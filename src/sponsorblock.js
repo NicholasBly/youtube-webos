@@ -240,7 +240,9 @@ class SponsorBlockHandler {
 
       this.sliderInterval = setInterval(() => {
         this.slider = document.querySelector(
-          '.ytp-progress-bar-container, .ypcs-scrub-slider-slot.ytu-player-controls'
+          '.ytp-progress-bar, .ytp-progress-list, ' +
+          // Fallback to original LG WebOS specific selectors
+          '.ytlr-progress-bar__slider, .ytlr-multi-markers-player-bar-renderer'
         );
         if (this.slider) {
           console.info('slider found...', this.slider);
