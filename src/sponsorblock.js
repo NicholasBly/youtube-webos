@@ -240,7 +240,7 @@ class SponsorBlockHandler {
 
       this.sliderInterval = setInterval(() => {
         this.slider = document.querySelector(
-          '.ytlr-progress-bar__slider, .ytlr-multi-markers-player-bar-renderer'
+          '.ytp-progress-bar-container, .ypcs-scrub-slider-slot.ytu-player-controls'
         );
         if (this.slider) {
           console.info('slider found...', this.slider);
