@@ -2,19 +2,6 @@ import sha256 from 'tiny-sha256';
 import { configRead } from './config';
 import { showNotification } from './ui';
 
-// --- Mocks and Polyfills for standalone compilation ---
-// Simple mock for findValidElement as it's from an external utility file.
-// In a full compilation, this would be imported from "../../maze-utils/src/dom".
-// For this context, we assume the first valid element is sufficient.
-function findValidElement(elements) {
-    if (!elements || elements.length === 0) {
-        return null;
-    }
-    // For simplicity in this standalone context, we'll just return the first element.
-    // The original findValidElement likely had more complex logic for visibility/interactivity.
-    return elements[0];
-}
-
 // Copied from https://github.com/ajayyy/SponsorBlock/blob/9392d16617d2d48abb6125c00e2ff6042cb7bebe/src/config.ts#L179-L233
 const barTypes = {
   sponsor: {
@@ -60,71 +47,63 @@ class SponsorBlockHandler {
   video = null;
   active = true;
 
-  // Timers/intervals for element detection and skip scheduling
-  attachVideoInterval = null; // Changed from Timeout to Interval for continuous checking
+  attachVideoTimeout = null;
   nextSkipTimeout = null;
 
-  progressBar = null; // Renamed from 'slider' to 'progressBar' for clarity and consistency with original source
+  slider = null;
+  sliderInterval = null;
   sliderObserver = null;
   sliderSegmentsOverlay = null;
+  progressBar = null; 
 
   scheduleSkipHandler = null;
+  durationChangeHandler = null;
   segments = null;
   skippableCategories = [];
 
-  // Properties from PreviewBar needed for updatePageElements
-  originalChapterBar = null;
-
   constructor(videoID) {
     this.videoID = videoID;
-    console.log(`[SponsorBlock] Initializing for video ID: ${this.videoID}`);
   }
 
-  // Main initialization method: fetches segments and then attempts to attach to video/build overlay.
   async init() {
-    if (!this.videoID) {
-      console.warn('[SponsorBlock] No video ID found, cannot initialize.');
+    const videoHash = sha256(this.videoID).substring(0, 4);
+    const categories = [
+      'sponsor',
+      'intro',
+      'outro',
+      'interaction',
+      'selfpromo',
+      'music_offtopic',
+      'preview'
+    ];
+    const resp = await fetch(
+      `${sponsorblockAPI}/skipSegments/${videoHash}?categories=${encodeURIComponent(
+        JSON.stringify(categories)
+      )}`
+    );
+    const results = await resp.json();
+
+    const result = results.find((v) => v.videoID === this.videoID);
+    console.info(this.videoID, 'Got it:', result);
+
+    if (!result || !result.segments || !result.segments.length) {
+      console.info(this.videoID, 'No segments found.');
       return;
     }
 
-    try {
-      const videoHash = sha256(this.videoID).substring(0, 4);
-      const categories = [
-        'sponsor',
-        'intro',
-        'outro',
-        'interaction',
-        'selfpromo',
-        'music_offtopic',
-        'preview'
-      ];
-      const resp = await fetch(
-        `${sponsorblockAPI}/skipSegments/${videoHash}?categories=${encodeURIComponent(
-          JSON.stringify(categories)
-        )}`
-      );
-      const results = await resp.json();
+    this.segments = result.segments;
+    this.skippableCategories = this.getSkippableCategories();
 
-      const result = results.find((v) => v.videoID === this.videoID);
-      console.info('[SponsorBlock]', this.videoID, 'Got segment data:', result);
+    this.scheduleSkipHandler = () => this.scheduleSkip();
+    this.durationChangeHandler = () => this.buildOverlay();
 
-      if (!result || !result.segments || !result.segments.length) {
-        console.info('[SponsorBlock]', this.videoID, 'No segments found.');
-        return;
-      }
-
-      this.segments = result.segments;
-      this.skippableCategories = this.getSkippableCategories();
-
-      // Start the process of attaching to video and building the overlay
-      this.attachVideoAndBuildOverlay();
-
-      // Only add video event listeners for skipping logic once video is found and segments are available
-      this.scheduleSkipHandler = () => this.scheduleSkip();
-
-    } catch (error) {
-      console.error('[SponsorBlock] Error fetching segments:', error);
-    }
+    this.attachVideo();
+    this.buildOverlay();
+  }
+  
+  updatePageElements() {
+    const allProgressBars = document.querySelectorAll(".ytlr-progress-bar, .ytlr-progress-bar-container > .html5-progress-bar > .ytlr-progress-list");
+    this.progressBar = allProgressBars?.[0];
   }
 
   getSkippableCategories() {
@@ -153,194 +132,72 @@ class SponsorBlockHandler {
     return skippableCategories;
   }
 
-  // New method from PreviewBar.ts to update page elements, specifically the progress bar
-  private updatePageElements(): void {
-    // YT, Vorapis v3
-    // Use `NodeListOf<HTMLElement>` for type consistency if using TypeScript,
-    // but in plain JS, it's just a NodeList.
-    const allProgressBars = document.querySelectorAll(".ytp-progress-bar, .ytp-progress-bar-container > .html5-progress-bar > .ytp-progress-list");
-    this.progressBar = findValidElement(allProgressBars) ?? allProgressBars?.[0];
+  attachVideo() {
+    clearTimeout(this.attachVideoTimeout);
+    this.attachVideoTimeout = null;
 
-    if (this.progressBar) {
-        // This part is for chapter bar handling which might not be strictly needed for *just* segment display,
-        // but included for completeness from the original source.
-        const newChapterBar = this.progressBar.querySelector(".ytp-chapters-container:not(.sponsorBlockChapterBar)");
-        if (this.originalChapterBar !== newChapterBar) {
-            this.originalChapterBar?.style?.removeProperty("display");
-            this.originalChapterBar = newChapterBar;
-        }
+    this.video = document.querySelector('video');
+    if (!this.video) {
+      console.info(this.videoID, 'No video yet...');
+      this.attachVideoTimeout = setTimeout(() => this.attachVideo(), 100);
+      return;
     }
+
+    console.info(this.videoID, 'Video found, binding...');
+
+    this.video.addEventListener('play', this.scheduleSkipHandler);
+    this.video.addEventListener('pause', this.scheduleSkipHandler);
+    this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
+    this.video.addEventListener('durationchange', this.durationChangeHandler);
   }
 
-
-  // Periodically checks for the presence of the video element and the seek bar slider.
-  attachVideoAndBuildOverlay() {
-    // Clear any existing interval to prevent multiple checks running simultaneously.
-    if (this.attachVideoInterval) clearInterval(this.attachVideoInterval);
-
-    const checkElements = () => {
-      // Use more robust selectors for YouTube elements
-      this.video = document.querySelector('video.html5-main-video');
-      
-      // Call updatePageElements to set this.progressBar using the more robust selector
-      this.updatePageElements();
-
-      if (this.video && this.progressBar) {
-        console.info('[SponsorBlock] Video element found:', this.video);
-        console.info('[SponsorBlock] Progress Bar element found:', this.progressBar);
-
-        if (this.video.duration > 0) {
-          console.info('[SponsorBlock] Video duration available. Building overlay.');
-          clearInterval(this.attachVideoInterval); // Stop the interval once elements are found
-          this.buildOverlay();
-
-          // Add video event listeners for skipping logic
-          this.video.addEventListener('play', this.scheduleSkipHandler);
-          this.video.addEventListener('pause', this.scheduleSkipHandler);
-          this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
-        } else {
-          console.info('[SponsorBlock] Video duration not yet available. Waiting...');
-        }
-      } else {
-        if (!this.video) console.info('[SponsorBlock] Video element not found yet.');
-        if (!this.progressBar) console.info('[SponsorBlock] Progress Bar element not found yet.');
-        console.info('[SponsorBlock] Waiting for video and progress bar to load...');
-      }
-    };
-
-    // Start checking every 500 milliseconds.
-    this.attachVideoInterval = setInterval(checkElements, 500);
-  }
-
-  // Builds and injects the visual overlay for segments onto the seek bar.
   buildOverlay() {
-    // If an overlay already exists (e.g., due to re-initialization), remove it first.
     if (this.sliderSegmentsOverlay) {
-      console.info('[SponsorBlock] Existing overlay found, removing and rebuilding.');
-      this.sliderSegmentsOverlay.remove();
-      this.sliderSegmentsOverlay = null;
+        this.sliderSegmentsOverlay.innerHTML = '';
+    } else {
+        this.sliderSegmentsOverlay = document.createElement('div');
+        this.sliderSegmentsOverlay.id = 'previewbar'; 
     }
 
     if (!this.video || !this.video.duration) {
-      console.info('[SponsorBlock] Video or video duration not available for overlay build.');
+      console.info('No video duration yet');
       return;
     }
+    
+    this.updatePageElements();
 
     const videoDuration = this.video.duration;
 
-    // Create the main container for all segment bars.
-    this.sliderSegmentsOverlay = document.createElement('div');
-    this.sliderSegmentsOverlay.classList.add('sponsorblock-segments-overlay');
-
-    // Set up basic styling for the overlay container.
-    this.sliderSegmentsOverlay.style.position = 'absolute';
-    this.sliderSegmentsOverlay.style.left = '0';
-    this.sliderSegmentsOverlay.style.top = '0';
-    this.sliderSegmentsOverlay.style.width = '100%';
-    this.sliderSegmentsOverlay.style.height = '100%';
-    this.sliderSegmentsOverlay.style.pointerEvents = 'none'; // Allow interactions with the underlying seek bar.
-    this.sliderSegmentsOverlay.style['z-index'] = '10';
-
-    // Iterate over each fetched segment and create a corresponding visual bar.
     this.segments.forEach((segment) => {
-      const [start, end] = segment.segment;
-      const barType = barTypes[segment.category] || {
-        color: 'gray',
-        opacity: 0.7
-      };
-      const transform = `translateX(${(start / videoDuration) * 100.0}%) scaleX(${(end - start) / videoDuration})`;
-
-      const elm = document.createElement('div');
-      // Use a more generic class name
-      elm.classList.add('sponsorblock-segment-bar');
-      elm.style['background-color'] = barType.color;
-      elm.style['opacity'] = barType.opacity;
-      elm.style['-webkit-transform'] = transform;
-      elm.style['transform'] = transform;
-      elm.style['position'] = 'absolute';
-      elm.style['left'] = '0';
-      elm.style['top'] = '0';
-      elm.style['height'] = '100%';
-      elm.style['width'] = '100%';
-      elm.style['transform-origin'] = 'left';
-      elm.style['box-sizing'] = 'border-box';
-
-      console.info('[SponsorBlock] Generated element:', elm, 'from segment:', segment, 'with transform:', transform);
-      this.sliderSegmentsOverlay.appendChild(elm);
+        const bar = this.createBar(segment, videoDuration);
+        this.sliderSegmentsOverlay.appendChild(bar);
     });
 
-    // Append the entire overlay container to the detected YouTube progress bar.
-    if (this.progressBar) { // Now using this.progressBar
-      // Ensure the progressBar has a relative position for absolute children to work.
-      this.progressBar.style.position = this.progressBar.style.position || 'relative';
-      this.progressBar.appendChild(this.sliderSegmentsOverlay);
-      console.log('[SponsorBlock] Overlay appended to progress bar:', this.progressBar);
-    } else {
-      console.warn('[SponsorBlock] Progress Bar element not found during buildOverlay, cannot append overlay.');
-      return;
+    if (this.progressBar && !this.progressBar.contains(this.sliderSegmentsOverlay)) {
+        this.progressBar.prepend(this.sliderSegmentsOverlay);
     }
+  }
+  
+  createBar(barSegment, videoDuration) {
+    const { category, segment } = barSegment;
+    const [start, end] = segment;
 
-    // Sets up a MutationObserver to re-add the overlay if YouTube's dynamic UI
-    // removes it or rebuilds the player elements.
-    const watchForSliderChanges = () => {
-      if (this.sliderObserver) this.sliderObserver.disconnect();
+    const bar = document.createElement('li');
+    bar.classList.add('previewbar');
 
-      // Observe the immediate parent of the progress bar for changes.
-      // This should typically be `.ytp-chrome-bottom`.
-      const observerTarget = this.progressBar.parentNode;
-
-      if (observerTarget) {
-        console.log("[SponsorBlock] Observing progress bar parent for DOM changes:", observerTarget);
-        this.sliderObserver = new MutationObserver((mutations) => {
-          let reattachNeeded = false;
-          mutations.forEach((m) => {
-            // If the segments overlay itself is removed, re-add it.
-            if (m.removedNodes) {
-              for (const node of m.removedNodes) {
-                if (node === this.sliderSegmentsOverlay) {
-                  console.info('[SponsorBlock] Segments overlay was removed, marking for re-attachment.');
-                  reattachNeeded = true;
-                }
-                // If the progress bar element itself is removed, re-initiate the entire process.
-                if (node === this.progressBar || (node.contains && node.contains(this.progressBar))) {
-                  console.info('[SponsorBlock] Progress Bar element removed or changed, marking for re-initialization.');
-                  this.sliderObserver.disconnect();
-                  // Trigger a re-initialization of the whole process for the current video.
-                  initializeSponsorBlock(this.videoID);
-                  return;
-                }
-              }
-            }
-            // If new nodes are added that might be the progress bar, re-evaluate.
-            if (m.addedNodes) {
-              for (const node of m.addedNodes) {
-                if (node.querySelector('.ytp-progress-bar')) {
-                  console.info('[SponsorBlock] New progress bar or container added, marking for re-initialization.');
-                  this.sliderObserver.disconnect();
-                  initializeSponsorBlock(this.videoID);
-                  return;
-                }
-              }
-            }
-          });
-          if (reattachNeeded) {
-            // Only re-add the overlay if it was removed and the progress bar is still there
-            if (this.progressBar && !this.progressBar.contains(this.sliderSegmentsOverlay)) {
-              console.info('[SponsorBlock] Re-attaching segments overlay.');
-              this.progressBar.appendChild(this.sliderSegmentsOverlay);
-            }
-          }
-        });
-        this.sliderObserver.observe(observerTarget, {
-          childList: true,
-          subtree: true,
-        });
-      } else {
-        console.warn("[SponsorBlock] Observer target (progress bar parent) not found, cannot set up MutationObserver.");
-      }
+    const barType = barTypes[category] || {
+        color: 'blue',
+        opacity: 0.7
     };
 
-    watchForSliderChanges();
+    bar.style.backgroundColor = barType.color;
+    bar.style.opacity = barType.opacity;
+    
+    bar.style.position = "absolute";
+    bar.style.left = `${(start / videoDuration) * 100}%`;
+    bar.style.right = `${100 - (end / videoDuration) * 100}%`;
+
+    return bar;
   }
 
   scheduleSkip() {
@@ -357,10 +214,13 @@ class SponsorBlockHandler {
       return;
     }
 
+    // Sometimes timeupdate event (that calls scheduleSkip) gets fired right before
+    // already scheduled skip routine below. Let's just look back a little bit
+    // and, in worst case, perform a skip at negative interval (immediately)...
     const nextSegments = this.segments.filter(
       (seg) =>
-      seg.segment[0] > this.video.currentTime - 0.3 &&
-      seg.segment[1] > this.video.currentTime - 0.3
+        seg.segment[0] > this.video.currentTime - 0.3 &&
+        seg.segment[1] > this.video.currentTime - 0.3
     );
     nextSegments.sort((s1, s2) => s1.segment[0] - s2.segment[0]);
 
@@ -415,9 +275,14 @@ class SponsorBlockHandler {
       this.nextSkipTimeout = null;
     }
 
-    if (this.attachVideoInterval) {
-      clearInterval(this.attachVideoInterval);
-      this.attachVideoInterval = null;
+    if (this.attachVideoTimeout) {
+      clearTimeout(this.attachVideoTimeout);
+      this.attachVideoTimeout = null;
+    }
+
+    if (this.sliderInterval) {
+      clearInterval(this.sliderInterval);
+      this.sliderInterval = null;
     }
 
     if (this.sliderObserver) {
@@ -426,17 +291,18 @@ class SponsorBlockHandler {
     }
 
     if (this.sliderSegmentsOverlay) {
-      if (this.sliderSegmentsOverlay.parentNode) {
-        this.sliderSegmentsOverlay.remove();
-      }
+      this.sliderSegmentsOverlay.remove();
       this.sliderSegmentsOverlay = null;
     }
 
     if (this.video) {
-      // Remove event listeners added during attachVideoAndBuildOverlay
       this.video.removeEventListener('play', this.scheduleSkipHandler);
       this.video.removeEventListener('pause', this.scheduleSkipHandler);
       this.video.removeEventListener('timeupdate', this.scheduleSkipHandler);
+      this.video.removeEventListener(
+        'durationchange',
+        this.durationChangeHandler
+      );
     }
   }
 }
@@ -449,96 +315,54 @@ class SponsorBlockHandler {
 // shows my lack of understanding of javascript. (or both)
 window.sponsorblock = null;
 
-// --- Main execution logic (adapted from Tampermonkey script) ---
-
-let currentSponsorBlockHandler = null; // Stores the active handler instance.
-
-// Initializes a new SponsorBlock handler for the given video ID.
-function initializeSponsorBlock(videoID) {
-    if (!videoID) {
-        console.warn('[SponsorBlock] Attempted to initialize without a valid video ID.');
-        return;
-    }
-    // Destroy any existing handler if it's for a different video or if no video is active
-    if (currentSponsorBlockHandler && currentSponsorBlockHandler.videoID === videoID) {
-        console.log('[SponsorBlock] Handler already active for this video ID, skipping re-initialization.');
-        return; // Already initialized for this video, avoid redundant work.
-    } else if (currentSponsorBlockHandler) {
-         console.log('[SponsorBlock] Destroying previous handler for a different video or inactive state.');
-         currentSponsorBlockHandler.destroy();
-    }
-
-    currentSponsorBlockHandler = new SponsorBlockHandler(videoID);
-    currentSponsorBlockHandler.init();
-    window.sponsorblock = currentSponsorBlockHandler; // Keep global reference consistent if needed externally
-}
-
-// Destroys the current SponsorBlock handler.
 function uninitializeSponsorblock() {
-    if (currentSponsorBlockHandler) {
-        console.log('[SponsorBlock] Uninitializing current handler.');
-        currentSponsorBlockHandler.destroy();
-        currentSponsorBlockHandler = null;
-    }
-    window.sponsorblock = null;
+  if (!window.sponsorblock) {
+    return;
+  }
+  try {
+    window.sponsorblock.destroy();
+  } catch (err) {
+    console.warn('window.sponsorblock.destroy() failed!', err);
+  }
+  window.sponsorblock = null;
 }
 
-// Helper function to extract the video ID from a given URL.
-function getVideoIdFromUrl(url) {
-    try {
-        const parsedUrl = new URL(url);
-        if (parsedUrl.pathname === '/watch') {
-            return parsedUrl.searchParams.get('v');
-        }
-    } catch (e) {
-        // console.error("[SponsorBlock] Error parsing URL:", e); // Suppress frequent errors for malformed hashes
-    }
-    return null;
-}
-
-// Listens for hash changes, which YouTube uses for navigation without full page reloads.
 window.addEventListener(
   'hashchange',
   () => {
     const newURL = new URL(location.hash.substring(1), location.href);
-    const videoID = getVideoIdFromUrl(newURL.toString());
+    // uninitialize sponsorblock when not on `/watch` path, to prevent
+    // it from attaching to playback preview video element loaded on
+    // home page
+    if (newURL.pathname !== '/watch' && window.sponsorblock) {
+      console.info('uninitializing sponsorblock on a non-video page');
+      uninitializeSponsorblock();
+      return;
+    }
 
-    console.info('[SponsorBlock] Hashchange detected. New video ID:', videoID);
+    const videoID = newURL.searchParams.get('v');
+    const needsReload =
+      videoID &&
+      (!window.sponsorblock || window.sponsorblock.videoID != videoID);
 
-    if (videoID) {
-        initializeSponsorBlock(videoID);
-    } else {
-        // Uninitialize sponsorblock when not on `/watch` path.
-        console.info('uninitializing sponsorblock on a non-video page');
-        uninitializeSponsorblock();
+    console.info(
+      'hashchange',
+      videoID,
+      window.sponsorblock,
+      window.sponsorblock ? window.sponsorblock.videoID : null,
+      needsReload
+    );
+
+    if (needsReload) {
+      uninitializeSponsorblock();
+
+      if (configRead('enableSponsorBlock')) {
+        window.sponsorblock = new SponsorBlockHandler(videoID);
+        window.sponsorblock.init();
+      } else {
+        console.info('SponsorBlock disabled, not loading');
+      }
     }
   },
   false
 );
-
-// Initial check on page load.
-window.addEventListener('load', () => {
-    const videoID = getVideoIdFromUrl(location.href);
-    console.info('[SponsorBlock] Page loaded. Initial video ID:', videoID);
-    if (videoID) {
-        initializeSponsorBlock(videoID);
-    }
-});
-
-// A robust MutationObserver to catch scenarios where the player
-// is dynamically loaded or changed in ways not caught by hashchange or load.
-const playerContainer = document.getElementById('movie_player') || document.body;
-if (playerContainer) {
-    const generalObserver = new MutationObserver((mutations) => {
-        const currentVideoID = getVideoIdFromUrl(location.href);
-        if (currentVideoID) {
-            initializeSponsorBlock(currentVideoID);
-        } else if (currentSponsorBlockHandler) {
-            uninitializeSponsorblock();
-        }
-    });
-    generalObserver.observe(playerContainer, { childList: true, subtree: true });
-    console.info('[SponsorBlock] General MutationObserver started on:', playerContainer);
-} else {
-    console.warn('[SponsorBlock] Could not find player container (#movie_player), general observer not started.');
-}
