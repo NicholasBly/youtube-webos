@@ -239,7 +239,9 @@ class SponsorBlockHandler {
       if (this.sliderInterval) clearInterval(this.sliderInterval);
 
       this.sliderInterval = setInterval(() => {
-        this.slider = document.querySelector('.ytlr-progress-bar');
+          this.slider = document.querySelector(
+          '.ytlr-progress-bar, .ytLrProgressBarSlider'
+        );
         if (this.slider) {
           console.info('slider found...', this.slider);
           clearInterval(this.sliderInterval);
