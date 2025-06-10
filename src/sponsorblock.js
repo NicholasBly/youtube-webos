@@ -93,59 +93,7 @@ class SponsorBlockHandler {
     this.segments = result.segments;
     this.skippableCategories = this.getSkippableCategories();
 
-    this.scheduleSkipHandler = () => this.scheduleSkip();
-    this.durationChangeHandler = () => this.buildOverlay();
-
-    this.attachVideo();
-    this.buildOverlay();
-  }
-
-  getSkippableCategories() {
-    const skippableCategories = [];
-    if (configRead('enableSponsorBlockSponsor')) {
-      skippableCategories.push('sponsor');
-    }
-    if (configRead('enableSponsorBlockIntro')) {
-      skippableCategories.push('intro');
-    }
-    if (configRead('enableSponsorBlockOutro')) {
-      skippableCategories.push('outro');
-    }
-    if (configRead('enableSponsorBlockInteraction')) {
-      skippableCategories.push('interaction');
-    }
-    if (configRead('enableSponsorBlockSelfPromo')) {
-      skippableCategories.push('selfpromo');
-    }
-    if (configRead('enableSponsorBlockMusicOfftopic')) {
-      skippableCategories.push('music_offtopic');
-    }
-    if (configRead('enableSponsorBlockPreview')) {
-      skippableCategories.push('preview');
-    }
-    return skippableCategories;
-  }
-
-  attachVideo() {
-    clearTimeout(this.attachVideoTimeout);
-    this.attachVideoTimeout = null;
-
-    this.video = document.querySelector('video');
-    if (!this.video) {
-      console.info(this.videoID, 'No video yet...');
-      this.attachVideoTimeout = setTimeout(() => this.attachVideo(), 100);
-      return;
-    }
-
-    console.info(this.videoID, 'Video found, binding...');
-
-    this.video.addEventListener('play', this.scheduleSkipHandler);
-    this.video.addEventListener('pause', this.scheduleSkipHandler);
-    this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
-    this.video.addEventListener('durationchange', this.durationChangeHandler);
-  }
-
-  
+    this.scheduleSkipHandler = () => this.
   buildOverlay() {
     if (!this.video || !this.video.duration || !this.segments) {
       console.info('No video or segments yet');
@@ -201,6 +149,59 @@ class SponsorBlockHandler {
     } else {
       console.warn('SponsorBlock: Could not find progress bar container');
     }
+  }
+
+
+scheduleSkip();
+    this.durationChangeHandler = () => this.buildOverlay();
+
+    this.attachVideo();
+    this.buildOverlay();
+  }
+
+  getSkippableCategories() {
+    const skippableCategories = [];
+    if (configRead('enableSponsorBlockSponsor')) {
+      skippableCategories.push('sponsor');
+    }
+    if (configRead('enableSponsorBlockIntro')) {
+      skippableCategories.push('intro');
+    }
+    if (configRead('enableSponsorBlockOutro')) {
+      skippableCategories.push('outro');
+    }
+    if (configRead('enableSponsorBlockInteraction')) {
+      skippableCategories.push('interaction');
+    }
+    if (configRead('enableSponsorBlockSelfPromo')) {
+      skippableCategories.push('selfpromo');
+    }
+    if (configRead('enableSponsorBlockMusicOfftopic')) {
+      skippableCategories.push('music_offtopic');
+    }
+    if (configRead('enableSponsorBlockPreview')) {
+      skippableCategories.push('preview');
+    }
+    return skippableCategories;
+  }
+
+  attachVideo() {
+    clearTimeout(this.attachVideoTimeout);
+    this.attachVideoTimeout = null;
+
+    this.video = document.querySelector('video');
+    if (!this.video) {
+      console.info(this.videoID, 'No video yet...');
+      this.attachVideoTimeout = setTimeout(() => this.attachVideo(), 100);
+      return;
+    }
+
+    console.info(this.videoID, 'Video found, binding...');
+
+    this.video.addEventListener('play', this.scheduleSkipHandler);
+    this.video.addEventListener('pause', this.scheduleSkipHandler);
+    this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
+    this.video.addEventListener('durationchange', this.durationChangeHandler);
   }
 
 
