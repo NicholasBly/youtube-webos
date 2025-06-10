@@ -93,66 +93,7 @@ class SponsorBlockHandler {
     this.segments = result.segments;
     this.skippableCategories = this.getSkippableCategories();
 
-    this.scheduleSkipHandler = () => this.
-  buildOverlay() {
-    if (!this.video || !this.video.duration || !this.segments) {
-      console.info('No video or segments yet');
-      return;
-    }
-
-    const videoDuration = this.video.duration;
-
-    // Remove previous overlay if it exists
-    if (this.sliderSegmentsOverlay) {
-      this.sliderSegmentsOverlay.remove();
-    }
-
-    this.sliderSegmentsOverlay = document.createElement('div');
-    this.sliderSegmentsOverlay.style.position = 'absolute';
-    this.sliderSegmentsOverlay.style.width = '100%';
-    this.sliderSegmentsOverlay.style.height = '100%';
-    this.sliderSegmentsOverlay.style.top = '0';
-    this.sliderSegmentsOverlay.style.left = '0';
-    this.sliderSegmentsOverlay.style.pointerEvents = 'none';
-    this.sliderSegmentsOverlay.style.zIndex = '999';
-
-    // Generate segment bars
-    this.segments.forEach(segment => {
-      const [start, end] = segment.segment;
-      const duration = end - start;
-      const barType = barTypes[segment.category] || {
-        color: 'blue',
-        opacity: 0.7
-      };
-
-      const bar = document.createElement('div');
-      bar.style.position = 'absolute';
-      bar.style.backgroundColor = barType.color;
-      bar.style.opacity = barType.opacity;
-      bar.style.height = '100%';
-      bar.style.left = `${(start / videoDuration) * 100}%`;
-      bar.style.width = `${(duration / videoDuration) * 100}%`;
-      bar.className = 'sponsor-segment-bar';
-
-      this.sliderSegmentsOverlay.appendChild(bar);
-    });
-
-    // Try appending to known progress bar containers (TV or mobile layout)
-    const progressBarContainer = document.querySelector('.ytlr-progress-bar__slider') ||
-                                 document.querySelector('.ytlr-progress-bar') ||
-                                 document.querySelector('.ytp-progress-bar');
-
-    if (progressBarContainer) {
-      progressBarContainer.style.position = 'relative'; // Ensure it can position children absolutely
-      progressBarContainer.appendChild(this.sliderSegmentsOverlay);
-      console.info('SponsorBlock: Overlay attached to progress bar');
-    } else {
-      console.warn('SponsorBlock: Could not find progress bar container');
-    }
-  }
-
-
-scheduleSkip();
+    this.scheduleSkipHandler = () => this.scheduleSkip();
     this.durationChangeHandler = () => this.buildOverlay();
 
     this.attachVideo();
@@ -204,6 +145,11 @@ scheduleSkip();
     this.video.addEventListener('durationchange', this.durationChangeHandler);
   }
 
+  buildOverlay() {
+    if (this.sliderSegmentsOverlay) {
+      console.info('Overlay already built');
+      return;
+    }
 
     if (!this.video || !this.video.duration) {
       console.info('No video duration yet');
@@ -293,9 +239,7 @@ scheduleSkip();
       if (this.sliderInterval) clearInterval(this.sliderInterval);
 
       this.sliderInterval = setInterval(() => {
-        this.slider = document.querySelector(
-          '.ytlr-progress-bar__slider, .ytlr-multi-markers-player-bar-renderer'
-        );
+        this.slider = document.querySelector('yt-progress-bar');
         if (this.slider) {
           console.info('slider found...', this.slider);
           clearInterval(this.sliderInterval);
