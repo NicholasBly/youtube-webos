@@ -2,6 +2,19 @@ import sha256 from 'tiny-sha256';
 import { configRead } from './config';
 import { showNotification } from './ui';
 
+// --- Mocks and Polyfills for standalone compilation ---
+// Simple mock for findValidElement as it's from an external utility file.
+// In a full compilation, this would be imported from "../../maze-utils/src/dom".
+// For this context, we assume the first valid element is sufficient.
+function findValidElement(elements) {
+    if (!elements || elements.length === 0) {
+        return null;
+    }
+    // For simplicity in this standalone context, we'll just return the first element.
+    // The original findValidElement likely had more complex logic for visibility/interactivity.
+    return elements[0];
+}
+
 // Copied from https://github.com/ajayyy/SponsorBlock/blob/9392d16617d2d48abb6125c00e2ff6042cb7bebe/src/config.ts#L179-L233
 const barTypes = {
   sponsor: {
@@ -51,14 +64,16 @@ class SponsorBlockHandler {
   attachVideoInterval = null; // Changed from Timeout to Interval for continuous checking
   nextSkipTimeout = null;
 
-  slider = null;
+  progressBar = null; // Renamed from 'slider' to 'progressBar' for clarity and consistency with original source
   sliderObserver = null;
   sliderSegmentsOverlay = null;
 
   scheduleSkipHandler = null;
-  durationChangeHandler = null; // Now handled within buildOverlay's attachVideoAndBuildOverlay
   segments = null;
   skippableCategories = [];
+
+  // Properties from PreviewBar needed for updatePageElements
+  originalChapterBar = null;
 
   constructor(videoID) {
     this.videoID = videoID;
@@ -106,8 +121,6 @@ class SponsorBlockHandler {
 
       // Only add video event listeners for skipping logic once video is found and segments are available
       this.scheduleSkipHandler = () => this.scheduleSkip();
-      // No longer need durationChangeHandler as it's now handled by the polling in attachVideoAndBuildOverlay
-      // and re-initialization via MutationObserver if player changes.
 
     } catch (error) {
       console.error('[SponsorBlock] Error fetching segments:', error);
@@ -140,6 +153,26 @@ class SponsorBlockHandler {
     return skippableCategories;
   }
 
+  // New method from PreviewBar.ts to update page elements, specifically the progress bar
+  private updatePageElements(): void {
+    // YT, Vorapis v3
+    // Use `NodeListOf<HTMLElement>` for type consistency if using TypeScript,
+    // but in plain JS, it's just a NodeList.
+    const allProgressBars = document.querySelectorAll(".ytp-progress-bar, .ytp-progress-bar-container > .html5-progress-bar > .ytp-progress-list");
+    this.progressBar = findValidElement(allProgressBars) ?? allProgressBars?.[0];
+
+    if (this.progressBar) {
+        // This part is for chapter bar handling which might not be strictly needed for *just* segment display,
+        // but included for completeness from the original source.
+        const newChapterBar = this.progressBar.querySelector(".ytp-chapters-container:not(.sponsorBlockChapterBar)");
+        if (this.originalChapterBar !== newChapterBar) {
+            this.originalChapterBar?.style?.removeProperty("display");
+            this.originalChapterBar = newChapterBar;
+        }
+    }
+  }
+
+
   // Periodically checks for the presence of the video element and the seek bar slider.
   attachVideoAndBuildOverlay() {
     // Clear any existing interval to prevent multiple checks running simultaneously.
@@ -148,11 +181,13 @@ class SponsorBlockHandler {
     const checkElements = () => {
       // Use more robust selectors for YouTube elements
       this.video = document.querySelector('video.html5-main-video');
-      this.slider = document.querySelector('.ytp-progress-bar');
+      
+      // Call updatePageElements to set this.progressBar using the more robust selector
+      this.updatePageElements();
 
-      if (this.video && this.slider) {
+      if (this.video && this.progressBar) {
         console.info('[SponsorBlock] Video element found:', this.video);
-        console.info('[SponsorBlock] Slider element found:', this.slider);
+        console.info('[SponsorBlock] Progress Bar element found:', this.progressBar);
 
         if (this.video.duration > 0) {
           console.info('[SponsorBlock] Video duration available. Building overlay.');
@@ -163,15 +198,13 @@ class SponsorBlockHandler {
           this.video.addEventListener('play', this.scheduleSkipHandler);
           this.video.addEventListener('pause', this.scheduleSkipHandler);
           this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
-          // Removed durationchange listener as buildOverlay handles re-creation via observer
-          // and initial placement already considers duration.
         } else {
           console.info('[SponsorBlock] Video duration not yet available. Waiting...');
         }
       } else {
         if (!this.video) console.info('[SponsorBlock] Video element not found yet.');
-        if (!this.slider) console.info('[SponsorBlock] Slider element not found yet.');
-        console.info('[SponsorBlock] Waiting for video and slider to load...');
+        if (!this.progressBar) console.info('[SponsorBlock] Progress Bar element not found yet.');
+        console.info('[SponsorBlock] Waiting for video and progress bar to load...');
       }
     };
 
@@ -237,13 +270,13 @@ class SponsorBlockHandler {
     });
 
     // Append the entire overlay container to the detected YouTube progress bar.
-    if (this.slider) {
-      // Ensure the slider has a relative position for absolute children to work.
-      this.slider.style.position = this.slider.style.position || 'relative';
-      this.slider.appendChild(this.sliderSegmentsOverlay);
-      console.log('[SponsorBlock] Overlay appended to slider:', this.slider);
+    if (this.progressBar) { // Now using this.progressBar
+      // Ensure the progressBar has a relative position for absolute children to work.
+      this.progressBar.style.position = this.progressBar.style.position || 'relative';
+      this.progressBar.appendChild(this.sliderSegmentsOverlay);
+      console.log('[SponsorBlock] Overlay appended to progress bar:', this.progressBar);
     } else {
-      console.warn('[SponsorBlock] Slider element not found during buildOverlay, cannot append overlay.');
+      console.warn('[SponsorBlock] Progress Bar element not found during buildOverlay, cannot append overlay.');
       return;
     }
 
@@ -252,12 +285,12 @@ class SponsorBlockHandler {
     const watchForSliderChanges = () => {
       if (this.sliderObserver) this.sliderObserver.disconnect();
 
-      // Observe the immediate parent of the slider for changes.
+      // Observe the immediate parent of the progress bar for changes.
       // This should typically be `.ytp-chrome-bottom`.
-      const observerTarget = this.slider.parentNode;
+      const observerTarget = this.progressBar.parentNode;
 
       if (observerTarget) {
-        console.log("[SponsorBlock] Observing slider parent for DOM changes:", observerTarget);
+        console.log("[SponsorBlock] Observing progress bar parent for DOM changes:", observerTarget);
         this.sliderObserver = new MutationObserver((mutations) => {
           let reattachNeeded = false;
           mutations.forEach((m) => {
@@ -268,22 +301,21 @@ class SponsorBlockHandler {
                   console.info('[SponsorBlock] Segments overlay was removed, marking for re-attachment.');
                   reattachNeeded = true;
                 }
-                // If the slider element itself is removed, re-initiate the entire process.
-                if (node === this.slider || (node.contains && node.contains(this.slider))) {
-                  console.info('[SponsorBlock] Slider element removed or changed, marking for re-initialization.');
+                // If the progress bar element itself is removed, re-initiate the entire process.
+                if (node === this.progressBar || (node.contains && node.contains(this.progressBar))) {
+                  console.info('[SponsorBlock] Progress Bar element removed or changed, marking for re-initialization.');
                   this.sliderObserver.disconnect();
                   // Trigger a re-initialization of the whole process for the current video.
-                  // Use the global function to manage the instance.
                   initializeSponsorBlock(this.videoID);
                   return;
                 }
               }
             }
-            // If new nodes are added that might be the slider, re-evaluate.
+            // If new nodes are added that might be the progress bar, re-evaluate.
             if (m.addedNodes) {
               for (const node of m.addedNodes) {
                 if (node.querySelector('.ytp-progress-bar')) {
-                  console.info('[SponsorBlock] New slider or container added, marking for re-initialization.');
+                  console.info('[SponsorBlock] New progress bar or container added, marking for re-initialization.');
                   this.sliderObserver.disconnect();
                   initializeSponsorBlock(this.videoID);
                   return;
@@ -292,10 +324,10 @@ class SponsorBlockHandler {
             }
           });
           if (reattachNeeded) {
-            // Only re-add the overlay if it was removed and the slider is still there
-            if (this.slider && !this.slider.contains(this.sliderSegmentsOverlay)) {
+            // Only re-add the overlay if it was removed and the progress bar is still there
+            if (this.progressBar && !this.progressBar.contains(this.sliderSegmentsOverlay)) {
               console.info('[SponsorBlock] Re-attaching segments overlay.');
-              this.slider.appendChild(this.sliderSegmentsOverlay);
+              this.progressBar.appendChild(this.sliderSegmentsOverlay);
             }
           }
         });
@@ -304,7 +336,7 @@ class SponsorBlockHandler {
           subtree: true,
         });
       } else {
-        console.warn("[SponsorBlock] Observer target (slider parent) not found, cannot set up MutationObserver.");
+        console.warn("[SponsorBlock] Observer target (progress bar parent) not found, cannot set up MutationObserver.");
       }
     };
 
@@ -415,7 +447,7 @@ class SponsorBlockHandler {
 // SponsorBlockHandler initializations... This has been noticed on Chromium 38.
 // This either reveals some bug in chromium/webpack/babel scope handling, or
 // shows my lack of understanding of javascript. (or both)
-window.sponsorblock = null; // Renamed to currentSponsorBlockHandler for clarity
+window.sponsorblock = null;
 
 // --- Main execution logic (adapted from Tampermonkey script) ---
 
@@ -442,7 +474,7 @@ function initializeSponsorBlock(videoID) {
 }
 
 // Destroys the current SponsorBlock handler.
-function uninitializeSponsorblock() { // Renamed for consistency with global window.sponsorblock
+function uninitializeSponsorblock() {
     if (currentSponsorBlockHandler) {
         console.log('[SponsorBlock] Uninitializing current handler.');
         currentSponsorBlockHandler.destroy();
