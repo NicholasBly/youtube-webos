@@ -10,8 +10,8 @@ import { showNotification } from './ui'; // Assuming you have this file
  * skips them based on user configuration.
  *
  * This implementation is based on concepts from the original SponsorBlock extension,
- * fix.js, and previewBar.ts, adapted for the WebOS environment.
- * It includes robust observation to prevent segments from disappearing during UI redraws.
+ * adapted for the WebOS environment. It includes robust observation to prevent
+ * segments from disappearing during UI redraws and a custom notification system.
  */
 
 // Assuming tiny-sha256 is loaded globally in the WebOS environment.
@@ -23,22 +23,18 @@ import { showNotification } from './ui'; // Assuming you have this file
 
     // --- Helper Functions & Constants ---
 
-    // Dummy implementations for config and UI, to be replaced by the WebOS app's actual functions.
+    // These functions should be provided by the WebOS environment.
+    // They are defined here as fallbacks to prevent errors if not present.
     if (typeof window.configRead === 'undefined') {
         console.warn("SponsorBlock: configRead function is not defined. Using dummy implementation.");
         window.configRead = function(key) {
-            // Default to enabling all features if config is missing.
-            return !key.startsWith('enable') || true;
+            return !key.startsWith('enable') || true; // Default to true
         };
     }
 
     if (typeof window.showNotification === 'undefined') {
-        console.warn("SponsorBlock: showNotification function is not defined. Using console.log fallback.");
-        window.showNotification = function(message) {
-            console.info(`[SponsorBlock Notification] ${message}`);
-            // On a real WebOS app, you would use its native notification API here.
-            // For example: webOS.notification.showToast({ message: message, duration: 2000 }, () => {});
-        };
+        console.warn("SponsorBlock: showNotification function is not defined. Using internal fallback.");
+        // A built-in notification system will be used.
     }
 
 
@@ -55,6 +51,61 @@ import { showNotification } from './ui'; // Assuming you have this file
         filler: { color: 'rgba(175, 175, 175, 0.7)', name: 'Filler Tangent' }
     };
 
+    /**
+     * Handles displaying on-screen notifications.
+     */
+    class NotificationManager {
+        constructor() {
+            this.notificationElement = null;
+        }
+
+        show(message) {
+            // Use the app's native notification system if it exists
+            if (typeof window.showNotification === 'function') {
+                window.showNotification(message);
+                return;
+            }
+
+            // Fallback to a custom HTML notification
+            if (this.notificationElement) {
+                this.notificationElement.remove();
+            }
+
+            this.notificationElement = document.createElement('div');
+            this.notificationElement.textContent = message;
+            Object.assign(this.notificationElement.style, {
+                position: 'fixed',
+                top: '20px',
+                right: '20px',
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                color: 'white',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                zIndex: '9999',
+                fontSize: '16px',
+                opacity: '0',
+                transition: 'opacity 0.5s',
+            });
+            
+            document.body.appendChild(this.notificationElement);
+
+            // Fade in
+            setTimeout(() => {
+                this.notificationElement.style.opacity = '1';
+            }, 10);
+
+            // Fade out and remove
+            setTimeout(() => {
+                if (this.notificationElement) {
+                   this.notificationElement.style.opacity = '0';
+                   setTimeout(() => {
+                        if (this.notificationElement) this.notificationElement.remove();
+                        this.notificationElement = null;
+                   }, 500);
+                }
+            }, 2500);
+        }
+    }
 
     /**
      * The main class for handling SponsorBlock logic.
@@ -67,10 +118,8 @@ import { showNotification } from './ui'; // Assuming you have this file
             this.segments = [];
             this.skippableCategories = [];
             this.active = true;
-            this.chaptersReady = false; // Flag to check if YouTube's chapters are rendered
 
             this.timeouts = {
-                attachVideo: null,
                 scheduleSkip: null,
             };
             this.intervals = {
@@ -81,6 +130,7 @@ import { showNotification } from './ui'; // Assuming you have this file
             };
 
             this.previewBar = new PreviewBar();
+            this.notificationManager = new NotificationManager();
 
             console.info(`SponsorBlock: Initialized for videoID: ${this.videoID}`);
             this.init();
@@ -126,7 +176,6 @@ import { showNotification } from './ui'; // Assuming you have this file
             this.clearInterval('waitForElements');
 
             this.intervals.waitForElements = setInterval(() => {
-                // Step 1: Find the video element
                 if (!this.video) {
                     this.video = document.querySelector('video.video-stream.html5-main-video');
                     if (this.video) {
@@ -135,7 +184,6 @@ import { showNotification } from './ui'; // Assuming you have this file
                     }
                 }
                 
-                // Step 2: Find the progress bar
                 if (this.video && !this.progressBar) {
                     const selectors = ['.ytlr-progress-bar', '.ytLrProgressBarSlider'];
                      for (const selector of selectors) {
@@ -147,18 +195,8 @@ import { showNotification } from './ui'; // Assuming you have this file
                         }
                     }
                 }
-
-                // Step 3: Wait for YouTube's chapters to be rendered
-                if (this.progressBar && !this.chaptersReady) {
-                    const chapterContainer = this.progressBar.querySelector('.ytp-chapters-container, .ytLrMultiMarkersPlayerBarRendererHost');
-                    if (chapterContainer && chapterContainer.childElementCount > 0) {
-                         console.info("SponsorBlock: YouTube chapters detected. Ready to render segments.");
-                         this.chaptersReady = true;
-                    }
-                }
                 
-                // Step 4: If all elements are ready, render and start observing
-                if (this.video && this.progressBar && this.chaptersReady) {
+                if (this.video && this.progressBar) {
                     this.clearInterval('waitForElements');
                     this.renderSegments();
                     this.observeUI();
@@ -188,7 +226,7 @@ import { showNotification } from './ui'; // Assuming you have this file
         }
         
         renderSegments() {
-            if (this.progressBar && this.video && this.video.duration > 0 && this.chaptersReady) {
+            if (this.progressBar && this.video && this.video.duration > 0) {
                  this.previewBar.render(this.progressBar, this.segments, this.video.duration);
             }
         }
@@ -197,43 +235,35 @@ import { showNotification } from './ui'; // Assuming you have this file
             if (this.observers.ui || !this.progressBar || !this.progressBar.parentNode) return;
 
             this.observers.ui = new MutationObserver(mutations => {
-                let barRemoved = false;
-                let chaptersRemoved = false;
-                let segmentsRemoved = false;
-
                 for (const mutation of mutations) {
-                    mutation.removedNodes.forEach(node => {
-                        if (node.nodeType !== Node.ELEMENT_NODE) return;
+                     if (mutation.type === 'childList') {
+                        let segmentsRemoved = false;
+                        let chaptersAdded = false;
 
-                        if (node === this.progressBar) barRemoved = true;
-                        if (node.matches('.ytp-chapters-container')) chaptersRemoved = true;
-                        if (node.id === 'sponsorblock-preview-bar') segmentsRemoved = true;
-                    });
-                }
-                
-                if (barRemoved) {
-                    console.warn("SponsorBlock: Progress bar was removed. Restarting element search.");
-                    this.destroyObserver();
-                    this.video = null; // Force re-find
-                    this.progressBar = null;
-                    this.chaptersReady = false;
-                    this.previewBar.clear();
-                    this.waitForPlayerElements();
-                } else if (chaptersRemoved) {
-                    console.warn("SponsorBlock: Chapters were re-rendered. Waiting for new chapters.");
-                    this.chaptersReady = false;
-                    this.previewBar.clear();
-                    // The main interval will pick this up and wait for chapters again.
-                    this.waitForPlayerElements();
-                } else if (segmentsRemoved) {
-                    console.info("SponsorBlock: Segment overlay was removed. Re-rendering.");
-                    this.renderSegments();
+                        mutation.removedNodes.forEach(node => {
+                            if (node.id === 'sponsorblock-preview-bar') {
+                                segmentsRemoved = true;
+                            }
+                        });
+
+                        mutation.addedNodes.forEach(node => {
+                            if (node.nodeType === Node.ELEMENT_NODE && node.matches('.ytp-chapters-container, .ytLrMultiMarkersPlayerBarRendererHost')) {
+                                chaptersAdded = true;
+                            }
+                        });
+
+                        // If YouTube adds its chapters or removes our segments, we re-render ours on top.
+                        if (segmentsRemoved || chaptersAdded) {
+                            console.info("SponsorBlock: Player UI updated. Re-rendering segments to ensure visibility.");
+                            this.renderSegments();
+                            // We don't need to break, let it check all mutations
+                        }
+                    }
                 }
             });
 
-            // Observe the progress bar for its children (our overlay), and its parent for its own removal.
-            this.observers.ui.observe(this.progressBar, { childList: true });
-            this.observers.ui.observe(this.progressBar.parentNode, { childList: true });
+            // Observe the progress bar and its parent to catch UI changes
+            this.observers.ui.observe(this.progressBar.parentNode, { childList: true, subtree: true });
         }
 
 
@@ -247,15 +277,13 @@ import { showNotification } from './ui'; // Assuming you have this file
             const currentTime = this.video.currentTime;
             let upcomingSegment = null;
 
-            // Check if we are currently inside a skippable segment
             for (const segment of this.segments) {
                 if (currentTime >= segment.segment[0] && currentTime < segment.segment[1]) {
                     if (this.skippableCategories.includes(segment.category)) {
                         this.performSkip(segment);
-                        return; // Skip performed, no need to schedule another
+                        return;
                     }
                 }
-                // Find the next upcoming skippable segment
                 else if (segment.segment[0] > currentTime && this.skippableCategories.includes(segment.category)) {
                     if (!upcomingSegment || segment.segment[0] < upcomingSegment.segment[0]) {
                         upcomingSegment = segment;
@@ -270,16 +298,14 @@ import { showNotification } from './ui'; // Assuming you have this file
         }
 
         performSkip(segment) {
-            // Final check to prevent skipping if state changed
             if (!this.active || !this.video || this.video.paused) {
                 return;
             }
-
-            // Ensure we are still close to the segment to avoid wrongful skips after seeking
-            if (Math.abs(this.video.currentTime - segment.segment[0]) < 2) {
+            
+            // Check if we are still within a reasonable timeframe of the segment start
+            if (this.video.currentTime >= segment.segment[0] - 0.5 && this.video.currentTime < segment.segment[1]) {
                 const segmentName = BAR_TYPES[segment.category]?.name || segment.category;
-                console.info(`SponsorBlock: Skipping ${segmentName}.`);
-                window.showNotification(`Skipping ${segmentName}`);
+                this.notificationManager.show(`Skipping ${segmentName}`);
                 this.video.currentTime = segment.segment[1];
             }
         }
@@ -333,7 +359,7 @@ import { showNotification } from './ui'; // Assuming you have this file
         render(progressBar, segments, duration) {
             if (!progressBar || !segments || !duration || !document.body.contains(progressBar)) return;
 
-            this.clear(); // Clear previous segments before rendering new ones
+            this.clear();
 
             this.container = document.createElement('div');
             this.container.id = 'sponsorblock-preview-bar';
@@ -393,8 +419,9 @@ import { showNotification } from './ui'; // Assuming you have this file
         }
 
         clear() {
-            if (this.container && this.container.parentNode) {
-                this.container.remove();
+            const existingBar = document.getElementById('sponsorblock-preview-bar');
+            if (existingBar) {
+                existingBar.remove();
             }
             this.container = null;
         }
