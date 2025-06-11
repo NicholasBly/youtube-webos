@@ -83,7 +83,7 @@ class SponsorBlockHandler {
   // For detached overlay
   animationFrameId = null;
   
-  // NEW: For watching the main controls container
+  // For watching the main controls container
   controlsContainer = null;
   controlsInterval = null;
   controlsObserver = null;
@@ -158,7 +158,7 @@ class SponsorBlockHandler {
     if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
     if (!this.segments || !this.segments.length) return;
 
-    this.destroyOverlay(); // Clean up previous elements and observers first.
+    this.destroyOverlay();
     console.info(this.videoID, `Building overlay...`);
     
     this.sliderSegmentsOverlay = document.createElement('ul');
@@ -175,10 +175,31 @@ class SponsorBlockHandler {
       this.sliderSegmentsOverlay.appendChild(elm);
     });
 
+    const updateOverlayVisibility = () => {
+        if (!this.controlsContainer || !this.sliderSegmentsOverlay) return;
+
+        const controlsAreVisible = this.controlsContainer.getAttribute('ishidden') === 'false';
+        
+        // --- MODIFICATION START: RACE CONDITION FIX ---
+        // We can only show the overlay if the controls are visible AND we've found the progress bar.
+        const canShow = controlsAreVisible && this.progressBarElement;
+
+        if (canShow) {
+            this.sliderSegmentsOverlay.style.display = 'block';
+        } else {
+            this.sliderSegmentsOverlay.style.display = 'none';
+            // As requested, log when controls are the reason for hiding.
+            if (!controlsAreVisible) {
+                console.info('SponsorBlock: Hiding segments because player controls are hidden.');
+            }
+        }
+    };
+    // --- MODIFICATION END ---
+
     const syncOverlayPosition = () => {
         if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
-            watchForProgressBar(); // Lost the bar, find it again.
-            return; // Stop this animation loop.
+            watchForProgressBar();
+            return;
         }
         const rect = this.progressBarElement.getBoundingClientRect();
         this.sliderSegmentsOverlay.style.left = `${rect.left}px`;
@@ -198,19 +219,16 @@ class SponsorBlockHandler {
             this.progressBarElement = element;
             console.info(this.videoID, `Progress bar found with selector "${selector}".`);
             clearInterval(this.sliderInterval);
-            // Start syncing position once the bar is found
+            
             if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
             this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
+
+            // --- MODIFICATION: Trigger a visibility check now that the progress bar is found.
+            updateOverlayVisibility();
             return;
           }
         }
       }, 500);
-    };
-
-    const updateOverlayVisibility = () => {
-        if (!this.controlsContainer || !this.sliderSegmentsOverlay) return;
-        const isHidden = this.controlsContainer.getAttribute('ishidden') !== 'false';
-        this.sliderSegmentsOverlay.style.display = isHidden ? 'none' : 'block';
     };
 
     const watchForControlsContainer = () => {
@@ -225,15 +243,12 @@ class SponsorBlockHandler {
                 this.controlsObserver = new MutationObserver(updateOverlayVisibility);
                 this.controlsObserver.observe(this.controlsContainer, { attributes: true, attributeFilter: ['ishidden'] });
                 
-                // Set initial state
                 updateOverlayVisibility();
             }
         }, 500);
     };
     
-    // Add the overlay to the page
     document.body.appendChild(this.sliderSegmentsOverlay);
-    // Start searching for the elements we need to track
     watchForProgressBar();
     watchForControlsContainer();
   }
@@ -258,7 +273,6 @@ class SponsorBlockHandler {
   }
 
   destroyOverlay() {
-    // A dedicated function to clean up all visual elements and their trackers
     if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
     if (this.controlsObserver) this.controlsObserver.disconnect();
     clearInterval(this.sliderInterval);
@@ -280,15 +294,15 @@ class SponsorBlockHandler {
     this.active = false;
     clearTimeout(this.nextSkipTimeout);
     clearTimeout(this.attachVideoTimeout);
-    this.destroyOverlay(); // Use the new cleanup function
+    this.destroyOverlay();
     if (this.video) {
       this.video.removeEventListener('loadedmetadata', this.durationChangeHandler);
       this.video.removeEventListener('durationchange', this.durationChangeHandler);
       this.video.removeEventListener('play', this.scheduleSkipHandler);
-      this.video.removeEventListener('pause', this.scheduleSkipHandler);
-      this.video.removeEventListener('seeking', this.scheduleSkipHandler);
-      this.video.removeEventListener('seeked', this.scheduleSkipHandler);
-      this.video.removeEventListener('timeupdate', this.scheduleSkipHandler);
+      this.video.addEventListener('pause', this.scheduleSkipHandler);
+      this.video.addEventListener('seeking', this.scheduleSkipHandler);
+      this.video.addEventListener('seeked', this.scheduleSkipHandler);
+      this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
     }
   }
 }
