@@ -70,67 +70,289 @@ const barTypes = {
 const sponsorblockAPI = 'https://sponsorblock.inf.re/api'; // Consider using a more resilient endpoint if available
 
 class SponsorBlockHandler {
-  // Maintain existing references
-  sliderSegmentsOverlay = null;
-  currentSegments = new Map(); // UUID -> {element, segmentData}
+  video = null;
+  active = true;
 
-  createSegmentsOverlay() {
-    if (!this.sliderSegmentsOverlay) {
-      this.sliderSegmentsOverlay = document.createElement('div');
-      this.sliderSegmentsOverlay.style.position = 'absolute';
-      this.sliderSegmentsOverlay.style.width = '100%';
-      this.sliderSegmentsOverlay.style.height = '100%';
-      // Add to DOM once
-      document.querySelector('.ytp-progress-bar').appendChild(this.sliderSegmentsOverlay);
+  attachVideoTimeout = null;
+  nextSkipTimeout = null;
+
+  progressBarElement = null;
+  sliderInterval = null;
+  sliderSegmentsOverlay = null; // This will now be the <ul> element
+
+  persistenceInterval = null;
+
+  scheduleSkipHandler = null;
+  durationChangeHandler = null;
+  segments = null;
+  skippableCategories = [];
+
+  constructor(videoID) {
+    this.videoID = videoID;
+    console.info(`SponsorBlockHandler created for videoID: ${videoID}`);
+  }
+
+  async init() {
+    if (typeof sha256 !== 'function') {
+        console.error("SHA256 function is not available. Cannot fetch segments by hash.");
+        return;
+    }
+    const videoHash = sha256(String(this.videoID)).substring(0, 4);
+
+    const categories = [
+      'sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 
+      'music_offtopic', 'preview', 'chapter'
+    ];
+    
+    try {
+        const resp = await fetch(
+          `${sponsorblockAPI}/skipSegments/${videoHash}?categories=${encodeURIComponent(
+            JSON.stringify(categories)
+          )}&videoID=${this.videoID}`
+        );
+
+        if (!resp.ok) {
+            console.error(`SponsorBlock API request failed with status: ${resp.status}`);
+            return;
+        }
+
+        const results = await resp.json();
+        let result = Array.isArray(results) ? results.find((v) => v.videoID === this.videoID) : results;
+
+        if (!result || !result.segments || !result.segments.length) {
+          console.info(this.videoID, 'No segments found for this video.');
+          return;
+        }
+
+        this.segments = result.segments;
+        this.skippableCategories = this.getSkippableCategories();
+
+        this.scheduleSkipHandler = () => this.scheduleSkip();
+        this.durationChangeHandler = () => this.buildOverlay();
+
+        this.attachVideo();
+    } catch (error) {
+        console.error("Error initializing SponsorBlock or fetching segments:", error);
     }
   }
 
-  updateSegments(segments) {
-    this.createSegmentsOverlay();
-    const newUUIDs = new Set();
+  getSkippableCategories() {
+    const skippable = [];
+    try {
+        if (configRead('enableSponsorBlockSponsor')) skippable.push('sponsor');
+        if (configRead('enableSponsorBlockIntro')) skippable.push('intro');
+        if (configRead('enableSponsorBlockOutro')) skippable.push('outro');
+        if (configRead('enableSponsorBlockInteraction')) skippable.push('interaction');
+        if (configRead('enableSponsorBlockSelfPromo')) skippable.push('selfpromo');
+        if (configRead('enableSponsorBlockMusicOfftopic')) skippable.push('music_offtopic');
+        if (configRead('enableSponsorBlockPreview')) skippable.push('preview');
+    } catch (e) {
+        console.warn("Could not read SponsorBlock config, using defaults. Error:", e);
+        return ['sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 'music_offtopic', 'preview'];
+    }
+    return skippable;
+  }
 
-    // Update or create segments
-    segments.forEach(segment => {
-      newUUIDs.add(segment.UUID);
-      if (!this.currentSegments.has(segment.UUID)) {
-        const element = this.createSegmentElement(segment);
-        this.currentSegments.set(segment.UUID, {element, segment});
-        this.sliderSegmentsOverlay.appendChild(element);
-      } else {
-        this.updateSegmentPosition(segment.UUID);
-      }
+  attachVideo() {
+    clearTimeout(this.attachVideoTimeout);
+    this.video = document.querySelector('video');
+    if (!this.video) {
+      this.attachVideoTimeout = setTimeout(() => this.attachVideo(), 250);
+      return;
+    }
+
+    console.info(this.videoID, 'Video element found. Binding event listeners.');
+
+    this.video.addEventListener('loadedmetadata', this.durationChangeHandler);
+    this.video.addEventListener('durationchange', this.durationChangeHandler);
+    this.video.addEventListener('play', this.scheduleSkipHandler);
+    this.video.addEventListener('pause', this.scheduleSkipHandler);
+    this.video.addEventListener('seeking', this.scheduleSkipHandler);
+    this.video.addEventListener('seeked', this.scheduleSkipHandler);
+    this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
+    
+    if (this.video.duration && this.segments) {
+        this.buildOverlay();
+    }
+  }
+
+  buildOverlay() {
+    if (!this.video || !this.video.duration || isNaN(this.video.duration) || this.video.duration <= 0) {
+      return;
+    }
+    if (!this.segments || !this.segments.length) {
+        return;
+    }
+
+    const videoDuration = this.video.duration;
+    console.info(this.videoID, `Building overlay for duration: ${videoDuration}s`);
+
+    // If the overlay already exists, remove it before recreating
+    if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
+        this.sliderSegmentsOverlay.remove();
+    }
+    // Clear any existing intervals
+    if (this.sliderInterval) {
+        clearInterval(this.sliderInterval);
+        this.sliderInterval = null;
+    }
+
+    // Create the UL container for the segments
+    this.sliderSegmentsOverlay = document.createElement('ul');
+    this.sliderSegmentsOverlay.id = 'previewbar';
+    
+    // --- MODIFICATION START ---
+    // Style the overlay to sit on top of a stable parent, not inside the progress bar
+    this.sliderSegmentsOverlay.style.cssText = `
+      position: absolute;
+      bottom: 25px; /* Adjust this value to align perfectly with the progress bar's vertical position */
+      left: 12px;  /* Adjust this value to align with the progress bar's horizontal start */
+      width: calc(100% - 24px); /* Adjust to match the progress bar's width */
+      height: 5px; /* Adjust to match the progress bar's height */
+      pointer-events: none;
+      z-index: 10;
+      margin: 0;
+      padding: 0;
+      border-radius: 2px; /* Optional: to match YouTube's progress bar style */
+    `;
+    // --- MODIFICATION END ---
+
+    this.segments.forEach((segment) => {
+      const [start, end] = segment.segment;
+      const segmentStart = Math.max(0, Math.min(start, videoDuration));
+      const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
+
+      if (segmentEnd <= segmentStart) return;
+
+      const barType = barTypes[segment.category] || barTypes.sponsor;
+      const segmentWidthPercent = ((segmentEnd - segmentStart) / videoDuration) * 100;
+      const segmentLeftPercent = (segmentStart / videoDuration) * 100;
+
+      const elm = document.createElement('li');
+      elm.className = `previewbar sponsorblock-category-${segment.category}`;
+      elm.innerHTML = '&nbsp;';
+      elm.style.cssText = `
+        position: absolute;
+        list-style: none;
+        height: 100%;
+        background-color: ${barType.color};
+        opacity: ${barType.opacity};
+        left: ${segmentLeftPercent}%;
+        width: ${segmentWidthPercent}%;
+        border-radius: inherit;
+      `;
+      elm.title = `${barType.name}: ${segmentStart.toFixed(1)}s - ${segmentEnd.toFixed(1)}s`;
+      this.sliderSegmentsOverlay.appendChild(elm);
     });
 
-    // Remove stale segments
-    this.currentSegments.forEach((_, uuid) => {
-      if (!newUUIDs.has(uuid)) {
-        this.sliderSegmentsOverlay.removeChild(this.currentSegments.get(uuid).element);
-        this.currentSegments.delete(uuid);
+    const attachOverlayToPlayer = (playerContainer) => {
+      // Ensure the container has a non-static position for the overlay to be positioned correctly
+      if (window.getComputedStyle(playerContainer).position === 'static') {
+        playerContainer.style.position = 'relative';
       }
-    });
+      playerContainer.appendChild(this.sliderSegmentsOverlay);
+      console.info(this.videoID, 'Segments overlay attached to player container.');
+    };
+
+    const watchForPlayerContainer = () => {
+      // Stop any previous interval
+      if (this.sliderInterval) clearInterval(this.sliderInterval);
+
+      // Selectors for stable player containers. These are less likely to be re-rendered.
+      const playerContainerSelectors = [
+        '#player-container-inner', // Standard YouTube player container
+        '#movie_player',             // Another common high-level player element
+        '.html5-video-player'
+      ];
+
+      this.sliderInterval = setInterval(() => {
+        for (const selector of playerContainerSelectors) {
+          const element = document.querySelector(selector);
+          // Ensure the element exists and is visible
+          if (element && window.getComputedStyle(element).display !== 'none') {
+            console.info(this.videoID, `Stable player container found with selector "${selector}"`);
+            clearInterval(this.sliderInterval);
+            this.sliderInterval = null;
+            attachOverlayToPlayer(element);
+            return;
+          }
+        }
+      }, 500);
+    };
+
+    // Start looking for the player container
+    watchForPlayerContainer();
   }
 
-  createSegmentElement(segment) {
-    const element = document.createElement('div');
-    element.style.position = 'absolute';
-    element.style.height = '100%';
-    element.style.backgroundColor = barTypes[segment.category].color;
-    element.style.opacity = barTypes[segment.category].opacity;
-    this.updateElementPosition(element, segment);
-    return element;
+  scheduleSkip() {
+    clearTimeout(this.nextSkipTimeout);
+    this.nextSkipTimeout = null;
+
+    if (!this.active || !this.video || this.video.paused || !this.segments) {
+      return;
+    }
+
+    const currentTime = this.video.currentTime;
+    const nextSegment = this.segments
+      .filter(seg => seg.segment[1] > currentTime && this.skippableCategories.includes(seg.category))
+      .sort((a, b) => a.segment[0] - b.segment[0])[0];
+    
+    if (!nextSegment) return;
+
+    const [start, end] = nextSegment.segment;
+
+    if (currentTime >= start && currentTime < end) {
+      const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
+      showNotification(`Skipping ${skipName}`);
+      this.video.currentTime = end;
+      this.scheduleSkip();
+    } else if (start > currentTime) {
+      const timeUntilSkip = (start - currentTime) * 1000;
+      this.nextSkipTimeout = setTimeout(() => {
+        if (!this.active || this.video.paused) return;
+        if (this.video.currentTime >= start - 0.5 && this.video.currentTime < end) {
+          const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
+          showNotification(`Skipping ${skipName}`);
+          this.video.currentTime = end;
+          this.scheduleSkip();
+        }
+      }, Math.max(0, timeUntilSkip));
+    }
   }
 
-  updateElementPosition(element, segment) {
-    const duration = this.video.duration || 1;
-    const startPercent = (segment.segment[0] / duration) * 100;
-    const endPercent = (segment.segment[1] / duration) * 100;
-    element.style.left = `${startPercent}%`;
-    element.style.width = `${endPercent - startPercent}%`;
-  }
+  destroy() {
+    console.info(this.videoID, 'Destroying SponsorBlockHandler instance.');
+    this.active = false;
 
-  updateSegmentPosition(uuid) {
-    const {element, segment} = this.currentSegments.get(uuid);
-    this.updateElementPosition(element, segment);
+    clearTimeout(this.nextSkipTimeout);
+    clearTimeout(this.attachVideoTimeout);
+    clearInterval(this.sliderInterval);
+    clearInterval(this.persistenceInterval);
+
+    this.nextSkipTimeout = null;
+    this.attachVideoTimeout = null;
+    this.sliderInterval = null;
+    this.persistenceInterval = null;
+
+    if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
+      this.sliderSegmentsOverlay.remove();
+    }
+    this.sliderSegmentsOverlay = null;
+    this.progressBarElement = null;
+
+    if (this.video) {
+      this.video.removeEventListener('loadedmetadata', this.durationChangeHandler);
+      this.video.removeEventListener('durationchange', this.durationChangeHandler);
+      this.video.removeEventListener('play', this.scheduleSkipHandler);
+      this.video.removeEventListener('pause', this.scheduleSkipHandler);
+      this.video.removeEventListener('seeking', this.scheduleSkipHandler);
+      this.video.removeEventListener('seeked', this.scheduleSkipHandler);
+      this.video.removeEventListener('timeupdate', this.scheduleSkipHandler);
+      this.video = null;
+    }
+    
+    this.scheduleSkipHandler = null;
+    this.durationChangeHandler = null;
   }
 }
 
