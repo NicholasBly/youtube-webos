@@ -5,58 +5,23 @@ import { showNotification } from './ui'; // Assuming you have this file
 // Fallback for tiny-sha256 if it's not found (e.g. in a raw WebOS environment without module loading)
 if (typeof sha256 !== 'function' && typeof require === 'function') {
     try {
-        // This is a placeholder; direct inclusion or a global sha256 function might be needed for WebOS.
         console.warn("sha256 function was not initially available. Ensure it's correctly loaded for WebOS.");
     } catch (e) {
         console.error("Failed to load sha256. SponsorBlock functionality will be impaired.", e);
-        // Provide a dummy function if all else fails, to prevent crashes. This is NOT a real solution.
+        // Provide a dummy function if all else fails, to prevent crashes.
         window.sha256 = window.sha256 || function(s) { return s; };
     }
 }
 
-
-// Copied from https://github.com/ajayyy/SponsorBlock/blob/9392d16617d2d48abb6125c00e2ff6042cb7bebe/src/config.ts#L179-L233
 const barTypes = {
-  sponsor: {
-    color: '#00d400',
-    opacity: '0.7',
-    name: 'sponsored segment'
-  },
-  intro: {
-    color: '#00ffff',
-    opacity: '0.7',
-    name: 'intro'
-  },
-  outro: {
-    color: '#0202ed',
-    opacity: '0.7',
-    name: 'outro'
-  },
-  interaction: {
-    color: '#cc00ff',
-    opacity: '0.7',
-    name: 'interaction reminder'
-  },
-  selfpromo: {
-    color: '#ffff00',
-    opacity: '0.7',
-    name: 'self-promotion'
-  },
-  music_offtopic: {
-    color: '#ff9900',
-    opacity: '0.7',
-    name: 'non-music part'
-  },
-  preview: {
-    color: '#008fd6',
-    opacity: '0.7',
-    name: 'recap or preview'
-  },
-  chapter: {
-    color: 'rgba(128, 128, 128, 0.5)',
-    opacity: '0.5',
-    name: 'chapter'
-  }
+  sponsor: { color: '#00d400', opacity: '0.7', name: 'sponsored segment' },
+  intro: { color: '#00ffff', opacity: '0.7', name: 'intro' },
+  outro: { color: '#0202ed', opacity: '0.7', name: 'outro' },
+  interaction: { color: '#cc00ff', opacity: '0.7', name: 'interaction reminder' },
+  selfpromo: { color: '#ffff00', opacity: '0.7', name: 'self-promotion' },
+  music_offtopic: { color: '#ff9900', opacity: '0.7', name: 'non-music part' },
+  preview: { color: '#008fd6', opacity: '0.7', name: 'recap or preview' },
+  chapter: { color: 'rgba(128, 128, 128, 0.5)', opacity: '0.5', name: 'chapter' }
 };
 
 const sponsorblockAPI = 'https://sponsorblock.inf.re/api';
@@ -64,15 +29,11 @@ const sponsorblockAPI = 'https://sponsorblock.inf.re/api';
 class SponsorBlockHandler {
   video = null;
   active = true;
-
   attachVideoTimeout = null;
   nextSkipTimeout = null;
 
-  progressBarElement = null;
-  sliderInterval = null;
-  sliderObserver = null;
   sliderSegmentsOverlay = null;
-  reattachInterval = null; // For periodic check
+  maintainOverlayInterval = null; // For the persistent check loop
 
   scheduleSkipHandler = null;
   durationChangeHandler = null;
@@ -81,7 +42,6 @@ class SponsorBlockHandler {
 
   constructor(videoID) {
     this.videoID = videoID;
-    this.reattachInterval = null;
     console.info(`SponsorBlockHandler created for videoID: ${videoID}`);
   }
 
@@ -111,24 +71,15 @@ class SponsorBlockHandler {
 
         const results = await resp.json();
         
-        let result;
-        if (Array.isArray(results)) {
-            result = results.find((v) => v.videoID === this.videoID);
-        } else if (results && results.videoID === this.videoID) {
-            result = results;
-        }
-
-        console.info(this.videoID, 'API Response:', results);
-        console.info(this.videoID, 'Matched Result:', result);
+        let result = Array.isArray(results) ? results.find((v) => v.videoID === this.videoID) : (results && results.videoID === this.videoID ? results : null);
 
         if (!result || !result.segments || !result.segments.length) {
-          console.info(this.videoID, 'No segments found or result structure unexpected.');
+          console.info(this.videoID, 'No segments found.');
           return;
         }
 
         this.segments = result.segments;
         this.skippableCategories = this.getSkippableCategories();
-
         this.scheduleSkipHandler = () => this.scheduleSkip();
         this.durationChangeHandler = () => this.buildOverlay();
 
@@ -149,7 +100,7 @@ class SponsorBlockHandler {
         if (configRead('enableSponsorBlockMusicOfftopic')) skippableCategories.push('music_offtopic');
         if (configRead('enableSponsorBlockPreview')) skippableCategories.push('preview');
     } catch (e) {
-        console.warn("Could not read SponsorBlock config, using defaults (all skippable). Error:", e);
+        console.warn("Could not read SponsorBlock config, using defaults.", e);
         return ['sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 'music_offtopic', 'preview'];
     }
     return skippableCategories;
@@ -157,17 +108,13 @@ class SponsorBlockHandler {
 
   attachVideo() {
     clearTimeout(this.attachVideoTimeout);
-    this.attachVideoTimeout = null;
-
     this.video = document.querySelector('video');
     if (!this.video) {
-      console.info(this.videoID, 'No video element found yet. Retrying...');
       this.attachVideoTimeout = setTimeout(() => this.attachVideo(), 250);
       return;
     }
 
     console.info(this.videoID, 'Video element found. Binding event listeners.');
-
     this.video.addEventListener('loadedmetadata', this.durationChangeHandler);
     this.video.addEventListener('durationchange', this.durationChangeHandler);
     this.video.addEventListener('play', this.scheduleSkipHandler);
@@ -180,123 +127,50 @@ class SponsorBlockHandler {
         this.buildOverlay();
     }
   }
-  
-  // New method for periodically checking and re-attaching the overlay
-  checkAndReattachOverlay() {
-    if (!this.active || !this.progressBarElement || !this.sliderSegmentsOverlay) {
-        if (this.reattachInterval) {
-            clearInterval(this.reattachInterval);
-            this.reattachInterval = null;
-        }
+
+  maintainOverlay() {
+    // If handler is not active or the overlay hasn't been built, do nothing.
+    if (!this.active || !this.sliderSegmentsOverlay) {
         return;
     }
 
-    if (!this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
-        console.info(this.videoID, "Periodic check found overlay missing. Re-attaching.");
-        
-        if (document.body.contains(this.progressBarElement)) {
-            if (window.getComputedStyle(this.progressBarElement).position === 'static') {
-                this.progressBarElement.style.position = 'relative';
-            }
-            this.progressBarElement.prepend(this.sliderSegmentsOverlay);
-        } else {
-            console.info(this.videoID, "Progress bar lost. Restarting watch process.");
-            this.progressBarElement = null;
-            if (this.sliderObserver) this.sliderObserver.disconnect();
-            if (this.reattachInterval) clearInterval(this.reattachInterval);
-            this.watchForProgressBar();
-        }
-    }
-  }
-
-  // Moved from buildOverlay to be a class method
-  attachOverlayToProgressBar() {
-    if (this.progressBarElement && this.sliderSegmentsOverlay) {
-      const currentPosition = window.getComputedStyle(this.progressBarElement).position;
-      if (currentPosition === 'static') {
-          this.progressBarElement.style.position = 'relative';
-          console.info(this.videoID, `Set ${this.progressBarElement.className || this.progressBarElement.id} to position: relative`);
-      }
-      
-      this.progressBarElement.prepend(this.sliderSegmentsOverlay);
-      console.info(this.videoID, 'Segments overlay attached to progress bar:', this.progressBarElement);
-
-      if (this.sliderObserver) this.sliderObserver.disconnect();
-      if (this.progressBarElement.parentNode) {
-          this.sliderObserver = new MutationObserver((mutations) => {
-            let reAttachOverlay = false;
-            let reFindProgressBar = false;
-
-            for (const mutation of mutations) {
-              if (mutation.type === 'childList') {
-                if (mutation.removedNodes) {
-                  mutation.removedNodes.forEach(node => {
-                    if (node === this.sliderSegmentsOverlay) {
-                      console.info(this.videoID, 'Segments overlay removed by YouTube. Re-attaching.');
-                      reAttachOverlay = true;
-                    }
-                    if (node === this.progressBarElement) {
-                      console.info(this.videoID, 'Progress bar element removed. Re-finding.');
-                      reFindProgressBar = true;
-                    }
-                  });
-                }
-              }
-            }
-
-            if (reFindProgressBar) {
-              this.progressBarElement = null;
-              if(this.sliderObserver) this.sliderObserver.disconnect();
-              this.watchForProgressBar();
-            } else if (reAttachOverlay && this.progressBarElement && this.sliderSegmentsOverlay) {
-              if (document.body.contains(this.progressBarElement)) {
-                  this.progressBarElement.prepend(this.sliderSegmentsOverlay);
-              } else {
-                  this.progressBarElement = null;
-                  if(this.sliderObserver) this.sliderObserver.disconnect();
-                  this.watchForProgressBar();
-              }
-            }
-          });
-
-          this.sliderObserver.observe(this.progressBarElement.parentNode, { childList: true, subtree: false });
-          this.sliderObserver.observe(this.progressBarElement, { childList: true, subtree: false });
-      }
-
-    } else {
-        console.warn(this.videoID, "Progress bar element or overlay missing, cannot attach.");
-    }
-  }
-
-  // Moved from buildOverlay to be a class method
-  watchForProgressBar() {
-    if (this.sliderInterval) clearInterval(this.sliderInterval);
-
+    // 1. Find the progress bar every single time to get a fresh reference.
     const progressBarSelectors = [
       '.ytlr-progress-bar',
+      '.ytp-progress-bar',
+      '.ytp-progress-bar-container',
       '.ytLrProgressBarSlider',
-      '.ytLrProgressBarSliderBase' // Added for better targeting
+      '.ytLrProgressBarSliderBase'
     ];
-
-    this.sliderInterval = setInterval(() => {
-      for (const selector of progressBarSelectors) {
-        const element = document.querySelector(selector);
-        if (element && window.getComputedStyle(element).display !== 'none' && element.offsetWidth > 50) {
-          this.progressBarElement = element;
-          console.info(this.videoID, `Progress bar found with selector "${selector}":`, this.progressBarElement);
-          clearInterval(this.sliderInterval);
-          this.sliderInterval = null;
-          this.attachOverlayToProgressBar();
-          return;
-        }
+    let progressBarElement = null;
+    for (const selector of progressBarSelectors) {
+      const element = document.querySelector(selector);
+      if (element && element.offsetWidth > 50) {
+        progressBarElement = element;
+        break;
       }
-      console.info(this.videoID, 'Still searching for progress bar...');
-    }, 500);
+    }
+    
+    // If no progress bar is found on the page, we can't do anything.
+    if (!progressBarElement) {
+        return;
+    }
+
+    // 2. Ensure its position is 'relative' for absolute children to be placed correctly.
+    if (window.getComputedStyle(progressBarElement).position === 'static') {
+        progressBarElement.style.position = 'relative';
+    }
+
+    // 3. If our overlay isn't a child of the progress bar, add it.
+    if (!progressBarElement.contains(this.sliderSegmentsOverlay)) {
+        console.info(this.videoID, "Overlay missing or detached, re-attaching...");
+        progressBarElement.prepend(this.sliderSegmentsOverlay);
+    }
   }
 
   buildOverlay() {
     if (!this.video || !this.video.duration || isNaN(this.video.duration) || this.video.duration <= 0) {
-      console.info(this.videoID, 'Video duration not available or invalid. Overlay build deferred.');
+      console.info(this.videoID, 'Video duration not ready. Overlay build deferred.');
       return;
     }
     
@@ -308,26 +182,25 @@ class SponsorBlockHandler {
     const videoDuration = this.video.duration;
     console.info(this.videoID, `Building overlay for duration: ${videoDuration}s`);
 
-    if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
-        this.sliderSegmentsOverlay.remove();
-        this.sliderSegmentsOverlay = null;
+    // Create the overlay container element if it doesn't already exist.
+    if (!this.sliderSegmentsOverlay) {
+        this.sliderSegmentsOverlay = document.createElement('div');
+        this.sliderSegmentsOverlay.style.position = 'absolute';
+        this.sliderSegmentsOverlay.style.left = '0';
+        this.sliderSegmentsOverlay.style.top = '0';
+        this.sliderSegmentsOverlay.style.width = '100%';
+        this.sliderSegmentsOverlay.style.height = '100%';
+        this.sliderSegmentsOverlay.style.pointerEvents = 'none';
+        this.sliderSegmentsOverlay.style.zIndex = '10';
+        this.sliderSegmentsOverlay.id = 'sponsorblock-segments-overlay';
+    } else {
+        // Clear old segments if we are rebuilding the overlay.
+        while (this.sliderSegmentsOverlay.firstChild) {
+            this.sliderSegmentsOverlay.removeChild(this.sliderSegmentsOverlay.firstChild);
+        }
     }
-    if (this.sliderObserver) {
-        this.sliderObserver.disconnect();
-        this.sliderObserver = null;
-    }
 
-    this.sliderSegmentsOverlay = document.createElement('div');
-    this.sliderSegmentsOverlay.style.position = 'absolute';
-    this.sliderSegmentsOverlay.style.left = '0';
-    this.sliderSegmentsOverlay.style.top = '0';
-    this.sliderSegmentsOverlay.style.width = '100%';
-    this.sliderSegmentsOverlay.style.height = '100%';
-    this.sliderSegmentsOverlay.style.pointerEvents = 'none';
-    this.sliderSegmentsOverlay.style.zIndex = '10';
-    this.sliderSegmentsOverlay.id = 'sponsorblock-segments-overlay';
-
-
+    // Populate the overlay with the visual segment bars.
     this.segments.forEach((segment) => {
       const [start, end] = segment.segment;
       const segmentStart = Math.max(0, Math.min(start, videoDuration));
@@ -336,7 +209,6 @@ class SponsorBlockHandler {
       if (segmentEnd <= segmentStart) return;
 
       const barType = barTypes[segment.category] || barTypes.sponsor;
-      
       const segmentWidthPercent = ((segmentEnd - segmentStart) / videoDuration) * 100;
       const segmentLeftPercent = (segmentStart / videoDuration) * 100;
 
@@ -344,29 +216,22 @@ class SponsorBlockHandler {
       elm.classList.add('sponsorblock-segment-visual');
       elm.style.backgroundColor = barType.color;
       elm.style.opacity = barType.opacity;
-      
       elm.style.position = 'absolute';
       elm.style.left = `${segmentLeftPercent}%`;
       elm.style.width = `${segmentWidthPercent}%`;
-      
-      // MODIFICATION: Position segments on the bottom half to not cover chapters
-      elm.style.height = '60%';
+      elm.style.height = '60%'; // Position on bottom 60% to avoid covering chapters.
       elm.style.bottom = '0px';
-      elm.style.top = 'auto'; // unset top
-      
+      elm.style.top = 'auto'; // Unset top positioning.
       elm.style.borderRadius = 'inherit';
       elm.title = `${barType.name}: ${segmentStart.toFixed(1)}s - ${segmentEnd.toFixed(1)}s`;
 
       this.sliderSegmentsOverlay.appendChild(elm);
     });
 
-    this.watchForProgressBar();
-
-    // Start the periodic check to ensure the overlay stays put.
-    if (this.reattachInterval) {
-        clearInterval(this.reattachInterval);
+    // Start the persistent overlay loop if it's not already running.
+    if (!this.maintainOverlayInterval) {
+        this.maintainOverlayInterval = setInterval(() => this.maintainOverlay(), 250);
     }
-    this.reattachInterval = setInterval(() => this.checkAndReattachOverlay(), 1000);
   }
 
   scheduleSkip() {
@@ -378,48 +243,39 @@ class SponsorBlockHandler {
     }
 
     const currentTime = this.video.currentTime;
-    const nextSegments = this.segments.filter(
-      (seg) =>
-        seg.segment[0] >= currentTime - 0.5 &&
-        seg.segment[1] > currentTime
-    );
-    
-    nextSegments.sort((s1, s2) => s1.segment[0] - s2.segment[0]);
-
-    if (!nextSegments.length) {
-      return;
-    }
-
-    const segmentToSkip = nextSegments[0];
-    const [start, end] = segmentToSkip.segment;
-
-    if (this.skippableCategories.includes(segmentToSkip.category) && start > currentTime - 0.3) {
-      const timeUntilSkip = (start - currentTime) * 1000;
+    const nextSegment = this.segments
+      .filter(seg => seg.segment[1] > currentTime && this.skippableCategories.includes(seg.category))
+      .sort((a, b) => a.segment[0] - b.segment[0])[0];
       
-      this.nextSkipTimeout = setTimeout(() => {
-        if (!this.active || !this.video || this.video.paused) {
-          return;
-        }
-        if (this.video.currentTime >= start - 0.5 && this.video.currentTime < end) {
-            const skipName = barTypes[segmentToSkip.category]?.name || segmentToSkip.category;
-            console.info(this.videoID, `Performing skip of ${skipName} from ${this.video.currentTime.toFixed(1)}s to ${end.toFixed(1)}s.`);
-            if (typeof showNotification === 'function') {
-                 showNotification(`Skipping ${skipName}`);
-            }
-            this.video.currentTime = end;
-            this.scheduleSkip();
-        } else {
-            this.scheduleSkip();
-        }
-      }, Math.max(0, timeUntilSkip));
-    } else if (start <= currentTime && end > currentTime && this.skippableCategories.includes(segmentToSkip.category)) {
-        const skipName = barTypes[segmentToSkip.category]?.name || segmentToSkip.category;
-        console.info(this.videoID, `Currently inside skippable segment '${skipName}'. Skipping from ${currentTime.toFixed(1)}s to ${end.toFixed(1)}s.`);
-        if (typeof showNotification === 'function') {
-            showNotification(`Skipping ${skipName}`);
-        }
+    if (!nextSegment) return;
+
+    const [start, end] = nextSegment.segment;
+
+    // If we are currently inside a skippable segment
+    if (start <= currentTime && end > currentTime) {
+        const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
+        console.info(this.videoID, `Skipping current segment '${skipName}'.`);
+        if (typeof showNotification === 'function') showNotification(`Skipping ${skipName}`);
         this.video.currentTime = end;
+        this.scheduleSkip(); // Immediately check for the next segment
+        return;
+    }
+    
+    // If the next segment is in the future
+    if (start > currentTime) {
+      const timeUntilSkip = (start - currentTime) * 1000;
+      this.nextSkipTimeout = setTimeout(() => {
+        // Re-check conditions before skipping
+        if (!this.active || this.video.paused || this.video.seeking) return;
+        // Check if we are still on track for this segment
+        if (Math.abs(this.video.currentTime - start) < 1) {
+            const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
+            console.info(this.videoID, `Skipping upcoming segment '${skipName}'.`);
+            if (typeof showNotification === 'function') showNotification(`Skipping ${skipName}`);
+            this.video.currentTime = end;
+        }
         this.scheduleSkip();
+      }, timeUntilSkip);
     }
   }
 
@@ -429,29 +285,18 @@ class SponsorBlockHandler {
 
     clearTimeout(this.nextSkipTimeout);
     this.nextSkipTimeout = null;
-
     clearTimeout(this.attachVideoTimeout);
     this.attachVideoTimeout = null;
 
-    clearInterval(this.sliderInterval);
-    this.sliderInterval = null;
-    
-    // Clear the re-attachment interval
-    if (this.reattachInterval) {
-        clearInterval(this.reattachInterval);
-        this.reattachInterval = null;
+    if (this.maintainOverlayInterval) {
+        clearInterval(this.maintainOverlayInterval);
+        this.maintainOverlayInterval = null;
     }
 
-    if (this.sliderObserver) {
-      this.sliderObserver.disconnect();
-      this.sliderObserver = null;
-    }
-
-    if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
+    if (this.sliderSegmentsOverlay?.parentNode) {
       this.sliderSegmentsOverlay.remove();
-      this.sliderSegmentsOverlay = null;
     }
-    this.progressBarElement = null;
+    this.sliderSegmentsOverlay = null;
 
     if (this.video) {
       this.video.removeEventListener('loadedmetadata', this.durationChangeHandler);
@@ -475,11 +320,7 @@ if (typeof window !== 'undefined') {
 
     function uninitializeSponsorblock() {
       if (window.sponsorblock) {
-        try {
-          window.sponsorblock.destroy();
-        } catch (err) {
-          console.warn('window.sponsorblock.destroy() failed!', err);
-        }
+        window.sponsorblock.destroy();
         window.sponsorblock = null;
         console.info("SponsorBlock uninitialized.");
       }
@@ -489,78 +330,57 @@ if (typeof window !== 'undefined') {
         let currentPath = '';
         let searchParamsString = '';
         try {
-            const hash = window.location.hash;
-            if (hash.startsWith('#')) {
-                const pathAndQuery = hash.substring(1);
-                const queryIndex = pathAndQuery.indexOf('?');
-                if (queryIndex !== -1) {
-                    currentPath = pathAndQuery.substring(0, queryIndex);
-                    searchParamsString = pathAndQuery.substring(queryIndex);
-                } else {
-                    currentPath = pathAndQuery;
-                }
+            const hash = window.location.hash.substring(1);
+            const queryIndex = hash.indexOf('?');
+            if (queryIndex !== -1) {
+                currentPath = hash.substring(0, queryIndex);
+                searchParamsString = hash.substring(queryIndex);
+            } else {
+                currentPath = hash;
             }
         } catch (e) {
             console.error("Error parsing window.location.hash:", e);
-            currentPath = "/";
         }
 
-        const searchParams = new URLSearchParams(searchParamsString);
-        const videoID = searchParams.get('v');
-
+        const videoID = new URLSearchParams(searchParamsString).get('v');
         console.info(`Hash changed. Path: '${currentPath}', Video ID: '${videoID}'`);
 
-        if (currentPath !== '/watch' && window.sponsorblock) {
-          console.info('Not on a /watch path. Uninitializing SponsorBlock.');
+        if (currentPath !== '/watch' || !videoID) {
           uninitializeSponsorblock();
           return;
         }
 
-        const needsReload = videoID && (!window.sponsorblock || window.sponsorblock.videoID !== videoID);
-
+        const needsReload = !window.sponsorblock || window.sponsorblock.videoID !== videoID;
         if (needsReload) {
-          console.info(`Video ID changed to ${videoID} or SponsorBlock not initialized. Reloading.`);
           uninitializeSponsorblock();
-
           let sbEnabled = true;
           try {
             sbEnabled = configRead('enableSponsorBlock');
           } catch (e) {
-            console.warn("Could not read 'enableSponsorBlock' config. Defaulting to enabled. Error:", e);
+            console.warn("Could not read config, defaulting to enabled.", e);
           }
-          
           if (sbEnabled) {
-            console.info(`SponsorBlock is enabled. Initializing for video ID: ${videoID}`);
+            console.info(`SponsorBlock enabled. Initializing for video ID: ${videoID}`);
             window.sponsorblock = new SponsorBlockHandler(videoID);
             window.sponsorblock.init();
           } else {
-            console.info('SponsorBlock is disabled in config. Not loading.');
+            console.info('SponsorBlock is disabled in config.');
           }
-        } else if (!videoID && window.sponsorblock) {
-            console.info('No video ID in URL. Uninitializing SponsorBlock.');
-            uninitializeSponsorblock();
         }
     };
 
     window.addEventListener('hashchange', handleHashChange, false);
-
-    if (document.readyState === 'complete') {
-        setTimeout(handleHashChange, 500);
-    } else {
-        window.addEventListener('load', () => setTimeout(handleHashChange, 500));
-    }
+    // Initial run on page load
+    setTimeout(handleHashChange, 500);
 
 } else {
-    console.warn("SponsorBlock: 'window' object not found. Running in a non-browser environment?");
+    console.warn("SponsorBlock: 'window' object not found.");
 }
 
+// Dummy/fallback implementations for environments where these aren't provided.
 if (typeof configRead === 'undefined') {
     console.warn("configRead function is not defined. Using dummy implementation.");
-    window.configRead = function(key) {
-        if (key === 'enableSponsorBlock') return true;
-        if (key.startsWith('enableSponsorBlock')) return true;
-        return false;
-    };
+    window.configRead = function(key) { return true; };
 }
 
 if (typeof showNotification === 'undefined') {
