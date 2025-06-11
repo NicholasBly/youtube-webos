@@ -134,7 +134,6 @@ class SponsorBlockHandler {
   }
 }
 
-
 // Global instance management
 if (typeof window !== 'undefined') {
     window.sponsorblock = null;
