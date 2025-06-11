@@ -159,95 +159,116 @@ class SponsorBlockHandler {
   }
 
   buildOverlay() {
-    if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
-    if (!this.segments || !this.segments.length) return;
+  if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
+  if (!this.segments || !this.segments.length) return;
 
-    const videoDuration = this.video.duration;
-    console.info(this.videoID, `Building detached overlay for duration: ${videoDuration}s`);
+  const videoDuration = this.video.duration;
+  console.info(this.videoID, `Building detached overlay for duration: ${videoDuration}s`);
 
-    if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
+  if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
+    this.sliderSegmentsOverlay.remove();
+  }
+  if (this.animationFrameId) {
+    cancelAnimationFrame(this.animationFrameId);
+    this.animationFrameId = null;
+  }
+
+  this.sliderSegmentsOverlay = document.createElement('ul');
+  this.sliderSegmentsOverlay.style.cssText = `
+    position: fixed;
+    display: none;
+    padding: 0;
+    margin: 0;
+    pointer-events: none;
+    z-index: 9999;
+  `;
+
+  this.segments.forEach((segment) => {
+    const [start, end] = segment.segment;
+    const segmentStart = Math.max(0, Math.min(start, videoDuration));
+    const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
+    if (segmentEnd <= segmentStart) return;
+    const barType = barTypes[segment.category] || barTypes.sponsor;
+    const segmentWidthPercent = ((segmentEnd - segmentStart) / videoDuration) * 100;
+    const segmentLeftPercent = (segmentStart / videoDuration) * 100;
+    const elm = document.createElement('li');
+    elm.style.cssText = `
+      position: absolute;
+      list-style: none;
+      height: 100%;
+      background-color: ${barType.color};
+      opacity: ${barType.opacity};
+      left: ${segmentLeftPercent}%;
+      width: ${segmentWidthPercent}%;
+      border-radius: inherit;
+    `;
+    this.sliderSegmentsOverlay.appendChild(elm);
+  });
+
+  const syncOverlayPosition = () => {
+    if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
+      if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
         this.sliderSegmentsOverlay.remove();
-    }
-    if (this.animationFrameId) {
+        this.sliderSegmentsOverlay = null;
+      }
+      if (this.animationFrameId) {
         cancelAnimationFrame(this.animationFrameId);
         this.animationFrameId = null;
+      }
+      watchForProgressBar();
+      return;
     }
 
-    this.sliderSegmentsOverlay = document.createElement('ul');
-    this.sliderSegmentsOverlay.style.cssText = 'position: fixed; display: none; padding: 0; margin: 0; pointer-events: none; z-index: 999;';
+    const rect = this.progressBarElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0 || window.getComputedStyle(this.progressBarElement).display === 'none') {
+      this.sliderSegmentsOverlay.style.display = 'none';
+    } else {
+      this.sliderSegmentsOverlay.style.display = 'block';
+      this.sliderSegmentsOverlay.style.left = `${rect.left}px`;
+      this.sliderSegmentsOverlay.style.top = `${rect.top}px`;
+      this.sliderSegmentsOverlay.style.width = `${rect.width}px`;
+      this.sliderSegmentsOverlay.style.height = `${rect.height}px`;
+    }
 
-    this.segments.forEach((segment) => {
-      const [start, end] = segment.segment;
-      const segmentStart = Math.max(0, Math.min(start, videoDuration));
-      const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
-      if (segmentEnd <= segmentStart) return;
-      const barType = barTypes[segment.category] || barTypes.sponsor;
-      const segmentWidthPercent = ((segmentEnd - segmentStart) / videoDuration) * 100;
-      const segmentLeftPercent = (segmentStart / videoDuration) * 100;
-      const elm = document.createElement('li');
-      elm.style.cssText = `position: absolute; list-style: none; height: 100%; background-color: ${barType.color}; opacity: ${barType.opacity}; left: ${segmentLeftPercent}%; width: ${segmentWidthPercent}%; border-radius: inherit;`;
-      this.sliderSegmentsOverlay.appendChild(elm);
-    });
+    this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
+  };
 
-    const syncOverlayPosition = () => {
-        if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
-            if (this.sliderSegmentsOverlay) this.sliderSegmentsOverlay.style.display = 'none';
-            watchForProgressBar();
-            return;
+  const startSyncing = () => {
+    if (!document.body.contains(this.sliderSegmentsOverlay)) {
+      document.body.appendChild(this.sliderSegmentsOverlay);
+    }
+    if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
+    this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
+    console.info(this.videoID, 'Started detached overlay position sync.');
+  };
+
+  const watchForProgressBar = () => {
+    if (this.sliderInterval) clearInterval(this.sliderInterval);
+    const progressBarSelectors = [
+      '.ytlr-progress-bar__slider',
+      '.ytlr-multi-markers-player-bar-renderer',
+      '.ytlr-progress-bar',
+      '.ytLrProgressBarSlider',
+      '.ytp-progress-bar'
+    ];
+    this.sliderInterval = setInterval(() => {
+      for (const selector of progressBarSelectors) {
+        const element = document.querySelector(selector);
+        if (element && window.getComputedStyle(element).display !== 'none' && element.offsetWidth > 50) {
+          this.progressBarElement = element;
+          console.info(this.videoID, `Progress bar found with selector "${selector}".`);
+          clearInterval(this.sliderInterval);
+          this.sliderInterval = null;
+          startSyncing();
+          return;
         }
+      }
+    }, 500);
+  };
 
-        const rect = this.progressBarElement.getBoundingClientRect();
-        const style = window.getComputedStyle(this.progressBarElement);
+  watchForProgressBar();
+}
 
-        // --- MODIFICATION START: Robust visibility check ---
-        const isVisible = style.display !== 'none' &&
-                          style.visibility !== 'hidden' &&
-                          style.opacity !== '0' &&
-                          rect.width > 0 &&
-                          rect.height > 0;
-        // --- MODIFICATION END ---
-
-        if (isVisible) {
-            this.sliderSegmentsOverlay.style.display = 'block';
-            this.sliderSegmentsOverlay.style.left = `${rect.left}px`;
-            this.sliderSegmentsOverlay.style.top = `${rect.top}px`;
-            this.sliderSegmentsOverlay.style.width = `${rect.width}px`;
-            this.sliderSegmentsOverlay.style.height = `${rect.height}px`;
-        } else {
-            this.sliderSegmentsOverlay.style.display = 'none';
-        }
-        this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
-    };
-
-    const startSyncing = () => {
-        if (!document.body.contains(this.sliderSegmentsOverlay)) {
-            document.body.appendChild(this.sliderSegmentsOverlay);
-        }
-        if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
-        this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
-        console.info(this.videoID, 'Started detached overlay position sync.');
-    };
-
-    const watchForProgressBar = () => {
-      if (this.sliderInterval) clearInterval(this.sliderInterval);
-      const progressBarSelectors = ['.ytlr-progress-bar__slider', '.ytlr-multi-markers-player-bar-renderer', '.ytlr-progress-bar', '.ytLrProgressBarSlider', '.ytp-progress-bar'];
-      this.sliderInterval = setInterval(() => {
-        for (const selector of progressBarSelectors) {
-          const element = document.querySelector(selector);
-          if (element && window.getComputedStyle(element).display !== 'none' && element.offsetWidth > 50) {
-            this.progressBarElement = element;
-            console.info(this.videoID, `Progress bar found with selector "${selector}".`);
-            clearInterval(this.sliderInterval);
-            this.sliderInterval = null;
-            startSyncing();
-            return;
-          }
-        }
-      }, 500);
-    };
-
-    watchForProgressBar();
-  }
 
   scheduleSkip() {
     clearTimeout(this.nextSkipTimeout);
