@@ -79,15 +79,12 @@ class SponsorBlockHandler {
   progressBarElement = null;
   sliderInterval = null;
   sliderSegmentsOverlay = null;
-
-  // For detached overlay
   animationFrameId = null;
-  
-  // For watching the main controls container
   controlsContainer = null;
-  controlsInterval = null; // This will now be a persistent "guardian" interval
+  controlsInterval = null;
   controlsObserver = null;
 
+  // Handlers
   scheduleSkipHandler = null;
   durationChangeHandler = null;
   segments = null;
@@ -176,15 +173,13 @@ class SponsorBlockHandler {
     const updateOverlayVisibility = () => {
         if (!this.controlsContainer || !this.sliderSegmentsOverlay) return;
         const controlsAreVisible = this.controlsContainer.getAttribute('ishidden') === 'false';
-        const canShow = controlsAreVisible && this.progressBarElement;
-        
-        console.info(`SponsorBlock: Controls visible: ${controlsAreVisible}. Progress bar found: ${!!this.progressBarElement}. Can show overlay: ${canShow}.`);
-
-        this.sliderSegmentsOverlay.style.display = canShow ? 'block' : 'none';
+        console.info(`SponsorBlock: Controls visibility changed. Are controls visible? ${controlsAreVisible}.`);
+        this.sliderSegmentsOverlay.style.display = controlsAreVisible ? 'block' : 'none';
     };
 
     const syncOverlayPosition = () => {
         if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
+            this.sliderSegmentsOverlay.style.display = 'none'; // Hide overlay if bar is removed
             watchForProgressBar(); // Lost the bar, find it again.
             return;
         }
@@ -196,6 +191,25 @@ class SponsorBlockHandler {
         this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
     };
 
+    const watchForControlsContainer = () => {
+        clearInterval(this.controlsInterval);
+        this.controlsInterval = setInterval(() => {
+            if (this.controlsContainer && !document.body.contains(this.controlsContainer)) {
+                if (this.controlsObserver) this.controlsObserver.disconnect();
+                this.controlsContainer = null;
+            }
+            if (!this.controlsContainer) {
+                const element = document.querySelector('ytlr-pivot.ytLrPivotHost');
+                if (element) {
+                    this.controlsContainer = element;
+                    this.controlsObserver = new MutationObserver(updateOverlayVisibility);
+                    this.controlsObserver.observe(this.controlsContainer, { attributes: true, attributeFilter: ['ishidden', 'class'] });
+                    updateOverlayVisibility(); // Set initial state
+                }
+            }
+        }, 1000);
+    };
+
     const watchForProgressBar = () => {
       clearInterval(this.sliderInterval);
       const selectors = ['.ytlr-progress-bar__slider', '.ytlr-progress-bar', '.ytp-progress-bar'];
@@ -203,46 +217,26 @@ class SponsorBlockHandler {
         for (const selector of selectors) {
           const element = document.querySelector(selector);
           if (element && element.offsetWidth > 50) {
-            if (this.progressBarElement === element) return; // Already found this exact element.
             this.progressBarElement = element;
             console.info(this.videoID, `Progress bar found: "${selector}".`);
             clearInterval(this.sliderInterval);
+            
+            // --- MODIFICATION: START THE REST OF THE PROCESS ---
+            // 1. Start syncing the overlay's position to the newly found bar.
             if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
             this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
-            updateOverlayVisibility();
+
+            // 2. NOW that we have the progress bar, start watching the controls for visibility.
+            watchForControlsContainer();
             return;
           }
         }
       }, 500);
     };
-
-    const watchForControlsContainer = () => {
-        clearInterval(this.controlsInterval);
-        this.controlsInterval = setInterval(() => {
-            // If we have a container, check if it's still attached to the page. If not, nullify it.
-            if (this.controlsContainer && !document.body.contains(this.controlsContainer)) {
-                console.info("SponsorBlock: Stale controls container detected. Searching for new one.");
-                if (this.controlsObserver) this.controlsObserver.disconnect();
-                this.controlsContainer = null;
-            }
-
-            // If we don't have a container, search for it.
-            if (!this.controlsContainer) {
-                const element = document.querySelector('ytlr-pivot.ytLrPivotHost');
-                if (element) {
-                    console.info("SponsorBlock: Found controls container (ytlr-pivot). Attaching observer.");
-                    this.controlsContainer = element;
-                    this.controlsObserver = new MutationObserver(updateOverlayVisibility);
-                    this.controlsObserver.observe(this.controlsContainer, { attributes: true, attributeFilter: ['ishidden', 'class'] });
-                    updateOverlayVisibility();
-                }
-            }
-        }, 1000); // Check every second.
-    };
     
     document.body.appendChild(this.sliderSegmentsOverlay);
+    // Start the entire chain by searching for the progress bar first.
     watchForProgressBar();
-    watchForControlsContainer();
   }
 
   scheduleSkip() {
