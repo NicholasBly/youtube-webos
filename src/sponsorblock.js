@@ -365,8 +365,13 @@ class SponsorBlockHandler {
       // More robust list of selectors for the progress bar element itself (the track or a close container)
       // Order matters: try more specific/likely ones first.
       const progressBarSelectors = [
-        '.ytlr-progress-bar', // Common YouTube web
-        '.ytLrProgressBarSlider', // Sometimes chapters are drawn on this or similar named elements in new layouts
+        '.ytlr-progress-bar__slider',
+        '.ytlr-multi-markers-player-bar-renderer',
+        '.ytlr-progress-bar',
+        '.ytLrProgressBarSlider',
+        '.ytLrProgressBarSliderBase',
+        '.ytp-progress-bar',
+        '.ytp-progress-bar-container'
       ];
 
       this.sliderInterval = setInterval(() => {
