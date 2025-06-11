@@ -1,459 +1,441 @@
 import sha256 from 'tiny-sha256';
-import { configRead } from './config'; // Assuming you have this file
-import { showNotification } from './ui'; // Assuming you have this file
+import { configRead } from './config';
+import { showNotification } from './ui';
 
-/**
- * SponsorBlock.js for LG WebOS
- *
- * This script integrates SponsorBlock functionality into the YouTube app on LG WebOS.
- * It fetches sponsorship segments, displays them on the progress bar, and automatically
- * skips them based on user configuration.
- *
- * This implementation is based on concepts from the original SponsorBlock extension,
- * adapted for the WebOS environment. It includes robust observation to prevent
- * segments from disappearing during UI redraws and a custom notification system.
- */
+// Copied from https://github.com/ajayyy/SponsorBlock/blob/9392d16617d2d48abb6125c00e2ff6042cb7bebe/src/config.ts#L179-L233
+const barTypes = {
+  sponsor: {
+    color: '#00d400',
+    opacity: '0.7',
+    name: 'sponsored segment'
+  },
+  intro: {
+    color: '#00ffff',
+    opacity: '0.7',
+    name: 'intro'
+  },
+  outro: {
+    color: '#0202ed',
+    opacity: '0.7',
+    name: 'outro'
+  },
+  interaction: {
+    color: '#cc00ff',
+    opacity: '0.7',
+    name: 'interaction reminder'
+  },
+  selfpromo: {
+    color: '#ffff00',
+    opacity: '0.7',
+    name: 'self-promotion'
+  },
+  music_offtopic: {
+    color: '#ff9900',
+    opacity: '0.7',
+    name: 'non-music part'
+  },
+  preview: {
+    color: '#008fd6',
+    opacity: '0.7',
+    name: 'recap or preview'
+  }
+};
 
-// Assuming tiny-sha256 is loaded globally in the WebOS environment.
-// If not, it needs to be included directly in the app's vendor scripts.
-// Example: <script src="path/to/tiny-sha256.js"></script>
+const sponsorblockAPI = 'https://sponsorblock.inf.re/api';
 
-(function(window) {
-    'use strict';
+class SponsorBlockHandler {
+  video = null;
+  active = true;
 
-    // --- Helper Functions & Constants ---
+  attachVideoTimeout = null;
+  nextSkipTimeout = null;
 
-    // These functions should be provided by the WebOS environment.
-    // They are defined here as fallbacks to prevent errors if not present.
-    if (typeof window.configRead === 'undefined') {
-        console.warn("SponsorBlock: configRead function is not defined. Using dummy implementation.");
-        window.configRead = function(key) {
-            return !key.startsWith('enable') || true; // Default to true
-        };
+  slider = null;
+  sliderInterval = null;
+  sliderObserver = null;
+  sliderSegmentsOverlay = null;
+
+  scheduleSkipHandler = null;
+  durationChangeHandler = null;
+  segments = null;
+  skippableCategories = [];
+
+  constructor(videoID) {
+    this.videoID = videoID;
+  }
+
+  async init() {
+    const videoHash = sha256(this.videoID).substring(0, 4);
+    const categories = [
+      'sponsor',
+      'intro',
+      'outro',
+      'interaction',
+      'selfpromo',
+      'music_offtopic',
+      'preview'
+    ];
+    const resp = await fetch(
+      `${sponsorblockAPI}/skipSegments/${videoHash}?categories=${encodeURIComponent(
+        JSON.stringify(categories)
+      )}`
+    );
+    const results = await resp.json();
+
+    const result = results.find((v) => v.videoID === this.videoID);
+    console.info(this.videoID, 'Got it:', result);
+
+    if (!result || !result.segments || !result.segments.length) {
+      console.info(this.videoID, 'No segments found.');
+      return;
     }
 
-    if (typeof window.showNotification === 'undefined') {
-        console.warn("SponsorBlock: showNotification function is not defined. Using internal fallback.");
-        // A built-in notification system will be used.
+    this.segments = result.segments;
+    this.skippableCategories = this.getSkippableCategories();
+
+    this.scheduleSkipHandler = () => this.scheduleSkip();
+    this.durationChangeHandler = () => this.buildOverlay();
+
+    this.attachVideo();
+    this.buildOverlay();
+  }
+
+  getSkippableCategories() {
+    const skippableCategories = [];
+    if (configRead('enableSponsorBlockSponsor')) {
+      skippableCategories.push('sponsor');
+    }
+    if (configRead('enableSponsorBlockIntro')) {
+      skippableCategories.push('intro');
+    }
+    if (configRead('enableSponsorBlockOutro')) {
+      skippableCategories.push('outro');
+    }
+    if (configRead('enableSponsorBlockInteraction')) {
+      skippableCategories.push('interaction');
+    }
+    if (configRead('enableSponsorBlockSelfPromo')) {
+      skippableCategories.push('selfpromo');
+    }
+    if (configRead('enableSponsorBlockMusicOfftopic')) {
+      skippableCategories.push('music_offtopic');
+    }
+    if (configRead('enableSponsorBlockPreview')) {
+      skippableCategories.push('preview');
+    }
+    return skippableCategories;
+  }
+
+  attachVideo() {
+    clearTimeout(this.attachVideoTimeout);
+    this.attachVideoTimeout = null;
+
+    this.video = document.querySelector('video');
+    if (!this.video) {
+      console.info(this.videoID, 'No video yet...');
+      this.attachVideoTimeout = setTimeout(() => this.attachVideo(), 100);
+      return;
     }
 
+    console.info(this.videoID, 'Video found, binding...');
 
-    const SPONSORBLOCK_API = 'https://sponsor.ajay.app/api';
-    const CATEGORIES = ['sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 'music_offtopic', 'preview', 'filler'];
-    const BAR_TYPES = {
-        sponsor: { color: 'rgba(0, 212, 0, 0.7)', name: 'Sponsor' },
-        intro: { color: 'rgba(0, 255, 255, 0.7)', name: 'Intro' },
-        outro: { color: 'rgba(2, 2, 237, 0.7)', name: 'Outro' },
-        interaction: { color: 'rgba(204, 0, 255, 0.7)', name: 'Interaction Reminder' },
-        selfpromo: { color: 'rgba(255, 255, 0, 0.7)', name: 'Self-promotion' },
-        music_offtopic: { color: 'rgba(255, 153, 0, 0.7)', name: 'Non-music part' },
-        preview: { color: 'rgba(0, 143, 214, 0.7)', name: 'Recap/Preview' },
-        filler: { color: 'rgba(175, 175, 175, 0.7)', name: 'Filler Tangent' }
+    this.video.addEventListener('play', this.scheduleSkipHandler);
+    this.video.addEventListener('pause', this.scheduleSkipHandler);
+    this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
+    this.video.addEventListener('durationchange', this.durationChangeHandler);
+  }
+
+  buildOverlay() {
+    if (this.sliderSegmentsOverlay) {
+      console.info('Overlay already built');
+      return;
+    }
+
+    if (!this.video || !this.video.duration) {
+      console.info('No video duration yet');
+      return;
+    }
+
+    const videoDuration = this.video.duration;
+
+    this.sliderSegmentsOverlay = document.createElement('div');
+    this.segments.forEach((segment) => {
+      const [start, end] = segment.segment;
+      const barType = barTypes[segment.category] || {
+        color: 'blue',
+        opacity: 0.7
+      };
+      const transform = `translateX(${
+        (start / videoDuration) * 100.0
+      }%) scaleX(${(end - start) / videoDuration})`;
+      const elm = document.createElement('div');
+      elm.classList.add('ytlr-progress-bar__played');
+      elm.style['background-color'] = barType.color;
+      elm.style['opacity'] = barType.opacity;
+      elm.style['-webkit-transform'] = transform;
+      console.info('Generated element', elm, 'from', segment, transform);
+      this.sliderSegmentsOverlay.appendChild(elm);
+    });
+
+    const getSliderType = () => {
+      if (!this.slider) {
+        return null;
+      }
+
+      return this.slider.classList.contains(
+        'ytlr-multi-markers-player-bar-renderer'
+      )
+        ? 'multi-markers-player-bar'
+        : 'progress-bar';
     };
 
-    /**
-     * Handles displaying on-screen notifications.
-     */
-    class NotificationManager {
-        constructor() {
-            this.notificationElement = null;
+    const addSliderObserver = () => {
+      this.sliderObserver.observe(this.slider.parentNode, {
+        childList: true,
+        subtree: true
+      });
+    };
+
+    const addSliderOverlay = () => {
+      const sliderType = getSliderType();
+
+      // remove all styles from overlay
+      this.sliderSegmentsOverlay.removeAttribute('style');
+      this.sliderSegmentsOverlay.className = '';
+
+      switch (sliderType) {
+        case 'multi-markers-player-bar':
+          if (this.slider.parentNode) {
+            this.sliderSegmentsOverlay.style.top = '1.5rem';
+            this.sliderSegmentsOverlay.classList.add(
+              'ytlr-multi-markers-player-bar-renderer'
+            );
+            this.sliderSegmentsOverlay.classList.add(
+              'ytlr-multi-markers-player-bar-renderer__slider'
+            );
+
+            // add overlay just before playhead, so
+            // it is between the chapter layer and playhead
+            this.slider.parentNode.insertBefore(
+              this.sliderSegmentsOverlay,
+              document.querySelector('.ytlr-playhead')
+            );
+          } else {
+            console.info('slider without parent? video must have ended.');
+          }
+          break;
+
+        case 'progress-bar':
+          this.slider.appendChild(this.sliderSegmentsOverlay);
+          break;
+
+        default:
+          console.info('unknown slider type');
+          break;
+      }
+    };
+
+    const watchForSlider = () => {
+      if (this.sliderInterval) clearInterval(this.sliderInterval);
+
+      this.sliderInterval = setInterval(() => {
+        this.slider = document.querySelector(
+          '.ytlr-progress-bar, .ytlr-multi-markers-player-bar-renderer'
+        );
+        if (this.slider) {
+          console.info('slider found...', this.slider);
+          clearInterval(this.sliderInterval);
+          this.sliderInterval = null;
+          addSliderObserver();
+          addSliderOverlay();
         }
+      }, 100);
+    };
 
-        show(message) {
-            // Use the app's native notification system if it exists
-            if (typeof window.showNotification === 'function') {
-                window.showNotification(message);
-                return;
+    this.sliderObserver = new MutationObserver((mutations) => {
+      mutations.forEach((m) => {
+        if (m.removedNodes) {
+          for (const node of m.removedNodes) {
+            if (node === this.sliderSegmentsOverlay) {
+              console.info('bringing back segments overlay');
+              addSliderOverlay();
             }
-
-            // Fallback to a custom HTML notification
-            if (this.notificationElement) {
-                this.notificationElement.remove();
+            if (node === this.slider) {
+              console.info('slider removed, watching again');
+              this.sliderObserver.disconnect();
+              watchForSlider();
             }
-
-            this.notificationElement = document.createElement('div');
-            this.notificationElement.textContent = message;
-            Object.assign(this.notificationElement.style, {
-                position: 'fixed',
-                top: '20px',
-                right: '20px',
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                color: 'white',
-                padding: '10px 20px',
-                borderRadius: '8px',
-                zIndex: '9999',
-                fontSize: '16px',
-                opacity: '0',
-                transition: 'opacity 0.5s',
-            });
-            
-            document.body.appendChild(this.notificationElement);
-
-            // Fade in
-            setTimeout(() => {
-                this.notificationElement.style.opacity = '1';
-            }, 10);
-
-            // Fade out and remove
-            setTimeout(() => {
-                if (this.notificationElement) {
-                   this.notificationElement.style.opacity = '0';
-                   setTimeout(() => {
-                        if (this.notificationElement) this.notificationElement.remove();
-                        this.notificationElement = null;
-                   }, 500);
-                }
-            }, 2500);
+          }
         }
+      });
+    });
+
+    watchForSlider();
+  }
+
+  scheduleSkip() {
+    clearTimeout(this.nextSkipTimeout);
+    this.nextSkipTimeout = null;
+
+    if (!this.active) {
+      console.info(this.videoID, 'No longer active, ignoring...');
+      return;
     }
 
-    /**
-     * The main class for handling SponsorBlock logic.
-     */
-    class SponsorBlock {
-        constructor(videoID) {
-            this.videoID = videoID;
-            this.video = null;
-            this.progressBar = null;
-            this.segments = [];
-            this.skippableCategories = [];
-            this.active = true;
-
-            this.timeouts = {
-                scheduleSkip: null,
-            };
-            this.intervals = {
-                waitForElements: null,
-            };
-            this.observers = {
-                ui: null,
-            };
-
-            this.previewBar = new PreviewBar();
-            this.notificationManager = new NotificationManager();
-
-            console.info(`SponsorBlock: Initialized for videoID: ${this.videoID}`);
-            this.init();
-        }
-
-        async init() {
-            if (typeof sha256 !== 'function') {
-                console.error("SponsorBlock: sha256 function is not available. Cannot fetch segments.");
-                return;
-            }
-
-            this.skippableCategories = this.getSkippableCategories();
-            
-            try {
-                const videoHash = sha256(this.videoID).substring(0, 4);
-                const response = await fetch(`${SPONSORBLOCK_API}/skipSegments/${videoHash}?categories=${JSON.stringify(CATEGORIES)}`);
-                
-                if (!response.ok) {
-                    console.error(`SponsorBlock: API request failed with status: ${response.status}`);
-                    return;
-                }
-                
-                const results = await response.json();
-                const videoInfo = results.find(v => v.videoID === this.videoID);
-
-                if (videoInfo && videoInfo.segments && videoInfo.segments.length > 0) {
-                    this.segments = videoInfo.segments;
-                    console.info(`SponsorBlock: Found ${this.segments.length} segments for video ${this.videoID}.`);
-                    this.waitForPlayerElements();
-                } else {
-                    console.info(`SponsorBlock: No segments found for video ${this.videoID}.`);
-                }
-            } catch (error) {
-                console.error("SponsorBlock: Error fetching segments:", error);
-            }
-        }
-
-        getSkippableCategories() {
-            return CATEGORIES.filter(cat => window.configRead(`skip${cat.charAt(0).toUpperCase() + cat.slice(1)}`));
-        }
-
-        waitForPlayerElements() {
-            this.clearInterval('waitForElements');
-
-            this.intervals.waitForElements = setInterval(() => {
-                if (!this.video) {
-                    this.video = document.querySelector('video.video-stream.html5-main-video');
-                    if (this.video) {
-                        console.info("SponsorBlock: Video element found.");
-                        this.addVideoEventListeners();
-                    }
-                }
-                
-                if (this.video && !this.progressBar) {
-                    const selectors = ['.ytlr-progress-bar', '.ytLrProgressBarSlider'];
-                     for (const selector of selectors) {
-                        const element = document.querySelector(selector);
-                        if (element && element.offsetWidth > 100) {
-                            console.info(`SponsorBlock: Progress bar found with selector: "${selector}"`);
-                            this.progressBar = element;
-                            break;
-                        }
-                    }
-                }
-                
-                if (this.video && this.progressBar) {
-                    this.clearInterval('waitForElements');
-                    this.renderSegments();
-                    this.observeUI();
-                }
-            }, 500);
-        }
-
-        addVideoEventListeners() {
-            this.scheduleSkip = this.scheduleSkip.bind(this);
-            this.renderSegments = this.renderSegments.bind(this);
-
-            this.video.addEventListener('play', this.scheduleSkip);
-            this.video.addEventListener('pause', this.scheduleSkip);
-            this.video.addEventListener('seeking', this.scheduleSkip);
-            this.video.addEventListener('timeupdate', this.scheduleSkip);
-            this.video.addEventListener('loadedmetadata', this.renderSegments);
-        }
-
-        removeVideoEventListeners() {
-            if (this.video) {
-                this.video.removeEventListener('play', this.scheduleSkip);
-                this.video.removeEventListener('pause', this.scheduleSkip);
-                this.video.removeEventListener('seeking', this.scheduleSkip);
-                this.video.removeEventListener('timeupdate', this.scheduleSkip);
-                this.video.removeEventListener('loadedmetadata', this.renderSegments);
-            }
-        }
-        
-        renderSegments() {
-            if (this.progressBar && this.video && this.video.duration > 0) {
-                 this.previewBar.render(this.progressBar, this.segments, this.video.duration);
-            }
-        }
-
-        observeUI() {
-            if (this.observers.ui || !this.progressBar || !this.progressBar.parentNode) return;
-
-            this.observers.ui = new MutationObserver(mutations => {
-                for (const mutation of mutations) {
-                     if (mutation.type === 'childList') {
-                        let segmentsRemoved = false;
-                        let chaptersAdded = false;
-
-                        mutation.removedNodes.forEach(node => {
-                            if (node.id === 'sponsorblock-preview-bar') {
-                                segmentsRemoved = true;
-                            }
-                        });
-
-                        mutation.addedNodes.forEach(node => {
-                            if (node.nodeType === Node.ELEMENT_NODE && node.matches('.ytp-chapters-container, .ytLrMultiMarkersPlayerBarRendererHost')) {
-                                chaptersAdded = true;
-                            }
-                        });
-
-                        // If YouTube adds its chapters or removes our segments, we re-render ours on top.
-                        if (segmentsRemoved || chaptersAdded) {
-                            console.info("SponsorBlock: Player UI updated. Re-rendering segments to ensure visibility.");
-                            this.renderSegments();
-                            // We don't need to break, let it check all mutations
-                        }
-                    }
-                }
-            });
-
-            // Observe the progress bar and its parent to catch UI changes
-            this.observers.ui.observe(this.progressBar.parentNode, { childList: true, subtree: true });
-        }
-
-
-        scheduleSkip() {
-            this.clearTimeout('scheduleSkip');
-
-            if (!this.active || !this.video || this.video.paused || !this.segments.length) {
-                return;
-            }
-
-            const currentTime = this.video.currentTime;
-            let upcomingSegment = null;
-
-            for (const segment of this.segments) {
-                if (currentTime >= segment.segment[0] && currentTime < segment.segment[1]) {
-                    if (this.skippableCategories.includes(segment.category)) {
-                        this.performSkip(segment);
-                        return;
-                    }
-                }
-                else if (segment.segment[0] > currentTime && this.skippableCategories.includes(segment.category)) {
-                    if (!upcomingSegment || segment.segment[0] < upcomingSegment.segment[0]) {
-                        upcomingSegment = segment;
-                    }
-                }
-            }
-
-            if (upcomingSegment) {
-                const timeUntilSkip = (upcomingSegment.segment[0] - currentTime) * 1000;
-                this.timeouts.scheduleSkip = setTimeout(() => this.performSkip(upcomingSegment), Math.max(0, timeUntilSkip));
-            }
-        }
-
-        performSkip(segment) {
-            if (!this.active || !this.video || this.video.paused) {
-                return;
-            }
-            
-            // Check if we are still within a reasonable timeframe of the segment start
-            if (this.video.currentTime >= segment.segment[0] - 0.5 && this.video.currentTime < segment.segment[1]) {
-                const segmentName = BAR_TYPES[segment.category]?.name || segment.category;
-                this.notificationManager.show(`Skipping ${segmentName}`);
-                this.video.currentTime = segment.segment[1];
-            }
-        }
-
-        clearTimeout(name) {
-            if (this.timeouts[name]) {
-                clearTimeout(this.timeouts[name]);
-                this.timeouts[name] = null;
-            }
-        }
-
-        clearInterval(name) {
-            if (this.intervals[name]) {
-                clearInterval(this.intervals[name]);
-                this.intervals[name] = null;
-            }
-        }
-        
-        destroyObserver() {
-            if(this.observers.ui) {
-                this.observers.ui.disconnect();
-                this.observers.ui = null;
-            }
-        }
-        
-        destroy() {
-            console.info("SponsorBlock: Destroying instance.");
-            this.active = false;
-            
-            this.removeVideoEventListeners();
-            this.destroyObserver();
-            
-            Object.keys(this.timeouts).forEach(name => this.clearTimeout(name));
-            Object.keys(this.intervals).forEach(name => this.clearInterval(name));
-            
-            this.previewBar.clear();
-
-            this.video = null;
-            this.progressBar = null;
-        }
+    if (this.video.paused) {
+      console.info(this.videoID, 'Currently paused, ignoring...');
+      return;
     }
 
-    /**
-     * Handles the creation and rendering of the sponsor segments bar.
-     */
-    class PreviewBar {
-        constructor() {
-            this.container = null;
-        }
+    // Sometimes timeupdate event (that calls scheduleSkip) gets fired right before
+    // already scheduled skip routine below. Let's just look back a little bit
+    // and, in worst case, perform a skip at negative interval (immediately)...
+    const nextSegments = this.segments.filter(
+      (seg) =>
+        seg.segment[0] > this.video.currentTime - 0.3 &&
+        seg.segment[1] > this.video.currentTime - 0.3
+    );
+    nextSegments.sort((s1, s2) => s1.segment[0] - s2.segment[0]);
 
-        render(progressBar, segments, duration) {
-            if (!progressBar || !segments || !duration || !document.body.contains(progressBar)) return;
-
-            this.clear();
-
-            this.container = document.createElement('div');
-            this.container.id = 'sponsorblock-preview-bar';
-            Object.assign(this.container.style, {
-                position: 'absolute',
-                top: '0',
-                left: '0',
-                width: '100%',
-                height: '100%',
-                pointerEvents: 'none',
-                zIndex: '5',
-            });
-
-            segments.forEach(segment => {
-                const bar = this.createSegmentBar(segment, duration);
-                this.container.appendChild(bar);
-            });
-            
-            if (window.getComputedStyle(progressBar).position === 'static') {
-                progressBar.style.position = 'relative';
-            }
-
-            progressBar.prepend(this.container);
-        }
-
-        createSegmentBar(segment, duration) {
-            const bar = document.createElement('div');
-            const barType = BAR_TYPES[segment.category] || BAR_TYPES.sponsor;
-
-            const startTime = Math.max(0, segment.segment[0]);
-            const endTime = Math.min(duration, segment.segment[1]);
-            const segmentDuration = endTime - startTime;
-
-            if (segmentDuration <= 0) return document.createDocumentFragment();
-
-            const left = (startTime / duration) * 100;
-            const width = (segmentDuration / duration) * 100;
-
-            Object.assign(bar.style, {
-                position: 'absolute',
-                left: `${left}%`,
-                width: `${width}%`,
-                height: '100%',
-                backgroundColor: barType.color,
-                borderRadius: 'inherit'
-            });
-
-            bar.title = `${barType.name}: ${this.formatTime(startTime)} - ${this.formatTime(endTime)}`;
-
-            return bar;
-        }
-        
-        formatTime(seconds) {
-            const date = new Date(0);
-            date.setSeconds(seconds);
-            return date.toISOString().substr(11, 8);
-        }
-
-        clear() {
-            const existingBar = document.getElementById('sponsorblock-preview-bar');
-            if (existingBar) {
-                existingBar.remove();
-            }
-            this.container = null;
-        }
+    if (!nextSegments.length) {
+      console.info(this.videoID, 'No more segments');
+      return;
     }
 
-    // --- Global Management ---
-    
-    function initializeSponsorBlock() {
-        if (window.sponsorBlockInstance) {
-            window.sponsorBlockInstance.destroy();
-            window.sponsorBlockInstance = null;
+    const [segment] = nextSegments;
+    const [start, end] = segment.segment;
+    console.info(
+      this.videoID,
+      'Scheduling skip of',
+      segment,
+      'in',
+      start - this.video.currentTime
+    );
+
+    this.nextSkipTimeout = setTimeout(
+      () => {
+        if (this.video.paused) {
+          console.info(this.videoID, 'Currently paused, ignoring...');
+          return;
+        }
+        if (!this.skippableCategories.includes(segment.category)) {
+          console.info(
+            this.videoID,
+            'Segment',
+            segment.category,
+            'is not skippable, ignoring...'
+          );
+          return;
         }
 
-        const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
-        const videoID = urlParams.get('v');
-        const isWatchPage = window.location.hash.startsWith('#/watch');
+        const skipName = barTypes[segment.category]?.name || segment.category;
+        console.info(this.videoID, 'Skipping', segment);
+        showNotification(`Skipping ${skipName}`);
+        this.video.currentTime = end;
+        this.scheduleSkip();
+      },
+      (start - this.video.currentTime) * 1000
+    );
+  }
 
-        if (isWatchPage && videoID) {
-            if (window.configRead('enableSponsorBlock')) {
-                console.info("SponsorBlock: Initializing for new video.");
-                window.sponsorBlockInstance = new SponsorBlock(videoID);
-            } else {
-                console.info("SponsorBlock is disabled in settings.");
-            }
-        } else {
-             console.info("SponsorBlock: Not a watch page, not initializing.");
-        }
+  destroy() {
+    console.info(this.videoID, 'Destroying');
+
+    this.active = false;
+
+    if (this.nextSkipTimeout) {
+      clearTimeout(this.nextSkipTimeout);
+      this.nextSkipTimeout = null;
     }
 
-    // --- Entry Point ---
-    
-    window.addEventListener('hashchange', initializeSponsorBlock, false);
-    setTimeout(initializeSponsorBlock, 500);
+    if (this.attachVideoTimeout) {
+      clearTimeout(this.attachVideoTimeout);
+      this.attachVideoTimeout = null;
+    }
 
-})(window);
+    if (this.sliderInterval) {
+      clearInterval(this.sliderInterval);
+      this.sliderInterval = null;
+    }
+
+    if (this.sliderObserver) {
+      this.sliderObserver.disconnect();
+      this.sliderObserver = null;
+    }
+
+    if (this.sliderSegmentsOverlay) {
+      this.sliderSegmentsOverlay.remove();
+      this.sliderSegmentsOverlay = null;
+    }
+
+    if (this.video) {
+      this.video.removeEventListener('play', this.scheduleSkipHandler);
+      this.video.removeEventListener('pause', this.scheduleSkipHandler);
+      this.video.removeEventListener('timeupdate', this.scheduleSkipHandler);
+      this.video.removeEventListener(
+        'durationchange',
+        this.durationChangeHandler
+      );
+    }
+  }
+}
+
+// When this global variable was declared using let and two consecutive hashchange
+// events were fired (due to bubbling? not sure...) the second call handled below
+// would not see the value change from first call, and that would cause multiple
+// SponsorBlockHandler initializations... This has been noticed on Chromium 38.
+// This either reveals some bug in chromium/webpack/babel scope handling, or
+// shows my lack of understanding of javascript. (or both)
+window.sponsorblock = null;
+
+function uninitializeSponsorblock() {
+  if (!window.sponsorblock) {
+    return;
+  }
+  try {
+    window.sponsorblock.destroy();
+  } catch (err) {
+    console.warn('window.sponsorblock.destroy() failed!', err);
+  }
+  window.sponsorblock = null;
+}
+
+window.addEventListener(
+  'hashchange',
+  () => {
+    const newURL = new URL(location.hash.substring(1), location.href);
+    // uninitialize sponsorblock when not on `/watch` path, to prevent
+    // it from attaching to playback preview video element loaded on
+    // home page
+    if (newURL.pathname !== '/watch' && window.sponsorblock) {
+      console.info('uninitializing sponsorblock on a non-video page');
+      uninitializeSponsorblock();
+      return;
+    }
+
+    const videoID = newURL.searchParams.get('v');
+    const needsReload =
+      videoID &&
+      (!window.sponsorblock || window.sponsorblock.videoID != videoID);
+
+    console.info(
+      'hashchange',
+      videoID,
+      window.sponsorblock,
+      window.sponsorblock ? window.sponsorblock.videoID : null,
+      needsReload
+    );
+
+    if (needsReload) {
+      uninitializeSponsorblock();
+
+      if (configRead('enableSponsorBlock')) {
+        window.sponsorblock = new SponsorBlockHandler(videoID);
+        window.sponsorblock.init();
+      } else {
+        console.info('SponsorBlock disabled, not loading');
+      }
+    }
+  },
+  false
+);
