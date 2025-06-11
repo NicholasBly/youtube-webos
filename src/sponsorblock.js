@@ -220,7 +220,7 @@ class SponsorBlockHandler {
     }
   }
 
-buildOverlay() {
+	buildOverlay() {
     // Guard against missing video or duration
     if (!this.video || !this.video.duration || isNaN(this.video.duration) || this.video.duration <= 0) {
       console.info(this.videoID, 'Video duration not available or invalid. Overlay build deferred.');
@@ -288,52 +288,52 @@ buildOverlay() {
     });
 
     const attachOverlayToProgressBar = () => {
-        if (!this.progressBarElement || !this.sliderSegmentsOverlay) {
-            console.warn(this.videoID, "Progress bar element or overlay missing, cannot attach.");
-            return;
-        }
+      // This function relies on 'watchForProgressBar' being available in its scope, which it is.
 
-        // Ensure the parent is a positioning context
+      if (this.progressBarElement && this.sliderSegmentsOverlay) {
+        // Ensure the progress bar element can host an absolutely positioned overlay.
         const currentPosition = window.getComputedStyle(this.progressBarElement).position;
         if (currentPosition === 'static') {
-            this.progressBarElement.style.position = 'relative';
+            this.progressBarElement.style.position = 'relative'; // Make it a positioning context
         }
         
         this.progressBarElement.prepend(this.sliderSegmentsOverlay);
         console.info(this.videoID, 'Segments overlay attached to progress bar:', this.progressBarElement);
 
-        // Disconnect previous observer if it exists
+        // Disconnect any existing observer before creating the new, more robust one.
         if (this.sliderObserver) {
             this.sliderObserver.disconnect();
         }
 
-        // ** START: MODIFIED LOGIC **
-        this.sliderObserver = new MutationObserver(() => {
-            // If progress bar element is gone, restart the search
-            if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
-                console.info(this.videoID, 'Progress bar element removed from DOM. Re-finding...');
+        // Setup MutationObserver to persistently keep the overlay attached.
+        if (this.progressBarElement.parentNode) { // Observer needs a parent node to attach to.
+            this.sliderObserver = new MutationObserver(() => {
+              // CHECK 1: Is the progress bar itself still on the page?
+              // If not, it was removed entirely. We need to stop observing and find it again.
+              if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
+                console.info(this.videoID, 'Progress bar element removed. Re-finding...');
                 this.sliderObserver.disconnect();
-                this.progressBarElement = null;
-                watchForProgressBar(); // Restart the search
-                return; // Stop this observer callback
-            }
+                this.progressBarElement = null; // Clear the old reference
+                watchForProgressBar(); // Restart the entire search process
+                return; // Exit the observer callback
+              }
 
-            // If the overlay exists but is not a child of the progress bar, re-attach it
-            if (this.sliderSegmentsOverlay && !this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
-                console.info(this.videoID, 'Overlay detached by YouTube. Re-attaching.');
-                // Re-apply positioning context in case it was reset
-                if (window.getComputedStyle(this.progressBarElement).position === 'static') {
-                    this.progressBarElement.style.position = 'relative';
-                }
+              // CHECK 2: Is our overlay still inside the progress bar?
+              // If not, YouTube's UI redrew its children and we need to add it back.
+              if (this.sliderSegmentsOverlay && !this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
+                console.info(this.videoID, 'Overlay was detached. Re-attaching.');
                 this.progressBarElement.prepend(this.sliderSegmentsOverlay);
-            }
-        });
+              }
+            });
 
-        // Observe the parent of the progress bar for any changes in its children or their children (subtree)
-        if (this.progressBarElement.parentNode) {
+            // Start observing the PARENT of the progress bar.
+            // The `subtree: true` option is crucial, as it detects changes to the progress bar's children.
             this.sliderObserver.observe(this.progressBarElement.parentNode, { childList: true, subtree: true });
         }
-        // ** END: MODIFIED LOGIC **
+
+      } else {
+          console.warn(this.videoID, "Progress bar element or overlay missing, cannot attach.");
+      }
     };
 
     const watchForProgressBar = () => {
