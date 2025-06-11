@@ -192,26 +192,22 @@ class SponsorBlockHandler {
       this.sliderSegmentsOverlay.remove();
     }
     if (this.sliderInterval) clearInterval(this.sliderInterval);
-    if (this.positioningInterval) clearInterval(this.positioningInterval); // Clear previous positioning interval
+    if (this.positioningInterval) clearInterval(this.positioningInterval);
 
     this.sliderSegmentsOverlay = document.createElement('ul');
     this.sliderSegmentsOverlay.id = 'previewbar';
-    
-    // --- MODIFICATION ---
-    // Minimal styling, as position and size will be set dynamically
     this.sliderSegmentsOverlay.style.cssText = `
       position: absolute;
       pointer-events: none;
       z-index: 10;
       margin: 0;
       padding: 0;
-      opacity: 0; /* Start hidden until correctly positioned */
-      transition: opacity 0.2s;
+      opacity: 0; /* Hidden by default */
+      transition: opacity 0.2s linear;
     `;
 
     this.segments.forEach((segment) => {
       const [start, end] = segment.segment;
-      // ... (The rest of the forEach loop that creates the 'li' elements remains the same)
       const segmentStart = Math.max(0, Math.min(start, videoDuration));
       const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
 
@@ -239,8 +235,12 @@ class SponsorBlockHandler {
     });
 
     const trackProgressBarPosition = (playerContainer) => {
+      // More comprehensive list of selectors for the progress bar
       const progressBarSelectors = [
-        '.ytp-progress-bar-container', '.ytlr-progress-bar'
+        '.ytp-progress-bar-container',
+        '.ytp-progress-bar',
+        '.ytlr-progress-bar',
+        '.ytlr-multi-markers-player-bar-renderer',
       ];
 
       if (this.positioningInterval) clearInterval(this.positioningInterval);
@@ -248,33 +248,39 @@ class SponsorBlockHandler {
       this.positioningInterval = setInterval(() => {
         let progressBar = null;
         for (const selector of progressBarSelectors) {
-          progressBar = document.querySelector(selector);
-          if (progressBar) break;
+          const element = playerContainer.querySelector(selector);
+          // Find the first visible progress bar element
+          if (element && element.offsetParent !== null) {
+            progressBar = element;
+            break;
+          }
         }
 
         if (playerContainer && progressBar && document.body.contains(playerContainer)) {
           const parentRect = playerContainer.getBoundingClientRect();
           const progressRect = progressBar.getBoundingClientRect();
 
-          // Calculate position relative to the parent container
-          const top = progressRect.top - parentRect.top;
-          const left = progressRect.left - parentRect.left;
+          // --- CRITICAL SANITY CHECK ---
+          // Only proceed if we have a valid size. This prevents the 0x0 issue.
+          if (progressRect.width > 50 && progressRect.height > 0) {
+            const top = progressRect.top - parentRect.top;
+            const left = progressRect.left - parentRect.left;
 
-          // Apply the dynamic position and size
-          this.sliderSegmentsOverlay.style.top = `${top}px`;
-          this.sliderSegmentsOverlay.style.left = `${left}px`;
-          this.sliderSegmentsOverlay.style.width = `${progressRect.width}px`;
-          this.sliderSegmentsOverlay.style.height = `${progressRect.height}px`;
-          this.sliderSegmentsOverlay.style.opacity = '1'; // Make it visible
+            this.sliderSegmentsOverlay.style.top = `${top}px`;
+            this.sliderSegmentsOverlay.style.left = `${left}px`;
+            this.sliderSegmentsOverlay.style.width = `${progressRect.width}px`;
+            this.sliderSegmentsOverlay.style.height = `${progressRect.height}px`;
+            this.sliderSegmentsOverlay.style.opacity = '1'; // Make visible only when position is valid
+          } else {
+             this.sliderSegmentsOverlay.style.opacity = '0'; // Hide if progress bar is not valid
+          }
         } else {
-          // If the progress bar disappears (e.g., in fullscreen), hide the overlay
-          this.sliderSegmentsOverlay.style.opacity = '0';
+          this.sliderSegmentsOverlay.style.opacity = '0'; // Hide if elements are not found
           if (!document.body.contains(playerContainer)) {
-              // The whole player was removed, stop trying
-              clearInterval(this.positioningInterval);
+            clearInterval(this.positioningInterval);
           }
         }
-      }, 250); // Check position 4 times a second
+      }, 200);
     };
 
     const attachOverlayToPlayer = (playerContainer) => {
@@ -289,14 +295,12 @@ class SponsorBlockHandler {
     const watchForPlayerContainer = () => {
       if (this.sliderInterval) clearInterval(this.sliderInterval);
       
-      const playerContainerSelectors = [
-        '.html5-video-player', '#movie_player', '#player-container-inner'
-      ];
+      const playerContainerSelectors = ['.html5-video-player', '#movie_player'];
 
       this.sliderInterval = setInterval(() => {
         for (const selector of playerContainerSelectors) {
           const element = document.querySelector(selector);
-          if (element && window.getComputedStyle(element).display !== 'none') {
+          if (element && element.offsetParent !== null) {
             console.info(this.videoID, `Stable player container found with selector "${selector}"`);
             clearInterval(this.sliderInterval);
             this.sliderInterval = null;
