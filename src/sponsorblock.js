@@ -11,6 +11,7 @@ import { showNotification } from './ui'; // Assuming you have this file
  *
  * This implementation is based on concepts from the original SponsorBlock extension,
  * fix.js, and previewBar.ts, adapted for the WebOS environment.
+ * It includes robust observation to prevent segments from disappearing during UI redraws.
  */
 
 // Assuming tiny-sha256 is loaded globally in the WebOS environment.
@@ -66,16 +67,17 @@ import { showNotification } from './ui'; // Assuming you have this file
             this.segments = [];
             this.skippableCategories = [];
             this.active = true;
+            this.chaptersReady = false; // Flag to check if YouTube's chapters are rendered
 
             this.timeouts = {
                 attachVideo: null,
                 scheduleSkip: null,
             };
             this.intervals = {
-                progressBar: null,
+                waitForElements: null,
             };
             this.observers = {
-                progressBar: null,
+                ui: null,
             };
 
             this.previewBar = new PreviewBar();
@@ -107,7 +109,7 @@ import { showNotification } from './ui'; // Assuming you have this file
                 if (videoInfo && videoInfo.segments && videoInfo.segments.length > 0) {
                     this.segments = videoInfo.segments;
                     console.info(`SponsorBlock: Found ${this.segments.length} segments for video ${this.videoID}.`);
-                    this.start();
+                    this.waitForPlayerElements();
                 } else {
                     console.info(`SponsorBlock: No segments found for video ${this.videoID}.`);
                 }
@@ -120,37 +122,59 @@ import { showNotification } from './ui'; // Assuming you have this file
             return CATEGORIES.filter(cat => window.configRead(`skip${cat.charAt(0).toUpperCase() + cat.slice(1)}`));
         }
 
-        start() {
-            this.findVideoElement();
-        }
+        waitForPlayerElements() {
+            this.clearInterval('waitForElements');
 
-        findVideoElement() {
-            this.clearTimeout('attachVideo');
-            this.video = document.querySelector('video.video-stream.html5-main-video');
-            
-            if (!this.video) {
-                this.timeouts.attachVideo = setTimeout(() => this.findVideoElement(), 250);
-                return;
-            }
+            this.intervals.waitForElements = setInterval(() => {
+                // Step 1: Find the video element
+                if (!this.video) {
+                    this.video = document.querySelector('video.video-stream.html5-main-video');
+                    if (this.video) {
+                        console.info("SponsorBlock: Video element found.");
+                        this.addVideoEventListeners();
+                    }
+                }
+                
+                // Step 2: Find the progress bar
+                if (this.video && !this.progressBar) {
+                    const selectors = ['.ytlr-progress-bar', '.ytLrProgressBarSlider'];
+                     for (const selector of selectors) {
+                        const element = document.querySelector(selector);
+                        if (element && element.offsetWidth > 100) {
+                            console.info(`SponsorBlock: Progress bar found with selector: "${selector}"`);
+                            this.progressBar = element;
+                            break;
+                        }
+                    }
+                }
 
-            console.info("SponsorBlock: Video element found. Attaching event listeners.");
-            this.addVideoEventListeners();
-            this.findProgressBar();
-
-            if (this.video.duration > 0) {
-                this.previewBar.render(this.progressBar, this.segments, this.video.duration);
-            }
+                // Step 3: Wait for YouTube's chapters to be rendered
+                if (this.progressBar && !this.chaptersReady) {
+                    const chapterContainer = this.progressBar.querySelector('.ytp-chapters-container, .ytLrMultiMarkersPlayerBarRendererHost');
+                    if (chapterContainer && chapterContainer.childElementCount > 0) {
+                         console.info("SponsorBlock: YouTube chapters detected. Ready to render segments.");
+                         this.chaptersReady = true;
+                    }
+                }
+                
+                // Step 4: If all elements are ready, render and start observing
+                if (this.video && this.progressBar && this.chaptersReady) {
+                    this.clearInterval('waitForElements');
+                    this.renderSegments();
+                    this.observeUI();
+                }
+            }, 500);
         }
 
         addVideoEventListeners() {
             this.scheduleSkip = this.scheduleSkip.bind(this);
-            this.handleDurationChange = this.handleDurationChange.bind(this);
+            this.renderSegments = this.renderSegments.bind(this);
 
             this.video.addEventListener('play', this.scheduleSkip);
             this.video.addEventListener('pause', this.scheduleSkip);
             this.video.addEventListener('seeking', this.scheduleSkip);
             this.video.addEventListener('timeupdate', this.scheduleSkip);
-            this.video.addEventListener('loadedmetadata', this.handleDurationChange);
+            this.video.addEventListener('loadedmetadata', this.renderSegments);
         }
 
         removeVideoEventListeners() {
@@ -159,64 +183,57 @@ import { showNotification } from './ui'; // Assuming you have this file
                 this.video.removeEventListener('pause', this.scheduleSkip);
                 this.video.removeEventListener('seeking', this.scheduleSkip);
                 this.video.removeEventListener('timeupdate', this.scheduleSkip);
-                this.video.removeEventListener('loadedmetadata', this.handleDurationChange);
+                this.video.removeEventListener('loadedmetadata', this.renderSegments);
             }
         }
         
-        handleDurationChange() {
-            if (this.progressBar && this.video && this.video.duration > 0) {
+        renderSegments() {
+            if (this.progressBar && this.video && this.video.duration > 0 && this.chaptersReady) {
                  this.previewBar.render(this.progressBar, this.segments, this.video.duration);
             }
         }
 
-        findProgressBar() {
-            this.clearInterval('progressBar');
-            // Selectors for LG WebOS YouTube App's progress bar
-            const selectors = ['.ytlr-progress-bar', '.ytLrProgressBarSlider'];
-            
-            this.intervals.progressBar = setInterval(() => {
-                for (const selector of selectors) {
-                    const element = document.querySelector(selector);
-                    if (element && element.offsetWidth > 100) { // Ensure it's rendered and visible
-                        console.info(`SponsorBlock: Progress bar found with selector: "${selector}"`);
-                        this.progressBar = element;
-                        this.clearInterval('progressBar');
-                        this.handleDurationChange(); // Render segments now that we have the bar
-                        this.observeProgressBar();
-                        return;
-                    }
-                }
-            }, 500);
-        }
+        observeUI() {
+            if (this.observers.ui || !this.progressBar || !this.progressBar.parentNode) return;
 
-        observeProgressBar() {
-            if (this.observers.progressBar || !this.progressBar || !this.progressBar.parentNode) return;
+            this.observers.ui = new MutationObserver(mutations => {
+                let barRemoved = false;
+                let chaptersRemoved = false;
+                let segmentsRemoved = false;
 
-            this.observers.progressBar = new MutationObserver(mutations => {
                 for (const mutation of mutations) {
-                    if (mutation.removedNodes) {
-                        let barRemoved = false;
-                        mutation.removedNodes.forEach(node => {
-                            // If the progress bar itself is removed, we need to find it again
-                            if (node === this.progressBar) {
-                                barRemoved = true;
-                            }
-                        });
+                    mutation.removedNodes.forEach(node => {
+                        if (node.nodeType !== Node.ELEMENT_NODE) return;
 
-                        if (barRemoved) {
-                            console.warn("SponsorBlock: Progress bar was removed from DOM. Re-initializing search.");
-                            this.observers.progressBar.disconnect();
-                            this.observers.progressBar = null;
-                            this.progressBar = null;
-                            this.previewBar.clear();
-                            this.findProgressBar();
-                            break; 
-                        }
-                    }
+                        if (node === this.progressBar) barRemoved = true;
+                        if (node.matches('.ytp-chapters-container')) chaptersRemoved = true;
+                        if (node.id === 'sponsorblock-preview-bar') segmentsRemoved = true;
+                    });
+                }
+                
+                if (barRemoved) {
+                    console.warn("SponsorBlock: Progress bar was removed. Restarting element search.");
+                    this.destroyObserver();
+                    this.video = null; // Force re-find
+                    this.progressBar = null;
+                    this.chaptersReady = false;
+                    this.previewBar.clear();
+                    this.waitForPlayerElements();
+                } else if (chaptersRemoved) {
+                    console.warn("SponsorBlock: Chapters were re-rendered. Waiting for new chapters.");
+                    this.chaptersReady = false;
+                    this.previewBar.clear();
+                    // The main interval will pick this up and wait for chapters again.
+                    this.waitForPlayerElements();
+                } else if (segmentsRemoved) {
+                    console.info("SponsorBlock: Segment overlay was removed. Re-rendering.");
+                    this.renderSegments();
                 }
             });
 
-            this.observers.progressBar.observe(this.progressBar.parentNode, { childList: true });
+            // Observe the progress bar for its children (our overlay), and its parent for its own removal.
+            this.observers.ui.observe(this.progressBar, { childList: true });
+            this.observers.ui.observe(this.progressBar.parentNode, { childList: true });
         }
 
 
@@ -248,7 +265,7 @@ import { showNotification } from './ui'; // Assuming you have this file
 
             if (upcomingSegment) {
                 const timeUntilSkip = (upcomingSegment.segment[0] - currentTime) * 1000;
-                this.timeouts.scheduleSkip = setTimeout(() => this.performSkip(upcomingSegment), timeUntilSkip);
+                this.timeouts.scheduleSkip = setTimeout(() => this.performSkip(upcomingSegment), Math.max(0, timeUntilSkip));
             }
         }
 
@@ -281,20 +298,23 @@ import { showNotification } from './ui'; // Assuming you have this file
             }
         }
         
+        destroyObserver() {
+            if(this.observers.ui) {
+                this.observers.ui.disconnect();
+                this.observers.ui = null;
+            }
+        }
+        
         destroy() {
             console.info("SponsorBlock: Destroying instance.");
             this.active = false;
             
             this.removeVideoEventListeners();
+            this.destroyObserver();
             
             Object.keys(this.timeouts).forEach(name => this.clearTimeout(name));
             Object.keys(this.intervals).forEach(name => this.clearInterval(name));
             
-            if(this.observers.progressBar) {
-                this.observers.progressBar.disconnect();
-                this.observers.progressBar = null;
-            }
-
             this.previewBar.clear();
 
             this.video = null;
@@ -304,7 +324,6 @@ import { showNotification } from './ui'; // Assuming you have this file
 
     /**
      * Handles the creation and rendering of the sponsor segments bar.
-     * Adapted from previewBar.ts logic.
      */
     class PreviewBar {
         constructor() {
@@ -312,7 +331,7 @@ import { showNotification } from './ui'; // Assuming you have this file
         }
 
         render(progressBar, segments, duration) {
-            if (!progressBar || !segments || !duration) return;
+            if (!progressBar || !segments || !duration || !document.body.contains(progressBar)) return;
 
             this.clear(); // Clear previous segments before rendering new ones
 
@@ -325,7 +344,7 @@ import { showNotification } from './ui'; // Assuming you have this file
                 width: '100%',
                 height: '100%',
                 pointerEvents: 'none',
-                zIndex: '5', // Appear above the base progress bar but below the playhead
+                zIndex: '5',
             });
 
             segments.forEach(segment => {
@@ -333,7 +352,6 @@ import { showNotification } from './ui'; // Assuming you have this file
                 this.container.appendChild(bar);
             });
             
-            // Ensure the progress bar is a positioning context
             if (window.getComputedStyle(progressBar).position === 'static') {
                 progressBar.style.position = 'relative';
             }
@@ -349,7 +367,7 @@ import { showNotification } from './ui'; // Assuming you have this file
             const endTime = Math.min(duration, segment.segment[1]);
             const segmentDuration = endTime - startTime;
 
-            if (segmentDuration <= 0) return bar; // Return empty bar if no duration
+            if (segmentDuration <= 0) return document.createDocumentFragment();
 
             const left = (startTime / duration) * 100;
             const width = (segmentDuration / duration) * 100;
@@ -390,7 +408,6 @@ import { showNotification } from './ui'; // Assuming you have this file
             window.sponsorBlockInstance = null;
         }
 
-        // Use a more robust way to get video ID from the URL hash
         const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
         const videoID = urlParams.get('v');
         const isWatchPage = window.location.hash.startsWith('#/watch');
@@ -409,11 +426,7 @@ import { showNotification } from './ui'; // Assuming you have this file
 
     // --- Entry Point ---
     
-    // Listen for hash changes to handle navigation in the SPA.
     window.addEventListener('hashchange', initializeSponsorBlock, false);
-
-    // Initial run on script load.
-    // Use a small timeout to ensure the page has had a moment to render.
     setTimeout(initializeSponsorBlock, 500);
 
 })(window);
