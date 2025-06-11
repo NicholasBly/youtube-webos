@@ -85,7 +85,7 @@ class SponsorBlockHandler {
   
   // For watching the main controls container
   controlsContainer = null;
-  controlsInterval = null;
+  controlsInterval = null; // This will now be a persistent "guardian" interval
   controlsObserver = null;
 
   scheduleSkipHandler = null;
@@ -99,9 +99,7 @@ class SponsorBlockHandler {
   }
 
   async init() {
-    if (typeof sha256 !== 'function') {
-        return console.error("SHA256 function is not available.");
-    }
+    if (typeof sha256 !== 'function') return console.error("SHA256 function is not available.");
     const videoHash = sha256(String(this.videoID)).substring(0, 4);
     const categories = ['sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 'music_offtopic', 'preview', 'chapter'];
     try {
@@ -177,28 +175,17 @@ class SponsorBlockHandler {
 
     const updateOverlayVisibility = () => {
         if (!this.controlsContainer || !this.sliderSegmentsOverlay) return;
-
         const controlsAreVisible = this.controlsContainer.getAttribute('ishidden') === 'false';
-        
-        // --- MODIFICATION START: RACE CONDITION FIX ---
-        // We can only show the overlay if the controls are visible AND we've found the progress bar.
         const canShow = controlsAreVisible && this.progressBarElement;
+        
+        console.info(`SponsorBlock: Controls visible: ${controlsAreVisible}. Progress bar found: ${!!this.progressBarElement}. Can show overlay: ${canShow}.`);
 
-        if (canShow) {
-            this.sliderSegmentsOverlay.style.display = 'block';
-        } else {
-            this.sliderSegmentsOverlay.style.display = 'none';
-            // As requested, log when controls are the reason for hiding.
-            if (!controlsAreVisible) {
-                console.info('SponsorBlock: Hiding segments because player controls are hidden.');
-            }
-        }
+        this.sliderSegmentsOverlay.style.display = canShow ? 'block' : 'none';
     };
-    // --- MODIFICATION END ---
 
     const syncOverlayPosition = () => {
         if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
-            watchForProgressBar();
+            watchForProgressBar(); // Lost the bar, find it again.
             return;
         }
         const rect = this.progressBarElement.getBoundingClientRect();
@@ -216,14 +203,12 @@ class SponsorBlockHandler {
         for (const selector of selectors) {
           const element = document.querySelector(selector);
           if (element && element.offsetWidth > 50) {
+            if (this.progressBarElement === element) return; // Already found this exact element.
             this.progressBarElement = element;
-            console.info(this.videoID, `Progress bar found with selector "${selector}".`);
+            console.info(this.videoID, `Progress bar found: "${selector}".`);
             clearInterval(this.sliderInterval);
-            
             if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
             this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
-
-            // --- MODIFICATION: Trigger a visibility check now that the progress bar is found.
             updateOverlayVisibility();
             return;
           }
@@ -234,18 +219,25 @@ class SponsorBlockHandler {
     const watchForControlsContainer = () => {
         clearInterval(this.controlsInterval);
         this.controlsInterval = setInterval(() => {
-            const element = document.querySelector('ytlr-pivot.ytLrPivotHost');
-            if (element) {
-                this.controlsContainer = element;
-                console.info(this.videoID, "Controls container (ytlr-pivot) found.");
-                clearInterval(this.controlsInterval);
-                
-                this.controlsObserver = new MutationObserver(updateOverlayVisibility);
-                this.controlsObserver.observe(this.controlsContainer, { attributes: true, attributeFilter: ['ishidden'] });
-                
-                updateOverlayVisibility();
+            // If we have a container, check if it's still attached to the page. If not, nullify it.
+            if (this.controlsContainer && !document.body.contains(this.controlsContainer)) {
+                console.info("SponsorBlock: Stale controls container detected. Searching for new one.");
+                if (this.controlsObserver) this.controlsObserver.disconnect();
+                this.controlsContainer = null;
             }
-        }, 500);
+
+            // If we don't have a container, search for it.
+            if (!this.controlsContainer) {
+                const element = document.querySelector('ytlr-pivot.ytLrPivotHost');
+                if (element) {
+                    console.info("SponsorBlock: Found controls container (ytlr-pivot). Attaching observer.");
+                    this.controlsContainer = element;
+                    this.controlsObserver = new MutationObserver(updateOverlayVisibility);
+                    this.controlsObserver.observe(this.controlsContainer, { attributes: true, attributeFilter: ['ishidden', 'class'] });
+                    updateOverlayVisibility();
+                }
+            }
+        }, 1000); // Check every second.
     };
     
     document.body.appendChild(this.sliderSegmentsOverlay);
@@ -299,7 +291,7 @@ class SponsorBlockHandler {
       this.video.removeEventListener('loadedmetadata', this.durationChangeHandler);
       this.video.removeEventListener('durationchange', this.durationChangeHandler);
       this.video.removeEventListener('play', this.scheduleSkipHandler);
-      this.video.addEventListener('pause', this.scheduleSkipHandler);
+      this.video.removeEventListener('pause', this.scheduleSkipHandler);
       this.video.addEventListener('seeking', this.scheduleSkipHandler);
       this.video.addEventListener('seeked', this.scheduleSkipHandler);
       this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
