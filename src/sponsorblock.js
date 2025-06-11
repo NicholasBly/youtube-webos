@@ -78,9 +78,10 @@ class SponsorBlockHandler {
 
   progressBarElement = null;
   sliderInterval = null;
-  sliderSegmentsOverlay = null; // This will now be the <ul> element
+  sliderSegmentsOverlay = null;
 
-  persistenceInterval = null;
+  // We are now using an animation frame loop for smooth position syncing.
+  animationFrameId = null;
 
   scheduleSkipHandler = null;
   durationChangeHandler = null;
@@ -98,38 +99,24 @@ class SponsorBlockHandler {
         return;
     }
     const videoHash = sha256(String(this.videoID)).substring(0, 4);
-
-    const categories = [
-      'sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 
-      'music_offtopic', 'preview', 'chapter'
-    ];
+    const categories = ['sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 'music_offtopic', 'preview', 'chapter'];
     
     try {
-        const resp = await fetch(
-          `${sponsorblockAPI}/skipSegments/${videoHash}?categories=${encodeURIComponent(
-            JSON.stringify(categories)
-          )}&videoID=${this.videoID}`
-        );
-
+        const resp = await fetch(`${sponsorblockAPI}/skipSegments/${videoHash}?categories=${encodeURIComponent(JSON.stringify(categories))}&videoID=${this.videoID}`);
         if (!resp.ok) {
             console.error(`SponsorBlock API request failed with status: ${resp.status}`);
             return;
         }
-
         const results = await resp.json();
         let result = Array.isArray(results) ? results.find((v) => v.videoID === this.videoID) : results;
-
         if (!result || !result.segments || !result.segments.length) {
           console.info(this.videoID, 'No segments found for this video.');
           return;
         }
-
         this.segments = result.segments;
         this.skippableCategories = this.getSkippableCategories();
-
         this.scheduleSkipHandler = () => this.scheduleSkip();
         this.durationChangeHandler = () => this.buildOverlay();
-
         this.attachVideo();
     } catch (error) {
         console.error("Error initializing SponsorBlock or fetching segments:", error);
@@ -147,7 +134,6 @@ class SponsorBlockHandler {
         if (configRead('enableSponsorBlockMusicOfftopic')) skippable.push('music_offtopic');
         if (configRead('enableSponsorBlockPreview')) skippable.push('preview');
     } catch (e) {
-        console.warn("Could not read SponsorBlock config, using defaults. Error:", e);
         return ['sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 'music_offtopic', 'preview'];
     }
     return skippable;
@@ -160,9 +146,7 @@ class SponsorBlockHandler {
       this.attachVideoTimeout = setTimeout(() => this.attachVideo(), 250);
       return;
     }
-
     console.info(this.videoID, 'Video element found. Binding event listeners.');
-
     this.video.addEventListener('loadedmetadata', this.durationChangeHandler);
     this.video.addEventListener('durationchange', this.durationChangeHandler);
     this.video.addEventListener('play', this.scheduleSkipHandler);
@@ -170,117 +154,85 @@ class SponsorBlockHandler {
     this.video.addEventListener('seeking', this.scheduleSkipHandler);
     this.video.addEventListener('seeked', this.scheduleSkipHandler);
     this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
-    
     if (this.video.duration && this.segments) {
         this.buildOverlay();
     }
   }
 
   buildOverlay() {
-    if (!this.video || !this.video.duration || isNaN(this.video.duration) || this.video.duration <= 0) {
-      return;
-    }
-    if (!this.segments || !this.segments.length) {
-        return;
-    }
+    if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
+    if (!this.segments || !this.segments.length) return;
 
     const videoDuration = this.video.duration;
-    console.info(this.videoID, `Building overlay for duration: ${videoDuration}s`);
+    console.info(this.videoID, `Building detached overlay for duration: ${videoDuration}s`);
 
     if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
         this.sliderSegmentsOverlay.remove();
     }
-    if (this.persistenceInterval) {
-        clearInterval(this.persistenceInterval);
-        this.persistenceInterval = null;
+    if (this.animationFrameId) {
+        cancelAnimationFrame(this.animationFrameId);
+        this.animationFrameId = null;
     }
 
-    // --- MODIFICATION START ---
-    // Create a UL element to act as the container, like in the screenshot
     this.sliderSegmentsOverlay = document.createElement('ul');
-    this.sliderSegmentsOverlay.id = 'previewbar'; // Match the ID from the screenshot
-    this.sliderSegmentsOverlay.style.cssText = 'position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; margin: 0; padding: 0;';
+    // Key change: Use 'fixed' positioning to be relative to the viewport.
+    // This makes coordinate syncing much easier.
+    this.sliderSegmentsOverlay.style.cssText = 'position: fixed; display: none; padding: 0; margin: 0; pointer-events: none; z-index: 999;';
 
     this.segments.forEach((segment) => {
       const [start, end] = segment.segment;
       const segmentStart = Math.max(0, Math.min(start, videoDuration));
       const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
-
       if (segmentEnd <= segmentStart) return;
-
       const barType = barTypes[segment.category] || barTypes.sponsor;
       const segmentWidthPercent = ((segmentEnd - segmentStart) / videoDuration) * 100;
       const segmentLeftPercent = (segmentStart / videoDuration) * 100;
-
-      // Create an LI element for each segment
       const elm = document.createElement('li');
-      // Set classes similar to the screenshot
-      elm.className = `previewbar sponsorblock-category-${segment.category}`;
-      elm.innerHTML = '&nbsp;'; // The elements in the screenshot are empty
-      elm.style.cssText = `
-        position: absolute;
-        list-style: none;
-        height: 100%;
-        background-color: ${barType.color};
-        opacity: ${barType.opacity};
-        left: ${segmentLeftPercent}%;
-        width: ${segmentWidthPercent}%;
-        border-radius: inherit;
-      `;
-      elm.title = `${barType.name}: ${segmentStart.toFixed(1)}s - ${segmentEnd.toFixed(1)}s`;
+      elm.style.cssText = `position: absolute; list-style: none; height: 100%; background-color: ${barType.color}; opacity: ${barType.opacity}; left: ${segmentLeftPercent}%; width: ${segmentWidthPercent}%; border-radius: inherit;`;
       this.sliderSegmentsOverlay.appendChild(elm);
     });
-    // --- MODIFICATION END ---
 
-
-    const attachOverlayToProgressBar = () => {
-      if (!this.progressBarElement || !this.sliderSegmentsOverlay) return;
-
-      if (window.getComputedStyle(this.progressBarElement).position === 'static') {
-        this.progressBarElement.style.position = 'relative';
-      }
-      
-      this.progressBarElement.prepend(this.sliderSegmentsOverlay);
-      console.info(this.videoID, 'Segments overlay (UL/LI structure) initially attached.');
-
-      if (this.persistenceInterval) clearInterval(this.persistenceInterval);
-      this.persistenceInterval = null;
-
-      this.persistenceInterval = setInterval(() => {
-        if (!document.body.contains(this.progressBarElement)) {
-          console.info("Progress bar lost. Stopping persistence check and re-finding...");
-          clearInterval(this.persistenceInterval);
-          this.persistenceInterval = null;
-          this.progressBarElement = null;
-          watchForProgressBar();
-          return;
+    const syncOverlayPosition = () => {
+        if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
+            if (this.sliderSegmentsOverlay) this.sliderSegmentsOverlay.style.display = 'none';
+            watchForProgressBar(); // Progress bar is gone, find it again.
+            return; // Stop this loop.
         }
 
-        if (!this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
-          console.info("Overlay detached. Re-attaching via persistence check.");
-          this.progressBarElement.prepend(this.sliderSegmentsOverlay);
+        const rect = this.progressBarElement.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            this.sliderSegmentsOverlay.style.display = 'none';
+        } else {
+            this.sliderSegmentsOverlay.style.display = 'block';
+            this.sliderSegmentsOverlay.style.left = `${rect.left}px`;
+            this.sliderSegmentsOverlay.style.top = `${rect.top}px`;
+            this.sliderSegmentsOverlay.style.width = `${rect.width}px`;
+            this.sliderSegmentsOverlay.style.height = `${rect.height}px`;
         }
-      }, 250);
+        this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
+    };
+
+    const startSyncing = () => {
+        if (!document.body.contains(this.sliderSegmentsOverlay)) {
+            document.body.appendChild(this.sliderSegmentsOverlay);
+        }
+        if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
+        this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
+        console.info(this.videoID, 'Started detached overlay position sync.');
     };
 
     const watchForProgressBar = () => {
       if (this.sliderInterval) clearInterval(this.sliderInterval);
-      
-      const progressBarSelectors = [
-        '.ytlr-progress-bar__slider', '.ytlr-multi-markers-player-bar-renderer',
-        '.ytlr-progress-bar', '.ytLrProgressBarSlider', '.ytLrProgressBarSliderBase',
-        '.ytp-progress-bar', '.ytp-progress-bar-container'
-      ];
-
+      const progressBarSelectors = ['.ytlr-progress-bar__slider', '.ytlr-multi-markers-player-bar-renderer', '.ytlr-progress-bar', '.ytLrProgressBarSlider', '.ytp-progress-bar'];
       this.sliderInterval = setInterval(() => {
         for (const selector of progressBarSelectors) {
           const element = document.querySelector(selector);
           if (element && window.getComputedStyle(element).display !== 'none' && element.offsetWidth > 50) {
             this.progressBarElement = element;
-            console.info(this.videoID, `Progress bar found with selector "${selector}"`);
+            console.info(this.videoID, `Progress bar found with selector "${selector}".`);
             clearInterval(this.sliderInterval);
             this.sliderInterval = null;
-            attachOverlayToProgressBar();
+            startSyncing();
             return;
           }
         }
@@ -293,59 +245,39 @@ class SponsorBlockHandler {
   scheduleSkip() {
     clearTimeout(this.nextSkipTimeout);
     this.nextSkipTimeout = null;
-
-    if (!this.active || !this.video || this.video.paused || !this.segments) {
-      return;
-    }
-
+    if (!this.active || !this.video || this.video.paused || !this.segments) return;
     const currentTime = this.video.currentTime;
-    const nextSegment = this.segments
-      .filter(seg => seg.segment[1] > currentTime && this.skippableCategories.includes(seg.category))
-      .sort((a, b) => a.segment[0] - b.segment[0])[0];
-    
+    const nextSegment = this.segments.filter(seg => seg.segment[1] > currentTime && this.skippableCategories.includes(seg.category)).sort((a, b) => a.segment[0] - b.segment[0])[0];
     if (!nextSegment) return;
-
     const [start, end] = nextSegment.segment;
-
     if (currentTime >= start && currentTime < end) {
       const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
       showNotification(`Skipping ${skipName}`);
       this.video.currentTime = end;
-      this.scheduleSkip();
     } else if (start > currentTime) {
-      const timeUntilSkip = (start - currentTime) * 1000;
       this.nextSkipTimeout = setTimeout(() => {
-        if (!this.active || this.video.paused) return;
+        if (!this.active || this.video.paused || this.video.seeking) return;
         if (this.video.currentTime >= start - 0.5 && this.video.currentTime < end) {
           const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
           showNotification(`Skipping ${skipName}`);
           this.video.currentTime = end;
-          this.scheduleSkip();
         }
-      }, Math.max(0, timeUntilSkip));
+      }, (start - currentTime) * 1000);
     }
   }
 
   destroy() {
     console.info(this.videoID, 'Destroying SponsorBlockHandler instance.');
     this.active = false;
-
     clearTimeout(this.nextSkipTimeout);
     clearTimeout(this.attachVideoTimeout);
     clearInterval(this.sliderInterval);
-    clearInterval(this.persistenceInterval);
-
-    this.nextSkipTimeout = null;
-    this.attachVideoTimeout = null;
-    this.sliderInterval = null;
-    this.persistenceInterval = null;
-
+    if (this.animationFrameId) {
+        cancelAnimationFrame(this.animationFrameId);
+    }
     if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
       this.sliderSegmentsOverlay.remove();
     }
-    this.sliderSegmentsOverlay = null;
-    this.progressBarElement = null;
-
     if (this.video) {
       this.video.removeEventListener('loadedmetadata', this.durationChangeHandler);
       this.video.removeEventListener('durationchange', this.durationChangeHandler);
@@ -354,11 +286,7 @@ class SponsorBlockHandler {
       this.video.removeEventListener('seeking', this.scheduleSkipHandler);
       this.video.removeEventListener('seeked', this.scheduleSkipHandler);
       this.video.removeEventListener('timeupdate', this.scheduleSkipHandler);
-      this.video = null;
     }
-    
-    this.scheduleSkipHandler = null;
-    this.durationChangeHandler = null;
   }
 }
 
