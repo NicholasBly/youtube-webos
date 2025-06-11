@@ -73,14 +73,20 @@ class SponsorBlockHandler {
   video = null;
   active = true;
 
+  // Timers and element references
   attachVideoTimeout = null;
   nextSkipTimeout = null;
-
   progressBarElement = null;
   sliderInterval = null;
   sliderSegmentsOverlay = null;
 
+  // For detached overlay
   animationFrameId = null;
+  
+  // NEW: For watching the main controls container
+  controlsContainer = null;
+  controlsInterval = null;
+  controlsObserver = null;
 
   scheduleSkipHandler = null;
   durationChangeHandler = null;
@@ -94,31 +100,23 @@ class SponsorBlockHandler {
 
   async init() {
     if (typeof sha256 !== 'function') {
-        console.error("SHA256 function is not available. Cannot fetch segments by hash.");
-        return;
+        return console.error("SHA256 function is not available.");
     }
     const videoHash = sha256(String(this.videoID)).substring(0, 4);
     const categories = ['sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 'music_offtopic', 'preview', 'chapter'];
-    
     try {
         const resp = await fetch(`${sponsorblockAPI}/skipSegments/${videoHash}?categories=${encodeURIComponent(JSON.stringify(categories))}&videoID=${this.videoID}`);
-        if (!resp.ok) {
-            console.error(`SponsorBlock API request failed with status: ${resp.status}`);
-            return;
-        }
+        if (!resp.ok) return console.error(`SponsorBlock API request failed: ${resp.status}`);
         const results = await resp.json();
         let result = Array.isArray(results) ? results.find((v) => v.videoID === this.videoID) : results;
-        if (!result || !result.segments || !result.segments.length) {
-          console.info(this.videoID, 'No segments found for this video.');
-          return;
-        }
+        if (!result || !result.segments || !result.segments.length) return console.info(this.videoID, 'No segments found.');
         this.segments = result.segments;
         this.skippableCategories = this.getSkippableCategories();
         this.scheduleSkipHandler = () => this.scheduleSkip();
         this.durationChangeHandler = () => this.buildOverlay();
         this.attachVideo();
     } catch (error) {
-        console.error("Error initializing SponsorBlock or fetching segments:", error);
+        console.error("Error initializing SponsorBlock:", error);
     }
   }
 
@@ -145,7 +143,7 @@ class SponsorBlockHandler {
       this.attachVideoTimeout = setTimeout(() => this.attachVideo(), 250);
       return;
     }
-    console.info(this.videoID, 'Video element found. Binding event listeners.');
+    console.info(this.videoID, 'Video element found.');
     this.video.addEventListener('loadedmetadata', this.durationChangeHandler);
     this.video.addEventListener('durationchange', this.durationChangeHandler);
     this.video.addEventListener('play', this.scheduleSkipHandler);
@@ -153,159 +151,136 @@ class SponsorBlockHandler {
     this.video.addEventListener('seeking', this.scheduleSkipHandler);
     this.video.addEventListener('seeked', this.scheduleSkipHandler);
     this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
-    if (this.video.duration && this.segments) {
-        this.buildOverlay();
-    }
+    if (this.video.duration && this.segments) this.buildOverlay();
   }
 
   buildOverlay() {
-  if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
-  if (!this.segments || !this.segments.length) return;
+    if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
+    if (!this.segments || !this.segments.length) return;
 
-  const videoDuration = this.video.duration;
-  console.info(this.videoID, `Building detached overlay for duration: ${videoDuration}s`);
+    this.destroyOverlay(); // Clean up previous elements and observers first.
+    console.info(this.videoID, `Building overlay...`);
+    
+    this.sliderSegmentsOverlay = document.createElement('ul');
+    this.sliderSegmentsOverlay.style.cssText = 'position: fixed; display: none; padding: 0; margin: 0; pointer-events: none; z-index: 999;';
 
-  if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
-    this.sliderSegmentsOverlay.remove();
-  }
-  if (this.animationFrameId) {
-    cancelAnimationFrame(this.animationFrameId);
-    this.animationFrameId = null;
-  }
+    this.segments.forEach((segment) => {
+      const [start, end] = segment.segment;
+      const segmentStart = Math.max(0, Math.min(start, this.video.duration));
+      const segmentEnd = Math.max(segmentStart, Math.min(end, this.video.duration));
+      if (segmentEnd <= segmentStart) return;
+      const barType = barTypes[segment.category] || barTypes.sponsor;
+      const elm = document.createElement('li');
+      elm.style.cssText = `position: absolute; list-style: none; height: 100%; background-color: ${barType.color}; opacity: ${barType.opacity}; left: ${(segmentStart / this.video.duration) * 100}%; width: ${((segmentEnd - segmentStart) / this.video.duration) * 100}%; border-radius: inherit;`;
+      this.sliderSegmentsOverlay.appendChild(elm);
+    });
 
-  this.sliderSegmentsOverlay = document.createElement('ul');
-  this.sliderSegmentsOverlay.style.cssText = `
-    position: fixed;
-    display: none;
-    padding: 0;
-    margin: 0;
-    pointer-events: none;
-    z-index: 9999;
-  `;
-
-  this.segments.forEach((segment) => {
-    const [start, end] = segment.segment;
-    const segmentStart = Math.max(0, Math.min(start, videoDuration));
-    const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
-    if (segmentEnd <= segmentStart) return;
-    const barType = barTypes[segment.category] || barTypes.sponsor;
-    const segmentWidthPercent = ((segmentEnd - segmentStart) / videoDuration) * 100;
-    const segmentLeftPercent = (segmentStart / videoDuration) * 100;
-    const elm = document.createElement('li');
-    elm.style.cssText = `
-      position: absolute;
-      list-style: none;
-      height: 100%;
-      background-color: ${barType.color};
-      opacity: ${barType.opacity};
-      left: ${segmentLeftPercent}%;
-      width: ${segmentWidthPercent}%;
-      border-radius: inherit;
-    `;
-    this.sliderSegmentsOverlay.appendChild(elm);
-  });
-
-  const syncOverlayPosition = () => {
-    if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
-      if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
-        this.sliderSegmentsOverlay.remove();
-        this.sliderSegmentsOverlay = null;
-      }
-      if (this.animationFrameId) {
-        cancelAnimationFrame(this.animationFrameId);
-        this.animationFrameId = null;
-      }
-      watchForProgressBar();
-      return;
-    }
-
-    const rect = this.progressBarElement.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0 || window.getComputedStyle(this.progressBarElement).display === 'none') {
-      this.sliderSegmentsOverlay.style.display = 'none';
-    } else {
-      this.sliderSegmentsOverlay.style.display = 'block';
-      this.sliderSegmentsOverlay.style.left = `${rect.left}px`;
-      this.sliderSegmentsOverlay.style.top = `${rect.top}px`;
-      this.sliderSegmentsOverlay.style.width = `${rect.width}px`;
-      this.sliderSegmentsOverlay.style.height = `${rect.height}px`;
-    }
-
-    this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
-  };
-
-  const startSyncing = () => {
-    if (!document.body.contains(this.sliderSegmentsOverlay)) {
-      document.body.appendChild(this.sliderSegmentsOverlay);
-    }
-    if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
-    this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
-    console.info(this.videoID, 'Started detached overlay position sync.');
-  };
-
-  const watchForProgressBar = () => {
-    if (this.sliderInterval) clearInterval(this.sliderInterval);
-    const progressBarSelectors = [
-      '.ytlr-progress-bar__slider',
-      '.ytlr-multi-markers-player-bar-renderer',
-      '.ytlr-progress-bar',
-      '.ytLrProgressBarSlider',
-      '.ytp-progress-bar'
-    ];
-    this.sliderInterval = setInterval(() => {
-      for (const selector of progressBarSelectors) {
-        const element = document.querySelector(selector);
-        if (element && window.getComputedStyle(element).display !== 'none' && element.offsetWidth > 50) {
-          this.progressBarElement = element;
-          console.info(this.videoID, `Progress bar found with selector "${selector}".`);
-          clearInterval(this.sliderInterval);
-          this.sliderInterval = null;
-          startSyncing();
-          return;
+    const syncOverlayPosition = () => {
+        if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
+            watchForProgressBar(); // Lost the bar, find it again.
+            return; // Stop this animation loop.
         }
-      }
-    }, 500);
-  };
+        const rect = this.progressBarElement.getBoundingClientRect();
+        this.sliderSegmentsOverlay.style.left = `${rect.left}px`;
+        this.sliderSegmentsOverlay.style.top = `${rect.top}px`;
+        this.sliderSegmentsOverlay.style.width = `${rect.width}px`;
+        this.sliderSegmentsOverlay.style.height = `${rect.height}px`;
+        this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
+    };
 
-  watchForProgressBar();
-}
+    const watchForProgressBar = () => {
+      clearInterval(this.sliderInterval);
+      const selectors = ['.ytlr-progress-bar__slider', '.ytlr-progress-bar', '.ytp-progress-bar'];
+      this.sliderInterval = setInterval(() => {
+        for (const selector of selectors) {
+          const element = document.querySelector(selector);
+          if (element && element.offsetWidth > 50) {
+            this.progressBarElement = element;
+            console.info(this.videoID, `Progress bar found with selector "${selector}".`);
+            clearInterval(this.sliderInterval);
+            // Start syncing position once the bar is found
+            if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
+            return;
+          }
+        }
+      }, 500);
+    };
 
+    const updateOverlayVisibility = () => {
+        if (!this.controlsContainer || !this.sliderSegmentsOverlay) return;
+        const isHidden = this.controlsContainer.getAttribute('ishidden') !== 'false';
+        this.sliderSegmentsOverlay.style.display = isHidden ? 'none' : 'block';
+    };
+
+    const watchForControlsContainer = () => {
+        clearInterval(this.controlsInterval);
+        this.controlsInterval = setInterval(() => {
+            const element = document.querySelector('ytlr-pivot.ytLrPivotHost');
+            if (element) {
+                this.controlsContainer = element;
+                console.info(this.videoID, "Controls container (ytlr-pivot) found.");
+                clearInterval(this.controlsInterval);
+                
+                this.controlsObserver = new MutationObserver(updateOverlayVisibility);
+                this.controlsObserver.observe(this.controlsContainer, { attributes: true, attributeFilter: ['ishidden'] });
+                
+                // Set initial state
+                updateOverlayVisibility();
+            }
+        }, 500);
+    };
+    
+    // Add the overlay to the page
+    document.body.appendChild(this.sliderSegmentsOverlay);
+    // Start searching for the elements we need to track
+    watchForProgressBar();
+    watchForControlsContainer();
+  }
 
   scheduleSkip() {
     clearTimeout(this.nextSkipTimeout);
-    this.nextSkipTimeout = null;
-    if (!this.active || !this.video || this.video.paused || !this.segments) return;
+    if (!this.active || !this.video || this.video.paused) return;
     const currentTime = this.video.currentTime;
     const nextSegment = this.segments.filter(seg => seg.segment[1] > currentTime && this.skippableCategories.includes(seg.category)).sort((a, b) => a.segment[0] - b.segment[0])[0];
     if (!nextSegment) return;
     const [start, end] = nextSegment.segment;
     if (currentTime >= start && currentTime < end) {
-      const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
-      showNotification(`Skipping ${skipName}`);
+      showNotification(`Skipping ${barTypes[nextSegment.category]?.name || 'segment'}`);
       this.video.currentTime = end;
     } else if (start > currentTime) {
       this.nextSkipTimeout = setTimeout(() => {
-        if (!this.active || this.video.paused || this.video.seeking) return;
-        if (this.video.currentTime >= start - 0.5 && this.video.currentTime < end) {
-          const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
-          showNotification(`Skipping ${skipName}`);
-          this.video.currentTime = end;
-        }
+        if (this.video.paused || this.video.seeking) return;
+        showNotification(`Skipping ${barTypes[nextSegment.category]?.name || 'segment'}`);
+        this.video.currentTime = end;
       }, (start - currentTime) * 1000);
     }
   }
 
+  destroyOverlay() {
+    // A dedicated function to clean up all visual elements and their trackers
+    if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
+    if (this.controlsObserver) this.controlsObserver.disconnect();
+    clearInterval(this.sliderInterval);
+    clearInterval(this.controlsInterval);
+    if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
+      this.sliderSegmentsOverlay.remove();
+    }
+    this.animationFrameId = null;
+    this.controlsObserver = null;
+    this.sliderInterval = null;
+    this.controlsInterval = null;
+    this.sliderSegmentsOverlay = null;
+    this.progressBarElement = null;
+    this.controlsContainer = null;
+  }
+  
   destroy() {
     console.info(this.videoID, 'Destroying SponsorBlockHandler instance.');
     this.active = false;
     clearTimeout(this.nextSkipTimeout);
     clearTimeout(this.attachVideoTimeout);
-    clearInterval(this.sliderInterval);
-    if (this.animationFrameId) {
-        cancelAnimationFrame(this.animationFrameId);
-    }
-    if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
-      this.sliderSegmentsOverlay.remove();
-    }
+    this.destroyOverlay(); // Use the new cleanup function
     if (this.video) {
       this.video.removeEventListener('loadedmetadata', this.durationChangeHandler);
       this.video.removeEventListener('durationchange', this.durationChangeHandler);
