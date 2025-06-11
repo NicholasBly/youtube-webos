@@ -1,4 +1,4 @@
-// fix.js - SponsorBlock Overlay Fix with Persistent Attachment
+// fix.js - SponsorBlock Overlay Fix with Persistent Attachment & DOM Replacement Detection
 
 import sha256 from 'tiny-sha256';
 import { configRead } from './config';
@@ -22,8 +22,7 @@ class SponsorBlockHandler {
     this.video = null;
     this.overlay = null;
     this.progressBar = null;
-    this.progressBarObserver = null;
-    this.containerObserver = null;
+    this.observer = null;
   }
 
   async init() {
@@ -41,9 +40,7 @@ class SponsorBlockHandler {
     const tryFind = () => {
       this.video = document.querySelector('video');
       if (this.video && isFinite(this.video.duration)) {
-        this.video.addEventListener('loadedmetadata', () => this.setupProgressBarObserver());
-        this.video.addEventListener('durationchange', () => this.setupProgressBarObserver());
-        this.setupProgressBarObserver();
+        this.setupProgressBarWatcher();
       } else {
         setTimeout(tryFind, 300);
       }
@@ -51,31 +48,34 @@ class SponsorBlockHandler {
     tryFind();
   }
 
-  setupProgressBarObserver() {
+  setupProgressBarWatcher() {
     const container = document.querySelector('.ytLrWatchDefaultControlsContainer, .html5-video-player');
-    if (!container || !this.video || !isFinite(this.video.duration)) return;
+    if (!container) return;
 
-    if (this.containerObserver) this.containerObserver.disconnect();
-    this.containerObserver = new MutationObserver(() => this.tryAttachOverlay());
-    this.containerObserver.observe(container, { childList: true, subtree: true });
+    if (this.observer) this.observer.disconnect();
 
-    this.tryAttachOverlay();
-  }
+    this.observer = new MutationObserver(() => {
+      const newProgressBar = document.querySelector('.ytlr-progress-bar, .ytLrProgressBarSlider');
+      if (newProgressBar && newProgressBar !== this.progressBar) {
+        this.progressBar = newProgressBar;
+        this.buildOverlay();
+      }
+    });
 
-  tryAttachOverlay() {
-    const progressBar = document.querySelector('.ytlr-progress-bar, .ytLrProgressBarSlider');
-    if (!progressBar || !this.segments.length) return;
-    if (this.progressBar === progressBar && this.overlay && progressBar.contains(this.overlay)) return;
-
-    this.progressBar = progressBar;
-    this.buildOverlay();
+    this.observer.observe(container, { childList: true, subtree: true });
+    const initialProgressBar = document.querySelector('.ytlr-progress-bar, .ytLrProgressBarSlider');
+    if (initialProgressBar) {
+      this.progressBar = initialProgressBar;
+      this.buildOverlay();
+    }
   }
 
   buildOverlay() {
-    if (!this.video || !this.progressBar || !this.segments.length) return;
-    if (!isFinite(this.video.duration)) return;
+    if (!this.video || !this.progressBar || !this.segments.length || !isFinite(this.video.duration)) return;
 
-    if (this.overlay && this.overlay.parentNode) this.overlay.remove();
+    if (this.overlay && this.overlay.parentNode) {
+      this.overlay.remove();
+    }
 
     const duration = this.video.duration;
     const overlay = document.createElement('div');
@@ -101,8 +101,7 @@ class SponsorBlockHandler {
 
   destroy() {
     if (this.overlay && this.overlay.parentNode) this.overlay.remove();
-    if (this.containerObserver) this.containerObserver.disconnect();
-    if (this.progressBarObserver) this.progressBarObserver.disconnect();
+    if (this.observer) this.observer.disconnect();
   }
 }
 
