@@ -80,7 +80,6 @@ class SponsorBlockHandler {
   sliderInterval = null;
   sliderSegmentsOverlay = null;
 
-  // We are now using an animation frame loop for smooth position syncing.
   animationFrameId = null;
 
   scheduleSkipHandler = null;
@@ -175,8 +174,6 @@ class SponsorBlockHandler {
     }
 
     this.sliderSegmentsOverlay = document.createElement('ul');
-    // Key change: Use 'fixed' positioning to be relative to the viewport.
-    // This makes coordinate syncing much easier.
     this.sliderSegmentsOverlay.style.cssText = 'position: fixed; display: none; padding: 0; margin: 0; pointer-events: none; z-index: 999;';
 
     this.segments.forEach((segment) => {
@@ -195,19 +192,29 @@ class SponsorBlockHandler {
     const syncOverlayPosition = () => {
         if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
             if (this.sliderSegmentsOverlay) this.sliderSegmentsOverlay.style.display = 'none';
-            watchForProgressBar(); // Progress bar is gone, find it again.
-            return; // Stop this loop.
+            watchForProgressBar();
+            return;
         }
 
         const rect = this.progressBarElement.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) {
-            this.sliderSegmentsOverlay.style.display = 'none';
-        } else {
+        const style = window.getComputedStyle(this.progressBarElement);
+
+        // --- MODIFICATION START: Robust visibility check ---
+        const isVisible = style.display !== 'none' &&
+                          style.visibility !== 'hidden' &&
+                          style.opacity !== '0' &&
+                          rect.width > 0 &&
+                          rect.height > 0;
+        // --- MODIFICATION END ---
+
+        if (isVisible) {
             this.sliderSegmentsOverlay.style.display = 'block';
             this.sliderSegmentsOverlay.style.left = `${rect.left}px`;
             this.sliderSegmentsOverlay.style.top = `${rect.top}px`;
             this.sliderSegmentsOverlay.style.width = `${rect.width}px`;
             this.sliderSegmentsOverlay.style.height = `${rect.height}px`;
+        } else {
+            this.sliderSegmentsOverlay.style.display = 'none';
         }
         this.animationFrameId = requestAnimationFrame(syncOverlayPosition);
     };
