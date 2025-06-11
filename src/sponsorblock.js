@@ -1,3 +1,5 @@
+// fix.js - SponsorBlock Overlay Fix with Persistent Attachment
+
 import sha256 from 'tiny-sha256';
 import { configRead } from './config';
 import { showNotification } from './ui';
@@ -20,7 +22,8 @@ class SponsorBlockHandler {
     this.video = null;
     this.overlay = null;
     this.progressBar = null;
-    this.observer = null;
+    this.progressBarObserver = null;
+    this.containerObserver = null;
   }
 
   async init() {
@@ -38,9 +41,9 @@ class SponsorBlockHandler {
     const tryFind = () => {
       this.video = document.querySelector('video');
       if (this.video && isFinite(this.video.duration)) {
-        this.video.addEventListener('loadedmetadata', () => this.injectOverlay());
-        this.video.addEventListener('durationchange', () => this.injectOverlay());
-        this.injectOverlay();
+        this.video.addEventListener('loadedmetadata', () => this.setupProgressBarObserver());
+        this.video.addEventListener('durationchange', () => this.setupProgressBarObserver());
+        this.setupProgressBarObserver();
       } else {
         setTimeout(tryFind, 300);
       }
@@ -48,21 +51,37 @@ class SponsorBlockHandler {
     tryFind();
   }
 
-  injectOverlay() {
-    if (!this.video || !isFinite(this.video.duration) || !this.segments.length) return;
-    if (this.overlay && this.overlay.isConnected) return;
+  setupProgressBarObserver() {
+    const container = document.querySelector('.ytLrWatchDefaultControlsContainer, .html5-video-player');
+    if (!container || !this.video || !isFinite(this.video.duration)) return;
 
-    this.progressBar = document.querySelector('.ytlr-progress-bar, .ytLrProgressBarSlider');
-    if (!this.progressBar) return;
+    if (this.containerObserver) this.containerObserver.disconnect();
+    this.containerObserver = new MutationObserver(() => this.tryAttachOverlay());
+    this.containerObserver.observe(container, { childList: true, subtree: true });
 
-    const style = getComputedStyle(this.progressBar);
-    if (style.position === 'static') this.progressBar.style.position = 'relative';
+    this.tryAttachOverlay();
+  }
 
+  tryAttachOverlay() {
+    const progressBar = document.querySelector('.ytlr-progress-bar, .ytLrProgressBarSlider');
+    if (!progressBar || !this.segments.length) return;
+    if (this.progressBar === progressBar && this.overlay && progressBar.contains(this.overlay)) return;
+
+    this.progressBar = progressBar;
+    this.buildOverlay();
+  }
+
+  buildOverlay() {
+    if (!this.video || !this.progressBar || !this.segments.length) return;
+    if (!isFinite(this.video.duration)) return;
+
+    if (this.overlay && this.overlay.parentNode) this.overlay.remove();
+
+    const duration = this.video.duration;
     const overlay = document.createElement('div');
     overlay.id = 'sponsorblock-overlay';
     overlay.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:10;';
 
-    const duration = this.video.duration;
     this.segments.forEach(({ segment, category }) => {
       const [start, end] = segment;
       if (end <= start || end > duration) return;
@@ -73,25 +92,17 @@ class SponsorBlockHandler {
       overlay.appendChild(div);
     });
 
+    const style = getComputedStyle(this.progressBar);
+    if (style.position === 'static') this.progressBar.style.position = 'relative';
+
     this.overlay = overlay;
     this.progressBar.appendChild(overlay);
-    this.observeProgressBar();
-  }
-
-  observeProgressBar() {
-    if (!this.progressBar || this.observer) return;
-    this.observer = new MutationObserver(() => {
-      if (!this.overlay.isConnected && this.progressBar.contains(this.overlay)) return;
-      if (!this.progressBar.contains(this.overlay)) {
-        this.progressBar.appendChild(this.overlay);
-      }
-    });
-    this.observer.observe(this.progressBar, { childList: true });
   }
 
   destroy() {
     if (this.overlay && this.overlay.parentNode) this.overlay.remove();
-    if (this.observer) this.observer.disconnect();
+    if (this.containerObserver) this.containerObserver.disconnect();
+    if (this.progressBarObserver) this.progressBarObserver.disconnect();
   }
 }
 
