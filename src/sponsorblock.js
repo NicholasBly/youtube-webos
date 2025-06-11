@@ -78,6 +78,7 @@ class SponsorBlockHandler {
 
   progressBarElement = null;
   sliderInterval = null;
+  positioningInterval = null;
   sliderSegmentsOverlay = null; // This will now be the <ul> element
 
   persistenceInterval = null;
@@ -181,44 +182,36 @@ class SponsorBlockHandler {
       return;
     }
     if (!this.segments || !this.segments.length) {
-        return;
+      return;
     }
 
     const videoDuration = this.video.duration;
     console.info(this.videoID, `Building overlay for duration: ${videoDuration}s`);
 
-    // If the overlay already exists, remove it before recreating
     if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
-        this.sliderSegmentsOverlay.remove();
+      this.sliderSegmentsOverlay.remove();
     }
-    // Clear any existing intervals
-    if (this.sliderInterval) {
-        clearInterval(this.sliderInterval);
-        this.sliderInterval = null;
-    }
+    if (this.sliderInterval) clearInterval(this.sliderInterval);
+    if (this.positioningInterval) clearInterval(this.positioningInterval); // Clear previous positioning interval
 
-    // Create the UL container for the segments
     this.sliderSegmentsOverlay = document.createElement('ul');
     this.sliderSegmentsOverlay.id = 'previewbar';
     
-    // --- MODIFICATION START ---
-    // Style the overlay to sit on top of a stable parent, not inside the progress bar
+    // --- MODIFICATION ---
+    // Minimal styling, as position and size will be set dynamically
     this.sliderSegmentsOverlay.style.cssText = `
       position: absolute;
-      bottom: 25px; /* Adjust this value to align perfectly with the progress bar's vertical position */
-      left: 12px;  /* Adjust this value to align with the progress bar's horizontal start */
-      width: calc(100% - 24px); /* Adjust to match the progress bar's width */
-      height: 5px; /* Adjust to match the progress bar's height */
       pointer-events: none;
       z-index: 10;
       margin: 0;
       padding: 0;
-      border-radius: 2px; /* Optional: to match YouTube's progress bar style */
+      opacity: 0; /* Start hidden until correctly positioned */
+      transition: opacity 0.2s;
     `;
-    // --- MODIFICATION END ---
 
     this.segments.forEach((segment) => {
       const [start, end] = segment.segment;
+      // ... (The rest of the forEach loop that creates the 'li' elements remains the same)
       const segmentStart = Math.max(0, Math.min(start, videoDuration));
       const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
 
@@ -245,30 +238,64 @@ class SponsorBlockHandler {
       this.sliderSegmentsOverlay.appendChild(elm);
     });
 
+    const trackProgressBarPosition = (playerContainer) => {
+      const progressBarSelectors = [
+        '.ytp-progress-bar-container', '.ytlr-progress-bar'
+      ];
+
+      if (this.positioningInterval) clearInterval(this.positioningInterval);
+
+      this.positioningInterval = setInterval(() => {
+        let progressBar = null;
+        for (const selector of progressBarSelectors) {
+          progressBar = document.querySelector(selector);
+          if (progressBar) break;
+        }
+
+        if (playerContainer && progressBar && document.body.contains(playerContainer)) {
+          const parentRect = playerContainer.getBoundingClientRect();
+          const progressRect = progressBar.getBoundingClientRect();
+
+          // Calculate position relative to the parent container
+          const top = progressRect.top - parentRect.top;
+          const left = progressRect.left - parentRect.left;
+
+          // Apply the dynamic position and size
+          this.sliderSegmentsOverlay.style.top = `${top}px`;
+          this.sliderSegmentsOverlay.style.left = `${left}px`;
+          this.sliderSegmentsOverlay.style.width = `${progressRect.width}px`;
+          this.sliderSegmentsOverlay.style.height = `${progressRect.height}px`;
+          this.sliderSegmentsOverlay.style.opacity = '1'; // Make it visible
+        } else {
+          // If the progress bar disappears (e.g., in fullscreen), hide the overlay
+          this.sliderSegmentsOverlay.style.opacity = '0';
+          if (!document.body.contains(playerContainer)) {
+              // The whole player was removed, stop trying
+              clearInterval(this.positioningInterval);
+          }
+        }
+      }, 250); // Check position 4 times a second
+    };
+
     const attachOverlayToPlayer = (playerContainer) => {
-      // Ensure the container has a non-static position for the overlay to be positioned correctly
       if (window.getComputedStyle(playerContainer).position === 'static') {
         playerContainer.style.position = 'relative';
       }
       playerContainer.appendChild(this.sliderSegmentsOverlay);
-      console.info(this.videoID, 'Segments overlay attached to player container.');
+      console.info(this.videoID, 'Segments overlay attached. Starting position tracking.');
+      trackProgressBarPosition(playerContainer);
     };
 
     const watchForPlayerContainer = () => {
-      // Stop any previous interval
       if (this.sliderInterval) clearInterval(this.sliderInterval);
-
-      // Selectors for stable player containers. These are less likely to be re-rendered.
+      
       const playerContainerSelectors = [
-        '#player-container-inner', // Standard YouTube player container
-        '#movie_player',             // Another common high-level player element
-        '.html5-video-player'
+        '.html5-video-player', '#movie_player', '#player-container-inner'
       ];
 
       this.sliderInterval = setInterval(() => {
         for (const selector of playerContainerSelectors) {
           const element = document.querySelector(selector);
-          // Ensure the element exists and is visible
           if (element && window.getComputedStyle(element).display !== 'none') {
             console.info(this.videoID, `Stable player container found with selector "${selector}"`);
             clearInterval(this.sliderInterval);
@@ -280,7 +307,6 @@ class SponsorBlockHandler {
       }, 500);
     };
 
-    // Start looking for the player container
     watchForPlayerContainer();
   }
 
@@ -328,12 +354,15 @@ class SponsorBlockHandler {
     clearTimeout(this.attachVideoTimeout);
     clearInterval(this.sliderInterval);
     clearInterval(this.persistenceInterval);
+    clearInterval(this.positioningInterval); // Add this line
 
     this.nextSkipTimeout = null;
     this.attachVideoTimeout = null;
     this.sliderInterval = null;
     this.persistenceInterval = null;
+    this.positioningInterval = null; // Add this line
 
+    // ... (rest of the destroy method remains the same)
     if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
       this.sliderSegmentsOverlay.remove();
     }
