@@ -183,9 +183,9 @@ class SponsorBlockHandler {
       }
 
       return this.slider.classList.contains(
-        'ytlr-multi-markers-player-bar-renderer'
+        'ytLrProgressBarSlider'
       )
-        ? 'multi-markers-player-bar'
+        ? 'ytLrProgressBarSlider'
         : 'progress-bar';
     };
 
@@ -204,14 +204,14 @@ class SponsorBlockHandler {
       this.sliderSegmentsOverlay.className = '';
 
       switch (sliderType) {
-        case 'multi-markers-player-bar':
+        case 'ytLrProgressBarSlider':
           if (this.slider.parentNode) {
             this.sliderSegmentsOverlay.style.top = '1.5rem';
             this.sliderSegmentsOverlay.classList.add(
-              'ytlr-multi-markers-player-bar-renderer'
+              'ytLrProgressBarSlider'
             );
             this.sliderSegmentsOverlay.classList.add(
-              'ytlr-multi-markers-player-bar-renderer__slider'
+              'ytLrProgressBarSlider'
             );
 
             // add overlay just before playhead, so
@@ -240,7 +240,7 @@ class SponsorBlockHandler {
 
       this.sliderInterval = setInterval(() => {
         this.slider = document.querySelector(
-          '..ytlr-progress-bar, .ytlr-multi-markers-player-bar-renderer'
+          '.ytlr-progress-bar, .ytLrProgressBarSlider'
         );
         if (this.slider) {
           console.info('slider found...', this.slider);
