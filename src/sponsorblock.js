@@ -78,10 +78,10 @@ class SponsorBlockHandler {
 
   progressBarElement = null;
   sliderInterval = null;
-  positioningInterval = null;
   sliderSegmentsOverlay = null; // This will now be the <ul> element
 
   persistenceInterval = null;
+  mutationObserver = null; // NEW: For smarter DOM change detection
 
   scheduleSkipHandler = null;
   durationChangeHandler = null;
@@ -177,34 +177,100 @@ class SponsorBlockHandler {
     }
   }
 
+  // NEW: Create mutation observer to detect when segments are removed
+  setupMutationObserver() {
+    if (this.mutationObserver) {
+      this.mutationObserver.disconnect();
+    }
+
+    if (!this.progressBarElement) return;
+
+    this.mutationObserver = new MutationObserver((mutations) => {
+      let needsReattach = false;
+      
+      mutations.forEach((mutation) => {
+        // Check if our overlay was removed
+        if (mutation.type === 'childList' && mutation.removedNodes.length > 0) {
+          for (let node of mutation.removedNodes) {
+            if (node === this.sliderSegmentsOverlay || 
+                (node.nodeType === Node.ELEMENT_NODE && node.contains(this.sliderSegmentsOverlay))) {
+              needsReattach = true;
+              break;
+            }
+          }
+        }
+      });
+
+      if (needsReattach && this.sliderSegmentsOverlay && !this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
+        console.info("Segments removed by DOM mutation. Re-attaching...");
+        this.attachOverlayToProgressBar();
+      }
+    });
+
+    this.mutationObserver.observe(this.progressBarElement, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  // NEW: Separated attachment logic for reuse
+  attachOverlayToProgressBar() {
+    if (!this.progressBarElement || !this.sliderSegmentsOverlay) return;
+
+    if (window.getComputedStyle(this.progressBarElement).position === 'static') {
+      this.progressBarElement.style.position = 'relative';
+    }
+    
+    // Use appendChild instead of prepend - less likely to interfere with YouTube's DOM updates
+    this.progressBarElement.appendChild(this.sliderSegmentsOverlay);
+    console.info(this.videoID, 'Segments overlay (UL/LI structure) attached.');
+  }
+
   buildOverlay() {
     if (!this.video || !this.video.duration || isNaN(this.video.duration) || this.video.duration <= 0) {
       return;
     }
     if (!this.segments || !this.segments.length) {
-      return;
+        return;
     }
 
     const videoDuration = this.video.duration;
     console.info(this.videoID, `Building overlay for duration: ${videoDuration}s`);
 
     if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
-      this.sliderSegmentsOverlay.remove();
+        this.sliderSegmentsOverlay.remove();
     }
-    if (this.sliderInterval) clearInterval(this.sliderInterval);
-    if (this.positioningInterval) clearInterval(this.positioningInterval);
+    if (this.persistenceInterval) {
+        clearInterval(this.persistenceInterval);
+        this.persistenceInterval = null;
+    }
+    if (this.mutationObserver) {
+        this.mutationObserver.disconnect();
+        this.mutationObserver = null;
+    }
 
+    // Create a UL element to act as the container, like in the screenshot
     this.sliderSegmentsOverlay = document.createElement('ul');
-    this.sliderSegmentsOverlay.id = 'previewbar';
+    this.sliderSegmentsOverlay.id = 'previewbar'; // Match the ID from the screenshot
+    
+    // IMPROVED: More robust CSS with !important declarations to prevent removal
     this.sliderSegmentsOverlay.style.cssText = `
-      position: absolute;
-      pointer-events: none;
-      z-index: 10;
-      margin: 0;
-      padding: 0;
-      opacity: 0; /* Hidden by default */
-      transition: opacity 0.2s linear;
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      pointer-events: none !important;
+      z-index: 10 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
     `;
+
+    // Add a data attribute to help identify our elements
+    this.sliderSegmentsOverlay.setAttribute('data-sponsorblock', 'segments');
 
     this.segments.forEach((segment) => {
       const [start, end] = segment.segment;
@@ -217,101 +283,83 @@ class SponsorBlockHandler {
       const segmentWidthPercent = ((segmentEnd - segmentStart) / videoDuration) * 100;
       const segmentLeftPercent = (segmentStart / videoDuration) * 100;
 
+      // Create an LI element for each segment
       const elm = document.createElement('li');
+      // Set classes similar to the screenshot
       elm.className = `previewbar sponsorblock-category-${segment.category}`;
-      elm.innerHTML = '&nbsp;';
+      elm.innerHTML = '&nbsp;'; // The elements in the screenshot are empty
+      
+      // IMPROVED: More robust CSS with !important declarations
       elm.style.cssText = `
-        position: absolute;
-        list-style: none;
-        height: 100%;
-        background-color: ${barType.color};
-        opacity: ${barType.opacity};
-        left: ${segmentLeftPercent}%;
-        width: ${segmentWidthPercent}%;
-        border-radius: inherit;
+        position: absolute !important;
+        list-style: none !important;
+        height: 100% !important;
+        background-color: ${barType.color} !important;
+        opacity: ${barType.opacity} !important;
+        left: ${segmentLeftPercent}% !important;
+        width: ${segmentWidthPercent}% !important;
+        border-radius: inherit !important;
+        display: block !important;
+        visibility: visible !important;
+        z-index: 11 !important;
       `;
+      
       elm.title = `${barType.name}: ${segmentStart.toFixed(1)}s - ${segmentEnd.toFixed(1)}s`;
+      elm.setAttribute('data-sponsorblock-segment', segment.category);
       this.sliderSegmentsOverlay.appendChild(elm);
     });
 
-    const trackProgressBarPosition = (playerContainer) => {
-      // More comprehensive list of selectors for the progress bar
-      const progressBarSelectors = [
-        '.ytp-progress-bar-container',
-        '.ytp-progress-bar',
-        '.ytlr-progress-bar',
-        '.ytlr-multi-markers-player-bar-renderer',
-      ];
-
-      if (this.positioningInterval) clearInterval(this.positioningInterval);
-
-      this.positioningInterval = setInterval(() => {
-        let progressBar = null;
-        for (const selector of progressBarSelectors) {
-          const element = playerContainer.querySelector(selector);
-          // Find the first visible progress bar element
-          if (element && element.offsetParent !== null) {
-            progressBar = element;
-            break;
-          }
-        }
-
-        if (playerContainer && progressBar && document.body.contains(playerContainer)) {
-          const parentRect = playerContainer.getBoundingClientRect();
-          const progressRect = progressBar.getBoundingClientRect();
-
-          // --- CRITICAL SANITY CHECK ---
-          // Only proceed if we have a valid size. This prevents the 0x0 issue.
-          if (progressRect.width > 50 && progressRect.height > 0) {
-            const top = progressRect.top - parentRect.top;
-            const left = progressRect.left - parentRect.left;
-
-            this.sliderSegmentsOverlay.style.top = `${top}px`;
-            this.sliderSegmentsOverlay.style.left = `${left}px`;
-            this.sliderSegmentsOverlay.style.width = `${progressRect.width}px`;
-            this.sliderSegmentsOverlay.style.height = `${progressRect.height}px`;
-            this.sliderSegmentsOverlay.style.opacity = '1'; // Make visible only when position is valid
-          } else {
-             this.sliderSegmentsOverlay.style.opacity = '0'; // Hide if progress bar is not valid
-          }
-        } else {
-          this.sliderSegmentsOverlay.style.opacity = '0'; // Hide if elements are not found
-          if (!document.body.contains(playerContainer)) {
-            clearInterval(this.positioningInterval);
-          }
-        }
-      }, 200);
-    };
-
-    const attachOverlayToPlayer = (playerContainer) => {
-      if (window.getComputedStyle(playerContainer).position === 'static') {
-        playerContainer.style.position = 'relative';
-      }
-      playerContainer.appendChild(this.sliderSegmentsOverlay);
-      console.info(this.videoID, 'Segments overlay attached. Starting position tracking.');
-      trackProgressBarPosition(playerContainer);
-    };
-
-    const watchForPlayerContainer = () => {
+    const watchForProgressBar = () => {
       if (this.sliderInterval) clearInterval(this.sliderInterval);
       
-      const playerContainerSelectors = ['.html5-video-player', '#movie_player'];
+      const progressBarSelectors = [
+        '.ytlr-progress-bar__slider', '.ytlr-multi-markers-player-bar-renderer',
+        '.ytlr-progress-bar', '.ytLrProgressBarSlider', '.ytLrProgressBarSliderBase',
+        '.ytp-progress-bar', '.ytp-progress-bar-container'
+      ];
 
       this.sliderInterval = setInterval(() => {
-        for (const selector of playerContainerSelectors) {
+        for (const selector of progressBarSelectors) {
           const element = document.querySelector(selector);
-          if (element && element.offsetParent !== null) {
-            console.info(this.videoID, `Stable player container found with selector "${selector}"`);
+          if (element && window.getComputedStyle(element).display !== 'none' && element.offsetWidth > 50) {
+            this.progressBarElement = element;
+            console.info(this.videoID, `Progress bar found with selector "${selector}"`);
             clearInterval(this.sliderInterval);
             this.sliderInterval = null;
-            attachOverlayToPlayer(element);
+            
+            this.attachOverlayToProgressBar();
+            this.setupMutationObserver(); // NEW: Setup smart reattachment
+            
+            // IMPROVED: Less frequent persistence checks to reduce blinking
+            if (this.persistenceInterval) clearInterval(this.persistenceInterval);
+            this.persistenceInterval = setInterval(() => {
+              if (!document.body.contains(this.progressBarElement)) {
+                console.info("Progress bar lost. Stopping persistence check and re-finding...");
+                clearInterval(this.persistenceInterval);
+                this.persistenceInterval = null;
+                this.progressBarElement = null;
+                if (this.mutationObserver) {
+                  this.mutationObserver.disconnect();
+                  this.mutationObserver = null;
+                }
+                watchForProgressBar();
+                return;
+              }
+
+              // Only check every 1 second instead of 250ms to reduce blinking
+              if (!this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
+                console.info("Overlay detached. Re-attaching via persistence check.");
+                this.attachOverlayToProgressBar();
+              }
+            }, 1000); // CHANGED: Reduced frequency from 250ms to 1000ms
+            
             return;
           }
         }
       }, 500);
     };
 
-    watchForPlayerContainer();
+    watchForProgressBar();
   }
 
   scheduleSkip() {
@@ -358,15 +406,18 @@ class SponsorBlockHandler {
     clearTimeout(this.attachVideoTimeout);
     clearInterval(this.sliderInterval);
     clearInterval(this.persistenceInterval);
-    clearInterval(this.positioningInterval); // Add this line
 
     this.nextSkipTimeout = null;
     this.attachVideoTimeout = null;
     this.sliderInterval = null;
     this.persistenceInterval = null;
-    this.positioningInterval = null; // Add this line
 
-    // ... (rest of the destroy method remains the same)
+    // NEW: Clean up mutation observer
+    if (this.mutationObserver) {
+      this.mutationObserver.disconnect();
+      this.mutationObserver = null;
+    }
+
     if (this.sliderSegmentsOverlay && this.sliderSegmentsOverlay.parentNode) {
       this.sliderSegmentsOverlay.remove();
     }
