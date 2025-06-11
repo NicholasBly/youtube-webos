@@ -220,7 +220,7 @@ class SponsorBlockHandler {
     }
   }
 
-  buildOverlay() {
+buildOverlay() {
     // Guard against missing video or duration
     if (!this.video || !this.video.duration || isNaN(this.video.duration) || this.video.duration <= 0) {
       console.info(this.videoID, 'Video duration not available or invalid. Overlay build deferred.');
@@ -249,143 +249,116 @@ class SponsorBlockHandler {
 
     this.sliderSegmentsOverlay = document.createElement('div');
     // Basic styling for the overlay container. It will sit on top of the progress bar.
-    this.sliderSegmentsOverlay.style.position = 'absolute'; // Relative to its offset parent (the progress bar)
+    this.sliderSegmentsOverlay.style.position = 'absolute';
     this.sliderSegmentsOverlay.style.left = '0';
     this.sliderSegmentsOverlay.style.top = '0';
     this.sliderSegmentsOverlay.style.width = '100%';
     this.sliderSegmentsOverlay.style.height = '100%';
-    this.sliderSegmentsOverlay.style.pointerEvents = 'none'; // Allow clicks to pass through
-    this.sliderSegmentsOverlay.style.zIndex = '10'; // Ensure it's above the basic progress bar visuals but below controls
+    this.sliderSegmentsOverlay.style.pointerEvents = 'none';
+    this.sliderSegmentsOverlay.style.zIndex = '10';
     this.sliderSegmentsOverlay.id = 'sponsorblock-segments-overlay';
 
 
     this.segments.forEach((segment) => {
       const [start, end] = segment.segment;
-      // Ensure start and end are within duration; API data can sometimes be slightly off
       const segmentStart = Math.max(0, Math.min(start, videoDuration));
       const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
 
-      if (segmentEnd <= segmentStart) return; // Skip zero or negative length segments
+      if (segmentEnd <= segmentStart) return;
 
-      const barType = barTypes[segment.category] || barTypes.sponsor; // Default to sponsor if category unknown
+      const barType = barTypes[segment.category] || barTypes.sponsor;
       
       const segmentWidthPercent = ((segmentEnd - segmentStart) / videoDuration) * 100;
       const segmentLeftPercent = (segmentStart / videoDuration) * 100;
 
       const elm = document.createElement('div');
-      // elm.classList.add('ytlr-progress-bar__played'); // Using a more generic class
       elm.classList.add('sponsorblock-segment-visual');
       elm.style.backgroundColor = barType.color;
       elm.style.opacity = barType.opacity;
       
-      // Using left and width for positioning within the absolute overlay container
       elm.style.position = 'absolute';
       elm.style.left = `${segmentLeftPercent}%`;
       elm.style.width = `${segmentWidthPercent}%`;
-      elm.style.height = '100%'; // Segments take full height of the overlay
-      elm.style.borderRadius = 'inherit'; // Inherit border radius from parent progress bar if possible
+      elm.style.height = '100%';
+      elm.style.borderRadius = 'inherit';
       
-      // Tooltip for debugging or future enhancement
       elm.title = `${barType.name}: ${segmentStart.toFixed(1)}s - ${segmentEnd.toFixed(1)}s`;
 
       this.sliderSegmentsOverlay.appendChild(elm);
     });
 
-    // New logic to find the progress bar and attach the overlay
     const attachOverlayToProgressBar = () => {
-      if (this.progressBarElement && this.sliderSegmentsOverlay) {
-        // Ensure the progress bar element can host an absolutely positioned overlay
-        // The parent of the overlay should have position: relative, absolute, or fixed.
-        // Most YouTube progress bars already have this.
+        if (!this.progressBarElement || !this.sliderSegmentsOverlay) {
+            console.warn(this.videoID, "Progress bar element or overlay missing, cannot attach.");
+            return;
+        }
+
+        // Ensure the parent is a positioning context
         const currentPosition = window.getComputedStyle(this.progressBarElement).position;
         if (currentPosition === 'static') {
-            this.progressBarElement.style.position = 'relative'; // Make it a positioning context
-            console.info(this.videoID, `Set ${this.progressBarElement.className || this.progressBarElement.id} to position: relative`);
+            this.progressBarElement.style.position = 'relative';
         }
         
-        this.progressBarElement.prepend(this.sliderSegmentsOverlay); // Prepend to be underneath other potential children if any
+        this.progressBarElement.prepend(this.sliderSegmentsOverlay);
         console.info(this.videoID, 'Segments overlay attached to progress bar:', this.progressBarElement);
 
-        // Setup MutationObserver to watch for progress bar changes / removal
-        if (this.progressBarElement.parentNode) { // Observer needs a parent
-            this.sliderObserver = new MutationObserver((mutations) => {
-              let reAttachOverlay = false;
-              let reFindProgressBar = false;
-
-              for (const mutation of mutations) {
-                if (mutation.type === 'childList') {
-                  // Check if our overlay was removed
-                  if (mutation.removedNodes) {
-                    mutation.removedNodes.forEach(node => {
-                      if (node === this.sliderSegmentsOverlay) {
-                        console.info(this.videoID, 'Segments overlay removed by YouTube. Re-attaching.');
-                        reAttachOverlay = true;
-                      }
-                      // Check if the progress bar itself was removed
-                      if (node === this.progressBarElement) {
-                        console.info(this.videoID, 'Progress bar element removed. Re-finding.');
-                        reFindProgressBar = true;
-                      }
-                    });
-                  }
-                }
-              }
-
-              if (reFindProgressBar) {
-                this.progressBarElement = null; // Clear current reference
-                if(this.sliderObserver) this.sliderObserver.disconnect(); // Stop old observer
-                watchForProgressBar(); // Restart the search
-              } else if (reAttachOverlay && this.progressBarElement && this.sliderSegmentsOverlay) {
-                // Ensure progressBarElement still exists and is in DOM before re-attaching
-                if (document.body.contains(this.progressBarElement)) {
-                    this.progressBarElement.prepend(this.sliderSegmentsOverlay);
-                } else {
-                    // Progress bar itself is gone, trigger a re-find
-                    this.progressBarElement = null;
-                    if(this.sliderObserver) this.sliderObserver.disconnect();
-                    watchForProgressBar();
-                }
-              }
-            });
-
-            // Observe the parent of the progress bar for changes to the progress bar itself,
-            // and the progress bar for changes to its children (like our overlay being removed).
-            this.sliderObserver.observe(this.progressBarElement.parentNode, { childList: true, subtree: false }); // For progress bar removal
-            this.sliderObserver.observe(this.progressBarElement, { childList: true, subtree: false }); // For overlay removal from progress bar
+        // Disconnect previous observer if it exists
+        if (this.sliderObserver) {
+            this.sliderObserver.disconnect();
         }
 
-      } else {
-          console.warn(this.videoID, "Progress bar element or overlay missing, cannot attach.");
-      }
+        // ** START: MODIFIED LOGIC **
+        this.sliderObserver = new MutationObserver(() => {
+            // If progress bar element is gone, restart the search
+            if (!this.progressBarElement || !document.body.contains(this.progressBarElement)) {
+                console.info(this.videoID, 'Progress bar element removed from DOM. Re-finding...');
+                this.sliderObserver.disconnect();
+                this.progressBarElement = null;
+                watchForProgressBar(); // Restart the search
+                return; // Stop this observer callback
+            }
+
+            // If the overlay exists but is not a child of the progress bar, re-attach it
+            if (this.sliderSegmentsOverlay && !this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
+                console.info(this.videoID, 'Overlay detached by YouTube. Re-attaching.');
+                // Re-apply positioning context in case it was reset
+                if (window.getComputedStyle(this.progressBarElement).position === 'static') {
+                    this.progressBarElement.style.position = 'relative';
+                }
+                this.progressBarElement.prepend(this.sliderSegmentsOverlay);
+            }
+        });
+
+        // Observe the parent of the progress bar for any changes in its children or their children (subtree)
+        if (this.progressBarElement.parentNode) {
+            this.sliderObserver.observe(this.progressBarElement.parentNode, { childList: true, subtree: true });
+        }
+        // ** END: MODIFIED LOGIC **
     };
 
     const watchForProgressBar = () => {
       if (this.sliderInterval) clearInterval(this.sliderInterval);
 
-      // More robust list of selectors for the progress bar element itself (the track or a close container)
-      // Order matters: try more specific/likely ones first.
       const progressBarSelectors = [
-        '.ytlr-progress-bar', // Common YouTube web
-        '.ytLrProgressBarSlider', // Sometimes chapters are drawn on this or similar named elements in new layouts
+        '.ytlr-progress-bar',
+        '.ytlrProgressBarSlider',
       ];
 
       this.sliderInterval = setInterval(() => {
         for (const selector of progressBarSelectors) {
           const element = document.querySelector(selector);
-          if (element && window.getComputedStyle(element).display !== 'none' && element.offsetWidth > 50) { // Ensure it's visible and has some width
+          if (element && window.getComputedStyle(element).display !== 'none' && element.offsetWidth > 50) {
             this.progressBarElement = element;
             console.info(this.videoID, `Progress bar found with selector "${selector}":`, this.progressBarElement);
             clearInterval(this.sliderInterval);
             this.sliderInterval = null;
-            attachOverlayToProgressBar(); // Attach the overlay
-            return; // Found
+            attachOverlayToProgressBar();
+            return;
           }
         }
-        console.info(this.videoID, 'Still searching for progress bar...');
-      }, 500); // Check every 500ms
+      }, 500);
     };
 
-    // Start watching for the progress bar
     watchForProgressBar();
   }
 
