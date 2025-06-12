@@ -315,9 +315,16 @@ class SponsorBlockHandler {
     this.sliderSegmentsOverlay.setAttribute('data-sponsorblock', 'segments');
 
     this.segments.forEach((segment) => {
+    if (segment.category === 'poi_highlight') {
+      const width = 5.47; // px
+      const height = 3; // px
+    } else {
       const [start, end] = segment.segment;
       const segmentStart = Math.max(0, Math.min(start, videoDuration));
       const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
+    
+    }
+    });
 
       if (segmentEnd <= segmentStart) return;
 
@@ -330,11 +337,6 @@ class SponsorBlockHandler {
       // Set classes similar to the screenshot
       elm.className = `previewbar sponsorblock-category-${segment.category}`;
       elm.innerHTML = '&nbsp;'; // The elements in the screenshot are empty
-
-      // Special handling for poi_highlight segments - fixed size
-      const isHighlight = segment.category === 'poi_highlight';
-      const elementWidth = isHighlight ? '5.47px' : `${segmentWidthPercent}%`;
-      const elementHeight = isHighlight ? '3px' : '100%';
       
       // IMPROVED: More robust CSS with !important declarations
       elm.style.cssText = `

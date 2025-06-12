@@ -1,62 +1,265 @@
 .ytaf-ui-container {
-  position: absolute;
-  top: 10%;
-  left: 10%;
-  right: 10%;
-  bottom: 10%;
-
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  border-radius: 20px;
-  padding: 20px;
-  font-size: 1.5rem;
+  position: fixed;
+  top: 5%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(90vw, 800px);
+  max-height: 90vh;
+  
+  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+  border: 1px solid #3f3f3f;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 
+              0 0 0 1px rgba(255, 255, 255, 0.05);
+  
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
   z-index: 1000;
+  
+  overflow: hidden;
+  backdrop-filter: blur(20px);
 }
 
-.ytaf-ui-container :focus {
-  outline: 4px red solid;
+.ytaf-ui-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, 
+    rgba(255, 0, 0, 0.05) 0%, 
+    rgba(255, 255, 255, 0.02) 50%, 
+    rgba(255, 0, 0, 0.05) 100%);
+  pointer-events: none;
+}
+
+.ytaf-ui-container > * {
+  position: relative;
+  z-index: 1;
 }
 
 .ytaf-ui-container h1 {
   margin: 0;
-  margin-bottom: 0.5em;
+  padding: 24px 32px 16px;
   text-align: center;
+  font-size: 28px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #ff0000, #ff4444);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  border-bottom: 1px solid #3f3f3f;
+  margin-bottom: 0;
+}
+
+.ytaf-ui-container > div:not(:first-child) {
+  padding: 0 32px 24px;
+  max-height: calc(90vh - 100px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar */
+.ytaf-ui-container > div::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ytaf-ui-container > div::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.ytaf-ui-container > div::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #ff0000, #cc0000);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.ytaf-ui-container > div::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #ff3333, #ff0000);
 }
 
 .ytaf-ui-container input[type='checkbox'] {
-  width: 2rem;
-  height: 1.5rem;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  margin-right: 12px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #2a2a2a;
+  border: 2px solid #4a4a4a;
+  border-radius: 4px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.ytaf-ui-container input[type='checkbox']:hover {
+  border-color: #ff0000;
+  background: #333333;
+  transform: scale(1.05);
+}
+
+.ytaf-ui-container input[type='checkbox']:checked {
+  background: linear-gradient(135deg, #ff0000, #cc0000);
+  border-color: #ff0000;
+  box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+}
+
+.ytaf-ui-container input[type='checkbox']:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.ytaf-ui-container input[type='checkbox']:focus {
+  outline: 2px solid #ff0000;
+  outline-offset: 2px;
 }
 
 .ytaf-ui-container label {
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 12px 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 8px;
+  margin: 0 -8px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.ytaf-ui-container label:hover {
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateX(4px);
+}
+
+.ytaf-ui-container label:focus-within {
+  background: rgba(255, 0, 0, 0.1);
+  box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.3);
+}
+
+.ytaf-ui-container blockquote {
+  margin: 16px 0 16px 24px;
+  padding-left: 24px;
+  border-left: 3px solid #ff0000;
+  background: rgba(255, 0, 0, 0.05);
+  border-radius: 0 8px 8px 0;
+}
+
+.ytaf-ui-container blockquote label {
+  font-size: 15px;
+  color: #e0e0e0;
+  padding: 8px 0;
+}
+
+.ytaf-ui-container small {
   display: block;
-  font-size: 2rem;
+  text-align: center;
+  color: #888888;
+  font-size: 13px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #3f3f3f;
+}
+
+/* Focus styles for TV navigation */
+.ytaf-ui-container :focus {
+  outline: 3px solid #ff0000;
+  outline-offset: 2px;
 }
 
 .ytaf-notification-container {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  font-size: 16pt;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  font-size: 16px;
   z-index: 1200;
+  max-width: 400px;
 }
 
 .ytaf-notification-container .message {
-  background: rgba(0, 0, 0, 0.7);
+  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+  border: 1px solid #3f3f3f;
   color: white;
-  padding: 1em;
-  margin: 0.5em;
-  transition: all 0.3s ease-in-out;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 1;
-  line-height: 1;
-  border-right: 10px solid rgba(50, 255, 50, 0.3);
-  display: inline-block;
-  float: right;
+  transform: translateX(0);
+  border-left: 4px solid #ff0000;
+  backdrop-filter: blur(10px);
+  font-weight: 500;
+  line-height: 1.4;
+  display: block;
+  float: none;
 }
 
 .ytaf-notification-container .message-hidden {
   opacity: 0;
-  margin: 0 0.5em;
-  padding: 0 1em;
-  line-height: 0;
+  transform: translateX(100%);
+  margin-bottom: 0;
+  padding: 0 20px;
+  max-height: 0;
+  overflow: hidden;
+}
+
+/* Smooth animations */
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.ytaf-notification-container .message {
+  animation: slideInFromRight 0.3s ease-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ytaf-ui-container {
+    width: 95vw;
+    top: 2.5%;
+    max-height: 95vh;
+  }
+  
+  .ytaf-ui-container h1 {
+    font-size: 24px;
+    padding: 20px 24px 12px;
+  }
+  
+  .ytaf-ui-container > div:not(:first-child) {
+    padding: 0 24px 20px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .ytaf-ui-container {
+    background: #000000;
+    border: 2px solid #ffffff;
+  }
+  
+  .ytaf-ui-container input[type='checkbox']:checked {
+    background: #ffffff;
+    color: #000000;
+  }
 }
