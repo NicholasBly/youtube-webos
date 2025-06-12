@@ -18,6 +18,7 @@ const ARROW_KEY_CODE = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' };
 // ---,   172,    170,  191
 const colorCodeMap = new Map([
   [403, 'red'],
+  [166, 'red'], // fixed webOS24
 
   [404, 'green'],
   [172, 'green'],
@@ -26,6 +27,7 @@ const colorCodeMap = new Map([
   [170, 'yellow'],
 
   [406, 'blue'],
+  [167, 'blue'], // fixed webOS24
   [191, 'blue']
 ]);
 
