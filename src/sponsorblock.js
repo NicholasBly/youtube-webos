@@ -62,7 +62,7 @@ const barTypes = {
   poi_highlight: {
     color: '#ff1684',
     opacity: '0.8',
-    name: 'highlight'
+    name: 'poi_highlight'
   },
   // Adding 'chapter' as it's commonly used, though not in original snippet's barTypes
   chapter: {
