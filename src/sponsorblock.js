@@ -315,8 +315,19 @@ class SponsorBlockHandler {
     this.sliderSegmentsOverlay.setAttribute('data-sponsorblock', 'segments');
 
     this.segments.forEach((segment) => {
-      const [start, end] = segment.segment;
-      const isHighlight = segment.category === 'poi_highlight';
+	  const [start, end] = segment.segment;
+	  const isHighlight = segment.category === 'poi_highlight';
+	  
+	  // Skip poi_highlight segments if highlights are disabled
+	  if (isHighlight) {
+		try {
+		  const highlightEnabled = configRead('enableSponsorBlockHighlight');
+		  if (!highlightEnabled) return;
+		} catch (e) {
+		  console.warn("Could not read highlight config:", e);
+		  return; // Skip if we can't read the config
+		}
+	  }
       
       let segmentStart, segmentEnd, segmentWidthPercent, segmentLeftPercent;
       
