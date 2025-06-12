@@ -152,10 +152,9 @@ class SponsorBlockHandler {
         if (configRead('enableSponsorBlockSelfPromo')) skippable.push('selfpromo');
         if (configRead('enableSponsorBlockMusicOfftopic')) skippable.push('music_offtopic');
         if (configRead('enableSponsorBlockPreview')) skippable.push('preview');
-	if (configRead('enableSponsorBlockHighlight')) skippable.push('poi_highlight');
     } catch (e) {
         console.warn("Could not read SponsorBlock config, using defaults. Error:", e);
-        return ['sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 'music_offtopic', 'preview', 'poi_highlight'];
+        return ['sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 'music_offtopic', 'preview'];
     }
     return skippable;
   }
@@ -293,9 +292,8 @@ class SponsorBlockHandler {
         this.mutationObserver = null;
     }
 
-    // Create a UL element to act as the container, like in the screenshot
     this.sliderSegmentsOverlay = document.createElement('ul');
-    this.sliderSegmentsOverlay.id = 'previewbar'; // Match the ID from the screenshot
+    this.sliderSegmentsOverlay.id = 'previewbar';
     
     // IMPROVED: More robust CSS with !important declarations to prevent removal
     this.sliderSegmentsOverlay.style.cssText = `
