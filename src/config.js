@@ -36,6 +36,20 @@ const configOptions = new Map([
     }
   ],
   [
+    'enableSponsorBlockHighlight',
+    {
+      default: true,
+      desc: 'Show highlight segments'
+    }
+  ],
+  [
+    'enableHighlightJump',
+    {
+      default: true,
+      desc: 'Jump to highlight with blue button'
+    }
+  ],
+  [
     'enableSponsorBlockPreview',
     {
       default: false,

@@ -137,6 +137,8 @@ function createOptionsPanel() {
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockInteraction'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockSelfPromo'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockMusicOfftopic'));
+  elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockHighlight'));
+  elmBlock.appendChild(createConfigCheckbox('enableHighlightJump'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockPreview'));
 
   elmContainer.appendChild(elmBlock);
@@ -185,7 +187,9 @@ const eventHandler = (evt) => {
     evt.defaultPrevented
   );
 
-  if (getKeyColor(evt.charCode) === 'green') {
+  const keyColor = getKeyColor(evt.charCode);
+  
+  if (keyColor === 'green') {
     console.info('Taking over!');
 
     evt.preventDefault();
@@ -196,7 +200,27 @@ const eventHandler = (evt) => {
       showOptionsPanel(!optionsPanelVisible);
     }
     return false;
+  } else if (keyColor === 'blue' && evt.type === 'keydown') {
+    // Handle yellow button for highlight jumping
+    console.info('Blue button pressed - attempting highlight jump');
+    
+    try {
+      const jumpEnabled = configRead('enableHighlightJump');
+      if (jumpEnabled && window.sponsorblock) {
+        const jumped = window.sponsorblock.jumpToNextHighlight();
+        if (jumped) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          return false;
+        } else {
+          showNotification('No highlights found in this video');
+        }
+      }
+    } catch (e) {
+      console.warn('Error jumping to highlight:', e);
+    }
   }
+  
   return true;
 };
 
