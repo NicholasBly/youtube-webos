@@ -94,11 +94,9 @@ class SponsorBlockHandler {
   skippableCategories = [];
 
   constructor(videoID) {
-	this.videoID = videoID;
-	this.lastSeekTime = null;
-	this.manuallyEnteredSegment = null;
-  console.info(`SponsorBlockHandler created for videoID: ${videoID}`);
-}
+    this.videoID = videoID;
+    console.info(`SponsorBlockHandler created for videoID: ${videoID}`);
+  }
 
   async init() {
     if (typeof sha256 !== 'function') {
@@ -216,13 +214,6 @@ class SponsorBlockHandler {
     this.video.addEventListener('seeking', this.scheduleSkipHandler);
     this.video.addEventListener('seeked', this.scheduleSkipHandler);
     this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
-	
-	this.video.addEventListener('seeking', () => {
-	this.lastSeekTime = Date.now();
-	});
-	this.video.addEventListener('seeked', () => {
-	this.lastSeekTime = Date.now();
-	});
     
     if (this.video.duration && this.segments) {
         this.buildOverlay();
@@ -469,68 +460,42 @@ class SponsorBlockHandler {
   }
 
   scheduleSkip() {
-  clearTimeout(this.nextSkipTimeout);
-  this.nextSkipTimeout = null;
+    clearTimeout(this.nextSkipTimeout);
+    this.nextSkipTimeout = null;
 
-  if (!this.active || !this.video || this.video.paused || !this.segments) {
-    return;
-  }
+    if (!this.active || !this.video || this.video.paused || !this.segments) {
+      return;
+    }
 
-  const currentTime = this.video.currentTime;
-  
-  // Check if we're currently in a segment that user manually entered
-  const currentSegment = this.segments.find(seg => 
-    currentTime >= seg.segment[0] && 
-    currentTime < seg.segment[1] && 
-    this.skippableCategories.includes(seg.category) && 
-    seg.category !== 'poi_highlight'
-  );
-  
-  // If user recently seeked into this segment, mark it as manually entered
-  if (currentSegment && this.lastSeekTime && Date.now() - this.lastSeekTime < 1000) {
-    this.manuallyEnteredSegment = currentSegment;
-  }
-  
-  // If we're in a manually entered segment, don't skip it
-  if (currentSegment && this.manuallyEnteredSegment === currentSegment) {
-    return;
-  }
-  
-  // Clear manually entered segment if we're no longer in it
-  if (this.manuallyEnteredSegment && 
-      (currentTime < this.manuallyEnteredSegment.segment[0] || 
-       currentTime >= this.manuallyEnteredSegment.segment[1])) {
-    this.manuallyEnteredSegment = null;
-  }
+    const currentTime = this.video.currentTime;
+    const nextSegment = this.segments
+      .filter(seg => seg.segment[1] > currentTime && 
+                   this.skippableCategories.includes(seg.category) && 
+                   seg.category !== 'poi_highlight') // Don't auto-skip highlights
+      .sort((a, b) => a.segment[0] - b.segment[0])[0];
+    
+    if (!nextSegment) return;
 
-  const nextSegment = this.segments
-    .filter(seg => seg.segment[1] > currentTime && 
-                 this.skippableCategories.includes(seg.category) && 
-                 seg.category !== 'poi_highlight')
-    .sort((a, b) => a.segment[0] - b.segment[0])[0];
-  
-  if (!nextSegment) return;
+    const [start, end] = nextSegment.segment;
 
-  const [start, end] = nextSegment.segment;
-
-  if (currentTime >= start && currentTime < end) {
-    const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
-    showNotification(`Skipping ${skipName}`);
-    this.video.currentTime = end;
-    this.scheduleSkip();
-  } else if (start > currentTime) {
-    const timeUntilSkip = (start - currentTime) * 1000;
-    this.nextSkipTimeout = setTimeout(() => {
-      if (!this.active || this.video.paused) return;
-      if (this.video.currentTime >= start - 0.5 && this.video.currentTime < end) {
-        const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
-        showNotification(`Skipping ${skipName}`);
-        this.video.currentTime = end;
-        this.scheduleSkip();
-      }
-    }, Math.max(0, timeUntilSkip));
+    if (currentTime >= start && currentTime < end) {
+      const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
+      showNotification(`Skipping ${skipName}`);
+      this.video.currentTime = end;
+      this.scheduleSkip();
+    } else if (start > currentTime) {
+      const timeUntilSkip = (start - currentTime) * 1000;
+      this.nextSkipTimeout = setTimeout(() => {
+        if (!this.active || this.video.paused) return;
+        if (this.video.currentTime >= start - 0.5 && this.video.currentTime < end) {
+          const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
+          showNotification(`Skipping ${skipName}`);
+          this.video.currentTime = end;
+          this.scheduleSkip();
+        }
+      }, Math.max(0, timeUntilSkip));
+    }
   }
-}
 
   destroy() {
     console.info(this.videoID, 'Destroying SponsorBlockHandler instance.');
