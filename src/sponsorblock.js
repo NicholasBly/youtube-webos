@@ -359,7 +359,7 @@ class SponsorBlockHandler {
         elm.style.cssText = `
           position: absolute !important;
           list-style: none !important;
-          height: 3px !important;
+          height: 12px !important;
           background-color: ${barType.color} !important;
           opacity: ${barType.opacity} !important;
           left: ${segmentLeftPercent}% !important;
