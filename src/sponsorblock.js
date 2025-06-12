@@ -324,7 +324,7 @@ class SponsorBlockHandler {
       const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
     
     }
-    }
+    })
 
       if (segmentEnd <= segmentStart) return;
 
