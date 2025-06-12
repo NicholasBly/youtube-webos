@@ -94,9 +94,10 @@ class SponsorBlockHandler {
   skippableCategories = [];
 
   constructor(videoID) {
-    this.videoID = videoID;
-    this.lastSeekTime = null;
-    console.info(`SponsorBlockHandler created for videoID: ${videoID}`);
+	this.videoID = videoID;
+	this.lastSeekTime = null;
+	this.manuallyEnteredSegment = null;
+  console.info(`SponsorBlockHandler created for videoID: ${videoID}`);
 }
 
   async init() {
@@ -477,22 +478,42 @@ class SponsorBlockHandler {
 
   const currentTime = this.video.currentTime;
   
-  // Check if user recently seeked - if so, don't skip segments they seeked into
-  const recentlySeekTime = this.lastSeekTime && Date.now() - this.lastSeekTime < 2000;
+  // Check if we're currently in a segment that user manually entered
+  const currentSegment = this.segments.find(seg => 
+    currentTime >= seg.segment[0] && 
+    currentTime < seg.segment[1] && 
+    this.skippableCategories.includes(seg.category) && 
+    seg.category !== 'poi_highlight'
+  );
   
+  // If user recently seeked into this segment, mark it as manually entered
+  if (currentSegment && this.lastSeekTime && Date.now() - this.lastSeekTime < 1000) {
+    this.manuallyEnteredSegment = currentSegment;
+  }
+  
+  // If we're in a manually entered segment, don't skip it
+  if (currentSegment && this.manuallyEnteredSegment === currentSegment) {
+    return;
+  }
+  
+  // Clear manually entered segment if we're no longer in it
+  if (this.manuallyEnteredSegment && 
+      (currentTime < this.manuallyEnteredSegment.segment[0] || 
+       currentTime >= this.manuallyEnteredSegment.segment[1])) {
+    this.manuallyEnteredSegment = null;
+  }
+
   const nextSegment = this.segments
     .filter(seg => seg.segment[1] > currentTime && 
                  this.skippableCategories.includes(seg.category) && 
-                 seg.category !== 'poi_highlight') // Don't auto-skip highlights
+                 seg.category !== 'poi_highlight')
     .sort((a, b) => a.segment[0] - b.segment[0])[0];
   
   if (!nextSegment) return;
 
   const [start, end] = nextSegment.segment;
 
-  // Only skip if we're in a segment AND we didn't recently seek
-  // This allows users to intentionally seek into segments without auto-skipping
-  if (currentTime >= start && currentTime < end && !recentlySeekTime) {
+  if (currentTime >= start && currentTime < end) {
     const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
     showNotification(`Skipping ${skipName}`);
     this.video.currentTime = end;
@@ -501,9 +522,7 @@ class SponsorBlockHandler {
     const timeUntilSkip = (start - currentTime) * 1000;
     this.nextSkipTimeout = setTimeout(() => {
       if (!this.active || this.video.paused) return;
-      // Only skip if we naturally reached the segment, not if user seeked recently
-      const stillRecentSeek = this.lastSeekTime && Date.now() - this.lastSeekTime < 2000;
-      if (this.video.currentTime >= start - 0.5 && this.video.currentTime < end && !stillRecentSeek) {
+      if (this.video.currentTime >= start - 0.5 && this.video.currentTime < end) {
         const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
         showNotification(`Skipping ${skipName}`);
         this.video.currentTime = end;
