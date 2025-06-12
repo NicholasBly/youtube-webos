@@ -201,7 +201,7 @@ const eventHandler = (evt) => {
     }
     return false;
   } else if (keyColor === 'blue' && evt.type === 'keydown') {
-    // Handle yellow button for highlight jumping
+    // Handle blue button for highlight jumping
     console.info('Blue button pressed - attempting highlight jump');
     
     try {

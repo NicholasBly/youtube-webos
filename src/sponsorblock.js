@@ -59,6 +59,11 @@ const barTypes = {
     opacity: '0.7',
     name: 'recap or preview'
   },
+  poi_highlight: {
+    color: '#ff1684',
+    opacity: '0.8',
+    name: 'highlight'
+  },
   // Adding 'chapter' as it's commonly used, though not in original snippet's barTypes
   chapter: {
     color: 'rgba(128, 128, 128, 0.5)', // Example: semi-transparent grey
@@ -102,7 +107,7 @@ class SponsorBlockHandler {
 
     const categories = [
       'sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 
-      'music_offtopic', 'preview', 'chapter'
+      'music_offtopic', 'preview', 'chapter', 'poi_highlight'
     ];
     
     try {
@@ -147,11 +152,50 @@ class SponsorBlockHandler {
         if (configRead('enableSponsorBlockSelfPromo')) skippable.push('selfpromo');
         if (configRead('enableSponsorBlockMusicOfftopic')) skippable.push('music_offtopic');
         if (configRead('enableSponsorBlockPreview')) skippable.push('preview');
+	if (configRead('enableSponsorBlockHighlight')) skippable.push('poi_highlight');
     } catch (e) {
         console.warn("Could not read SponsorBlock config, using defaults. Error:", e);
-        return ['sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 'music_offtopic', 'preview'];
+        return ['sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 'music_offtopic', 'preview', 'poi_highlight'];
     }
     return skippable;
+  }
+  
+  getHighlightSegments() {
+    if (!this.segments) return [];
+    try {
+      const highlightEnabled = configRead('enableSponsorBlockHighlight');
+      if (!highlightEnabled) return [];
+      
+      return this.segments
+        .filter(seg => seg.category === 'poi_highlight')
+        .sort((a, b) => a.segment[0] - b.segment[0]);
+    } catch (e) {
+      console.warn("Could not read highlight config:", e);
+      return [];
+    }
+  }
+  
+  jumpToNextHighlight() {
+    if (!this.video) return false;
+    
+    const highlights = this.getHighlightSegments();
+    if (highlights.length === 0) return false;
+    
+    const currentTime = this.video.currentTime;
+    const nextHighlight = highlights.find(seg => seg.segment[0] > currentTime + 1);
+    
+    if (nextHighlight) {
+      this.video.currentTime = nextHighlight.segment[0];
+      showNotification(`Jumped to highlight at ${Math.floor(nextHighlight.segment[0])}s`);
+      return true;
+    } else if (highlights.length > 0) {
+      // Jump to first highlight if no next highlight found
+      this.video.currentTime = highlights[0].segment[0];
+      showNotification(`Jumped to first highlight at ${Math.floor(highlights[0].segment[0])}s`);
+      return true;
+    }
+    
+    return false;
   }
 
   attachVideo() {
@@ -372,7 +416,9 @@ class SponsorBlockHandler {
 
     const currentTime = this.video.currentTime;
     const nextSegment = this.segments
-      .filter(seg => seg.segment[1] > currentTime && this.skippableCategories.includes(seg.category))
+      .filter(seg => seg.segment[1] > currentTime && 
+                   this.skippableCategories.includes(seg.category) && 
+                   seg.category !== 'poi_highlight') // Don't auto-skip highlights
       .sort((a, b) => a.segment[0] - b.segment[0])[0];
     
     if (!nextSegment) return;
