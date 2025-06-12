@@ -314,45 +314,83 @@ class SponsorBlockHandler {
     // Add a data attribute to help identify our elements
     this.sliderSegmentsOverlay.setAttribute('data-sponsorblock', 'segments');
 
-     this.segments.forEach((segment) => {
-  if (segment.category === 'poi_highlight') {
-    const width = 5.47; // px
-    const height = 3; // px
-  } else {
-    const [start, end] = segment.segment;
-    const segmentStart = Math.max(0, Math.min(start, videoDuration));
-    const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
-  }
-});
-
-      if (segmentEnd <= segmentStart) return;
+    this.segments.forEach((segment) => {
+      const [start, end] = segment.segment;
+      const isHighlight = segment.category === 'poi_highlight';
+      
+      let segmentStart, segmentEnd, segmentWidthPercent, segmentLeftPercent;
+      
+      if (isHighlight) {
+        // For poi_highlight, use only the start time as it's a point in time
+        const highlightTime = Math.max(0, Math.min(start, videoDuration));
+        
+        // Calculate position as percentage of video duration
+        segmentLeftPercent = (highlightTime / videoDuration) * 100;
+        
+        // Fixed width for highlights - convert 5.47px to percentage of progress bar width
+        // We'll calculate this dynamically based on the progress bar's actual width
+        const progressBarWidth = this.progressBarElement ? this.progressBarElement.offsetWidth : 1000; // fallback width
+        const fixedWidthPx = 5.47;
+        segmentWidthPercent = (fixedWidthPx / progressBarWidth) * 100;
+        
+        // For consistency with the rest of the code, set segmentStart and segmentEnd
+        segmentStart = highlightTime;
+        segmentEnd = highlightTime; // Same as start since it's a point
+      } else {
+        // Original logic for duration-based segments
+        segmentStart = Math.max(0, Math.min(start, videoDuration));
+        segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
+        
+        if (segmentEnd <= segmentStart) return;
+        
+        segmentWidthPercent = ((segmentEnd - segmentStart) / videoDuration) * 100;
+        segmentLeftPercent = (segmentStart / videoDuration) * 100;
+      }
 
       const barType = barTypes[segment.category] || barTypes.sponsor;
-      const segmentWidthPercent = ((segmentEnd - segmentStart) / videoDuration) * 100;
-      const segmentLeftPercent = (segmentStart / videoDuration) * 100;
 
       // Create an LI element for each segment
       const elm = document.createElement('li');
-      // Set classes similar to the screenshot
       elm.className = `previewbar sponsorblock-category-${segment.category}`;
-      elm.innerHTML = '&nbsp;'; // The elements in the screenshot are empty
+      elm.innerHTML = '&nbsp;';
+
+      // Apply different styling based on segment type
+      if (isHighlight) {
+        elm.style.cssText = `
+          position: absolute !important;
+          list-style: none !important;
+          height: 3px !important;
+          background-color: ${barType.color} !important;
+          opacity: ${barType.opacity} !important;
+          left: ${segmentLeftPercent}% !important;
+          width: ${segmentWidthPercent}% !important;
+          min-width: 5.47px !important;
+          max-width: 5.47px !important;
+          border-radius: inherit !important;
+          display: block !important;
+          visibility: visible !important;
+          z-index: 11 !important;
+          top: 50% !important;
+          transform: translateY(-50%) !important;
+        `;
+        elm.title = `${barType.name}: ${segmentStart.toFixed(1)}s`;
+      } else {
+        elm.style.cssText = `
+          position: absolute !important;
+          list-style: none !important;
+          height: 100% !important;
+          background-color: ${barType.color} !important;
+          opacity: ${barType.opacity} !important;
+          left: ${segmentLeftPercent}% !important;
+          width: ${segmentWidthPercent}% !important;
+          border-radius: inherit !important;
+          display: block !important;
+          visibility: visible !important;
+          z-index: 11 !important;
+        `;
+        elm.title = `${barType.name}: ${segmentStart.toFixed(1)}s - ${segmentEnd.toFixed(1)}s`;
+      }
       
-      // IMPROVED: More robust CSS with !important declarations
-      elm.style.cssText = `
-        position: absolute !important;
-        list-style: none !important;
-        height: 100% !important;
-        background-color: ${barType.color} !important;
-        opacity: ${barType.opacity} !important;
-        left: ${segmentLeftPercent}% !important;
-        width: ${segmentWidthPercent}% !important;
-        border-radius: inherit !important;
-        display: block !important;
-        visibility: visible !important;
-        z-index: 11 !important;
-      `;
-      
-      elm.title = `${barType.name}: ${segmentStart.toFixed(1)}s - ${segmentEnd.toFixed(1)}s`;
       elm.setAttribute('data-sponsorblock-segment', segment.category);
       this.sliderSegmentsOverlay.appendChild(elm);
     });
