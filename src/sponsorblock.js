@@ -294,11 +294,6 @@ class SponsorBlockHandler {
 
     this.sliderSegmentsOverlay = document.createElement('ul');
     this.sliderSegmentsOverlay.id = 'previewbar';
-
-    // Special handling for poi_highlight segments - fixed size
-    const isHighlight = segment.category === 'poi_highlight';
-    const elementWidth = isHighlight ? '5.47px' : `${segmentWidthPercent}%`;
-    const elementHeight = isHighlight ? '3px' : '100%';
     
     // IMPROVED: More robust CSS with !important declarations to prevent removal
     this.sliderSegmentsOverlay.style.cssText = `
@@ -335,6 +330,11 @@ class SponsorBlockHandler {
       // Set classes similar to the screenshot
       elm.className = `previewbar sponsorblock-category-${segment.category}`;
       elm.innerHTML = '&nbsp;'; // The elements in the screenshot are empty
+
+      // Special handling for poi_highlight segments - fixed size
+      const isHighlight = segment.category === 'poi_highlight';
+      const elementWidth = isHighlight ? '5.47px' : `${segmentWidthPercent}%`;
+      const elementHeight = isHighlight ? '3px' : '100%';
       
       // IMPROVED: More robust CSS with !important declarations
       elm.style.cssText = `
