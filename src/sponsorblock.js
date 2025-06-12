@@ -314,17 +314,16 @@ class SponsorBlockHandler {
     // Add a data attribute to help identify our elements
     this.sliderSegmentsOverlay.setAttribute('data-sponsorblock', 'segments');
 
-    this.segments.forEach((segment) => {
-    if (segment.category === 'poi_highlight') {
-      const width = 5.47; // px
-      const height = 3; // px
-    } else {
-      const [start, end] = segment.segment;
-      const segmentStart = Math.max(0, Math.min(start, videoDuration));
-      const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
-    
-    }
-    })
+     this.segments.forEach((segment) => {
+  if (segment.category === 'poi_highlight') {
+    const width = 5.47; // px
+    const height = 3; // px
+  } else {
+    const [start, end] = segment.segment;
+    const segmentStart = Math.max(0, Math.min(start, videoDuration));
+    const segmentEnd = Math.max(segmentStart, Math.min(end, videoDuration));
+  }
+});
 
       if (segmentEnd <= segmentStart) return;
 
