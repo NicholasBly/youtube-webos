@@ -310,5 +310,5 @@ applyUIFixes();
 initHideLogo();
 
 setTimeout(() => {
-  showNotification('Press [GREEN] to open YTAF configuration screen');
+  showNotification('Press [GREEN] to open SponsorBlock configuration screen');
 }, 2000);
