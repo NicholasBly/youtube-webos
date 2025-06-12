@@ -477,10 +477,8 @@ class SponsorBlockHandler {
 
   const currentTime = this.video.currentTime;
   
-  // Add a small delay to avoid interfering with manual seeking
-  // This prevents immediate skipping when user intentionally seeks into a segment
-  const wasRecentlySeekingOrSeeked = this.video.seeking || 
-    (this.lastSeekTime && Date.now() - this.lastSeekTime < 1000);
+  // Check if user recently seeked - if so, don't skip segments they seeked into
+  const recentlySeekTime = this.lastSeekTime && Date.now() - this.lastSeekTime < 2000;
   
   const nextSegment = this.segments
     .filter(seg => seg.segment[1] > currentTime && 
@@ -492,7 +490,9 @@ class SponsorBlockHandler {
 
   const [start, end] = nextSegment.segment;
 
-  if (currentTime >= start && currentTime < end && !wasRecentlySeekingOrSeeked) {
+  // Only skip if we're in a segment AND we didn't recently seek
+  // This allows users to intentionally seek into segments without auto-skipping
+  if (currentTime >= start && currentTime < end && !recentlySeekTime) {
     const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
     showNotification(`Skipping ${skipName}`);
     this.video.currentTime = end;
@@ -501,7 +501,9 @@ class SponsorBlockHandler {
     const timeUntilSkip = (start - currentTime) * 1000;
     this.nextSkipTimeout = setTimeout(() => {
       if (!this.active || this.video.paused) return;
-      if (this.video.currentTime >= start - 0.5 && this.video.currentTime < end) {
+      // Only skip if we naturally reached the segment, not if user seeked recently
+      const stillRecentSeek = this.lastSeekTime && Date.now() - this.lastSeekTime < 2000;
+      if (this.video.currentTime >= start - 0.5 && this.video.currentTime < end && !stillRecentSeek) {
         const skipName = barTypes[nextSegment.category]?.name || nextSegment.category;
         showNotification(`Skipping ${skipName}`);
         this.video.currentTime = end;
