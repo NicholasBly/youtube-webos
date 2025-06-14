@@ -4,7 +4,7 @@
   left: 50%;
   transform: translateX(-50%);
   width: min(95vw, 800px);
-  max-height: 140vh;
+  max-height: 85vh;
   
   background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
   border: 1px solid #3f3f3f;
@@ -55,9 +55,10 @@
 
 .ytaf-ui-container > div:not(:first-child) {
   padding: 0 32px 24px;
-  max-height: calc(90vh - 100px);
+  max-height: calc(85vh - 80px);
   overflow-y: auto;
   overflow-x: hidden;
+  padding-bottom: 40px;
 }
 
 /* Custom scrollbar */
@@ -231,12 +232,11 @@
   animation: slideInFromRight 0.3s ease-out;
 }
 
-/* Responsive adjustments */
 @media (max-width: 768px) {
   .ytaf-ui-container {
     width: 95vw;
     top: 2.5%;
-    max-height: 95vh;
+    max-height: 90vh;
   }
   
   .ytaf-ui-container h1 {
@@ -245,11 +245,11 @@
   }
   
   .ytaf-ui-container > div:not(:first-child) {
-    padding: 0 24px 20px;
+    padding: 0 24px 40px;
+    max-height: calc(80vh - 70px);
   }
 }
 
-/* High contrast mode support */
 @media (prefers-contrast: high) {
   .ytaf-ui-container {
     background: #000000;
