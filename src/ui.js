@@ -5,7 +5,8 @@ import {
   configRead,
   configWrite,
   configGetDesc,
-  segmentTypes
+  segmentTypes,
+  configGetDefault
 } from './config.js';
 import './ui.css';
 
@@ -75,9 +76,8 @@ function createColorPicker(key) {
 
   const elmLabel = document.createElement('label');
   elmLabel.classList.add('color-picker-label');
-  elmLabel.appendChild(
-    document.createTextNode(`\u00A0Color for ${desc}`)
-  );
+
+  const textNode = document.createTextNode(`\u00A0Color for ${desc}`);
 
   const elmInput = document.createElement('input');
   elmInput.type = 'color';
@@ -94,7 +94,23 @@ function createColorPicker(key) {
     }
   });
 
-  elmLabel.appendChild(elmInput);
+  const resetButton = document.createElement('button');
+  resetButton.textContent = 'Reset';
+  resetButton.classList.add('reset-color-btn');
+  resetButton.addEventListener('click', (evt) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    const defaultValue = configGetDefault(colorKey);
+    configWrite(colorKey, defaultValue);
+  });
+
+  const controlsContainer = document.createElement('div');
+  controlsContainer.classList.add('color-picker-controls');
+  controlsContainer.appendChild(resetButton);
+  controlsContainer.appendChild(elmInput);
+
+  elmLabel.appendChild(textNode);
+  elmLabel.appendChild(controlsContainer);
 
   return elmLabel;
 }
@@ -129,20 +145,10 @@ function createOptionsPanel() {
       if (evt.keyCode in ARROW_KEY_CODE) {
         navigate(ARROW_KEY_CODE[evt.keyCode]);
       } else if (evt.keyCode === 13) {
-        // "OK" button
-
-        /**
-         * The YouTube app generates these "OK" events from clicks (including
-         * with the Magic Remote), and we don't want to send a duplicate click
-         * event for those. Youtube uses the `Event` class instead of
-         * `KeyboardEvent` so we check for that.
-         * See issue #143 and #200 for context.
-         */
         if (evt instanceof KeyboardEvent) {
           document.activeElement.click();
         }
       } else if (evt.keyCode === 27) {
-        // Back button
         showOptionsPanel(false);
       }
 
@@ -156,12 +162,14 @@ function createOptionsPanel() {
   elmHeading.textContent = 'webOS YouTube Extended';
   elmContainer.appendChild(elmHeading);
 
-  elmContainer.appendChild(createConfigCheckbox('enableAdBlock'));
-  elmContainer.appendChild(createConfigCheckbox('upgradeThumbnails'));
-  elmContainer.appendChild(createConfigCheckbox('hideLogo'));
-  elmContainer.appendChild(createConfigCheckbox('enableOledCareMode'));
-  elmContainer.appendChild(createConfigCheckbox('removeShorts'));
-  elmContainer.appendChild(createConfigCheckbox('enableSponsorBlock'));
+  const contentWrapper = document.createElement('div');
+
+  contentWrapper.appendChild(createConfigCheckbox('enableAdBlock'));
+  contentWrapper.appendChild(createConfigCheckbox('upgradeThumbnails'));
+  contentWrapper.appendChild(createConfigCheckbox('hideLogo'));
+  contentWrapper.appendChild(createConfigCheckbox('enableOledCareMode'));
+  contentWrapper.appendChild(createConfigCheckbox('removeShorts'));
+  contentWrapper.appendChild(createConfigCheckbox('enableSponsorBlock'));
 
   const elmBlock = document.createElement('blockquote');
 
@@ -170,23 +178,26 @@ function createOptionsPanel() {
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockOutro'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockInteraction'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockSelfPromo'));
-  elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockMusicOfftopic'));
+  elmBlock.appendChild(
+    createConfigCheckbox('enableSponsorBlockMusicOfftopic')
+  );
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockHighlight'));
   elmBlock.appendChild(createConfigCheckbox('enableHighlightJump'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockPreview'));
+  contentWrapper.appendChild(elmBlock);
 
-  elmContainer.appendChild(elmBlock);
-  
   const elmColorBlock = document.createElement('blockquote');
   for (const key of Object.keys(segmentTypes)) {
-	elmColorBlock.appendChild(createColorPicker(key));
-	}
-	elmContainer.appendChild(elmColorBlock);
+    elmColorBlock.appendChild(createColorPicker(key));
+  }
+  contentWrapper.appendChild(elmColorBlock);
 
   const elmSponsorLink = document.createElement('div');
   elmSponsorLink.innerHTML =
     '<small>Sponsor segments skipping - https://sponsor.ajay.app</small>';
-  elmContainer.appendChild(elmSponsorLink);
+  contentWrapper.appendChild(elmSponsorLink);
+
+  elmContainer.appendChild(contentWrapper);
 
   return elmContainer;
 }

@@ -223,3 +223,10 @@ export function configRemoveChangeListener(key, callback) {
 
   frag.removeEventListener('ytafConfigChange', callback);
 }
+
+export function configGetDefault(key) {
+  if (!configExists(key)) {
+    throw new Error('tried to get default for unknown config key: ' + key);
+  }
+  return configOptions.get(key).default;
+}

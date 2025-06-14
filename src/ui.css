@@ -300,9 +300,9 @@
 }
 
 .ytaf-ui-container.oled-care h1 {
-  background: none;
-  -webkit-text-fill-color: #ff3333;
-  border-bottom-color: #383838;
+ background: none;
+ -webkit-text-fill-color: #999999;
+ border-bottom-color: #383838;
 }
 
 .ytaf-ui-container.oled-care > div::-webkit-scrollbar-track {
@@ -310,7 +310,7 @@
 }
 
 .ytaf-ui-container.oled-care > div::-webkit-scrollbar-thumb {
-  background: #ff3333;
+  background: #999999;
 }
 
 .ytaf-ui-container.oled-care input[type='checkbox'] {
@@ -319,12 +319,12 @@
 }
 
 .ytaf-ui-container.oled-care input[type='checkbox']:hover {
-  border-color: #ff3333;
+  border-color: #999999;
 }
 
 .ytaf-ui-container.oled-care input[type='checkbox']:checked {
-  background: #ff3333;
-  border-color: #ff3333;
+  background: #999999;
+  border-color: #999999;
 }
 
 .ytaf-ui-container.oled-care label:hover {
@@ -332,8 +332,8 @@
 }
 
 .ytaf-ui-container.oled-care blockquote {
-  border-left-color: #ff3333;
-  background: rgba(255, 51, 51, 0.08);
+  border-left-color: #999999;
+  background: rgba(153, 153, 153, 0.08);
 }
 
 .ytaf-ui-container.oled-care small {
@@ -343,5 +343,41 @@
 .ytaf-notification-container.oled-care .message {
   background: #000000;
   border-color: #383838;
-  border-left-color: #ff3333;
+  border-left-color: #999999;
+}
+
+.color-picker-controls {
+  display: flex;
+  align-items: center;
+}
+
+.reset-color-btn {
+  background: #4f4f4f;
+  color: #ffffff;
+  border: 1px solid #666666;
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin-right: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.reset-color-btn:hover {
+  background: #6a6a6a;
+}
+
+.reset-color-btn:focus {
+  outline: 2px solid #ff0000;
+  outline-offset: 1px;
+}
+
+.ytaf-ui-container.oled-care .reset-color-btn {
+  background: #222222;
+  border-color: #555555;
+}
+
+.ytaf-ui-container.oled-care .reset-color-btn:hover {
+  background: #333333;
 }
