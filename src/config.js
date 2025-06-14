@@ -1,5 +1,48 @@
 const CONFIG_KEY = 'ytaf-configuration';
 
+export const segmentTypes = {
+  sponsor: {
+    color: '#00d400',
+    opacity: '0.7',
+    name: 'sponsored segment'
+  },
+  intro: {
+    color: '#00ffff',
+    opacity: '0.7',
+    name: 'intro'
+  },
+  outro: {
+    color: '#0202ed',
+    opacity: '0.7',
+    name: 'outro'
+  },
+  interaction: {
+    color: '#cc00ff',
+    opacity: '0.7',
+    name: 'interaction reminder'
+  },
+  selfpromo: {
+    color: '#ffff00',
+    opacity: '0.7',
+    name: 'self-promotion'
+  },
+  music_offtopic: {
+    color: '#ff9900',
+    opacity: '0.7',
+    name: 'non-music part'
+  },
+  preview: {
+    color: '#008fd6',
+    opacity: '0.7',
+    name: 'recap or preview'
+  },
+  poi_highlight: {
+    color: '#ff1684',
+    opacity: '0.8',
+    name: 'poi_highlight'
+  }
+};
+
 const configOptions = new Map([
   ['enableAdBlock', { default: true, desc: 'Enable ad blocking' }],
   ['upgradeThumbnails', { default: false, desc: 'Upgrade thumbnail quality' }],
@@ -62,8 +105,16 @@ const configOptions = new Map([
       default: false,
       desc: 'Hide YouTube logo'
     }
-  ]
+  ],
+  ['enableOledCareMode', { default: false, desc: 'Enable OLED-Care mode (true black UI)' }]
 ]);
+
+for (const [key, value] of Object.entries(segmentTypes)) {
+  configOptions.set(`${key}Color`, {
+    default: value.color,
+    desc: `Color for ${value.name}`
+  });
+}
 
 const defaultConfig = (() => {
   let ret = {};

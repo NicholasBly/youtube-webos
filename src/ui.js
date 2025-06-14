@@ -4,7 +4,8 @@ import {
   configAddChangeListener,
   configRead,
   configWrite,
-  configGetDesc
+  configGetDesc,
+  segmentTypes
 } from './config.js';
 import './ui.css';
 
@@ -64,6 +65,36 @@ function createConfigCheckbox(key) {
   elmLabel.appendChild(elmInput);
   // Use non-breaking space (U+00A0)
   elmLabel.appendChild(document.createTextNode('\u00A0' + configGetDesc(key)));
+
+  return elmLabel;
+}
+
+function createColorPicker(key) {
+  const colorKey = `${key}Color`;
+  const desc = segmentTypes[key].name;
+
+  const elmLabel = document.createElement('label');
+  elmLabel.classList.add('color-picker-label');
+  elmLabel.appendChild(
+    document.createTextNode(`\u00A0Color for ${desc}`)
+  );
+
+  const elmInput = document.createElement('input');
+  elmInput.type = 'color';
+  elmInput.value = configRead(colorKey);
+
+  elmInput.addEventListener('input', (evt) => {
+    configWrite(colorKey, evt.target.value);
+  });
+
+  configAddChangeListener(colorKey, (evt) => {
+    elmInput.value = evt.detail.newValue;
+    if (window.sponsorblock) {
+      window.sponsorblock.buildOverlay();
+    }
+  });
+
+  elmLabel.appendChild(elmInput);
 
   return elmLabel;
 }
@@ -128,6 +159,7 @@ function createOptionsPanel() {
   elmContainer.appendChild(createConfigCheckbox('enableAdBlock'));
   elmContainer.appendChild(createConfigCheckbox('upgradeThumbnails'));
   elmContainer.appendChild(createConfigCheckbox('hideLogo'));
+  elmContainer.appendChild(createConfigCheckbox('enableOledCareMode'));
   elmContainer.appendChild(createConfigCheckbox('removeShorts'));
   elmContainer.appendChild(createConfigCheckbox('enableSponsorBlock'));
 
@@ -144,6 +176,12 @@ function createOptionsPanel() {
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockPreview'));
 
   elmContainer.appendChild(elmBlock);
+  
+  const elmColorBlock = document.createElement('blockquote');
+  for (const key of Object.keys(segmentTypes)) {
+	elmColorBlock.appendChild(createColorPicker(key));
+	}
+	elmContainer.appendChild(elmColorBlock);
 
   const elmSponsorLink = document.createElement('div');
   elmSponsorLink.innerHTML =
@@ -234,8 +272,11 @@ export function showNotification(text, time = 3000) {
   if (!document.querySelector('.ytaf-notification-container')) {
     console.info('Adding notification container');
     const c = document.createElement('div');
-    c.classList.add('ytaf-notification-container');
-    document.body.appendChild(c);
+	c.classList.add('ytaf-notification-container');
+	if (configRead('enableOledCareMode')) {
+	  c.classList.add('oled-care');
+	}
+	document.body.appendChild(c);
   }
 
   const elm = document.createElement('div');
@@ -308,6 +349,29 @@ function applyUIFixes() {
 
 applyUIFixes();
 initHideLogo();
+
+function applyOledMode(enabled) {
+  const optionsPanel = document.querySelector('.ytaf-ui-container');
+  const notificationContainer = document.querySelector(
+    '.ytaf-notification-container'
+  );
+  const oledClass = 'oled-care';
+  if (enabled) {
+    optionsPanel?.classList.add(oledClass);
+    notificationContainer?.classList.add(oledClass);
+  } else {
+    optionsPanel?.classList.remove(oledClass);
+    notificationContainer?.classList.remove(oledClass);
+  }
+}
+
+applyUIFixes();
+initHideLogo();
+
+applyOledMode(configRead('enableOledCareMode'));
+configAddChangeListener('enableOledCareMode', (evt) => {
+  applyOledMode(evt.detail.newValue);
+});
 
 setTimeout(() => {
   showNotification('Press [GREEN] to open SponsorBlock configuration screen');

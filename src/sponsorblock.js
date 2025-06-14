@@ -1,5 +1,5 @@
 import sha256 from 'tiny-sha256';
-import { configRead } from './config';
+import { configRead, segmentTypes } from './config';
 import { showNotification } from './ui';
 
 // Fallback for tiny-sha256 if it's not found (e.g. in a raw WebOS environment without module loading)
@@ -20,57 +20,6 @@ if (typeof sha256 !== 'function' && typeof require === 'function') {
         window.sha256 = window.sha256 || function(s) { return s; };
     }
 }
-
-
-// Copied from https://github.com/ajayyy/SponsorBlock/blob/9392d16617d2d48abb6125c00e2ff6042cb7bebe/src/config.ts#L179-L233
-const barTypes = {
-  sponsor: {
-    color: '#00d400',
-    opacity: '0.7',
-    name: 'sponsored segment'
-  },
-  intro: {
-    color: '#00ffff',
-    opacity: '0.7',
-    name: 'intro'
-  },
-  outro: {
-    color: '#0202ed',
-    opacity: '0.7',
-    name: 'outro'
-  },
-  interaction: {
-    color: '#cc00ff',
-    opacity: '0.7',
-    name: 'interaction reminder'
-  },
-  selfpromo: {
-    color: '#ffff00',
-    opacity: '0.7',
-    name: 'self-promotion'
-  },
-  music_offtopic: {
-    color: '#ff9900',
-    opacity: '0.7',
-    name: 'non-music part'
-  },
-  preview: {
-    color: '#008fd6',
-    opacity: '0.7',
-    name: 'recap or preview'
-  },
-  poi_highlight: {
-    color: '#ff1684',
-    opacity: '0.8',
-    name: 'poi_highlight'
-  },
-  // Adding 'chapter' as it's commonly used, though not in original snippet's barTypes
-  chapter: {
-    color: 'rgba(128, 128, 128, 0.5)', // Example: semi-transparent grey
-    opacity: '0.5',
-    name: 'chapter'
-  }
-};
 
 const sponsorblockAPI = 'https://sponsorblock.inf.re/api'; // Consider using a more resilient endpoint if available
 
@@ -358,7 +307,14 @@ class SponsorBlockHandler {
         segmentLeftPercent = (segmentStart / videoDuration) * 100;
       }
 
-      const barType = barTypes[segment.category] || barTypes.sponsor;
+      const categoryInfo = segmentTypes[segment.category];
+	  if (!categoryInfo) return; 
+
+	  const barType = {
+		name: categoryInfo.name,
+		opacity: categoryInfo.opacity,
+		color: configRead(`${segment.category}Color`) || categoryInfo.color
+	  };
 
       // Create an LI element for each segment
       const elm = document.createElement('li');
@@ -514,7 +470,7 @@ class SponsorBlockHandler {
           return;
         }
 
-        const skipName = barTypes[segment.category]?.name || segment.category;
+        const skipName = segmentTypes[segment.category]?.name || segment.category;
         console.info(this.videoID, 'Skipping', segment);
         showNotification(`Skipping ${skipName}`);
         this.video.currentTime = end;
