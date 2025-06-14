@@ -53,36 +53,65 @@ const configOptions = new Map([
   ['enableSponsorBlock', { default: true, desc: 'Enable SponsorBlock' }],
   [
     'enableSponsorBlockSponsor',
-    { default: true, desc: 'Skip sponsor segments' }
+    { 
+      default: true, 
+      desc: 'Skip sponsor segments',
+      hasColor: true,
+      colorKey: 'sponsorColor'
+    }
   ],
-  ['enableSponsorBlockIntro', { default: true, desc: 'Skip intro segments' }],
-  ['enableSponsorBlockOutro', { default: true, desc: 'Skip outro segments' }],
+  [
+    'enableSponsorBlockIntro', 
+    { 
+      default: true, 
+      desc: 'Skip intro segments',
+      hasColor: true,
+      colorKey: 'introColor'
+    }
+  ],
+  [
+    'enableSponsorBlockOutro', 
+    { 
+      default: true, 
+      desc: 'Skip outro segments',
+      hasColor: true,
+      colorKey: 'outroColor'
+    }
+  ],
   [
     'enableSponsorBlockInteraction',
     {
       default: true,
-      desc: 'Skip interaction reminder segments'
+      desc: 'Skip interaction reminder segments',
+      hasColor: true,
+      colorKey: 'interactionColor'
     }
   ],
   [
     'enableSponsorBlockSelfPromo',
     {
       default: true,
-      desc: 'Skip self promotion segments'
+      desc: 'Skip self promotion segments',
+      hasColor: true,
+      colorKey: 'selfpromoColor'
     }
   ],
   [
     'enableSponsorBlockMusicOfftopic',
     {
       default: true,
-      desc: 'Skip non-music segments in music videos'
+      desc: 'Skip non-music segments in music videos',
+      hasColor: true,
+      colorKey: 'music_offtopicColor'
     }
   ],
   [
     'enableSponsorBlockHighlight',
     {
       default: true,
-      desc: 'Show highlight segments'
+      desc: 'Show highlight segments',
+      hasColor: true,
+      colorKey: 'poi_highlightColor'
     }
   ],
   [
@@ -96,7 +125,9 @@ const configOptions = new Map([
     'enableSponsorBlockPreview',
     {
       default: false,
-      desc: 'Skip recaps and previews'
+      desc: 'Skip recaps and previews',
+      hasColor: true,
+      colorKey: 'previewColor'
     }
   ],
   [
