@@ -143,14 +143,29 @@ function createOptionsPanel() {
       }
 
       if (evt.keyCode in ARROW_KEY_CODE) {
-        navigate(ARROW_KEY_CODE[evt.keyCode]);
+        // Check if we're at the boundary and need to scroll
+        const direction = ARROW_KEY_CODE[evt.keyCode];
+        const contentWrapper = elmContainer.querySelector('.content-wrapper');
         const activeElement = document.activeElement;
-        if (activeElement && contentWrapper.contains(activeElement)) {
-          activeElement.scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest'
-          });
+        
+        if (direction === 'up' || direction === 'down') {
+          const containerRect = elmContainer.getBoundingClientRect();
+          const activeRect = activeElement ? activeElement.getBoundingClientRect() : null;
+          
+          if (activeRect) {
+            const scrollAmount = 50;
+            
+            if (direction === 'down' && activeRect.bottom > containerRect.bottom - 20) {
+              // Scroll down
+              contentWrapper.scrollTop += scrollAmount;
+            } else if (direction === 'up' && activeRect.top < containerRect.top + 20) {
+              // Scroll up
+              contentWrapper.scrollTop -= scrollAmount;
+            }
+          }
         }
+        
+        navigate(ARROW_KEY_CODE[evt.keyCode]);
       } else if (evt.keyCode === 13) {
         if (evt instanceof KeyboardEvent) {
           document.activeElement.click();
@@ -170,6 +185,10 @@ function createOptionsPanel() {
   elmContainer.appendChild(elmHeading);
 
   const contentWrapper = document.createElement('div');
+  contentWrapper.classList.add('content-wrapper');
+  contentWrapper.style.maxHeight = '70vh';
+  contentWrapper.style.overflowY = 'auto';
+  contentWrapper.style.paddingRight = '10px';
 
   contentWrapper.appendChild(createConfigCheckbox('enableAdBlock'));
   contentWrapper.appendChild(createConfigCheckbox('upgradeThumbnails'));
