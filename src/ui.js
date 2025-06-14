@@ -4,7 +4,9 @@ import {
   configAddChangeListener,
   configRead,
   configWrite,
-  configGetDesc
+  configGetDesc,
+  segmentTypes,
+  configGetDefault
 } from './config.js';
 import './ui.css';
 
@@ -18,6 +20,7 @@ const ARROW_KEY_CODE = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' };
 // ---,   172,    170,  191
 const colorCodeMap = new Map([
   [403, 'red'],
+  [166, 'red'], // fixed webOS24
 
   [404, 'green'],
   [172, 'green'],
@@ -26,6 +29,7 @@ const colorCodeMap = new Map([
   [170, 'yellow'],
 
   [406, 'blue'],
+  [167, 'blue'], // fixed webOS24
   [191, 'blue']
 ]);
 
@@ -66,6 +70,51 @@ function createConfigCheckbox(key) {
   return elmLabel;
 }
 
+function createColorPicker(key) {
+  const colorKey = `${key}Color`;
+  const desc = segmentTypes[key].name;
+
+  const elmLabel = document.createElement('label');
+  elmLabel.classList.add('color-picker-label');
+
+  const textNode = document.createTextNode(`\u00A0Color for ${desc}`);
+
+  const elmInput = document.createElement('input');
+  elmInput.type = 'color';
+  elmInput.value = configRead(colorKey);
+
+  elmInput.addEventListener('input', (evt) => {
+    configWrite(colorKey, evt.target.value);
+  });
+
+  configAddChangeListener(colorKey, (evt) => {
+    elmInput.value = evt.detail.newValue;
+    if (window.sponsorblock) {
+      window.sponsorblock.buildOverlay();
+    }
+  });
+
+  const resetButton = document.createElement('button');
+  resetButton.textContent = 'Reset';
+  resetButton.classList.add('reset-color-btn');
+  resetButton.addEventListener('click', (evt) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    const defaultValue = configGetDefault(colorKey);
+    configWrite(colorKey, defaultValue);
+  });
+
+  const controlsContainer = document.createElement('div');
+  controlsContainer.classList.add('color-picker-controls');
+  controlsContainer.appendChild(resetButton);
+  controlsContainer.appendChild(elmInput);
+
+  elmLabel.appendChild(textNode);
+  elmLabel.appendChild(controlsContainer);
+
+  return elmLabel;
+}
+
 function createOptionsPanel() {
   const elmContainer = document.createElement('div');
 
@@ -96,20 +145,10 @@ function createOptionsPanel() {
       if (evt.keyCode in ARROW_KEY_CODE) {
         navigate(ARROW_KEY_CODE[evt.keyCode]);
       } else if (evt.keyCode === 13) {
-        // "OK" button
-
-        /**
-         * The YouTube app generates these "OK" events from clicks (including
-         * with the Magic Remote), and we don't want to send a duplicate click
-         * event for those. Youtube uses the `Event` class instead of
-         * `KeyboardEvent` so we check for that.
-         * See issue #143 and #200 for context.
-         */
         if (evt instanceof KeyboardEvent) {
           document.activeElement.click();
         }
       } else if (evt.keyCode === 27) {
-        // Back button
         showOptionsPanel(false);
       }
 
@@ -123,11 +162,14 @@ function createOptionsPanel() {
   elmHeading.textContent = 'webOS YouTube Extended';
   elmContainer.appendChild(elmHeading);
 
-  elmContainer.appendChild(createConfigCheckbox('enableAdBlock'));
-  elmContainer.appendChild(createConfigCheckbox('upgradeThumbnails'));
-  elmContainer.appendChild(createConfigCheckbox('hideLogo'));
-  elmContainer.appendChild(createConfigCheckbox('removeShorts'));
-  elmContainer.appendChild(createConfigCheckbox('enableSponsorBlock'));
+  const contentWrapper = document.createElement('div');
+
+  contentWrapper.appendChild(createConfigCheckbox('enableAdBlock'));
+  contentWrapper.appendChild(createConfigCheckbox('upgradeThumbnails'));
+  contentWrapper.appendChild(createConfigCheckbox('hideLogo'));
+  contentWrapper.appendChild(createConfigCheckbox('enableOledCareMode'));
+  contentWrapper.appendChild(createConfigCheckbox('removeShorts'));
+  contentWrapper.appendChild(createConfigCheckbox('enableSponsorBlock'));
 
   const elmBlock = document.createElement('blockquote');
 
@@ -136,15 +178,26 @@ function createOptionsPanel() {
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockOutro'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockInteraction'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockSelfPromo'));
-  elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockMusicOfftopic'));
+  elmBlock.appendChild(
+    createConfigCheckbox('enableSponsorBlockMusicOfftopic')
+  );
+  elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockHighlight'));
+  elmBlock.appendChild(createConfigCheckbox('enableHighlightJump'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockPreview'));
+  contentWrapper.appendChild(elmBlock);
 
-  elmContainer.appendChild(elmBlock);
+  const elmColorBlock = document.createElement('blockquote');
+  for (const key of Object.keys(segmentTypes)) {
+    elmColorBlock.appendChild(createColorPicker(key));
+  }
+  contentWrapper.appendChild(elmColorBlock);
 
   const elmSponsorLink = document.createElement('div');
   elmSponsorLink.innerHTML =
     '<small>Sponsor segments skipping - https://sponsor.ajay.app</small>';
-  elmContainer.appendChild(elmSponsorLink);
+  contentWrapper.appendChild(elmSponsorLink);
+
+  elmContainer.appendChild(contentWrapper);
 
   return elmContainer;
 }
@@ -185,7 +238,9 @@ const eventHandler = (evt) => {
     evt.defaultPrevented
   );
 
-  if (getKeyColor(evt.charCode) === 'green') {
+  const keyColor = getKeyColor(evt.charCode);
+  
+  if (keyColor === 'green') {
     console.info('Taking over!');
 
     evt.preventDefault();
@@ -196,7 +251,27 @@ const eventHandler = (evt) => {
       showOptionsPanel(!optionsPanelVisible);
     }
     return false;
+  } else if (keyColor === 'blue' && evt.type === 'keydown') {
+    // Handle blue button for highlight jumping
+    console.info('Blue button pressed - attempting highlight jump');
+    
+    try {
+      const jumpEnabled = configRead('enableHighlightJump');
+      if (jumpEnabled && window.sponsorblock) {
+        const jumped = window.sponsorblock.jumpToNextHighlight();
+        if (jumped) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          return false;
+        } else {
+          showNotification('No highlights found in this video');
+        }
+      }
+    } catch (e) {
+      console.warn('Error jumping to highlight:', e);
+    }
   }
+  
   return true;
 };
 
@@ -208,8 +283,11 @@ export function showNotification(text, time = 3000) {
   if (!document.querySelector('.ytaf-notification-container')) {
     console.info('Adding notification container');
     const c = document.createElement('div');
-    c.classList.add('ytaf-notification-container');
-    document.body.appendChild(c);
+	c.classList.add('ytaf-notification-container');
+	if (configRead('enableOledCareMode')) {
+	  c.classList.add('oled-care');
+	}
+	document.body.appendChild(c);
   }
 
   const elm = document.createElement('div');
@@ -283,6 +361,29 @@ function applyUIFixes() {
 applyUIFixes();
 initHideLogo();
 
+function applyOledMode(enabled) {
+  const optionsPanel = document.querySelector('.ytaf-ui-container');
+  const notificationContainer = document.querySelector(
+    '.ytaf-notification-container'
+  );
+  const oledClass = 'oled-care';
+  if (enabled) {
+    optionsPanel?.classList.add(oledClass);
+    notificationContainer?.classList.add(oledClass);
+  } else {
+    optionsPanel?.classList.remove(oledClass);
+    notificationContainer?.classList.remove(oledClass);
+  }
+}
+
+applyUIFixes();
+initHideLogo();
+
+applyOledMode(configRead('enableOledCareMode'));
+configAddChangeListener('enableOledCareMode', (evt) => {
+  applyOledMode(evt.detail.newValue);
+});
+
 setTimeout(() => {
-  showNotification('Press [GREEN] to open YTAF configuration screen');
+  showNotification('Press [GREEN] to open SponsorBlock configuration screen');
 }, 2000);
