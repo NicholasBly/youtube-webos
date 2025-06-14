@@ -3,8 +3,8 @@
   top: 5%;
   left: 50%;
   transform: translateX(-50%);
-  width: min(95vw, 1200px);
-  max-height: 90vh;
+  width: min(95vw, 800px);
+  max-height: 140vh;
   
   background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
   border: 1px solid #3f3f3f;
@@ -43,7 +43,7 @@
   margin: 0;
   padding: 24px 32px 16px;
   text-align: center;
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 600;
   background: linear-gradient(135deg, #ff0000, #ff4444);
   -webkit-background-clip: text;
