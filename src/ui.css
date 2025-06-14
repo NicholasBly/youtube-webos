@@ -4,7 +4,7 @@
   left: 50%;
   transform: translateX(-50%);
   width: min(95vw, 800px);
-  max-height: 85vh;
+  height: 90vh;
   
   background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
   border: 1px solid #3f3f3f;
@@ -17,7 +17,6 @@
   font-size: 16px;
   z-index: 1000;
   
-  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -56,10 +55,11 @@
 }
 
 .ytaf-ui-container > div:not(:first-child) {
-  padding: 0 32px 32px;
-  max-height: 65vh;
+  padding: 0 32px 24px;
   overflow-y: auto;
   overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Custom scrollbar */
