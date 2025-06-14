@@ -53,65 +53,36 @@ const configOptions = new Map([
   ['enableSponsorBlock', { default: true, desc: 'Enable SponsorBlock' }],
   [
     'enableSponsorBlockSponsor',
-    { 
-      default: true, 
-      desc: 'Skip sponsor segments',
-      hasColor: true,
-      colorKey: 'sponsorColor'
-    }
+    { default: true, desc: 'Skip sponsor segments' }
   ],
-  [
-    'enableSponsorBlockIntro', 
-    { 
-      default: true, 
-      desc: 'Skip intro segments',
-      hasColor: true,
-      colorKey: 'introColor'
-    }
-  ],
-  [
-    'enableSponsorBlockOutro', 
-    { 
-      default: true, 
-      desc: 'Skip outro segments',
-      hasColor: true,
-      colorKey: 'outroColor'
-    }
-  ],
+  ['enableSponsorBlockIntro', { default: true, desc: 'Skip intro segments' }],
+  ['enableSponsorBlockOutro', { default: true, desc: 'Skip outro segments' }],
   [
     'enableSponsorBlockInteraction',
     {
       default: true,
-      desc: 'Skip interaction reminder segments',
-      hasColor: true,
-      colorKey: 'interactionColor'
+      desc: 'Skip interaction reminder segments'
     }
   ],
   [
     'enableSponsorBlockSelfPromo',
     {
       default: true,
-      desc: 'Skip self promotion segments',
-      hasColor: true,
-      colorKey: 'selfpromoColor'
+      desc: 'Skip self promotion segments'
     }
   ],
   [
     'enableSponsorBlockMusicOfftopic',
     {
       default: true,
-      desc: 'Skip non-music segments in music videos',
-      hasColor: true,
-      colorKey: 'music_offtopicColor'
+      desc: 'Skip non-music segments in music videos'
     }
   ],
   [
     'enableSponsorBlockHighlight',
     {
       default: true,
-      desc: 'Show highlight segments',
-      hasColor: true,
-      colorKey: 'poi_highlightColor'
+      desc: 'Show highlight segments'
     }
   ],
   [
@@ -125,9 +96,7 @@ const configOptions = new Map([
     'enableSponsorBlockPreview',
     {
       default: false,
-      desc: 'Skip recaps and previews',
-      hasColor: true,
-      colorKey: 'previewColor'
+      desc: 'Skip recaps and previews'
     }
   ],
   [
