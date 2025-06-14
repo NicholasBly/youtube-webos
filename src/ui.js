@@ -144,6 +144,13 @@ function createOptionsPanel() {
 
       if (evt.keyCode in ARROW_KEY_CODE) {
         navigate(ARROW_KEY_CODE[evt.keyCode]);
+        const activeElement = document.activeElement;
+        if (activeElement && contentWrapper.contains(activeElement)) {
+          activeElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest'
+          });
+        }
       } else if (evt.keyCode === 13) {
         if (evt instanceof KeyboardEvent) {
           document.activeElement.click();
