@@ -93,6 +93,13 @@ const configOptions = new Map([
     }
   ],
   [
+  'enableAutoLogin',
+  {
+    default: true,
+    desc: 'Auto login on startup'
+  }
+  ],
+  [
     'enableSponsorBlockPreview',
     {
       default: false,

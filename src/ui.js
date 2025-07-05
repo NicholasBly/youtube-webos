@@ -9,6 +9,7 @@ import {
   configGetDefault
 } from './config.js';
 import './ui.css';
+import './auto-login.js';
 
 // We handle key events ourselves.
 window.__spatialNavigation__.keyMode = 'NONE';
@@ -170,6 +171,7 @@ function createOptionsPanel() {
   contentWrapper.appendChild(createConfigCheckbox('enableOledCareMode'));
   contentWrapper.appendChild(createConfigCheckbox('removeShorts'));
   contentWrapper.appendChild(createConfigCheckbox('enableSponsorBlock'));
+  contentWrapper.appendChild(createConfigCheckbox('enableAutoLogin'));
 
   const elmBlock = document.createElement('blockquote');
 
