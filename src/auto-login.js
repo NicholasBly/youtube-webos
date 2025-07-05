@@ -10,15 +10,25 @@ function checkForLoginPrompt() {
   if (loginPrompt && loginPrompt.textContent.includes("Who's watching?")) {
     console.info('Auto login: Found login prompt, pressing OK');
     
-    // Create and dispatch Enter key event
-    const enterEvent = new KeyboardEvent('keydown', {
+    const keydownEvent = new KeyboardEvent('keydown', {
+      charCode: 0,
       keyCode: 13,
       which: 13,
       bubbles: true,
       cancelable: true
     });
     
-    document.dispatchEvent(enterEvent);
+    const keyupEvent = new KeyboardEvent('keyup', {
+      charCode: 0,
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      cancelable: true
+    });
+    
+    document.dispatchEvent(keydownEvent);
+    document.dispatchEvent(keyupEvent);
+    
     autoLoginChecked = true;
     return true;
   }
