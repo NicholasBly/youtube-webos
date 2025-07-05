@@ -5,10 +5,11 @@ let autoLoginChecked = false;
 function checkForLoginPrompt() {
   if (autoLoginChecked) return;
 
-  const loginPrompt = document.querySelector('yt-formatted-string[id*="ytlr-account-selector"]');
+  const bodyHasClass = document.body && document.body.classList.contains('WEB_PAGE_TYPE_ACCOUNT_SELECTOR');
+  const selectorElement = document.querySelector('[id*="ytlr-account-selector"]');
   
-  if (loginPrompt && loginPrompt.textContent.includes("Who's watching?")) {
-    console.info('Auto login: Found login prompt, pressing OK');
+  if (bodyHasClass || selectorElement) {
+    console.info('Auto login: Found account selector page, pressing OK');
     
     const keydownEvent = new KeyboardEvent('keydown', {
       charCode: 0,
