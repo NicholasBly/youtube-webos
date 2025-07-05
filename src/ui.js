@@ -68,32 +68,48 @@ function createConfigCheckbox(key) {
   // Use non-breaking space (U+00A0)
   elmLabel.appendChild(document.createTextNode('\u00A0' + configGetDesc(key)));
 
+  // Check if this is a SponsorBlock segment type that has a corresponding color
+  const segmentKey = key.replace('enableSponsorBlock', '').toLowerCase();
+  const hasColorPicker = segmentTypes[segmentKey] || (segmentKey === 'highlight' && segmentTypes['poi_highlight']);
+  
+  if (hasColorPicker) {
+    const colorKey = segmentKey === 'highlight' ? 'poi_highlightColor' : `${segmentKey}Color`;
+    
+    const resetButton = document.createElement('button');
+    resetButton.textContent = 'Reset';
+    resetButton.classList.add('reset-color-btn');
+    resetButton.addEventListener('click', (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      const defaultValue = configGetDefault(colorKey);
+      configWrite(colorKey, defaultValue);
+    });
+
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.value = configRead(colorKey);
+
+    colorInput.addEventListener('input', (evt) => {
+      configWrite(colorKey, evt.target.value);
+    });
+
+    configAddChangeListener(colorKey, (evt) => {
+      colorInput.value = evt.detail.newValue;
+      if (window.sponsorblock) {
+        window.sponsorblock.buildOverlay();
+      }
+    });
+
+    const controlsContainer = document.createElement('div');
+    controlsContainer.classList.add('color-picker-controls');
+    controlsContainer.appendChild(resetButton);
+    controlsContainer.appendChild(colorInput);
+
+    elmLabel.appendChild(controlsContainer);
+  }
+
   return elmLabel;
 }
-
-function createColorPicker(key) {
-  const colorKey = `${key}Color`;
-  const desc = segmentTypes[key].name;
-
-  const elmLabel = document.createElement('label');
-  elmLabel.classList.add('color-picker-label');
-
-  const textNode = document.createTextNode(`\u00A0Color for ${desc}`);
-
-  const elmInput = document.createElement('input');
-  elmInput.type = 'color';
-  elmInput.value = configRead(colorKey);
-
-  elmInput.addEventListener('input', (evt) => {
-    configWrite(colorKey, evt.target.value);
-  });
-
-  configAddChangeListener(colorKey, (evt) => {
-    elmInput.value = evt.detail.newValue;
-    if (window.sponsorblock) {
-      window.sponsorblock.buildOverlay();
-    }
-  });
 
   const resetButton = document.createElement('button');
   resetButton.textContent = 'Reset';
@@ -187,12 +203,6 @@ function createOptionsPanel() {
   elmBlock.appendChild(createConfigCheckbox('enableHighlightJump'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockPreview'));
   contentWrapper.appendChild(elmBlock);
-
-  const elmColorBlock = document.createElement('blockquote');
-  for (const key of Object.keys(segmentTypes)) {
-    elmColorBlock.appendChild(createColorPicker(key));
-  }
-  contentWrapper.appendChild(elmColorBlock);
 
   const elmSponsorLink = document.createElement('div');
   elmSponsorLink.innerHTML =
