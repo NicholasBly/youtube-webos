@@ -2,7 +2,7 @@
 
 YouTube App with extended functionalities
 
-![Configuration Screen](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/1_sm_new.png?raw=true)
+![Configuration Screen](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/webOS_TV_24_Simulator_GEgUgGmuir.png?raw=true)
 ![Segment Skipped](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/2_sm_new.png?raw=true)
 
 ## Features
