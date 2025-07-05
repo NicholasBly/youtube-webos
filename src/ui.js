@@ -64,9 +64,16 @@ function createConfigCheckbox(key) {
   });
 
   const elmLabel = document.createElement('label');
-  elmLabel.appendChild(elmInput);
+  
+  // Create a container for the checkbox and text content
+  const labelContent = document.createElement('div');
+  labelContent.classList.add('label-content');
+  
+  labelContent.appendChild(elmInput);
   // Use non-breaking space (U+00A0)
-  elmLabel.appendChild(document.createTextNode('\u00A0' + configGetDesc(key)));
+  labelContent.appendChild(document.createTextNode('\u00A0' + configGetDesc(key)));
+  
+  elmLabel.appendChild(labelContent);
 
   // Check if this is a SponsorBlock segment type that has a corresponding color
   const segmentKey = key.replace('enableSponsorBlock', '').toLowerCase();

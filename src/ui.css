@@ -44,7 +44,7 @@
   margin: 0;
   padding: 24px 32px 16px;
   text-align: center;
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 600;
   background: linear-gradient(135deg, #ff0000, #ff4444);
   -webkit-background-clip: text;
@@ -129,6 +129,7 @@
 .ytaf-ui-container label {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   font-size: 16px;
   font-weight: 400;
   line-height: 1.4;
@@ -139,6 +140,20 @@
   margin: 0 -8px;
   padding-left: 8px;
   padding-right: 8px;
+}
+
+.ytaf-ui-container label .label-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.ytaf-ui-container label .color-picker-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .ytaf-ui-container label:hover {
@@ -278,7 +293,6 @@
   border-radius: 4px;
   background-color: transparent;
   cursor: pointer;
-  margin-left: 12px;
 }
 
 .ytaf-ui-container input[type='color']::-webkit-color-swatch-wrapper {
@@ -349,10 +363,10 @@
 }
 
 .color-picker-controls {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 20px;
+  margin-left: auto;
 }
 
 .reset-color-btn {
