@@ -111,27 +111,6 @@ function createConfigCheckbox(key) {
   return elmLabel;
 }
 
-  const resetButton = document.createElement('button');
-  resetButton.textContent = 'Reset';
-  resetButton.classList.add('reset-color-btn');
-  resetButton.addEventListener('click', (evt) => {
-    evt.preventDefault();
-    evt.stopPropagation();
-    const defaultValue = configGetDefault(colorKey);
-    configWrite(colorKey, defaultValue);
-  });
-
-  const controlsContainer = document.createElement('div');
-  controlsContainer.classList.add('color-picker-controls');
-  controlsContainer.appendChild(resetButton);
-  controlsContainer.appendChild(elmInput);
-
-  elmLabel.appendChild(textNode);
-  elmLabel.appendChild(controlsContainer);
-
-  return elmLabel;
-}
-
 function createOptionsPanel() {
   const elmContainer = document.createElement('div');
 
