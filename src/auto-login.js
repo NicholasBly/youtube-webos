@@ -4,13 +4,12 @@ let autoLoginChecked = false;
 
 function checkForLoginPrompt() {
   if (autoLoginChecked) return;
-
   const bodyHasClass = document.body && document.body.classList.contains('WEB_PAGE_TYPE_ACCOUNT_SELECTOR');
   const selectorElement = document.querySelector('[id*="ytlr-account-selector"]');
-  
+
   if (bodyHasClass || selectorElement) {
     console.info('Auto login: Found account selector page, pressing OK');
-    
+
     const keydownEvent = new KeyboardEvent('keydown', {
       charCode: 0,
       keyCode: 13,
@@ -18,7 +17,7 @@ function checkForLoginPrompt() {
       bubbles: true,
       cancelable: true
     });
-    
+
     const keyupEvent = new KeyboardEvent('keyup', {
       charCode: 0,
       keyCode: 13,
@@ -26,16 +25,14 @@ function checkForLoginPrompt() {
       bubbles: true,
       cancelable: true
     });
-    
-    setTimeout(() => {
-      document.dispatchEvent(keydownEvent);
-      document.dispatchEvent(keyupEvent);
-    }, 2000);
-    
+
+    document.dispatchEvent(keydownEvent);
+    document.dispatchEvent(keyupEvent);
+
     autoLoginChecked = true;
     return true;
   }
-  
+
   return false;
 }
 
