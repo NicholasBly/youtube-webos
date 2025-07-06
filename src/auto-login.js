@@ -27,8 +27,10 @@ function checkForLoginPrompt() {
       cancelable: true
     });
     
-    document.dispatchEvent(keydownEvent);
-    document.dispatchEvent(keyupEvent);
+    setTimeout(() => {
+      document.dispatchEvent(keydownEvent);
+      document.dispatchEvent(keyupEvent);
+    }, 2000);
     
     autoLoginChecked = true;
     return true;
