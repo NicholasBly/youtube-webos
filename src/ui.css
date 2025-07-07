@@ -4,7 +4,7 @@
   left: 50%;
   transform: translateX(-50%);
   width: min(95vw, 800px);
-  max-height: 80vh;
+  max-height: 90vh;
   
   background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
   border: 1px solid #3f3f3f;

@@ -172,9 +172,9 @@ function createOptionsPanel() {
   contentWrapper.appendChild(createConfigCheckbox('hideLogo'));
   contentWrapper.appendChild(createConfigCheckbox('enableOledCareMode'));
   contentWrapper.appendChild(createConfigCheckbox('removeShorts'));
-  contentWrapper.appendChild(createConfigCheckbox('enableSponsorBlock'));
   contentWrapper.appendChild(createConfigCheckbox('enableAutoLogin'));
   contentWrapper.appendChild(createConfigCheckbox('hideEndcards'));
+  contentWrapper.appendChild(createConfigCheckbox('enableSponsorBlock'));
 
   const elmBlock = document.createElement('blockquote');
 
