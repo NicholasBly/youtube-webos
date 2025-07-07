@@ -81,7 +81,7 @@ const configOptions = new Map([
   [
   'hideEndcards',
   {
-    default: 'none',
+    default: false,
     desc: 'Hide endcards'
   }
   ],

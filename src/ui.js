@@ -118,94 +118,6 @@ function createConfigCheckbox(key) {
   return elmLabel;
 }
 
-function createConfigSelect(key, options) {
-  const elmSelect = document.createElement('select');
-  elmSelect.value = configRead(key);
-  elmSelect.setAttribute('tabindex', '0');
-  elmSelect.style.cssText = `
-    background: #2a2a2a;
-    border: 2px solid #4a4a4a;
-    border-radius: 4px;
-    color: #ffffff;
-    padding: 8px 12px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: all 0.2s ease;
-    margin-left: auto;
-    flex-shrink: 0;
-  `;
-
-  for (const [value, label] of options) {
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = label;
-    option.style.cssText = `
-      background: #2a2a2a;
-      color: #ffffff;
-    `;
-    elmSelect.appendChild(option);
-  }
-
-  elmSelect.addEventListener('change', (evt) => {
-    configWrite(key, evt.target.value);
-  });
-
-  elmSelect.addEventListener('focus', () => {
-    elmSelect.style.borderColor = '#ff0000';
-    elmSelect.style.backgroundColor = '#333333';
-  });
-
-  elmSelect.addEventListener('blur', () => {
-    elmSelect.style.borderColor = '#4a4a4a';
-    elmSelect.style.backgroundColor = '#2a2a2a';
-  });
-
-  elmSelect.addEventListener('keydown', (evt) => {
-    if (evt.keyCode === 13) {
-      evt.preventDefault();
-      evt.stopPropagation();
-      
-      const clickEvent = new MouseEvent('click', {
-        view: window,
-        bubbles: true,
-        cancelable: true
-      });
-      elmSelect.dispatchEvent(clickEvent);
-    }
-  });
-
-  configAddChangeListener(key, (evt) => {
-    elmSelect.value = evt.detail.newValue;
-  });
-
-  const elmLabel = document.createElement('label');
-  elmLabel.style.cssText = `
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 16px;
-    font-weight: 400;
-    line-height: 1.4;
-    padding: 12px 0;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border-radius: 8px;
-    margin: 0 -8px;
-    padding-left: 8px;
-    padding-right: 8px;
-  `;
-
-  elmLabel.addEventListener('click', (evt) => {
-    evt.preventDefault();
-    elmSelect.focus();
-  });
-
-  elmLabel.appendChild(document.createTextNode(configGetDesc(key)));
-  elmLabel.appendChild(elmSelect);
-
-  return elmLabel;
-}
-
 function createOptionsPanel() {
   const elmContainer = document.createElement('div');
 
@@ -225,30 +137,26 @@ function createOptionsPanel() {
   );
 
   elmContainer.addEventListener(
-  'keydown',
-  (evt) => {
-    console.info('Options panel key event:', evt.type, evt.charCode);
+    'keydown',
+    (evt) => {
+      console.info('Options panel key event:', evt.type, evt.charCode);
 
-    if (getKeyColor(evt.charCode) === 'green') {
-      return;
-    }
-
-    if (evt.keyCode in ARROW_KEY_CODE) {
-      navigate(ARROW_KEY_CODE[evt.keyCode]);
-    } else if (evt.keyCode === 13) {
-      if (evt instanceof KeyboardEvent) {
-        const activeElement = document.activeElement;
-        if (activeElement && activeElement.tagName === 'SELECT') {
-          return;
-        }
-        activeElement.click();
+      if (getKeyColor(evt.charCode) === 'green') {
+        return;
       }
-    } else if (evt.keyCode === 27) {
-      showOptionsPanel(false);
-    }
 
-    evt.preventDefault();
-    evt.stopPropagation();
+      if (evt.keyCode in ARROW_KEY_CODE) {
+        navigate(ARROW_KEY_CODE[evt.keyCode]);
+      } else if (evt.keyCode === 13) {
+        if (evt instanceof KeyboardEvent) {
+          document.activeElement.click();
+        }
+      } else if (evt.keyCode === 27) {
+        showOptionsPanel(false);
+      }
+
+      evt.preventDefault();
+      evt.stopPropagation();
     },
     true
   );
@@ -266,11 +174,8 @@ function createOptionsPanel() {
   contentWrapper.appendChild(createConfigCheckbox('removeShorts'));
   contentWrapper.appendChild(createConfigCheckbox('enableSponsorBlock'));
   contentWrapper.appendChild(createConfigCheckbox('enableAutoLogin'));
-  contentWrapper.appendChild(createConfigSelect('hideEndcards', [
-    ['none', 'Don\'t hide endcards'],
-    ['thumbnails', 'Hide thumbnails only'],
-    ['all', 'Hide entire endcard']
-  ]));
+  contentWrapper.appendChild(createConfigCheckbox('hideEndcards'));
+
   const elmBlock = document.createElement('blockquote');
 
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockSponsor'));
@@ -427,27 +332,15 @@ function initHideEndcards() {
   const style = document.createElement('style');
   document.head.appendChild(style);
 
-  /** @type {(mode: string) => void} */
-  const setHidden = (mode) => {
-    let css = '';
-    
-    if (mode === 'all') {
-      css = `
-        ytlr-endscreen-renderer { display: none !important; }
-        .ytLrEndscreenElementRendererElementContainer { display: none !important; }
-        .ytLrEndscreenElementRendererVideo { display: none !important; }
-        .ytLrEndscreenElementRendererHost { display: none !important; }
-      `;
-    } else if (mode === 'thumbnails') {
-      css = `
-        .ytLrEndscreenElementRendererElementContainer img { display: none !important; }
-        .ytLrEndscreenElementRendererVideo img { display: none !important; }
-        ytlr-endscreen-element-renderer img { display: none !important; }
-        .ytLrEndscreenElementRendererElementContainer .ytLrEndscreenElementRendererVideoThumbnail { display: none !important; }
-      `;
-    }
-    
-    style.textContent = css;
+  /** @type {(hide: boolean) => void} */
+  const setHidden = (hide) => {
+    const display = hide ? 'none' : 'block';
+    style.textContent = `
+      ytlr-endscreen-renderer { display: ${display} !important; }
+      .ytLrEndscreenElementRendererElementContainer { display: ${display} !important; }
+      .ytLrEndscreenElementRendererVideo { display: ${display} !important; }
+      .ytLrEndscreenElementRendererHost { display: ${display} !important; }
+    `;
   };
 
   setHidden(configRead('hideEndcards'));
