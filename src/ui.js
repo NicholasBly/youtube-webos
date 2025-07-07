@@ -121,6 +121,7 @@ function createConfigCheckbox(key) {
 function createConfigSelect(key, options) {
   const elmSelect = document.createElement('select');
   elmSelect.value = configRead(key);
+  elmSelect.setAttribute('tabindex', '0');
   elmSelect.style.cssText = `
     background: #2a2a2a;
     border: 2px solid #4a4a4a;
@@ -159,6 +160,20 @@ function createConfigSelect(key, options) {
     elmSelect.style.backgroundColor = '#2a2a2a';
   });
 
+  elmSelect.addEventListener('keydown', (evt) => {
+    if (evt.keyCode === 13) {
+      evt.preventDefault();
+      evt.stopPropagation();
+      
+      const clickEvent = new MouseEvent('click', {
+        view: window,
+        bubbles: true,
+        cancelable: true
+      });
+      elmSelect.dispatchEvent(clickEvent);
+    }
+  });
+
   configAddChangeListener(key, (evt) => {
     elmSelect.value = evt.detail.newValue;
   });
@@ -179,6 +194,11 @@ function createConfigSelect(key, options) {
     padding-left: 8px;
     padding-right: 8px;
   `;
+
+  elmLabel.addEventListener('click', (evt) => {
+    evt.preventDefault();
+    elmSelect.focus();
+  });
 
   elmLabel.appendChild(document.createTextNode(configGetDesc(key)));
   elmLabel.appendChild(elmSelect);
@@ -205,26 +225,30 @@ function createOptionsPanel() {
   );
 
   elmContainer.addEventListener(
-    'keydown',
-    (evt) => {
-      console.info('Options panel key event:', evt.type, evt.charCode);
+  'keydown',
+  (evt) => {
+    console.info('Options panel key event:', evt.type, evt.charCode);
 
-      if (getKeyColor(evt.charCode) === 'green') {
-        return;
-      }
+    if (getKeyColor(evt.charCode) === 'green') {
+      return;
+    }
 
-      if (evt.keyCode in ARROW_KEY_CODE) {
-        navigate(ARROW_KEY_CODE[evt.keyCode]);
-      } else if (evt.keyCode === 13) {
-        if (evt instanceof KeyboardEvent) {
-          document.activeElement.click();
+    if (evt.keyCode in ARROW_KEY_CODE) {
+      navigate(ARROW_KEY_CODE[evt.keyCode]);
+    } else if (evt.keyCode === 13) {
+      if (evt instanceof KeyboardEvent) {
+        const activeElement = document.activeElement;
+        if (activeElement && activeElement.tagName === 'SELECT') {
+          return;
         }
-      } else if (evt.keyCode === 27) {
-        showOptionsPanel(false);
+        activeElement.click();
       }
+    } else if (evt.keyCode === 27) {
+      showOptionsPanel(false);
+    }
 
-      evt.preventDefault();
-      evt.stopPropagation();
+    evt.preventDefault();
+    evt.stopPropagation();
     },
     true
   );
