@@ -1,8 +1,17 @@
 # youtube-webos
 
-YouTube App with extended functionalities
+An upgraded fork of webosbrew's youtube-webos with extended features
 
-![Configuration Screen](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/webOS_TV_24_Simulator_GEgUgGmuir.png?raw=true)
+## Added Features
+
+- Enhanced Menu UI
+- Auto Login - bypasses account selection screen
+- Hide Endcards
+- Sponsorblock: Highlight feature added
+- Jump to highlight segment with blue button on LG remote
+- Change colors of highlighted segments
+
+![Configuration Screen](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/webOS_TV_24_Simulator_mKe8Gv7zXq.png?raw=true)
 ![Segment Skipped](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/2_sm_new.png?raw=true)
 
 ## Features
