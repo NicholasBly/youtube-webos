@@ -174,6 +174,7 @@ function createOptionsPanel() {
   contentWrapper.appendChild(createConfigCheckbox('removeShorts'));
   contentWrapper.appendChild(createConfigCheckbox('enableSponsorBlock'));
   contentWrapper.appendChild(createConfigCheckbox('enableAutoLogin'));
+  contentWrapper.appendChild(createConfigCheckbox('hideEndcards'));
 
   const elmBlock = document.createElement('blockquote');
 
@@ -327,6 +328,28 @@ function initHideLogo() {
   });
 }
 
+function initHideEndcards() {
+  const style = document.createElement('style');
+  document.head.appendChild(style);
+
+  /** @type {(hide: boolean) => void} */
+  const setHidden = (hide) => {
+    const display = hide ? 'none' : 'block';
+    style.textContent = `
+      ytlr-endscreen-renderer { display: ${display} !important; }
+      .ytLrEndscreenElementRendererElementContainer { display: ${display} !important; }
+      .ytLrEndscreenElementRendererVideo { display: ${display} !important; }
+      .ytLrEndscreenElementRendererHost { display: ${display} !important; }
+    `;
+  };
+
+  setHidden(configRead('hideEndcards'));
+
+  configAddChangeListener('hideEndcards', (evt) => {
+    setHidden(evt.detail.newValue);
+  });
+}
+
 function applyUIFixes() {
   try {
     const bodyClasses = document.body.classList;
@@ -356,9 +379,6 @@ function applyUIFixes() {
   }
 }
 
-applyUIFixes();
-initHideLogo();
-
 function applyOledMode(enabled) {
   const optionsPanel = document.querySelector('.ytaf-ui-container');
   const notificationContainer = document.querySelector(
@@ -376,6 +396,7 @@ function applyOledMode(enabled) {
 
 applyUIFixes();
 initHideLogo();
+initHideEndcards();
 
 applyOledMode(configRead('enableOledCareMode'));
 configAddChangeListener('enableOledCareMode', (evt) => {

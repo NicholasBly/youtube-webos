@@ -79,6 +79,13 @@ const configOptions = new Map([
     }
   ],
   [
+  'hideEndcards',
+  {
+    default: false,
+    desc: 'Hide endcards'
+  }
+  ],
+  [
     'enableSponsorBlockHighlight',
     {
       default: true,
