@@ -399,3 +399,19 @@
 .ytaf-ui-container.oled-care .reset-color-btn:hover {
   background: #333333;
 }
+
+.ytaf-ui-container.oled-care select {
+  background: #111111 !important;
+  border-color: #555555 !important;
+  color: #ffffff !important;
+}
+
+.ytaf-ui-container.oled-care select:focus {
+  border-color: #999999 !important;
+  background: #222222 !important;
+}
+
+.ytaf-ui-container.oled-care select option {
+  background: #111111 !important;
+  color: #ffffff !important;
+}
