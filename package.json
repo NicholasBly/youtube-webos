@@ -1,6 +1,6 @@
 {
   "name": "youtube-webos",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "Ad-free YouTube app for webOS",
   "type": "module",
   "main": "index.js",
@@ -20,8 +20,8 @@
   },
   "repository": "github:webosbrew/youtube-webos",
   "license": "GPL-3.0-only",
-  "bugs": "https://github.com/webosbrew/youtube-webos/issues",
-  "homepage": "https://github.com/webosbrew/youtube-webos#readme",
+  "bugs": "https://github.com/NicholasBly/youtube-webos/issues",
+  "homepage": "https://github.com/NicholasBly/youtube-webos#readme",
   "dependencies": {
     "@babel/runtime-corejs3": "^7.28.0",
     "core-js-pure": "^3.43.0",
