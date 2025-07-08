@@ -18,6 +18,22 @@ JSON.parse = function () {
     return r;
   }
 
+  // Skip processing if this doesn't look like a YouTube API response
+  if (typeof r !== 'object' || r === null) {
+    return r;
+  }
+
+  // Skip processing search suggestion responses
+  if (Array.isArray(r) && r.length >= 2 && Array.isArray(r[1])) {
+    // This looks like a search suggestions response: [query, [suggestions...], ...]
+    return r;
+  }
+
+  // Skip processing if this looks like search-related data
+  if (r.refinements || r.estimatedResults || r.searchInformation) {
+    return r;
+  }
+
   if (r.adPlacements) {
     r.adPlacements = [];
   }
