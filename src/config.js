@@ -103,7 +103,7 @@ const configOptions = new Map([
   'enableAutoLogin',
   {
     default: true,
-    desc: 'Auto login on startup'
+    desc: 'Auto login'
   }
   ],
   [
