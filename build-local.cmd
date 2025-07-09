@@ -32,7 +32,7 @@ if !errorlevel! neq 0 (
 )
 
 echo.
-echo ✅ Build complete! Your .ipk file is ready.
+echo Build complete! Your .ipk file is ready.
 echo Look for: youtube.leanback.v4_*_all.ipk
 echo Press any key to close...
 pause >nul
