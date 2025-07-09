@@ -4,6 +4,72 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.5] - 2025/07/09
+
+### Fixed
+
+- AdBlock bug causing empty search suggestions (present in webosbrew version)
+
+### Changed
+
+- Slight UI change
+
+## [0.4.4] - 2025/07/07
+
+### Added
+
+- "Hide end cards" toggle
+- Auto login now actively and efficiently looks for the login screen instead of only at startup. Only watches for class attribute changes on the body element.
+
+### Fixed
+
+- UI element order
+
+### Changed
+
+- Update dependencies
+
+## [0.4.3] - 2025/07/04
+
+### Added
+
+- "Auto Login", enabled by default. Whenever YouTube triggers the login screen, Auto Login will automatically log you in to bypass it
+- UI optimizations
+
+## [0.4.1] - 2025/06/09
+
+### Added
+
+- OLED-care mode (changes UI elements of options panel to black and gray)
+- Manual color selection of SponsorBlock segments
+
+### Fixed
+
+- Manual segment selection and crashing issue
+
+## [0.4.0] - 2025/06/09
+
+### Added
+
+- Redesigned menu UI
+- "Show highlight segments"
+- Highlight segment is now shown on the progress bar
+- "Jump to highlight with blue button"
+
+### Fixed
+
+- Colored button mappings for blue and red buttons
+
+## [0.3.9] - 2025/06/09
+
+### Added
+
+- Changed App Icon to mimic official YouTube App
+
+### Fixed
+
+- Sponsored segments not showing on preview bar
+
 ## [0.3.8] - 2025/05/10
 
 ### Fixed
