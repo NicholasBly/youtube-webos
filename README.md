@@ -1,6 +1,6 @@
 # youtube-webos
 
-An upgraded fork of webosbrew's youtube-webos with extended features
+An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 ## Added Features
 
@@ -10,6 +10,9 @@ An upgraded fork of webosbrew's youtube-webos with extended features
 - Sponsorblock: Highlight feature added
 - Jump to highlight segment with blue button on LG remote
 - Change colors of highlighted segments
+- Bug fixes
+
+Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-webos/blob/main/CHANGELOG.md)
 
 ![Configuration Screen](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/webOS_TV_24_Simulator_mKe8Gv7zXq.png?raw=true)
 ![Segment Skipped](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/2_sm_new.png?raw=true)
