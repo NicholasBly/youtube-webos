@@ -236,15 +236,12 @@ const eventHandler = (evt) => {
     evt.keyCode,
     evt.defaultPrevented
   );
-
   const keyColor = getKeyColor(evt.charCode);
   
   if (keyColor === 'green') {
     console.info('Taking over!');
-
     evt.preventDefault();
     evt.stopPropagation();
-
     if (evt.type === 'keydown') {
       // Toggle visibility.
       showOptionsPanel(!optionsPanelVisible);
@@ -269,8 +266,36 @@ const eventHandler = (evt) => {
     } catch (e) {
       console.warn('Error jumping to highlight:', e);
     }
-  }
+  } else if (keyColor === 'red' && evt.type === 'keydown') {
+  // Handle red button for 2x speed toggle
+  console.info('Red button pressed - toggling 2x speed');
   
+  try {
+    const isWatchPage = document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
+    if (isWatchPage) {
+      const video = document.querySelector('video');
+      
+      if (video && (video.readyState >= 2 || video.duration > 0)) {
+        const currentSpeed = video.playbackRate;
+        const newSpeed = currentSpeed === 2 ? 1 : 2;
+        video.playbackRate = newSpeed;
+        
+        showNotification(`Playback speed: ${newSpeed}x`);
+        
+        evt.preventDefault();
+        evt.stopPropagation();
+        return false;
+      } else {
+        showNotification('Video not ready');
+      }
+    } else {
+      showNotification('Not on a video page');
+    }
+  } catch (e) {
+    console.warn('Error toggling playback speed:', e);
+    showNotification('Error changing playback speed');
+  }
+}
   return true;
 };
 
