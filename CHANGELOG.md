@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.6] - 2025/07/11
+
+### Changed
+
+SponsorBlock Optimizations:
+- Network - API fallback added, timeout handling
+- Memory - centralized management system to prevent memory leaks
+- Performance - caching for DOM elements
+- Efficiency - reduced repeated queries
+- Error handling/logging improvements
+- Resource Cleanup
+
+### Added
+
+- Red button on LG remote now changes playback speed between 1x and 2x
+
 ## [0.4.5] - 2025/07/09
 
 ### Fixed
