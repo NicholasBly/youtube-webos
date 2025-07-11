@@ -9,6 +9,7 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 - Hide Endcards
 - Sponsorblock: Highlight feature added
 - Jump to highlight segment with blue button on LG remote
+- Adjust playback speed of video with red button on LG remote, works on "unsupported devices"
 - Change colors of highlighted segments
 - Bug fixes
 
