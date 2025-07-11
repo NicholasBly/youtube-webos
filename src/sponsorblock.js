@@ -414,27 +414,16 @@ class SponsorBlockHandler {
     }
     
     jumpToNextHighlight() {
-        if (!this.video) return false;
-        
-        const highlights = this.getHighlightSegments();
-        if (highlights.length === 0) return false;
-        
-        const currentTime = this.video.currentTime;
-        const nextHighlight = highlights.find(seg => seg.processedStart > currentTime + 1);
-        
-        if (nextHighlight) {
-            this.video.currentTime = nextHighlight.processedStart;
-            showNotification(`Jumped to highlight at ${Math.floor(nextHighlight.processedStart)}s`);
-            return true;
-        } else if (highlights.length > 0) {
-            // Jump to first highlight if no next highlight found
-            this.video.currentTime = highlights[0].processedStart;
-            showNotification(`Jumped to first highlight at ${Math.floor(highlights[0].processedStart)}s`);
-            return true;
-        }
-        
-        return false;
-    }
+		if (!this.video) return false;
+		
+		const highlights = this.getHighlightSegments();
+		if (highlights.length === 0) return false;
+		
+		const highlight = highlights[0];
+		this.video.currentTime = highlight.processedStart;
+		showNotification(`Jumped to highlight at ${Math.floor(highlight.processedStart)}s`);
+		return true;
+	}
 
     attachVideo() {
         this.clearTimeout('attachVideo');
@@ -463,41 +452,42 @@ class SponsorBlockHandler {
 
     // Setup mutation observer with centralized management
     setupMutationObserver() {
-        if (this.mutationObserver) {
-            this.mutationObserver.disconnect();
-            this.observers.delete(this.mutationObserver);
-        }
+    if (this.mutationObserver) {
+        this.mutationObserver.disconnect();
+        this.observers.delete(this.mutationObserver);
+    }
 
-        if (!this.progressBarElement) return;
+    if (!this.progressBarElement) return;
 
-        this.mutationObserver = new MutationObserver((mutations) => {
-            let needsReattach = false;
-            
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'childList' && mutation.removedNodes.length > 0) {
-                    for (let node of mutation.removedNodes) {
-                        if (node === this.sliderSegmentsOverlay || 
-                            (node.nodeType === Node.ELEMENT_NODE && node.contains(this.sliderSegmentsOverlay))) {
-                            needsReattach = true;
-                            break;
-                        }
+    this.mutationObserver = new MutationObserver((mutations) => {
+        let needsReattach = false;
+        
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'childList' && mutation.removedNodes.length > 0) {
+                for (let node of mutation.removedNodes) {
+                    if (node === this.sliderSegmentsOverlay || 
+                        (node.nodeType === Node.ELEMENT_NODE && node.contains(this.sliderSegmentsOverlay))) {
+                        needsReattach = true;
+                        break;
                     }
                 }
-            });
-
-            if (needsReattach && this.sliderSegmentsOverlay && !this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
-                this.log('info', "Segments removed by DOM mutation. Re-attaching...");
-                this.attachOverlayToProgressBar();
             }
         });
 
-        this.mutationObserver.observe(this.progressBarElement, {
-            childList: true,
-            subtree: true
-        });
-        
-        this.observers.add(this.mutationObserver);
-    }
+        if (needsReattach && this.sliderSegmentsOverlay && !this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
+            this.log('info', "Segments removed by DOM mutation. Re-attaching immediately...");
+            // Use immediate reattachment instead of delay
+            this.attachOverlayToProgressBar();
+        }
+    });
+
+    this.mutationObserver.observe(this.progressBarElement, {
+        childList: true,
+        subtree: true
+    });
+    
+    this.observers.add(this.mutationObserver);
+}
 
     // Inject CSS once instead of inline styles
     injectCSS() {
@@ -545,15 +535,24 @@ class SponsorBlockHandler {
     }
 
     attachOverlayToProgressBar() {
-        if (!this.progressBarElement || !this.sliderSegmentsOverlay) return;
+    if (!this.progressBarElement || !this.sliderSegmentsOverlay) return;
 
-        if (window.getComputedStyle(this.progressBarElement).position === 'static') {
-            this.progressBarElement.style.position = 'relative';
-        }
-        
-        this.progressBarElement.appendChild(this.sliderSegmentsOverlay);
-        this.log('info', 'Segments overlay (UL/LI structure) attached.');
+    if (this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
+        return;
     }
+
+    if (window.getComputedStyle(this.progressBarElement).position === 'static') {
+        this.progressBarElement.style.position = 'relative';
+    }
+    
+    requestAnimationFrame(() => {
+        if (this.progressBarElement && this.sliderSegmentsOverlay && 
+            !this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
+            this.progressBarElement.appendChild(this.sliderSegmentsOverlay);
+            this.log('info', 'Segments overlay (UL/LI structure) attached.');
+        }
+    });
+}
 
     buildOverlay() {
         if (!this.video || !this.video.duration || isNaN(this.video.duration) || this.video.duration <= 0) {
@@ -638,43 +637,64 @@ class SponsorBlockHandler {
 
         // Watch for progress bar and attach
         const watchForProgressBar = () => {
+    this.clearInterval('progressBarWatch');
+    
+    this.setInterval(() => {
+        const element = this.getElement('progressBar');
+        if (element) {
+            this.progressBarElement = element;
+            this.log('info', 'Progress bar found');
             this.clearInterval('progressBarWatch');
             
+            this.attachOverlayToProgressBar();
+            this.setupMutationObserver();
+            
+            // Add immediate re-attachment on video events that might cause DOM changes
+            this.addEventListener(this.video, 'loadstart', () => {
+                this.setTimeout(() => {
+                    if (this.progressBarElement && this.sliderSegmentsOverlay && 
+                        !this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
+                        this.log('info', "Re-attaching after loadstart event");
+                        this.attachOverlayToProgressBar();
+                    }
+                }, 50, 'loadstart_reattach');
+            }, 'video_loadstart');
+            
+            this.addEventListener(this.video, 'canplay', () => {
+                this.setTimeout(() => {
+                    if (this.progressBarElement && this.sliderSegmentsOverlay && 
+                        !this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
+                        this.log('info', "Re-attaching after canplay event");
+                        this.attachOverlayToProgressBar();
+                    }
+                }, 50, 'canplay_reattach');
+            }, 'video_canplay');
+            
+            // Reduce persistence check interval from 1000ms to 500ms
             this.setInterval(() => {
-                const element = this.getElement('progressBar');
-                if (element) {
-                    this.progressBarElement = element;
-                    this.log('info', 'Progress bar found');
-                    this.clearInterval('progressBarWatch');
-                    
-                    this.attachOverlayToProgressBar();
-                    this.setupMutationObserver();
-                    
-                    // Less frequent persistence checks
-                    this.setInterval(() => {
-                        if (!document.body.contains(this.progressBarElement)) {
-                            this.log('info', "Progress bar lost. Re-finding...");
-                            this.clearInterval('persistence');
-                            this.progressBarElement = null;
-                            if (this.mutationObserver) {
-                                this.mutationObserver.disconnect();
-                                this.observers.delete(this.mutationObserver);
-                                this.mutationObserver = null;
-                            }
-                            watchForProgressBar();
-                            return;
-                        }
-
-                        if (!this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
-                            this.log('info', "Overlay detached. Re-attaching via persistence check.");
-                            this.attachOverlayToProgressBar();
-                        }
-                    }, 1000, 'persistence');
-                    
+                if (!document.body.contains(this.progressBarElement)) {
+                    this.log('info', "Progress bar lost. Re-finding...");
+                    this.clearInterval('persistence');
+                    this.progressBarElement = null;
+                    if (this.mutationObserver) {
+                        this.mutationObserver.disconnect();
+                        this.observers.delete(this.mutationObserver);
+                        this.mutationObserver = null;
+                    }
+                    watchForProgressBar();
                     return;
                 }
-            }, 500, 'progressBarWatch');
-        };
+
+                if (!this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
+                    this.log('info', "Overlay detached. Re-attaching via persistence check.");
+                    this.attachOverlayToProgressBar();
+                }
+            }, 500, 'persistence'); // Reduced from 1000ms to 500ms
+            
+            return;
+        }
+    }, 100, 'progressBarWatch'); // Reduced from 500ms to 100ms
+};
 
         watchForProgressBar();
     }
