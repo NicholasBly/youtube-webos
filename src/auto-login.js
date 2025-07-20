@@ -4,44 +4,72 @@ let autoLoginChecked = false;
 let pageObserver = null;
 let currentPageType = null;
 
-function checkForLoginPrompt() {
-  if (autoLoginChecked) return;
+function enableAutoNavForAccount() {
+  if (autoLoginChecked) return false;
 
-  const bodyElement = document.body;
+  const storageKey = 'yt.leanback.default::AUTONAV_FOR_LIVING_ROOM';
   
-  if (bodyElement && bodyElement.classList.contains('WEB_PAGE_TYPE_ACCOUNT_SELECTOR')) {
-    console.info('Auto login: Found account selector page, pressing OK');
+  try {
+    // Get current storage value
+    const currentValue = localStorage.getItem(storageKey);
     
-    const keydownEvent = new KeyboardEvent('keydown', {
-      charCode: 0,
-      keyCode: 13,
-      which: 13,
-      bubbles: true,
-      cancelable: true
-    });
-	
-	const keyPressEvent = new KeyboardEvent('keypress', {
-      charCode: 13,
-      keyCode: 13,
-      which: 13,
-      bubbles: true,
-      cancelable: true
-    });
+    if (!currentValue) {
+      console.warn('Auto login: AUTONAV_FOR_LIVING_ROOM storage key not found');
+      return false;
+    }
     
-    const keyupEvent = new KeyboardEvent('keyup', {
-      charCode: 0,
-      keyCode: 13,
-      which: 13,
-      bubbles: true,
-      cancelable: true
-    });
+    // Parse the current value
+    const autonavData = JSON.parse(currentValue);
     
-    document.dispatchEvent(keydownEvent);
-	document.dispatchEvent(keyPressEvent);
-    document.dispatchEvent(keyupEvent);
+    if (!autonavData.data) {
+      console.warn('Auto login: Invalid AUTONAV data structure');
+      return false;
+    }
+    
+    // Find the account ID (any key that's not 'guest')
+    const accountIds = Object.keys(autonavData.data).filter(key => key !== 'guest');
+    
+    if (accountIds.length === 0) {
+      console.warn('Auto login: No account ID found in AUTONAV data');
+      return false;
+    }
+    
+    // Check if any account already has auto-nav enabled
+    const hasEnabledAccount = accountIds.some(accountId => autonavData.data[accountId] === true);
+    
+    if (hasEnabledAccount) {
+      console.info('Auto login: Auto-nav already enabled for an account');
+      autoLoginChecked = true;
+      return true;
+    }
+    
+    // Enable auto-nav for the first account found
+    const targetAccountId = accountIds[0];
+    autonavData.data.guest = true;
+    autonavData.data[targetAccountId] = true;
+    
+    // Save back to localStorage
+    localStorage.setItem(storageKey, JSON.stringify(autonavData));
+    
+    console.info(`Auto login: Enabled auto-nav for account ${targetAccountId}`);
+    console.info('Auto login: Modified AUTONAV_FOR_LIVING_ROOM:', autonavData);
     
     autoLoginChecked = true;
     return true;
+    
+  } catch (error) {
+    console.error('Auto login: Error modifying AUTONAV storage:', error);
+    return false;
+  }
+}
+
+function checkForLoginPrompt() {
+  if (autoLoginChecked) return false;
+
+  const bodyElement = document.body;
+  
+  if (bodyElement) { // if YouTube app is loaded
+    return enableAutoNavForAccount();
   }
   
   return false;
@@ -128,6 +156,7 @@ function initAutoLogin() {
 
   setupPageChangeObserver();
   
+  // Also try to enable auto-nav immediately if we're already on the account selector
   runAutoLoginCheck();
 }
 
