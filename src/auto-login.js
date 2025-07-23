@@ -4,110 +4,6 @@ let autoLoginChecked = false;
 let pageObserver = null;
 let currentPageType = null;
 
-function enableAutoNavForAccount() {
-  const storageKey = 'yt.leanback.default::AUTONAV_FOR_LIVING_ROOM';
-  
-  try {
-    // Get current storage value
-    const currentValue = localStorage.getItem(storageKey);
-    
-    if (!currentValue) {
-      console.warn('Auto login: AUTONAV_FOR_LIVING_ROOM storage key not found');
-      return false;
-    }
-    
-    // Parse the current value
-    const autonavData = JSON.parse(currentValue);
-    
-    if (!autonavData.data) {
-      console.warn('Auto login: Invalid AUTONAV data structure');
-      return false;
-    }
-    
-    // Find the account ID (any key that's not 'guest')
-    const accountIds = Object.keys(autonavData.data).filter(key => key !== 'guest');
-    
-    if (accountIds.length === 0) {
-      console.warn('Auto login: No account ID found in AUTONAV data');
-      return false;
-    }
-    
-    // Check if any account already has auto-nav enabled
-    const hasEnabledAccount = accountIds.some(accountId => autonavData.data[accountId] === true);
-    
-    if (hasEnabledAccount) {
-      console.info('Auto login: Auto-nav already enabled for an account');
-      return true; // REMOVED: autoLoginChecked = true; - this was preventing login checks
-    }
-    
-    // Enable auto-nav for the first account found
-    const targetAccountId = accountIds[0];
-    autonavData.data.guest = true;
-    autonavData.data[targetAccountId] = true;
-    
-    // Save back to localStorage
-    localStorage.setItem(storageKey, JSON.stringify(autonavData));
-    
-    console.info(`Auto login: Enabled auto-nav for account ${targetAccountId}`);
-    console.info('Auto login: Modified AUTONAV_FOR_LIVING_ROOM:', autonavData);
-    
-    return true;
-    
-  } catch (error) {
-    console.error('Auto login: Error modifying AUTONAV storage:', error);
-    return false;
-  }
-}
-
-function disableAutoNavForAccount() {
-  const storageKey = 'yt.leanback.default::AUTONAV_FOR_LIVING_ROOM';
-  
-  try {
-    // Get current storage value
-    const currentValue = localStorage.getItem(storageKey);
-    
-    if (!currentValue) {
-      console.warn('Auto login: AUTONAV_FOR_LIVING_ROOM storage key not found');
-      return false;
-    }
-    
-    // Parse the current value
-    const autonavData = JSON.parse(currentValue);
-    
-    if (!autonavData.data) {
-      console.warn('Auto login: Invalid AUTONAV data structure');
-      return false;
-    }
-    
-    // Find the account ID (any key that's not 'guest')
-    const accountIds = Object.keys(autonavData.data).filter(key => key !== 'guest');
-    
-    if (accountIds.length === 0) {
-      console.warn('Auto login: No account ID found in AUTONAV data');
-      return false;
-    }
-    
-    // Disable auto-nav for all accounts (set to false), but leave guest as true
-    accountIds.forEach(accountId => {
-      autonavData.data[accountId] = false;
-    });
-    
-    // Save back to localStorage
-    localStorage.setItem(storageKey, JSON.stringify(autonavData));
-    
-    console.info('Auto login: Disabled auto-nav for all accounts');
-    console.info('Auto login: Modified AUTONAV_FOR_LIVING_ROOM:', autonavData);
-    
-    autoLoginChecked = false;
-    
-    return true;
-    
-  } catch (error) {
-    console.error('Auto login: Error disabling AUTONAV storage:', error);
-    return false;
-  }
-}
-
 function sendKeyboardEvent(keyCode, keyName = '') {
   console.info(`Auto login: Sending keyCode ${keyCode} (${keyName})`);
   
@@ -171,11 +67,8 @@ function checkForLoginPrompt() {
 
   const bodyElement = document.body;
   
-  if (bodyElement && (bodyElement.classList.contains('WEB_PAGE_TYPE_ACCOUNT_SELECTOR') || 
-                    bodyElement.classList.contains('WEB_PAGE_TYPE_ACCOUNTS'))) {
+  if (bodyElement && bodyElement.classList.contains('WEB_PAGE_TYPE_ACCOUNT_SELECTOR')) {
     console.info('Auto login: Found account selector page, sending keyboard events');
-    
-    enableAutoNavForAccount();
     
     // Send keyCode 13 (Enter) first
     sendKeyboardEvent(13, 'Enter');
@@ -183,8 +76,7 @@ function checkForLoginPrompt() {
     // Wait 500ms and check if still on account page, then try keyCode 28
     setTimeout(() => {
       const currentBodyElement = document.body;
-      if (currentBodyElement && (currentBodyElement.classList.contains('WEB_PAGE_TYPE_ACCOUNT_SELECTOR') || 
-                                currentBodyElement.classList.contains('WEB_PAGE_TYPE_ACCOUNTS'))) {
+      if (currentBodyElement && currentBodyElement.classList.contains('WEB_PAGE_TYPE_ACCOUNT_SELECTOR')) {
         console.info('Auto login: Still on account page, trying keyCode 28');
         sendKeyboardEvent(28, 'webOS Enter');
       } else {
@@ -249,8 +141,9 @@ function setupPageChangeObserver() {
           currentPageType = newPageType;
           
           // Reset auto-login flag when page changes to account selection screen
-          // FIXED: Correct syntax for checking multiple page types
-          if (newPageType === 'WEB_PAGE_TYPE_ACCOUNT_SELECTOR' || newPageType === 'WEB_PAGE_TYPE_ACCOUNTS') {
+          // FIXED: Use array includes method for better compatibility
+          const accountPageTypes = ['WEB_PAGE_TYPE_ACCOUNT_SELECTOR'];
+          if (accountPageTypes.includes(newPageType)) {
             console.info('Auto login: Account selector page detected, resetting auto-login flag');
             autoLoginChecked = false;
             runAutoLoginCheck();
@@ -275,15 +168,6 @@ function setupPageChangeObserver() {
 
 function initAutoLogin() {
   const autoLoginEnabled = configRead('enableAutoLogin');
-  
-  if (!autoLoginEnabled) {
-    console.info('Auto login disabled - disabling auto-nav');
-    disableAutoNavForAccount();
-    return;
-  } else {
-    console.info('Auto login enabled - enabling auto-nav');
-    enableAutoNavForAccount(); // This no longer sets autoLoginChecked = true
-  }
 
   setupPageChangeObserver();
   
@@ -302,11 +186,9 @@ if (document.readyState === 'loading') {
 configAddChangeListener('enableAutoLogin', (evt) => {
   if (evt.detail.newValue) {
     console.info('Auto login enabled - setting up auto-login');
-    enableAutoNavForAccount();
     initAutoLogin();
   } else {
     console.info('Auto login disabled - disabling auto-nav');
-    disableAutoNavForAccount();
   }
 });
 
