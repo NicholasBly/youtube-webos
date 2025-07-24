@@ -170,9 +170,32 @@ function initAutoLogin() {
   const autoLoginEnabled = configRead('enableAutoLogin');
 
   setupPageChangeObserver();
+  setupResumeDetection();
   
   // Also try to enable auto-nav immediately if we're already on the account selector
   runAutoLoginCheck();
+}
+
+function handleAppResume() {
+  console.info('Auto login: App resumed from hibernation/background');
+  
+  // Reset the auto-login flag since we're resuming
+  autoLoginChecked = false;
+  
+  // Wait a short moment for the app to fully resume, then check
+  setTimeout(() => {
+    runAutoLoginCheck();
+  }, 1000);
+}
+
+function setupResumeDetection() {
+  // Page Visibility API - detects when tab/app becomes visible again
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      console.info('Auto login: Document became visible');
+      handleAppResume();
+    }
+  });
 }
 
 // Initialize when DOM is ready
@@ -188,7 +211,7 @@ configAddChangeListener('enableAutoLogin', (evt) => {
     console.info('Auto login enabled - setting up auto-login');
     initAutoLogin();
   } else {
-    console.info('Auto login disabled - disabling auto-nav');
+    console.info('Auto login disabled');
   }
 });
 
