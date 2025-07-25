@@ -537,11 +537,9 @@ class ReturnYouTubeDislike {
         // Was disliked, now liked - remove the dislike
         this.dislikesCount = Math.max(0, this.dislikesCount - 1);
       }
-      this.submitVote('like');
     } else if (wasLiked && !isLiked) {
       // User just un-liked
       this.likesCount = Math.max(0, this.likesCount - 1);
-      this.submitVote('none');
     }
   }
 
@@ -553,59 +551,9 @@ class ReturnYouTubeDislike {
         // Was liked, now disliked - remove the like
         this.likesCount = Math.max(0, this.likesCount - 1);
       }
-      this.submitVote('dislike');
     } else if (wasDisliked && !isDisliked) {
       // User just un-disliked
       this.dislikesCount = Math.max(0, this.dislikesCount - 1);
-      this.submitVote('none');
-    }
-  }
-
-  // Remove deprecated method - replaced with debounced state handling
-
-  async submitVote(voteType) {
-    if (!this.videoID) {
-      this.log('warn', 'No video ID available for vote submission');
-      return;
-    }
-    
-    // Check if vote submission is enabled (you can add this to config.js)
-    let submitVotes = true;
-    try {
-      submitVotes = configRead('enableReturnYouTubeDislikeSubmission');
-    } catch (e) {
-      // Default to true if config not found
-      submitVotes = true;
-    }
-    
-    if (!submitVotes) {
-      this.log('info', `Vote submission disabled in config: ${voteType}`);
-      return;
-    }
-    
-    try {
-      this.log('info', `Submitting vote: ${voteType} for video ${this.videoID}`);
-      
-      const response = await fetch('https://returnyoutubedislikeapi.com/interact/vote', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          videoId: this.videoID,
-          vote: voteType // 'like', 'dislike', or 'none'
-        })
-      });
-      
-      if (response.ok) {
-        this.log('info', `Vote submitted successfully: ${voteType}`);
-      } else {
-        this.log('warn', `Vote submission failed with status: ${response.status}`);
-        // Don't show error to user as this is optional functionality
-      }
-    } catch (error) {
-      this.log('error', 'Error submitting vote:', error);
-      // Don't show error to user as this is optional functionality
     }
   }
 
