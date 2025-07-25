@@ -10,6 +10,7 @@ import {
 } from './config.js';
 import './ui.css';
 import './auto-login.js';
+import './return-dislike.js';
 
 // We handle key events ourselves.
 window.__spatialNavigation__.keyMode = 'NONE';
@@ -174,6 +175,7 @@ function createOptionsPanel() {
   contentWrapper.appendChild(createConfigCheckbox('removeShorts'));
   contentWrapper.appendChild(createConfigCheckbox('enableAutoLogin'));
   contentWrapper.appendChild(createConfigCheckbox('hideEndcards'));
+  contentWrapper.appendChild(createConfigCheckbox('enableReturnYouTubeDislike'));
   contentWrapper.appendChild(createConfigCheckbox('enableSponsorBlock'));
 
   const elmBlock = document.createElement('blockquote');
