@@ -411,13 +411,40 @@ function applyOledMode(enabled) {
   const notificationContainer = document.querySelector(
     '.ytaf-notification-container'
   );
+
   const oledClass = 'oled-care';
   if (enabled) {
     optionsPanel?.classList.add(oledClass);
     notificationContainer?.classList.add(oledClass);
+
+    const style = document.createElement('style');
+    style.id = 'style-gray-ui-oled-care';
+
+    style.textContent = `
+      #container {
+        background-color: black !important;
+      }
+
+      .ytLrGuideResponseMask {
+        background-color: black !important;
+      }
+
+      .ytLrGuideResponseGradient {
+        display: none;
+      }
+
+      .ytLrAnimatedOverlayContainer {
+        background-color: black !important;
+      }
+    `;
+
+    document.head.appendChild(style);
+
   } else {
     optionsPanel?.classList.remove(oledClass);
     notificationContainer?.classList.remove(oledClass);
+
+    document.getElementById('style-gray-ui-oled-care')?.remove();
   }
 }
 
