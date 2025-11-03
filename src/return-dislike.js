@@ -123,10 +123,12 @@ class ReturnYouTubeDislike {
     }
     
     let element = null;
+    const likeButtonContainer = 'ytlr-like-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_LIKE_BUTTON"]';
+    
     if (type === 'likeButton') {
-      element = document.querySelector('ytlr-toggle-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_LIKE_BUTTON"]');
+      element = document.querySelector(`${likeButtonContainer} ytlr-button[idomkey="like-button"]`);
     } else if (type === 'dislikeButton') {
-      element = document.querySelector('ytlr-toggle-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_DISLIKE_BUTTON"]');
+      element = document.querySelector(`${likeButtonContainer} ytlr-button[idomkey="dislike-button"]`);
     }
     
     if (element) {
@@ -343,20 +345,10 @@ class ReturnYouTubeDislike {
       }, 100, 'popupRemovalTimeout');
     };
     
-    // Add event listeners to outer button - ONLY hover/focus events
     this.addEventListener(button, 'focus', focusHandler, `${type}_focus`);
     this.addEventListener(button, 'blur', blurHandler, `${type}_blur`);
     this.addEventListener(button, 'mouseenter', mouseEnterHandler, `${type}_mouseenter`);
     this.addEventListener(button, 'mouseleave', mouseLeaveHandler, `${type}_mouseleave`);
-    
-    const innerButton = button.querySelector('ytlr-button');
-    if (innerButton) {
-      // Also add to inner button for redundancy - ONLY hover/focus events
-      this.addEventListener(innerButton, 'focus', focusHandler, `${type}_inner_focus`);
-      this.addEventListener(innerButton, 'blur', blurHandler, `${type}_inner_blur`);
-      this.addEventListener(innerButton, 'mouseenter', mouseEnterHandler, `${type}_inner_mouseenter`);
-      this.addEventListener(innerButton, 'mouseleave', mouseLeaveHandler, `${type}_inner_mouseleave`);
-    }
     
     this.log('info', `${type} button hover listeners set up successfully`);
   }
@@ -649,28 +641,28 @@ class ReturnYouTubeDislike {
     this.showPopup(button, type);
   }
 
-  updateButtonState() {
-    const likeButton = this.getElement('likeButton');
-    const dislikeButton = this.getElement('dislikeButton');
-    
-    if (likeButton) {
-      const ytlrButton = likeButton.querySelector('ytlr-button');
-      const oldState = this.isLiked;
-      this.isLiked = ytlrButton && ytlrButton.getAttribute('aria-pressed') === 'true';
-      if (oldState !== this.isLiked) {
-        this.log('debug', `Like state changed: ${oldState} -> ${this.isLiked}`);
-      }
-    }
-    
-    if (dislikeButton) {
-      const ytlrButton = dislikeButton.querySelector('ytlr-button');
-      const oldState = this.isDisliked;
-      this.isDisliked = ytlrButton && ytlrButton.getAttribute('aria-pressed') === 'true';
-      if (oldState !== this.isDisliked) {
-        this.log('debug', `Dislike state changed: ${oldState} -> ${this.isDisliked}`);
-      }
-    }
-  }
+	updateButtonState() {
+		const likeButton = this.getElement('likeButton');
+		const dislikeButton = this.getElement('dislikeButton');
+		
+		if (likeButton) {
+		  // const ytlrButton = likeButton.querySelector('ytlr-button'); // No longer needed
+		  const oldState = this.isLiked;
+		  this.isLiked = likeButton && likeButton.getAttribute('aria-pressed') === 'true'; // Read from the button directly
+		  if (oldState !== this.isLiked) {
+			this.log('debug', `Like state changed: ${oldState} -> ${this.isLiked}`);
+		  }
+		}
+		
+		if (dislikeButton) {
+		  // const ytlrButton = dislikeButton.querySelector('ytlr-button'); // No longer needed
+		  const oldState = this.isDisliked;
+		  this.isDisliked = dislikeButton && dislikeButton.getAttribute('aria-pressed') === 'true'; // Read from the button directly
+		  if (oldState !== this.isDisliked) {
+			this.log('debug', `Dislike state changed: ${oldState} -> ${this.isDisliked}`);
+		  }
+		}
+	  }
 
   showPopup(button, type) {
     // Always remove existing popup first

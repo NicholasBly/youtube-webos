@@ -1,12 +1,14 @@
-import sha256 from 'tiny-sha256';
+import sha256_import from 'tiny-sha256';
 import { configRead, segmentTypes } from './config';
 import { showNotification } from './ui';
+
+let sha256 = sha256_import;
 
 // Simplified fallback for sha256
 if (typeof sha256 !== 'function') {
     console.error("SHA256 function is not available. SponsorBlock functionality will be disabled.");
     // Provide a no-op function to prevent crashes
-    window.sha256 = () => {
+    sha256 = () => {
         console.warn("SHA256 not available - segments cannot be fetched");
         return null;
     };
@@ -27,14 +29,14 @@ class SponsorBlockHandler {
         this.debugMode = false; // Can be set based on config
         
         // Centralized management
-        this.timers = new Map();
-        this.observers = new Set();
-        this.eventListeners = new Map();
-        
-        // Caching
-        this.configCache = new Map();
-        this.cacheExpiry = Date.now() + 30000; // 30 second cache
-        this.cachedElements = new Map();
+		this.timers = new Map();
+		this.observers = new Set();
+		this.eventListeners = new Map();
+
+		// Caching
+		this.configCache = new Map();
+		this.cacheExpiry = Date.now() + 30000; // 30 second cache
+		this.cachedElements = new Map();
         this.processedSegments = null;
         this.segmentCategories = null;
         
@@ -50,47 +52,29 @@ class SponsorBlockHandler {
         this.stylesInjected = false;
         
         // Pre-compiled selectors for better performance
-        this.selectors = {
-            video: 'video',
-            progressBar: [
-                '.ytlr-progress-bar__slider',
-                '.ytlr-multi-markers-player-bar-renderer',
-                '.ytlr-progress-bar',
-                '.ytLrProgressBarSlider',
-                '.ytLrProgressBarSliderBase',
-                '.ytp-progress-bar',
-                '.ytp-progress-bar-container'
-            ]
-        };
+		this.selectors = {
+			video: 'video',
+			progressBar: [
+				'ytlr-progress-bar',  // Add tag name selector first
+				'.ytlr-progress-bar',
+				'.ytlr-multi-markers-player-bar-renderer',
+				'.ytlr-progress-bar__slider',
+				'.ytLrProgressBarSlider',
+				'.ytLrProgressBarSliderBase',
+				'.ytp-progress-bar',
+				'.ytp-progress-bar-container'
+			]
+		};
         
         this.log('info', `SponsorBlockHandler created for videoID: ${videoID}`);
     }
 
     // Logging system
     log(level, message, ...args) {
-        const prefix = `[SponsorBlock:${this.videoID}]`;
-        
-        if (level === 'debug' && !this.debugMode) {
-            return;
-        }
-        
-        switch (level) {
-            case 'error':
-                console.error(prefix, message, ...args);
-                break;
-            case 'warn':
-                console.warn(prefix, message, ...args);
-                break;
-            case 'info':
-                console.info(prefix, message, ...args);
-                break;
-            case 'debug':
-                console.log(prefix, '[DEBUG]', message, ...args);
-                break;
-            default:
-                console.log(prefix, message, ...args);
-        }
-    }
+		if (level === 'debug' && !this.debugMode) return;
+		if (level === 'info' && !this.debugMode) return; // Skip info in production too
+		console[level === 'warn' ? 'warn' : 'error'](`[SB:${this.videoID}]`, message, ...args);
+	}
 
     // Standardized error handling
     handleError(error, context, fallback = null) {
@@ -108,15 +92,10 @@ class SponsorBlockHandler {
     }
 
     // Centralized timer management
-    setTimeout(callback, delay, name) {
-        this.clearTimeout(name);
-        const id = setTimeout(() => {
-            this.timers.delete(name);
-            callback();
-        }, delay);
-        this.timers.set(name, id);
-        return id;
-    }
+	setTimeout(callback, delay, name) {
+		if (this.timers[name]) clearTimeout(this.timers[name]);
+		this.timers[name] = setTimeout(callback, delay);
+	}
     
     clearTimeout(name) {
         if (this.timers.has(name)) {
@@ -139,28 +118,18 @@ class SponsorBlockHandler {
         }
     }
     
-    clearAllTimers() {
-        for (const [name, id] of this.timers) {
-            if (name.includes('interval')) {
-                clearInterval(id);
-            } else {
-                clearTimeout(id);
-            }
-        }
-        this.timers.clear();
-    }
+	clearAllTimers() {
+		for (const name in this.timers) {
+			clearTimeout(this.timers[name]); // clearTimeout works on intervals too
+		}
+		this.timers = {};
+	}
 
     // Configuration management with caching
     readConfig(key) {
-        const now = Date.now();
-        if (now > this.cacheExpiry) {
-            this.configCache.clear();
-            this.cacheExpiry = now + 30000;
-        }
-        
-        if (this.configCache.has(key)) {
-            return this.configCache.get(key);
-        }
+		if (this.configCache[key] !== undefined) {
+			return this.configCache[key];
+		}
         
         try {
             const value = configRead(key);
@@ -224,17 +193,12 @@ class SponsorBlockHandler {
         return element;
     }
 
-    // Event listener management
-    addEventListener(element, event, handler, name) {
+	addEventListener(element, event, handler, name) {
         const key = `${name || 'unnamed'}_${event}`;
-        
-        // Remove existing listener if present
         this.removeEventListener(element, event, key);
-        
-        // Add new listener
         element.addEventListener(event, handler);
         this.eventListeners.set(key, { element, event, handler });
-    }
+	}
     
     removeEventListener(element, event, key) {
         if (this.eventListeners.has(key)) {
@@ -393,9 +357,10 @@ class SponsorBlockHandler {
         }
         
         // Sort segments by start time
-        this.processedSegments.highlights.sort((a, b) => a.processedStart - b.processedStart);
-        this.processedSegments.skippable.sort((a, b) => a.processedStart - b.processedStart);
-        this.processedSegments.display.sort((a, b) => a.processedStart - b.processedStart);
+        const sortByStart = (a, b) => a.processedStart - b.processedStart;
+		if (this.processedSegments.highlights.length) {
+			this.processedSegments.highlights.sort(sortByStart);
+		}
         
         return this.processedSegments;
     }
@@ -462,17 +427,17 @@ class SponsorBlockHandler {
     this.mutationObserver = new MutationObserver((mutations) => {
         let needsReattach = false;
         
-        mutations.forEach((mutation) => {
-            if (mutation.type === 'childList' && mutation.removedNodes.length > 0) {
-                for (let node of mutation.removedNodes) {
-                    if (node === this.sliderSegmentsOverlay || 
-                        (node.nodeType === Node.ELEMENT_NODE && node.contains(this.sliderSegmentsOverlay))) {
-                        needsReattach = true;
-                        break;
-                    }
-                }
-            }
-        });
+        for (let i = 0; i < mutations.length; i++) {
+		const mutation = mutations[i];
+		if (mutation.type === 'childList' && mutation.removedNodes.length) {
+			// Direct check without nested loop if possible
+			if (mutation.removedNodes[0] === this.sliderSegmentsOverlay || 
+				this.progressBarElement.contains(this.sliderSegmentsOverlay) === false) {
+				needsReattach = true;
+				break;
+			}
+		}
+	}
 
         if (needsReattach && this.sliderSegmentsOverlay && !this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
             this.log('info', "Segments removed by DOM mutation. Re-attaching immediately...");
@@ -487,73 +452,127 @@ class SponsorBlockHandler {
     });
     
     this.observers.add(this.mutationObserver);
-}
+	}
 
-    // Inject CSS once instead of inline styles
-    injectCSS() {
-        if (this.stylesInjected) return;
-        
-        const style = document.createElement('style');
-        style.id = 'sponsorblock-styles';
-        style.textContent = `
-            #previewbar {
-                position: absolute !important;
-                left: 0 !important;
-                top: 0 !important;
-                width: 100% !important;
-                height: 100% !important;
-                pointer-events: none !important;
-                z-index: 10 !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                display: block !important;
-                visibility: visible !important;
-                opacity: 1 !important;
-            }
-            
-            .previewbar {
-                position: absolute !important;
-                list-style: none !important;
-                height: 100% !important;
-                border-radius: inherit !important;
-                display: block !important;
-                visibility: visible !important;
-                z-index: 11 !important;
-            }
-            
-            .previewbar.highlight {
-                height: 12px !important;
-                min-width: 5.47px !important;
-                max-width: 5.47px !important;
-                top: 50% !important;
-                transform: translateY(-50%) !important;
-            }
-        `;
-        
-        document.head.appendChild(style);
-        this.stylesInjected = true;
-    }
+	// Key fixes to apply to your sponsorblock.js:
 
-    attachOverlayToProgressBar() {
-    if (!this.progressBarElement || !this.sliderSegmentsOverlay) return;
+// 1. Update the CSS injection with higher z-index and proper positioning
+	injectCSS() {
+		if (document.getElementById('sponsorblock-styles')) return;
+		
+		const style = document.createElement('style');
+		style.id = 'sponsorblock-styles';
+		style.textContent = `
+			#previewbar {
+				position: absolute !important;
+				left: 0 !important;
+				top: 0 !important;
+				width: 100% !important;
+				height: 100% !important;
+				pointer-events: none !important;
+				z-index: 100 !important;
+				margin: 0 !important;
+				padding: 0 !important;
+				display: block !important;
+				visibility: visible !important;
+				opacity: 1 !important;
+				overflow: visible !important;
+			}
+			
+			.previewbar {
+				position: absolute !important;
+				list-style: none !important;
+				height: 12px !important;
+				top: 50% !important;
+				transform: translateY(-50%) !important;
+				border-radius: 2px !important;
+				display: block !important;
+				visibility: visible !important;
+				z-index: 101 !important;
+				pointer-events: none !important;
+			}
+			
+			.previewbar.highlight {
+				height: 12px !important;
+				min-width: 5.47px !important;
+				max-width: 5.47px !important;
+				top: 50% !important;
+				transform: translateY(-50%) !important;
+			}
+			
+			/* Ensure parent containers don't clip */
+			.afTAdb {
+				overflow: visible !important;
+			}
+			
+			ytlr-multi-markers-player-bar-renderer {
+				overflow: visible !important;
+			}
+		`;
+		
+		document.head.appendChild(style);
+		this.stylesInjected = true;
+	}
 
-    if (this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
-        return;
-    }
+	// 2. Enhanced attachOverlayToProgressBar - wait for proper structure
+	attachOverlayToProgressBar() {
+		if (!this.progressBarElement || !this.sliderSegmentsOverlay) return;
 
-    if (window.getComputedStyle(this.progressBarElement).position === 'static') {
-        this.progressBarElement.style.position = 'relative';
-    }
-    
-    requestAnimationFrame(() => {
-        if (this.progressBarElement && this.sliderSegmentsOverlay && 
-            !this.progressBarElement.contains(this.sliderSegmentsOverlay)) {
-            this.progressBarElement.appendChild(this.sliderSegmentsOverlay);
-            this.log('info', 'Segments overlay (UL/LI structure) attached.');
-        }
-    });
-}
+		let visualBarContainer = this.progressBarElement.querySelector('.afTAdb[idomkey="progress-bar"]');
+		
+		// Fallback: try without idomkey attribute
+		if (!visualBarContainer) {
+			visualBarContainer = this.progressBarElement.querySelector('.afTAdb');
+		}
+		
+		// If .afTAdb doesn't exist yet, the progress bar structure isn't ready
+		if (!visualBarContainer) {
+			this.log('info', 'Progress bar structure not ready (.afTAdb not found), waiting...');
+			this.setTimeout(() => this.attachOverlayToProgressBar(), 150, 'attach_retry');
+			return;
+		}
+		
+		// Also ensure ytlr-multi-markers-player-bar-renderer exists
+		const playerBarRenderer = this.progressBarElement.querySelector('ytlr-multi-markers-player-bar-renderer');
+		if (!playerBarRenderer) {
+			this.log('info', 'ytlr-multi-markers-player-bar-renderer not found, waiting...');
+			this.setTimeout(() => this.attachOverlayToProgressBar(), 150, 'attach_retry');
+			return;
+		}
+		
+		const targetElement = visualBarContainer;
 
+		if (targetElement.contains(this.sliderSegmentsOverlay)) return;
+		
+		// Wait for the progress bar to have actual dimensions
+		const rect = targetElement.getBoundingClientRect();
+		if (rect.height === 0 || rect.width === 0) {
+			this.log('info', 'Progress bar not yet rendered (zero dimensions), waiting...');
+			this.setTimeout(() => this.attachOverlayToProgressBar(), 150, 'attach_retry');
+			return;
+		}
+		
+		// Force the target to have proper positioning
+		const computedStyle = window.getComputedStyle(targetElement);
+		if (computedStyle.position === 'static') {
+			targetElement.style.position = 'relative';
+		}
+		
+		// Ensure no overflow clipping
+		targetElement.style.overflow = 'visible';
+		
+		targetElement.appendChild(this.sliderSegmentsOverlay);
+		this.log('info', 'Attached segments overlay to:', targetElement.tagName, targetElement.className);
+		
+		// Debug: log overlay position and visibility
+		setTimeout(() => {
+			if (this.sliderSegmentsOverlay) {
+				const rect = this.sliderSegmentsOverlay.getBoundingClientRect();
+				this.log('info', 'Overlay bounds:', rect);
+				this.log('info', 'Overlay children:', this.sliderSegmentsOverlay.children.length);
+			}
+		}, 100);
+	}
     buildOverlay() {
         if (!this.video || !this.video.duration || isNaN(this.video.duration) || this.video.duration <= 0) {
             return;
@@ -670,7 +689,6 @@ class SponsorBlockHandler {
                 }, 50, 'canplay_reattach');
             }, 'video_canplay');
             
-            // Reduce persistence check interval from 1000ms to 500ms
             this.setInterval(() => {
                 if (!document.body.contains(this.progressBarElement)) {
                     this.log('info', "Progress bar lost. Re-finding...");
@@ -689,14 +707,31 @@ class SponsorBlockHandler {
                     this.log('info', "Overlay detached. Re-attaching via persistence check.");
                     this.attachOverlayToProgressBar();
                 }
-            }, 500, 'persistence'); // Reduced from 1000ms to 500ms
+            }, 1000, 'persistence');
             
             return;
         }
-    }, 100, 'progressBarWatch'); // Reduced from 500ms to 100ms
+    }, 250, 'progressBarWatch'); // Reduced from 500ms to 100ms
 };
 
         watchForProgressBar();
+		if (this.sliderSegmentsOverlay) {
+			void this.sliderSegmentsOverlay.offsetHeight;
+			
+			// Log for debugging
+			this.log('info', 'Segments rendered:', this.sliderSegmentsOverlay.children.length);
+			Array.from(this.sliderSegmentsOverlay.children).forEach((child, i) => {
+				const style = window.getComputedStyle(child);
+				this.log('info', `Segment ${i}:`, {
+					left: child.style.left,
+					width: child.style.width,
+					backgroundColor: child.style.backgroundColor,
+					display: style.display,
+					visibility: style.visibility,
+					zIndex: style.zIndex
+				});
+			});
+		}
     }
 
     scheduleSkip() {
@@ -719,18 +754,19 @@ class SponsorBlockHandler {
         }
 
         // Find next segments to skip
-        const nextSegments = processed.skippable.filter(
-            (seg) =>
-                seg.processedStart > this.video.currentTime - 0.3 &&
-                seg.processedEnd > this.video.currentTime - 0.3
-        );
+        const currentTime = this.video.currentTime - 0.3;
+		let nextSegment = null;
+		for (let i = 0; i < processed.skippable.length; i++) {
+			const seg = processed.skippable[i];
+			if (seg.processedStart > currentTime && seg.processedEnd > currentTime) {
+				nextSegment = seg;
+				break;
+			}
+		}
+		
+		if (!nextSegment) return;
+		const segment = nextSegment;
 
-        if (!nextSegments.length) {
-            this.log('info', 'No more segments');
-            return;
-        }
-
-        const segment = nextSegments[0];
         this.log('info', 'Scheduling skip of', segment.category, 'in', segment.processedStart - this.video.currentTime);
 
         this.setTimeout(() => {

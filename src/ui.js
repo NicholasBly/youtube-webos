@@ -448,7 +448,7 @@ function applyOledMode(enabled) {
   }
 }
 
-applyUIFixes();
+//applyUIFixes();
 initHideLogo();
 initHideEndcards();
 
