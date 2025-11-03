@@ -20,6 +20,21 @@ class ReturnYouTubeDislike {
     
     // Caching
     this.cachedElements = new Map();
+	
+    this.selectors = {
+        likeButton: [
+            // WebOS 24 selector
+            'ytlr-toggle-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_LIKE_BUTTON"] ytlr-button[role="button"]',
+            // WebOS 23 selector
+            'ytlr-like-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_LIKE_BUTTON"] ytlr-button[idomkey="like-button"]'
+        ],
+        dislikeButton: [
+            // WebOS 24 selector
+            'ytlr-toggle-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_DISLIKE_BUTTON"] ytlr-button[role="button"]',
+            // WebOS 23 selector
+            'ytlr-like-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_LIKE_BUTTON"] ytlr-button[idomkey="dislike-button"]'
+        ]
+    };
     
     // Popup management
     this.popupCounter = 0;
@@ -123,19 +138,24 @@ class ReturnYouTubeDislike {
     }
     
     let element = null;
-    const likeButtonContainer = 'ytlr-like-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_LIKE_BUTTON"]';
     
-    if (type === 'likeButton') {
-      element = document.querySelector(`${likeButtonContainer} ytlr-button[idomkey="like-button"]`);
-    } else if (type === 'dislikeButton') {
-      element = document.querySelector(`${likeButtonContainer} ytlr-button[idomkey="dislike-button"]`);
+    // Check if the type exists in our new selectors list
+    if (this.selectors[type]) {
+        // Iterate through the array of selectors
+        for (const selector of this.selectors[type]) {
+            element = document.querySelector(selector);
+            if (element) {
+                // Found a match, stop searching
+                this.log('debug', `Found ${type} using selector: ${selector}`);
+                break; 
+            }
+        }
     }
     
     if (element) {
       this.cachedElements.set(type, { element, timestamp: now });
-      this.log('debug', `Found ${type}:`, element);
     } else {
-      this.log('debug', `Could not find ${type}`);
+      this.log('debug', `Could not find ${type} after checking ${this.selectors[type]?.length || 0} selectors.`);
     }
     
     return element;

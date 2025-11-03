@@ -93,8 +93,9 @@ class SponsorBlockHandler {
 
     // Centralized timer management
 	setTimeout(callback, delay, name) {
-		if (this.timers[name]) clearTimeout(this.timers[name]);
-		this.timers[name] = setTimeout(callback, delay);
+		this.clearTimeout(name);
+		const id = setTimeout(callback, delay);
+		this.timers.set(name, id);
 	}
     
     clearTimeout(name) {
@@ -119,10 +120,10 @@ class SponsorBlockHandler {
     }
     
 	clearAllTimers() {
-		for (const name in this.timers) {
-			clearTimeout(this.timers[name]); // clearTimeout works on intervals too
+		for (const id of this.timers.values()) {
+			clearTimeout(id); // clearTimeout works on intervals too
 		}
-		this.timers = {};
+		this.timers.clear();
 	}
 
     // Configuration management with caching
@@ -454,9 +455,6 @@ class SponsorBlockHandler {
     this.observers.add(this.mutationObserver);
 	}
 
-	// Key fixes to apply to your sponsorblock.js:
-
-// 1. Update the CSS injection with higher z-index and proper positioning
 	injectCSS() {
 		if (document.getElementById('sponsorblock-styles')) return;
 		
@@ -475,6 +473,7 @@ class SponsorBlockHandler {
 				padding: 0 !important;
 				display: block !important;
 				visibility: visible !important;
+		
 				opacity: 1 !important;
 				overflow: visible !important;
 			}
@@ -501,11 +500,13 @@ class SponsorBlockHandler {
 			}
 			
 			/* Ensure parent containers don't clip */
-			.afTAdb {
+			.afTAdb { /* Old target, keep for webOS 23 */
 				overflow: visible !important;
 			}
 			
-			ytlr-multi-markers-player-bar-renderer {
+			ytlr-multi-markers-player-bar-renderer, /* Parent container */
+			.ytLrProgressBarSliderBase /* New segment container for webOS 24 */
+			{
 				overflow: visible !important;
 			}
 		`;
@@ -518,29 +519,23 @@ class SponsorBlockHandler {
 	attachOverlayToProgressBar() {
 		if (!this.progressBarElement || !this.sliderSegmentsOverlay) return;
 
-		let visualBarContainer = this.progressBarElement.querySelector('.afTAdb[idomkey="progress-bar"]');
+		// OLD target was '.afTAdb', which is gone.
+		// NEW target from WebOS 24 HTML is the direct container for segments.
+		let sliderContainer = this.progressBarElement.querySelector('.ytLrProgressBarSliderBase.ytLrMultiMarkersPlayerBarRendererSlider');
 		
-		// Fallback: try without idomkey attribute
-		if (!visualBarContainer) {
-			visualBarContainer = this.progressBarElement.querySelector('.afTAdb');
+		// Fallback: If that's not found, try the multi-markers renderer itself
+		if (!sliderContainer) {
+			sliderContainer = this.progressBarElement.querySelector('ytlr-multi-markers-player-bar-renderer');
 		}
 		
-		// If .afTAdb doesn't exist yet, the progress bar structure isn't ready
-		if (!visualBarContainer) {
-			this.log('info', 'Progress bar structure not ready (.afTAdb not found), waiting...');
+		// If neither is found, the progress bar structure isn't ready
+		if (!sliderContainer) {
+			this.log('info', 'Progress bar structure not ready (sliderContainer not found), waiting...');
 			this.setTimeout(() => this.attachOverlayToProgressBar(), 150, 'attach_retry');
 			return;
 		}
 		
-		// Also ensure ytlr-multi-markers-player-bar-renderer exists
-		const playerBarRenderer = this.progressBarElement.querySelector('ytlr-multi-markers-player-bar-renderer');
-		if (!playerBarRenderer) {
-			this.log('info', 'ytlr-multi-markers-player-bar-renderer not found, waiting...');
-			this.setTimeout(() => this.attachOverlayToProgressBar(), 150, 'attach_retry');
-			return;
-		}
-		
-		const targetElement = visualBarContainer;
+		const targetElement = sliderContainer;
 
 		if (targetElement.contains(this.sliderSegmentsOverlay)) return;
 		
@@ -552,13 +547,13 @@ class SponsorBlockHandler {
 			return;
 		}
 		
-		// Force the target to have proper positioning
+		// Force the target to have proper positioning (CRITICAL for absolute overlay)
 		const computedStyle = window.getComputedStyle(targetElement);
 		if (computedStyle.position === 'static') {
 			targetElement.style.position = 'relative';
 		}
 		
-		// Ensure no overflow clipping
+		// Ensure no overflow clipping (CRITICAL)
 		targetElement.style.overflow = 'visible';
 		
 		targetElement.appendChild(this.sliderSegmentsOverlay);
