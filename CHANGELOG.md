@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.9] - 2025/11/03
+
+### Added
+
+- Return YouTube Dislike + UI Toggle
+  - ++ Hover over the Like/Dislike button on a video to see each value
+- Added pure black UI containers (pull request from tomikaka22)
+
+### Fixed
+
+- Fixed black screen when viewing controls / skipping forward or backward
+- Fixed sponsored segments not showing on progress bar
+- Fixed sponsored segments attaching to the wrong object initially / flickering
+- Setup mutation observer to keep segments perfectly attached without delay
+
+### Removed
+
+- Removed auto login button press, mutationobserver, and handling app resume (no longer needed)
+
+## [0.4.8] - 2025/07/24
+
+### Changed
+
+- Auto Login: Will now detect when the app is resumed from the background/sleep state and bypass the nag screen.
+- Auto Login: Opening this app with Auto Login enabled will modify local storage time values to prevent the nag screen from appearing for 7 days. Will stack every time you open the app. Credit to reisxd for this solution on Tizen OS https://github.com/reisxd/TizenTube/
+
+## [0.4.7] - 2025/07/23
+
+### Fixed
+
+- Auto Login: Fixed compatibility issue with webOS 23
+
+### Added
+
+- Auto Login: Added MutationObserver to look for body class changes for identifying the nag screen to bypass instead of only looking at the first 15 seconds of YouTube app load
+- Auto Login: Added secondary check for nag screen if it was not bypassed by key code 13 as some webOS versions / remotes have a different key code
+
 ## [0.4.6] - 2025/07/11
 
 ### Changed
