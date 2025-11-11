@@ -3,6 +3,14 @@
   z-index: -1;
 }
 
+/* Makes black control underneath video player transparent. Set to 0 to remove it */
+.ytLrWatchDefaultControlsBackground { /* webOS 24 */
+  opacity: 0.6;
+}
+.judYce { /* webOS 23 */
+  opacity: 0.6;
+}
+
 /**
  * Dirty hack to fix offset <video> on shorts on older webOS versions.
  * This shouldn't work but it does 😵‍💫.

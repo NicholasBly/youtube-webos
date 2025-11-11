@@ -269,34 +269,21 @@ const eventHandler = (evt) => {
       console.warn('Error jumping to highlight:', e);
     }
   } else if (keyColor === 'red' && evt.type === 'keydown') {
-  // Handle red button for 2x speed toggle
-  console.info('Red button pressed - toggling 2x speed');
+  console.info('OLED mode activated');
+  evt.preventDefault();
+  evt.stopPropagation();
   
-  try {
-    const isWatchPage = document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
-    if (isWatchPage) {
-      const video = document.querySelector('video');
-      
-      if (video && (video.readyState >= 2 || video.duration > 0)) {
-        const currentSpeed = video.playbackRate;
-        const newSpeed = currentSpeed === 2 ? 1 : 2;
-        video.playbackRate = newSpeed;
-        
-        showNotification(`Playback speed: ${newSpeed}x`);
-        
-        evt.preventDefault();
-        evt.stopPropagation();
-        return false;
-      } else {
-        showNotification('Video not ready');
-      }
-    } else {
-      showNotification('Not on a video page');
-    }
-  } catch (e) {
-    console.warn('Error toggling playback speed:', e);
-    showNotification('Error changing playback speed');
+  let overlay = document.getElementById('oled-black-overlay');
+  if (overlay) {
+    overlay.remove();
+	console.info('OLED mode deactivated');
+  } else {
+    overlay = document.createElement('div');
+    overlay.id = 'oled-black-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999';
+    document.body.appendChild(overlay);
   }
+  return false;
 }
   return true;
 };

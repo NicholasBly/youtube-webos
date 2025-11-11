@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.0] - 2025/11/11
+
+### Added
+
+- Red Button: Toggle OLED black screen
+- yt-fixes.css - add transparency to black box underneath video player (60%)
+- Bump dependencies
+
+### Removed
+
+- Red Button: 2x speed playback (wasn't working for most, might come back)
+
 ## [0.4.9] - 2025/11/03
 
 ### Added
