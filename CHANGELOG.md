@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.0.1] - 2025/11/11
+
+### Added
+
+- Added back original 0.4.8 nag screen checks from 0.4.8 as fallback.
+-- Checks for nag screen on startup, on page body change, and after resuming from the background.
+
 ## [0.5.0] - 2025/11/11
 
 ### Added
