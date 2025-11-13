@@ -45,7 +45,7 @@ export const segmentTypes = {
 
 const configOptions = new Map([
   ['enableAdBlock', { default: true, desc: 'Enable ad blocking' }],
-  ['enableReturnYouTubeDislike', { default: true, desc: 'Enable Return YouTube Dislike' }],
+  ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
   ['upgradeThumbnails', { default: false, desc: 'Upgrade thumbnail quality' }],
   [
     'removeShorts',

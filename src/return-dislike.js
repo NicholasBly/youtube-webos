@@ -1,6 +1,5 @@
 import { configRead, configAddChangeListener } from './config.js';
-import { showNotification } from './ui.js';
-import { waitForChildAdd } from './utils.js';
+import { detectWebOSVersion } from './webos-utils.js';
 
 class ReturnYouTubeDislike {
   constructor(videoID) {
@@ -8,75 +7,29 @@ class ReturnYouTubeDislike {
     this.active = true;
     this.debugMode = false; // Can be set based on config
     
-    this.likesCount = 0;
     this.dislikesCount = 0;
-    this.isLiked = false;
-    this.isDisliked = false;
     
-    // Centralized management like SponsorBlock
     this.timers = new Map();
     this.observers = new Set();
-    this.eventListeners = new Map();
     
-    // Caching
-    this.cachedElements = new Map();
-	
-    this.selectors = {
-        likeButton: [
-            // WebOS 24 selector
-            'ytlr-toggle-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_LIKE_BUTTON"] ytlr-button[role="button"]',
-            // WebOS 23 selector
-            'ytlr-like-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_LIKE_BUTTON"] ytlr-button[idomkey="like-button"]'
-        ],
-        dislikeButton: [
-            // WebOS 24 selector
-            'ytlr-toggle-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_DISLIKE_BUTTON"] ytlr-button[role="button"]',
-            // WebOS 23 selector
-            'ytlr-like-button-renderer[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_LIKE_BUTTON"] ytlr-button[idomkey="dislike-button"]'
-        ]
-    };
+    this.webOSVersion = detectWebOSVersion();
+	this.panelContentObserver = null;
+	this.bodyObserver = null;
     
-    // Popup management
-    this.popupCounter = 0;
-    this.currentPopup = null;
-    
-    // Debouncing for state changes
-    this.lastStateChangeTime = 0;
-    this.stateChangeDebounceMs = 300; // 300ms debounce
-    this.lastKnownLikedState = false;
-    this.lastKnownDislikedState = false;
-    
-    this.log('info', `ReturnYouTubeDislike created for videoID: ${videoID}`);
-    this.addStyles();
+    this.log('info', `ReturnYouTubeDislike created for videoID: ${videoID} on webOS ${this.webOSVersion}`);
   }
-
-  // Logging system (same pattern as SponsorBlock)
+  
+  // Logging system
   log(level, message, ...args) {
     const prefix = `[ReturnYouTubeDislike:${this.videoID}]`;
-    
     if (level === 'debug' && !this.debugMode) {
       return;
     }
-    
-    switch (level) {
-      case 'error':
-        console.error(prefix, message, ...args);
-        break;
-      case 'warn':
-        console.warn(prefix, message, ...args);
-        break;
-      case 'info':
-        console.info(prefix, message, ...args);
-        break;
-      case 'debug':
-        console.log(prefix, '[DEBUG]', message, ...args);
-        break;
-      default:
-        console.log(prefix, message, ...args);
-    }
+    // Simplified logger
+    console.log(prefix, `[${level.toUpperCase()}]`, message, ...args);
   }
 
-  // Centralized timer management (same as SponsorBlock)
+  // Centralized timer management
   setTimeout(callback, delay, name) {
     this.clearTimeout(name);
     const id = setTimeout(() => {
@@ -101,111 +54,16 @@ class ReturnYouTubeDislike {
     this.timers.clear();
   }
 
-  // Event listener management (same as SponsorBlock)
-  addEventListener(element, event, handler, name) {
-    const key = `${name || 'unnamed'}_${event}`;
-    
-    // Remove existing listener if present
-    this.removeEventListener(element, event, key);
-    
-    // Add new listener
-    element.addEventListener(event, handler);
-    this.eventListeners.set(key, { element, event, handler });
-  }
-  
-  removeEventListener(element, event, key) {
-    if (this.eventListeners.has(key)) {
-      const { element: el, event: ev, handler } = this.eventListeners.get(key);
-      el.removeEventListener(ev, handler);
-      this.eventListeners.delete(key);
-    }
-  }
-  
-  removeAllEventListeners() {
-    for (const [key, { element, event, handler }] of this.eventListeners) {
-      element.removeEventListener(event, handler);
-    }
-    this.eventListeners.clear();
-  }
-
-  // Cached DOM element retrieval
-  getElement(type, maxAge = 1000) {
-    const now = Date.now();
-    const cached = this.cachedElements.get(type);
-    
-    if (cached && (now - cached.timestamp) < maxAge && document.contains(cached.element)) {
-      return cached.element;
-    }
-    
-    let element = null;
-    
-    // Check if the type exists in our new selectors list
-    if (this.selectors[type]) {
-        // Iterate through the array of selectors
-        for (const selector of this.selectors[type]) {
-            element = document.querySelector(selector);
-            if (element) {
-                // Found a match, stop searching
-                this.log('debug', `Found ${type} using selector: ${selector}`);
-                break; 
-            }
-        }
-    }
-    
-    if (element) {
-      this.cachedElements.set(type, { element, timestamp: now });
-    } else {
-      this.log('debug', `Could not find ${type} after checking ${this.selectors[type]?.length || 0} selectors.`);
-    }
-    
-    return element;
-  }
-
-  addStyles() {
-    const style = document.createElement('style');
-    style.id = 'return-youtube-dislike-styles';
-    style.textContent = `
-      .ryd-popup {
-        position: fixed;
-        background-color: #373737;
-        color: white;
-        padding: 8px 12px;
-        border-radius: 4px;
-        font-size: 14px;
-        font-weight: 500;
-        z-index: 9999;
-        pointer-events: none;
-        opacity: 0;
-        transform: translateY(10px);
-        transition: opacity 0.2s ease, transform 0.2s ease;
-        white-space: nowrap;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-      }
-      
-      .ryd-popup.show {
-        opacity: 1;
-        transform: translateY(0);
-      }
-      
-      .ryd-popup::after {
-        content: '';
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        border: 6px solid transparent;
-        border-top-color: #373737;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
   async init() {
     this.log('info', 'Initializing Return YouTube Dislike...');
     
     try {
       await this.fetchVideoData();
-      this.waitForButtons();
+      if (this.dislikesCount > 0) {
+        this.observeBodyForPanel();
+      } else {
+        this.log('info', 'No dislikes found, not observing panel.');
+      }
     } catch (error) {
       this.log('error', 'Error during initialization:', error);
     }
@@ -223,553 +81,251 @@ class ReturnYouTubeDislike {
       const response = await fetch(`https://returnyoutubedislikeapi.com/votes?videoId=${this.videoID}`);
       const data = await response.json();
       
-      if (data && typeof data.likes === 'number' && typeof data.dislikes === 'number') {
-        this.likesCount = data.likes;
+      if (data && typeof data.dislikes === 'number') {
         this.dislikesCount = data.dislikes;
-        this.log('info', 'Data received - Likes:', this.likesCount, 'Dislikes:', this.dislikesCount);
+        this.log('info', 'Data received - Dislikes:', this.dislikesCount);
       } else {
         this.log('warn', 'Invalid data received:', data);
-        this.likesCount = 0;
         this.dislikesCount = 0;
       }
     } catch (error) {
       this.log('error', 'Error fetching video data:', error);
-      this.likesCount = 0;
       this.dislikesCount = 0;
     }
   }
-
-  waitForButtons() {
-    this.clearTimeout('waitForButtons');
+  
+  /**
+   * (Observer 1) Watches the entire document for the description panel
+   * being added or removed.
+   */
+  observeBodyForPanel() {
+    this.cleanupObservers(); // Clear any old ones
+    const panelSelector = 'ytlr-structured-description-content-renderer';
     
-    // First check if transport controls are available and focusable
-    const transportControls = document.querySelector('ytlr-transport-controls-renderer[idomkey="transport-controls"]');
-    
-    if (!transportControls) {
-      this.log('debug', 'Transport controls not found, retrying...');
-      this.setTimeout(() => this.waitForButtons(), 250, 'waitForButtons');
-      return;
-    }
-    
-    const isControlsVisible = transportControls.getAttribute('hybridnavfocusable') === 'true';
-    
-    if (!isControlsVisible) {
-      this.log('debug', 'Transport controls not focusable (hybridnavfocusable=false), setting up observer...');
-      this.setupTransportControlsObserver(transportControls);
-      return;
-    }
-    
-    // Controls are visible, now look for buttons
-    const likeButton = this.getElement('likeButton');
-    const dislikeButton = this.getElement('dislikeButton');
-    
-    if (likeButton && dislikeButton) {
-      this.log('info', 'Buttons found, setting up listeners');
-      this.setupButtonListeners();
-      return;
-    }
-    
-    this.log('debug', 'Controls visible but buttons not found, retrying...');
-    this.setTimeout(() => this.waitForButtons(), 100, 'waitForButtons');
-  }
-
-  setupTransportControlsObserver(transportControls) {
-    // Clean up any existing observer
-    this.cleanupTransportControlsObserver();
-    
-    this.transportControlsObserver = new MutationObserver((mutations) => {
+    this.bodyObserver = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
-        if (mutation.type === 'attributes' && 
-            mutation.attributeName === 'hybridnavfocusable' &&
-            mutation.target.getAttribute('hybridnavfocusable') === 'true') {
-          
-          this.log('info', 'Transport controls became focusable, looking for buttons...');
-          this.cleanupTransportControlsObserver();
-          
-          // Small delay to let buttons render
-          this.setTimeout(() => this.waitForButtons(), 50, 'waitForButtons');
-          break;
+        // Watch for the panel being ADDED
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType === 1 && node.matches(panelSelector)) {
+            this.log('info', 'Description panel added. Running check and attaching content observer.');
+            // Run the check immediately
+            this.checkAndInjectDislike(node);
+            // Attach the persistent observer to this new panel
+            this.attachContentObserver(node);
+          }
         }
-      }
-    });
-    
-    this.transportControlsObserver.observe(transportControls, {
-      attributes: true,
-      attributeFilter: ['hybridnavfocusable']
-    });
-    
-    this.observers.add(this.transportControlsObserver);
-    this.log('debug', 'Set up observer for transport controls visibility');
-  }
-
-  cleanupTransportControlsObserver() {
-    if (this.transportControlsObserver) {
-      this.transportControlsObserver.disconnect();
-      this.observers.delete(this.transportControlsObserver);
-      this.transportControlsObserver = null;
-    }
-  }
-
-  setupButtonListeners() {
-    this.removeAllEventListeners();
-    
-    const likeButton = this.getElement('likeButton');
-    const dislikeButton = this.getElement('dislikeButton');
-    
-    if (likeButton) {
-      // Only add hover events for popups, no click events
-      this.addHoverListener(likeButton, 'like');
-    }
-    
-    if (dislikeButton) {
-      // Only add hover events for popups, no click events
-      this.addHoverListener(dislikeButton, 'dislike');
-    }
-    
-    // Update initial state and set up mutation observer for state changes
-    this.updateButtonState();
-    this.lastKnownLikedState = this.isLiked;
-    this.lastKnownDislikedState = this.isDisliked;
-    this.setupButtonVisibilityObserver();
-  }
-
-  addHoverListener(button, type) {
-    this.log('info', `Setting up ${type} button hover listener`);
-    
-    // For TV remote navigation (focus-based)
-    const focusHandler = (e) => {
-      this.log('debug', `${type} button focused`);
-      this.showPopup(button, type);
-    };
-    
-    const blurHandler = (e) => {
-      this.log('debug', `${type} button blurred`);
-      // Small delay to allow moving between buttons
-      this.setTimeout(() => {
-        this.removeAllPopups();
-      }, 50, 'popupRemovalTimeout');
-    };
-    
-    // For mouse cursor navigation
-    const mouseEnterHandler = (e) => {
-      this.log('debug', `${type} button mouse enter`);
-      this.clearTimeout('popupRemovalTimeout'); // Cancel any pending removal
-      this.showPopup(button, type);
-    };
-    
-    const mouseLeaveHandler = (e) => {
-      this.log('debug', `${type} button mouse leave`);
-      // Small delay to allow cursor to move to popup
-      this.setTimeout(() => {
-        this.removeAllPopups();
-      }, 100, 'popupRemovalTimeout');
-    };
-    
-    this.addEventListener(button, 'focus', focusHandler, `${type}_focus`);
-    this.addEventListener(button, 'blur', blurHandler, `${type}_blur`);
-    this.addEventListener(button, 'mouseenter', mouseEnterHandler, `${type}_mouseenter`);
-    this.addEventListener(button, 'mouseleave', mouseLeaveHandler, `${type}_mouseleave`);
-    
-    this.log('info', `${type} button hover listeners set up successfully`);
-  }
-
-  testButtonInteraction(button, type) {
-    this.log('info', `Testing ${type} button interaction...`);
-    
-    // For TV remote navigation (focus-based)
-    const focusHandler = (e) => {
-      this.log('debug', `${type} button focused`);
-      this.showPopup(button, type);
-    };
-    
-    const blurHandler = (e) => {
-      this.log('debug', `${type} button blurred`);
-      // Small delay to allow moving between buttons
-      this.setTimeout(() => {
-        this.removeAllPopups();
-      }, 50, 'popupRemovalTimeout');
-    };
-    
-    // For mouse cursor navigation
-    const mouseEnterHandler = (e) => {
-      this.log('debug', `${type} button mouse enter`);
-      this.clearTimeout('popupRemovalTimeout'); // Cancel any pending removal
-      this.showPopup(button, type);
-    };
-    
-    const mouseLeaveHandler = (e) => {
-      this.log('debug', `${type} button mouse leave`);
-      // Small delay to allow cursor to move to popup
-      this.setTimeout(() => {
-        this.removeAllPopups();
-      }, 100, 'popupRemovalTimeout');
-    };
-    
-    // Add event listeners to outer button
-    button.addEventListener('focus', focusHandler);
-    button.addEventListener('blur', blurHandler);
-    button.addEventListener('mouseenter', mouseEnterHandler);
-    button.addEventListener('mouseleave', mouseLeaveHandler);
-    
-    const innerButton = button.querySelector('ytlr-button');
-    if (innerButton) {
-      // Also add to inner button for redundancy
-      innerButton.addEventListener('focus', focusHandler);
-      innerButton.addEventListener('blur', blurHandler);
-      innerButton.addEventListener('mouseenter', mouseEnterHandler);
-      innerButton.addEventListener('mouseleave', mouseLeaveHandler);
-    }
-  }
-
-  setupPopupMouseHandling(button, type) {
-    // Add a small delay before removing popup on mouseleave to handle
-    // cases where cursor briefly moves over the popup
-    this.popupMouseTimeout = null;
-    
-    const originalRemovePopup = this.removePopup.bind(this);
-    this.removePopup = () => {
-      // Clear any existing timeout
-      if (this.popupMouseTimeout) {
-        clearTimeout(this.popupMouseTimeout);
-      }
-      
-      // Add small delay to allow cursor to move back to button
-      this.popupMouseTimeout = setTimeout(() => {
-        originalRemovePopup();
-      }, 100);
-    };
-    
-    // Override for immediate removal when needed
-    this.removePopupImmediate = originalRemovePopup;
-  }
-
-  setupButtonVisibilityObserver() {
-    // Clean up existing observer
-    this.cleanupButtonVisibilityObserver();
-    
-    const likeButton = this.getElement('likeButton');
-    const dislikeButton = this.getElement('dislikeButton');
-    
-    if (!likeButton && !dislikeButton) return;
-    
-    // Watch for attribute changes that might indicate state changes
-    this.buttonVisibilityObserver = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.type === 'attributes') {
-          const target = mutation.target;
-          const attributeName = mutation.attributeName;
-          
-          if (attributeName === 'aria-pressed' && target.matches('ytlr-button')) {
-            this.log('debug', `Button aria-pressed changed: ${target.getAttribute('aria-pressed')}`, target);
-            
-            // Debounce state changes to prevent multiple rapid updates
-            this.debounceStateChange();
-            break;
+        // Watch for the panel being REMOVED
+        for (const node of mutation.removedNodes) {
+          if (node.nodeType === 1 && node.matches(panelSelector)) {
+            this.log('info', 'Description panel removed. Disconnecting content observer.');
+            // If the panel is removed, disconnect its observer
+            if (this.panelContentObserver) {
+              this.panelContentObserver.disconnect();
+              this.panelContentObserver = null;
+            }
           }
         }
       }
     });
+
+    this.bodyObserver.observe(document.body, { childList: true, subtree: true });
+    this.observers.add(this.bodyObserver);
+
+    this.log('info', 'Watching document for description panel...');
     
-    // Observe both buttons and their children
-    [likeButton, dislikeButton].forEach(button => {
-      if (button) {
-        this.buttonVisibilityObserver.observe(button, {
-          attributes: true,
-          subtree: true,
-          attributeFilter: ['aria-pressed']
-        });
-      }
+    // Also, check if panel is *already* open on load
+    const existingPanel = document.querySelector(panelSelector);
+    if (existingPanel) {
+      this.log('info', 'Panel already open. Running check and attaching observer.');
+      this.checkAndInjectDislike(existingPanel);
+      this.attachContentObserver(existingPanel);
+    }
+  }
+
+  /**
+   * (Observer 2) Attaches to a specific panel element and watches
+   * its content for any changes, re-running the injection check.
+   */
+  attachContentObserver(panelElement) {
+    // Disconnect any *previous* panel observer
+    if (this.panelContentObserver) {
+      this.panelContentObserver.disconnect();
+    }
+    
+    this.panelContentObserver = new MutationObserver((mutations) => {
+      // Any mutation inside the panel triggers a re-check
+      this.log('debug', 'Panel content changed, re-running injection check.');
+      this.checkAndInjectDislike(panelElement); 
     });
     
-    this.observers.add(this.buttonVisibilityObserver);
-    this.log('info', 'Set up button visibility observer');
+    // Observe the panel itself for any child or subtree changes
+    this.panelContentObserver.observe(panelElement, { 
+      childList: true, 
+      subtree: true 
+    });
+    
+    this.log('info', 'Attached persistent content observer to panel.');
   }
+  
+/**
+   * Checks if the dislike count should be injected, and if so, injects it.
+   * Applies a dynamic layout fix that respects the video's native spacing.
+   */
+  checkAndInjectDislike(panelElement) {
+    try {
+      // --- 1. Configuration Strategy ---
+      const useStandardSelectors = (this.webOSVersion !== 23);
+      const useCompactLayout = (this.webOSVersion >= 24);
 
-  debounceStateChange() {
-    const now = Date.now();
-    
-    // Clear any existing debounce timer
-    this.clearTimeout('stateChangeDebounce');
-    
-    // Set a new timer to process the state change
-    this.setTimeout(() => {
-      this.processStateChange();
-    }, this.stateChangeDebounceMs, 'stateChangeDebounce');
-  }
-
-  processStateChange() {
-    // Get previous state
-    const wasLiked = this.lastKnownLikedState;
-    const wasDisliked = this.lastKnownDislikedState;
-    
-    // Update current state
-    this.updateButtonState();
-    
-    // Check if state actually changed
-    if (this.isLiked === wasLiked && this.isDisliked === wasDisliked) {
-      this.log('debug', 'No actual state change detected, ignoring');
-      return;
-    }
-    
-    this.log('info', `State change detected - was(liked:${wasLiked}, disliked:${wasDisliked}) -> now(liked:${this.isLiked}, disliked:${this.isDisliked})`);
-    
-    // Determine which button changed and handle the logic
-    let buttonChanged = null;
-    let changeType = null;
-    
-    if (this.isLiked !== wasLiked) {
-      this.handleLikeStateChange(wasLiked, this.isLiked);
-      buttonChanged = this.getElement('likeButton');
-      changeType = 'like';
-    }
-    
-    if (this.isDisliked !== wasDisliked) {
-      this.handleDislikeStateChange(wasDisliked, this.isDisliked);
-      buttonChanged = this.getElement('dislikeButton');
-      changeType = 'dislike';
-    }
-    
-    // Update our known state
-    this.lastKnownLikedState = this.isLiked;
-    this.lastKnownDislikedState = this.isDisliked;
-    
-    this.log('info', `Final counts - Likes: ${this.likesCount}, Dislikes: ${this.dislikesCount}`);
-    
-    // Show popup for the changed button
-    if (buttonChanged && changeType) {
-      this.showClickPopup(buttonChanged, changeType);
-    }
-  }
-
-  handleLikeStateChange(wasLiked, isLiked) {
-    if (!wasLiked && isLiked) {
-      // User just liked
-      this.likesCount++;
-      if (this.lastKnownDislikedState) {
-        // Was disliked, now liked - remove the dislike
-        this.dislikesCount = Math.max(0, this.dislikesCount - 1);
-      }
-    } else if (wasLiked && !isLiked) {
-      // User just un-liked
-      this.likesCount = Math.max(0, this.likesCount - 1);
-    }
-  }
-
-  handleDislikeStateChange(wasDisliked, isDisliked) {
-    if (!wasDisliked && isDisliked) {
-      // User just disliked
-      this.dislikesCount++;
-      if (this.lastKnownLikedState) {
-        // Was liked, now disliked - remove the like
-        this.likesCount = Math.max(0, this.likesCount - 1);
-      }
-    } else if (wasDisliked && !isDisliked) {
-      // User just un-disliked
-      this.dislikesCount = Math.max(0, this.dislikesCount - 1);
-    }
-  }
-
-  showClickPopup(button, type) {
-    // Show popup briefly for click feedback
-    this.showPopup(button, type);
-    
-    // Remove after 1.5 seconds for click feedback
-    this.setTimeout(() => {
-      this.removeAllPopups();
-    }, 1500, 'clickPopupTimeout');
-  }
-
-  cleanupButtonVisibilityObserver() {
-    if (this.buttonVisibilityObserver) {
-      this.buttonVisibilityObserver.disconnect();
-      this.observers.delete(this.buttonVisibilityObserver);
-      this.buttonVisibilityObserver = null;
-    }
-  }
-
-  addButtonListener(button, type) {
-    this.log('info', `Setting up ${type} button listener`);
-    
-    const clickHandler = (event) => {
-      this.log('info', `${type} button clicked!`, event);
-      this.handleButtonClick(button, type, event);
-    };
-    
-    const focusHandler = () => {
-      this.log('debug', `${type} button focused`);
-      this.updateButtonState();
-    };
-    
-    // Try multiple event types to catch interactions
-    this.addEventListener(button, 'click', clickHandler, `${type}_click`);
-    this.addEventListener(button, 'mousedown', clickHandler, `${type}_mousedown`);
-    this.addEventListener(button, 'focus', focusHandler, `${type}_focus`);
-    
-    // Also listen on the inner ytlr-button element
-    const innerButton = button.querySelector('ytlr-button');
-    if (innerButton) {
-      this.log('debug', `Found inner button for ${type}, adding listeners`);
-      this.addEventListener(innerButton, 'click', clickHandler, `${type}_inner_click`);
-      this.addEventListener(innerButton, 'mousedown', clickHandler, `${type}_inner_mousedown`);
-    }
-    
-    this.log('info', `${type} button listeners set up successfully`);
-  }
-
-  handleButtonClick(button, type, event) {
-    this.log('info', 'Button clicked:', type);
-    
-    // Update our internal state based on current button state
-    this.updateButtonState();
-    
-    // Simulate the state change that will happen
-    if (type === 'like') {
-      if (this.isLiked) {
-        // Unlike
-        this.likesCount = Math.max(0, this.likesCount - 1);
-        this.isLiked = false;
+      // --- 2. Define Selectors ---
+      let container, likesElement, valueSelector, labelSelector, factoidClass, listItemClass;
+      
+      if (useStandardSelectors) {
+        // webOS 6-22, 24, 25
+        container = panelElement.querySelector('.ytLrVideoDescriptionHeaderRendererFactoidContainer');
+        factoidClass = '.ytLrVideoDescriptionHeaderRendererFactoid';
+        valueSelector = '.ytLrVideoDescriptionHeaderRendererValue';
+        labelSelector = '.ytLrVideoDescriptionHeaderRendererLabel';
+        listItemClass = '.ytVirtualListItem'; 
       } else {
-        // Like
-        this.likesCount++;
-        this.isLiked = true;
-        
-        // If previously disliked, remove dislike
-        if (this.isDisliked) {
-          this.dislikesCount = Math.max(0, this.dislikesCount - 1);
-          this.isDisliked = false;
-        }
+        // webOS 23
+        container = panelElement.querySelector('.rznqCe');
+        factoidClass = '.nOJlw';
+        valueSelector = '.axf6h';
+        labelSelector = '.Ph2lNb';
+        listItemClass = '.TXB27d'; 
       }
-    } else if (type === 'dislike') {
-      if (this.isDisliked) {
-        // Un-dislike
-        this.dislikesCount = Math.max(0, this.dislikesCount - 1);
-        this.isDisliked = false;
+
+      if (!container) {
+        this.log('debug', 'Factoid container not found (yet?).');
+        return;
+      }
+      
+      likesElement = container.querySelector(`div[aria-label*="likes"]${factoidClass}`);
+      if (!likesElement) {
+        this.log('debug', 'Likes element not found (yet?).');
+        return;
+      }
+
+      // --- 3. Dynamic Layout Fix (Runs on every mutation, checks flags) ---
+      
+      // 💡 YOUR CUSTOM HEIGHT RULES INTEGRATED HERE
+      let extraHeightRem = 2.5; // Default conservative
+      let dateMarginTop = '0.75rem'; // Default margin
+
+      if (this.webOSVersion === 25) {
+          extraHeightRem = 2.0;
+      } else if (this.webOSVersion === 24) {
+          extraHeightRem = 2.0;
+      } else if (this.webOSVersion === 23) {
+          extraHeightRem = 2.0;
+          dateMarginTop = '0.25rem'; // Tighter margin for webOS 23
+      } else if (this.webOSVersion <= 22) {
+          extraHeightRem = 2.0;
+          dateMarginTop = '0.25rem'; // Assuming similar to 23
+      }
+
+      // A. Fix Date Element
+      const dateElement = container.querySelector('div[idomkey="factoid-2"]');
+      if (dateElement && dateElement.dataset.rydFixed !== 'true') {
+        dateElement.style.flexBasis = '100%';
+        dateElement.style.width = '100%';
+        dateElement.style.marginTop = dateMarginTop;
+        dateElement.style.textAlign = 'center';
+
+        const valueElement = dateElement.querySelector(valueSelector);
+        const labelElement = dateElement.querySelector(labelSelector);
+        
+        if (valueElement && labelElement) {
+          valueElement.style.display = 'inline-block';
+          valueElement.style.marginRight = '0.4rem';
+          labelElement.style.display = 'inline-block';
+        } else if (valueElement) {
+          valueElement.style.display = 'inline-block';
+        }
+        dateElement.dataset.rydFixed = 'true';
+      }
+
+      // B. Dynamic List Item Shifter
+      // Shift ALL list items relative to their NATIVE position.
+      
+      const allItems = panelElement.querySelectorAll(listItemClass);
+      
+      allItems.forEach(item => {
+        // Identify if this is the header (we need to grow it)
+        const isHeader = item.querySelector(useStandardSelectors ? 'ytlr-video-description-header-renderer' : '#structured-description-header\\:2g') 
+                         || item.innerHTML.includes('Likes'); // Fallback check
+
+        if (isHeader) {
+             // Grow the header
+             if (!item.dataset.rydHeightFixed) {
+                 const currentHeight = parseFloat(item.style.height || (useCompactLayout ? '7.5' : '9.5'));
+                 item.style.height = `${currentHeight + extraHeightRem}rem`;
+                 item.dataset.rydHeightFixed = 'true';
+                 this.log('info', `Adjusted header height +${extraHeightRem}rem`);
+             }
+        } else {
+             // This is a subsequent item (Channel, Description, Comments, etc.)
+             // We need to shift it down by extraHeightRem relative to its NATIVE position.
+             
+             const transform = item.style.transform;
+             const match = transform.match(/translateY\(([\d.-]+)rem\)/i);
+             
+             if (match) {
+                 const currentY = parseFloat(match[1]);
+                 
+                 // Check if we already shifted this item
+                 if (item.dataset.rydOriginalY) {
+                     const originalY = parseFloat(item.dataset.rydOriginalY);
+                     const expectedY = originalY + extraHeightRem;
+                     
+                     // If current Y is DIFFERENT from expected, YouTube moved it.
+                     // We must update our base reference.
+                     if (Math.abs(currentY - expectedY) > 0.1) {
+                         item.dataset.rydOriginalY = currentY.toString();
+                         item.style.transform = `translateY(${currentY + extraHeightRem}rem) translateZ(0px)`;
+                         this.log('debug', `Re-applying shift to moved item: ${currentY} -> ${currentY + extraHeightRem}`);
+                     }
+                 } else {
+                     // First time seeing this item
+                     item.dataset.rydOriginalY = currentY.toString();
+                     item.style.transform = `translateY(${currentY + extraHeightRem}rem) translateZ(0px)`;
+                     item.dataset.rydShifted = 'true';
+                     this.log('debug', `Shifted item: ${currentY} -> ${currentY + extraHeightRem}`);
+                 }
+             }
+        }
+      });
+
+      // --- 4. Dislike Injection ---
+      if (container.querySelector('#ryd-dislike-factoid')) {
+        return;
+      }
+
+      this.log('info', 'Injecting dislike count...');
+      const dislikeElement = likesElement.cloneNode(true);
+      dislikeElement.id = 'ryd-dislike-factoid';
+      dislikeElement.setAttribute('idomkey', 'factoid-ryd');
+      
+      const valueElement = dislikeElement.querySelector(valueSelector); 
+      const labelElement = dislikeElement.querySelector(labelSelector); 
+      
+      if (valueElement && labelElement) {
+        const dislikeText = this.formatNumber(this.dislikesCount);
+        valueElement.textContent = dislikeText; 
+        labelElement.textContent = 'Dislikes';
+        dislikeElement.setAttribute('aria-label', `${dislikeText} Dislikes`);
       } else {
-        // Dislike
-        this.dislikesCount++;
-        this.isDisliked = true;
-        
-        // If previously liked, remove like
-        if (this.isLiked) {
-          this.likesCount = Math.max(0, this.likesCount - 1);
-          this.isLiked = false;
-        }
+        this.log('warn', 'Could not find value/label in cloned node.');
+        return;
       }
+      
+      likesElement.insertAdjacentElement('afterend', dislikeElement);
+      this.log('info', 'Successfully injected dislike count.');
+      
+    } catch (error) {
+      this.log('error', 'Error during dislike injection check:', error);
     }
-    
-    // Show popup with updated counts
-    this.showPopup(button, type);
-  }
-
-	updateButtonState() {
-		const likeButton = this.getElement('likeButton');
-		const dislikeButton = this.getElement('dislikeButton');
-		
-		if (likeButton) {
-		  // const ytlrButton = likeButton.querySelector('ytlr-button'); // No longer needed
-		  const oldState = this.isLiked;
-		  this.isLiked = likeButton && likeButton.getAttribute('aria-pressed') === 'true'; // Read from the button directly
-		  if (oldState !== this.isLiked) {
-			this.log('debug', `Like state changed: ${oldState} -> ${this.isLiked}`);
-		  }
-		}
-		
-		if (dislikeButton) {
-		  // const ytlrButton = dislikeButton.querySelector('ytlr-button'); // No longer needed
-		  const oldState = this.isDisliked;
-		  this.isDisliked = dislikeButton && dislikeButton.getAttribute('aria-pressed') === 'true'; // Read from the button directly
-		  if (oldState !== this.isDisliked) {
-			this.log('debug', `Dislike state changed: ${oldState} -> ${this.isDisliked}`);
-		  }
-		}
-	  }
-
-  showPopup(button, type) {
-    // Always remove existing popup first
-    this.removeAllPopups();
-    
-    const count = type === 'like' ? this.likesCount : this.dislikesCount;
-    const text = type === 'like' ? 
-      `${this.formatNumber(count)} like${count !== 1 ? 's' : ''}` :
-      `${this.formatNumber(count)} dislike${count !== 1 ? 's' : ''}`;
-    
-    // Create unique ID for this popup
-    this.popupCounter++;
-    const popupId = `ryd-popup-${this.videoID}-${this.popupCounter}`;
-    
-    const popup = document.createElement('div');
-    popup.className = 'ryd-popup';
-    popup.textContent = text;
-    popup.id = popupId;
-    popup.setAttribute('data-ryd-popup', 'true'); // Add marker for easy cleanup
-    
-    // Store reference to current popup
-    this.currentPopup = popup;
-    
-    // Position the popup above the button
-    const rect = button.getBoundingClientRect();
-    popup.style.left = `${rect.left + (rect.width / 2)}px`;
-    popup.style.top = `${rect.top - 50}px`;
-    popup.style.transform = 'translateX(-50%) translateY(10px)';
-    
-    // Add mouse event handlers to the popup itself
-    popup.addEventListener('mouseenter', () => {
-      this.log('debug', 'Mouse entered popup');
-      // Cancel any pending removal
-      this.clearTimeout('popupRemovalTimeout');
-    });
-    
-    popup.addEventListener('mouseleave', () => {
-      this.log('debug', 'Mouse left popup');
-      // Remove popup when leaving the popup area
-      this.removeAllPopups();
-    });
-    
-    document.body.appendChild(popup);
-    
-    // Trigger animation
-    requestAnimationFrame(() => {
-      if (popup.parentNode) { // Make sure it's still in DOM
-        popup.classList.add('show');
-      }
-    });
-    
-    this.log('debug', `Created popup with ID: ${popupId}`);
-  }
-
-  removeAllPopups() {
-    // Clear any pending timers
-    this.clearTimeout('popupRemovalTimeout');
-    this.clearTimeout('clickPopupTimeout');
-    
-    // Remove ALL RYD popups, not just the one with current ID
-    const allRydPopups = document.querySelectorAll('[data-ryd-popup="true"]');
-    
-    this.log('debug', `Removing ${allRydPopups.length} popup(s)`);
-    
-    allRydPopups.forEach(popup => {
-      if (popup.parentNode) {
-        popup.classList.remove('show');
-        // Remove immediately to prevent accumulation
-        popup.parentNode.removeChild(popup);
-      }
-    });
-    
-    // Clear current popup reference
-    this.currentPopup = null;
-    
-    // Also clean up any old popups with the old ID system as fallback
-    const oldPopups = document.querySelectorAll('#ryd-current-popup');
-    oldPopups.forEach(popup => {
-      if (popup.parentNode) {
-        popup.parentNode.removeChild(popup);
-      }
-    });
-  }
-
-  removePopup() {
-    // Just call removeAllPopups for consistency
-    this.removeAllPopups();
   }
 
   formatNumber(num) {
@@ -782,51 +338,47 @@ class ReturnYouTubeDislike {
     return num.toString();
   }
 
-  cleanupObservers() {
-    for (const observer of this.observers) {
-      try {
-        observer.disconnect();
-      } catch (e) {
-        this.log('warn', 'Failed to disconnect observer:', e);
-      }
-    }
-    this.observers.clear();
-    this.cleanupTransportControlsObserver();
-    this.cleanupButtonVisibilityObserver();
-  }
-
-  cleanupDOM() {
-    this.removeAllPopups();
-    
-    // Remove injected styles
-    const style = document.getElementById('return-youtube-dislike-styles');
-    if (style) {
-      style.remove();
-    }
-  }
+	cleanupObservers() {
+		if (this.bodyObserver) {
+		  this.bodyObserver.disconnect();
+		  this.observers.delete(this.bodyObserver);
+		  this.bodyObserver = null;
+		}
+		
+		if (this.panelContentObserver) {
+		  this.panelContentObserver.disconnect();
+		  this.panelContentObserver = null;
+		}
+		
+		// Fallback for any other observers
+		for (const observer of this.observers) {
+		  try {
+			observer.disconnect();
+		  } catch (e) {
+			// ignore
+		  }
+		}
+		this.observers.clear();
+	  }
 
   destroy() {
     this.log('info', 'Destroying ReturnYouTubeDislike instance.');
     this.active = false;
     
-    // Use centralized cleanup methods
     this.clearAllTimers();
-    this.removeAllEventListeners();
     this.cleanupObservers();
-    this.cleanupDOM();
     
-    // Clear caches
-    this.cachedElements?.clear();
+    // Clean up the DOM element if we added it
+    const dislikeFactoid = document.getElementById('ryd-dislike-factoid');
+    if (dislikeFactoid) {
+      dislikeFactoid.remove();
+    }
     
-    // Clear references
     this.videoID = null;
-    this.transportControlsObserver = null;
-    this.buttonVisibilityObserver = null;
-    this.currentPopup = null;
   }
 }
 
-// Global instance management (same pattern as SponsorBlock)
+// Global instance management
 if (typeof window !== 'undefined') {
   window.returnYouTubeDislike = null;
 
@@ -838,7 +390,7 @@ if (typeof window !== 'undefined') {
         console.warn('window.returnYouTubeDislike.destroy() failed!', err);
       }
       window.returnYouTubeDislike = null;
-      console.info("ReturnYouTubeDislike uninitialized.");
+      console.info("[ReturnYouTubeDislike] Uninitialized.");
     }
   }
 
@@ -859,7 +411,7 @@ if (typeof window !== 'undefined') {
         }
       }
     } catch (e) {
-      console.error("Error parsing window.location.hash:", e);
+      console.error("[ReturnYouTubeDislike] Error parsing window.location.hash:", e);
       currentPath = "/";
     }
 
@@ -900,7 +452,7 @@ if (typeof window !== 'undefined') {
     }
   };
 
-  // Listen for hash changes to handle navigation within the YouTube single-page app
+  // Listen for hash changes to handle navigation
   window.addEventListener('hashchange', handleHashChangeForRYD, false);
 
   // Also run on initial load
@@ -914,7 +466,6 @@ if (typeof window !== 'undefined') {
   try {
     configAddChangeListener('enableReturnYouTubeDislike', (evt) => {
       if (evt.detail.newValue) {
-        // Re-run hash change handler to initialize if we're on a watch page
         handleHashChangeForRYD();
       } else if (window.returnYouTubeDislike) {
         uninitializeReturnYouTubeDislike();
@@ -925,22 +476,15 @@ if (typeof window !== 'undefined') {
   }
 
 } else {
-  console.warn("ReturnYouTubeDislike: 'window' object not found. Running in a non-browser environment?");
+  console.warn("ReturnYouTubeDislike: 'window' object not found.");
 }
 
-// Dummy implementations if not provided by WebOS environment
+// Dummy implementations if not provided
 if (typeof configRead === 'undefined') {
   console.warn("configRead function is not defined. Using dummy implementation.");
   window.configRead = function(key) {
     if (key === 'enableReturnYouTubeDislike') return true;
     return false;
-  };
-}
-
-if (typeof showNotification === 'undefined') {
-  console.warn("showNotification function is not defined. Using console.log fallback.");
-  window.showNotification = function(message) {
-    console.info(`[Notification] ${message}`);
   };
 }
 

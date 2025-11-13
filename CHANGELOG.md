@@ -4,12 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.5.0.1] - 2025/11/11
+## [0.5.1] - 2025/11/12
 
-### Added
+## Features & Improvements
 
-- Added back original 0.4.8 nag screen checks from 0.4.8 as fallback.
--- Checks for nag screen on startup, on page body change, and after resuming from the background.
+### Return YouTube Dislike
+* **Native UI Integration:** Moved the dislike count from button tooltips to the main video description panel. It now appears natively alongside Likes and Views.
+* **Dynamic Layout Engine:** Implemented a smart layout shifter that automatically adjusts content spacing to prevent button overlaps, regardless of the video description length.
+* **Multi-Version Support:** Added specific CSS selectors and spacing rules to ensure perfect rendering across **webOS 23, 24, and 25**.
+* **Visual Tweaks:** Fixed the alignment of the "Date" element to ensure it centers correctly on its own line when the Dislike count is present.
+
+### SponsorBlock
+* **webOS 25 Support:** Optimized segment rendering for the newer OS.
+* **Dynamic Visibility:** Segments now correctly disappear when the player progress bar is hidden.
+* **Focus Scaling:** Segments now correctly resize and fit the progress bar during focus/unfocus states.
+
+### Core / Internal
+* **webOS 25 Support:** Added general compatibility for webOS 25.
+* **Version Detection:** Added `webos-utils.js` to accurately map User Agent Chrome versions to webOS versions (based on [LGE Specifications](https://webostv.developer.lge.com/develop/specifications/web-api-and-web-engine)). This ensures visuals and features load with the correct version-specific rules.
+* **Major Version Improvements:** Sponsorblock and Return YouTube Dislike now have individual rules for each webOS version for better functionality.
 
 ## [0.5.0] - 2025/11/11
 
