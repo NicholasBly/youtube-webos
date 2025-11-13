@@ -4,13 +4,15 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 ## Added Features
 
+- Full support for webOS 6-22, 23, 24, and 25
 - Enhanced Menu UI
 - Auto Login - bypasses account selection screen
 - Hide Endcards
-- Sponsorblock: Highlight feature added
+- SponsorBlock: Highlight feature added
 - Jump to highlight segment with blue button on LG remote
-- Adjust playback speed of video with red button on LG remote, works on "unsupported devices"
-- Change colors of highlighted segments
+- Toggle black screen with red button on LG remote for OLED TVs
+- Color selector for all SponsorBlock segments
+- Return YouTube Dislike
 - Bug fixes
 
 Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-webos/blob/main/CHANGELOG.md)
