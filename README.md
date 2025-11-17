@@ -4,7 +4,7 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 ## Added Features
 
-- Full support for webOS 6-22, 23, 24, and 25
+- Full support for webOS 6, 22, 23, 24, and 25 (older versions are untested)
 - Enhanced Menu UI
 - Auto Login - bypasses account selection screen
 - Hide Endcards
