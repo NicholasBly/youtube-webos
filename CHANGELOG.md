@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.2] - 2025/11/17
+
+## Features & Improvements
+
+Guest Mode: hide sign-in button
+-- When in guest mode, a new option appears in the UI panel to hide the "sign in to subscribe" button underneath videos.
+-- yt-fixes.js added for applying this tweak
+
+UI panel visual enhancements
+-- Added webOS version to header
+-- Increased font size, reduced spacing
+
+Attempt to fix Android casting issue
+
 ## [0.5.1] - 2025/11/12
 
 ## Features & Improvements

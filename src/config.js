@@ -121,7 +121,8 @@ const configOptions = new Map([
       desc: 'Hide YouTube logo'
     }
   ],
-  ['enableOledCareMode', { default: false, desc: 'Enable OLED-Care mode (true black UI)' }]
+  ['enableOledCareMode', { default: false, desc: 'Enable OLED-Care mode (true black UI)' }],
+  ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Button' }]
 ]);
 
 for (const [key, value] of Object.entries(segmentTypes)) {

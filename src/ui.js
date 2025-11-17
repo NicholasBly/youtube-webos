@@ -11,6 +11,35 @@ import {
 import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
+import { initYouTubeFixes } from './yt-fixes.js';
+import { detectWebOSVersion } from './webos-utils.js';
+
+function isGuestMode() {
+  try {
+    const lastIdentity = window.localStorage.getItem('yt.leanback.default::last-identity-used');
+    if (lastIdentity) {
+      const parsed = JSON.parse(lastIdentity);
+      // If we found an identity, trust it definitively.
+      if (parsed?.data?.identityType === 'UNAUTHENTICATED_IDENTITY_TYPE_GUEST') {
+        return true;
+      }
+      return false; 
+    }
+
+    // Only check fallback keys if lastIdentity was completely missing
+    const autoNav = window.localStorage.getItem('yt.leanback.default::AUTONAV_FOR_LIVING_ROOM');
+    if (autoNav) {
+      const parsed = JSON.parse(autoNav);
+      if (parsed?.data?.guest === true) {
+        return true;
+      }
+    }
+    return false;
+  } catch (e) {
+    console.warn('Error detecting guest mode:', e);
+    return false;
+  }
+}
 
 // We handle key events ourselves.
 window.__spatialNavigation__.keyMode = 'NONE';
@@ -123,6 +152,11 @@ function createOptionsPanel() {
   const elmContainer = document.createElement('div');
 
   elmContainer.classList.add('ytaf-ui-container');
+  
+  if (isGuestMode()) {
+    elmContainer.classList.add('guest-mode');
+  }
+  
   elmContainer.style['display'] = 'none';
   elmContainer.setAttribute('tabindex', 0);
 
@@ -163,7 +197,8 @@ function createOptionsPanel() {
   );
 
   const elmHeading = document.createElement('h1');
-  elmHeading.textContent = 'webOS YouTube Extended';
+  const webOSVersion = detectWebOSVersion(); 
+  elmHeading.textContent = `YouTube Extended — webOS ${webOSVersion}`;
   elmContainer.appendChild(elmHeading);
 
   const contentWrapper = document.createElement('div');
@@ -176,6 +211,9 @@ function createOptionsPanel() {
   contentWrapper.appendChild(createConfigCheckbox('enableAutoLogin'));
   contentWrapper.appendChild(createConfigCheckbox('hideEndcards'));
   contentWrapper.appendChild(createConfigCheckbox('enableReturnYouTubeDislike'));
+  if (isGuestMode()) {
+    contentWrapper.appendChild(createConfigCheckbox('hideGuestSignInPrompts'));
+  }
   contentWrapper.appendChild(createConfigCheckbox('enableSponsorBlock'));
 
   const elmBlock = document.createElement('blockquote');
@@ -438,6 +476,29 @@ function applyOledMode(enabled) {
 //applyUIFixes();
 initHideLogo();
 initHideEndcards();
+
+if (configRead('hideGuestSignInPrompts') && isGuestMode()) {
+  initYouTubeFixes();
+}
+
+if (isGuestMode()) {
+  configAddChangeListener('hideGuestSignInPrompts', (evt) => {
+    if (evt.detail.newValue) {
+      initYouTubeFixes();
+    } else {
+      showNotification('Reload required to disable fix');
+    }
+  });
+}
+
+// Listen for runtime changes to the toggle
+configAddChangeListener('hideGuestSignInPrompts', (evt) => {
+  if (evt.detail.newValue && isGuestMode()) {
+    initYouTubeFixes();
+  } else {
+    showNotification('Reload required to disable fix');
+  }
+});
 
 applyOledMode(configRead('enableOledCareMode'));
 configAddChangeListener('enableOledCareMode', (evt) => {

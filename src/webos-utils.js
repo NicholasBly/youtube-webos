@@ -7,6 +7,9 @@ let cachedWebOSVersion = null;
  * @returns {number} webOS version number
  */
 	export function detectWebOSVersion() {
+	if (cachedWebOSVersion !== null) {
+        return cachedWebOSVersion;
+    }
     try {
         // Check user agent for Chrome version and map to webOS
         const ua = navigator.userAgent;

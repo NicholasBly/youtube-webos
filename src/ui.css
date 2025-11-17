@@ -14,7 +14,7 @@
   
   color: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 16px;
+  font-size: 48px; /* Original 16px */
   z-index: 1000;
   
   display: flex;
@@ -44,7 +44,7 @@
   margin: 0;
   padding: 24px 32px 16px;
   text-align: center;
-  font-size: 28px;
+  font-size: 42px; /* Original 28px */
   font-weight: 600;
   background: linear-gradient(135deg, #ff0000, #ff4444);
   -webkit-background-clip: text;
@@ -130,9 +130,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 16px;
+  font-size: 24px; /* Original 16px */
   font-weight: 400;
-  line-height: 1.4;
+  line-height: 1.0; /* Original 1.4 */
   padding: 12px 0;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -175,16 +175,20 @@
 }
 
 .ytaf-ui-container blockquote label {
-  font-size: 15px;
+  font-size: 20px; /* Original 15px */
   color: #e0e0e0;
-  padding: 8px 0;
+  padding: 8px 0; /* 8px in normal mode */
+}
+
+.ytaf-ui-container.guest-mode blockquote label {
+  padding: 6px 0; /* 6px in guest mode */
 }
 
 .ytaf-ui-container small {
   display: block;
   text-align: center;
   color: #888888;
-  font-size: 13px;
+  font-size: 16px; /* Original 13px */
   margin-top: 20px;
   padding-top: 16px;
   border-top: 1px solid #3f3f3f;

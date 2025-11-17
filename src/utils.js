@@ -30,13 +30,6 @@ export function handleLaunch(params) {
   console.info('handleLaunch', params);
   let ytURL = getYTURL();
 
-  // Handle null/undefined params (common during app resume)
-  if (!params || typeof params !== 'object') {
-    console.info('handleLaunch: No valid params provided, using default YouTube URL');
-    window.location.href = ytURL.toString();
-    return;
-  }
-
   // We use our custom "target" param, since launches with "contentTarget"
   // parameter do not respect "handlesRelaunch" appinfo option. We still
   // fallback to "contentTarget" if our custom param is not specified.
