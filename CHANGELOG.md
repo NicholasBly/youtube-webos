@@ -29,6 +29,10 @@ If you're still on the old UI and have no bugs, please feel free to stay on 0.5.
 - Bump dependencies
 - Implement some older bug fixes from webosbrew
 
+### Known Issues / Fixed in next version
+Guest Mode button not being hidden
+SponsorBlock segments appear slightly off-center when progress bar is not focused
+
 ## [0.5.2] - 2025/11/17
 
 ## Features & Improvements
