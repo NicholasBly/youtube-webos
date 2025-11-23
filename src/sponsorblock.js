@@ -1,7 +1,7 @@
 import sha256_import from 'tiny-sha256';
 import { configRead, segmentTypes } from './config';
 import { showNotification } from './ui';
-import { detectWebOSVersion } from './webos-utils.js';
+import { detectWebOSVersion, isNewYouTubeLayout } from './webos-utils.js';
 
 let sha256 = sha256_import;
 
@@ -52,6 +52,7 @@ class SponsorBlockHandler {
         this.durationChangeHandler = null;
         this.stylesInjected = false;
 		this.webOSVersion = detectWebOSVersion();
+		this.isNewYouTubeLayout = isNewYouTubeLayout();
         
         // Pre-compiled selectors for better performance
 		this.selectors = {
@@ -499,152 +500,115 @@ class SponsorBlockHandler {
     this.observers.add(this.mutationObserver);
 }
 
-	injectCSS() {
+injectCSS() {
     if (document.getElementById('sponsorblock-styles')) return;
-    
-    const webOSVersion = this.webOSVersion;
-    const isWebOS25Plus = webOSVersion >= 25;
+
+    /* const webOSVersion = this.webOSVersion; */
     
     const style = document.createElement('style');
     style.id = 'sponsorblock-styles';
-    
-    // Common styles for all versions
+
     let css = `
         #previewbar {
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            height: 100% !important;
+            height: 100% !important; /* Fill the correct container completely */
             pointer-events: none !important;
             z-index: 100 !important;
             margin: 0 !important;
             padding: 0 !important;
             display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            overflow: visible !important;
         }
         
-        /* Base styles that always apply */
         .previewbar {
             position: absolute !important;
             list-style: none !important;
-            top: 50% !important;
-            transform: translateY(-50%) !important;
-            border-radius: 0px !important;
+            height: 100% !important;
+            top: 0 !important;
+            bottom: 0 !important;
+            transform: none !important;
             display: block !important;
-            visibility: visible !important;
             z-index: 101 !important;
-            pointer-events: none !important;
         }
-        
+
         .previewbar.highlight {
             min-width: 5.47px !important;
             max-width: 5.47px !important;
-            top: 50% !important;
-            transform: translateY(-50%) !important;
+            height: 100% !important;
+            top: 0 !important;
         }
-        
-        /* Hide segments when progress bar is hidden */
+
+        ytlr-progress-bar > #previewbar,
+        .ytlr-progress-bar > #previewbar {
+            height: 13px !important;
+            top: 67% !important;		/* Fixed alignment */
+            bottom: auto !important;
+            margin: auto !important;
+            transform: none !important;
+        }
+
         .ytLrProgressBarHidden #previewbar {
             display: none !important;
         }
+
+        ytlr-multi-markers-player-bar-renderer,
+        .ytLrProgressBarSliderBase,
+        ytlr-progress-bar {
+            overflow: visible !important;
+        }
     `;
-    
-    // Version-specific rules
-    if (isWebOS25Plus) {
-        this.log('info', 'Applying webOS 25+ CSS rules');
-        css += `
-            /* webOS 25+ - Dynamic height based on focus */
-            
-            /* Unfocused state - thinner bar (10px) */
-            ytlr-multi-markers-player-bar-renderer:not(.ytLrMultiMarkersPlayerBarRendererFocused) .previewbar,
-            ytlr-progress-bar:not(.ytLrProgressBarFocused) .previewbar {
-                height: 10px !important;
-				top: 70% !important;
-				transform: translateY(-50%) !important;
-            }
-            
-            /* Focused state - taller bar (12px) */
-            ytlr-multi-markers-player-bar-renderer.ytLrMultiMarkersPlayerBarRendererFocused .previewbar,
-            ytlr-progress-bar.ytLrProgressBarFocused .previewbar {
-                height: 12px !important;
-            }
-            
-            /* Highlights - unfocused state */
-            ytlr-multi-markers-player-bar-renderer:not(.ytLrMultiMarkersPlayerBarRendererFocused) .previewbar.highlight,
-            ytlr-progress-bar:not(.ytLrProgressBarFocused) .previewbar.highlight {
-                height: 10px !important;
-            }
-            
-            /* Highlights - focused state */
-            ytlr-multi-markers-player-bar-renderer.ytLrMultiMarkersPlayerBarRendererFocused .previewbar.highlight,
-            ytlr-progress-bar.ytLrProgressBarFocused .previewbar.highlight {
-                height: 12px !important;
-            }
-            
-            /* Ensure parent containers don't clip */
-            ytlr-multi-markers-player-bar-renderer,
-            .ytLrProgressBarSliderBase {
-                overflow: visible !important;
-            }
-        `;
-    } else {
-        this.log('info', 'Applying webOS 23/24 CSS rules');
-        css += `
-            /* webOS 23/24 - Fixed height */
-            .previewbar {
-                height: 12px !important;
-            }
-            
-            .previewbar.highlight {
-                height: 12px !important;
-            }
-            
-            /* Ensure parent containers don't clip */
-            .afTAdb {
-                overflow: visible !important;
-            }
-            
-            ytlr-multi-markers-player-bar-renderer,
-            .ytLrProgressBarSliderBase {
-                overflow: visible !important;
-            }
-        `;
-    }
-    
+
     style.textContent = css;
     document.head.appendChild(style);
     this.stylesInjected = true;
-    
-    this.log('info', `CSS injected for webOS ${webOSVersion}`);
+
+    this.log('info', `CSS injected`);
 }
 
 	attachOverlayToProgressBar() {
     if (!this.progressBarElement || !this.sliderSegmentsOverlay) return;
 
-    // Find the multi-markers-player-bar-renderer - this is the correct parent
+    // 1. Try Primary Target: Multi-markers renderer (used for Chapters/Heatmaps)
     let targetContainer = this.progressBarElement.querySelector('ytlr-multi-markers-player-bar-renderer');
     
+    // 2. Fallback Target: Slider Base (standard videos without chapters)
     if (!targetContainer) {
-        this.log('info', 'Multi-markers renderer not found, waiting...');
+        // Try specific internal containers often found in the new layout
+        targetContainer = this.progressBarElement.querySelector('ytlr-progress-bar') || 
+                          this.progressBarElement.querySelector('.ytlr-progress-bar');
+                          
+        // 3. Last Resort: The progress bar itself
+        if (!targetContainer) {
+            targetContainer = this.progressBarElement;
+        }
+    }
+
+    // Sanity check: If we still somehow have a null target (very unlikely), retry briefly
+    if (!targetContainer) {
+        this.log('info', 'No valid container found for overlay, waiting...');
         this.setTimeout(() => this.attachOverlayToProgressBar(), 150, 'attach_retry');
         return;
     }
 
-    // Check if already attached
+    // Check if already attached to this specific container
     if (targetContainer.contains(this.sliderSegmentsOverlay)) return;
     
-    // Wait for the container to have actual dimensions
+    // Wait for the container to have actual dimensions (prevents attaching to hidden/init states)
     const rect = targetContainer.getBoundingClientRect();
     if (rect.height === 0 || rect.width === 0) {
-        this.log('info', 'Container not yet rendered (zero dimensions), waiting...');
-        this.setTimeout(() => this.attachOverlayToProgressBar(), 150, 'attach_retry');
-        return;
+        // Only wait if the MAIN progress bar also has no dimensions (meaning the whole UI is hidden)
+        // If the main bar has size but our target doesn't, we might have picked a bad target, so we proceed anyway to avoid hanging.
+        const parentRect = this.progressBarElement.getBoundingClientRect();
+        if (parentRect.width === 0) {
+            // this.log('info', 'Container not yet rendered (zero dimensions), waiting...');
+            this.setTimeout(() => this.attachOverlayToProgressBar(), 150, 'attach_retry');
+            return;
+        }
     }
     
-    // Ensure proper positioning
+    // Ensure proper positioning context
     const computedStyle = window.getComputedStyle(targetContainer);
     if (computedStyle.position === 'static') {
         targetContainer.style.position = 'relative';
@@ -653,16 +617,17 @@ class SponsorBlockHandler {
     // Ensure no overflow clipping
     targetContainer.style.overflow = 'visible';
     
-    // Insert as first child (before the slider and other elements)
+    // Insert as first child
     targetContainer.insertBefore(this.sliderSegmentsOverlay, targetContainer.firstChild);
-    this.log('info', 'Attached segments overlay to ytlr-multi-markers-player-bar-renderer');
+    
+    const targetName = targetContainer.tagName ? targetContainer.tagName.toLowerCase() : targetContainer.className;
+    this.log('info', `Attached segments overlay to: ${targetName}`);
     
     // Debug: log overlay position and visibility
     setTimeout(() => {
         if (this.sliderSegmentsOverlay) {
             const rect = this.sliderSegmentsOverlay.getBoundingClientRect();
             this.log('info', 'Overlay bounds:', rect);
-            this.log('info', 'Overlay children:', this.sliderSegmentsOverlay.children.length);
         }
     }, 100);
 }

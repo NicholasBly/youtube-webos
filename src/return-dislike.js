@@ -166,146 +166,78 @@ class ReturnYouTubeDislike {
     
     this.log('info', 'Attached persistent content observer to panel.');
   }
-  
+
 /**
-   * Checks if the dislike count should be injected, and if so, injects it.
-   * Applies a dynamic layout fix that respects the video's native spacing.
+   * REPLACEMENT METHOD
+   * 1. Detects if we are in "Standard Mode" (WebOS 25+) or "Compact Mode" (WebOS 23).
+   * 2. Sets the correct variables for that mode.
+   * 3. Applies the layout fix and injects the dislike count.
    */
   checkAndInjectDislike(panelElement) {
     try {
-      // --- 1. Configuration Strategy ---
-      const useStandardSelectors = (this.webOSVersion !== 23);
-      const useCompactLayout = (this.webOSVersion >= 24);
-
-      // --- 2. Define Selectors ---
-      let container, likesElement, valueSelector, labelSelector, factoidClass, listItemClass;
+      // --- 1. Feature Detection (Selector Strategy) ---
+      const standardContainer = panelElement.querySelector('.ytLrVideoDescriptionHeaderRendererFactoidContainer');
+      const compactContainer = panelElement.querySelector('.rznqCe');
       
-      if (useStandardSelectors) {
-        // webOS 6-22, 24, 25
-        container = panelElement.querySelector('.ytLrVideoDescriptionHeaderRendererFactoidContainer');
+      let container, factoidClass, valueSelector, labelSelector;
+      
+      if (standardContainer) {
+        // "Standard Mode" -> WebOS 25 / New UI / WebOS 22
+        this.log('debug', 'Standard UI detected (WebOS 25/Regular).');
+        container = standardContainer;
         factoidClass = '.ytLrVideoDescriptionHeaderRendererFactoid';
         valueSelector = '.ytLrVideoDescriptionHeaderRendererValue';
         labelSelector = '.ytLrVideoDescriptionHeaderRendererLabel';
-        listItemClass = '.ytVirtualListItem'; 
-      } else {
-        // webOS 23
-        container = panelElement.querySelector('.rznqCe');
+      } else if (compactContainer) {
+        // "Compact Mode" -> WebOS 23
+        this.log('debug', 'Compact UI detected (WebOS 23).');
+        container = compactContainer;
         factoidClass = '.nOJlw';
         valueSelector = '.axf6h';
         labelSelector = '.Ph2lNb';
-        listItemClass = '.TXB27d'; 
-      }
-
-      if (!container) {
-        this.log('debug', 'Factoid container not found (yet?).');
-        return;
-      }
-      
-      likesElement = container.querySelector(`div[aria-label*="likes"]${factoidClass}`);
-      if (!likesElement) {
-        this.log('debug', 'Likes element not found (yet?).');
+      } else {
+        // No recognizable container found yet
         return;
       }
 
-      // --- 3. Dynamic Layout Fix (Runs on every mutation, checks flags) ---
-      
-      // 💡 YOUR CUSTOM HEIGHT RULES INTEGRATED HERE
-      let extraHeightRem = 2.5; // Default conservative
-      let dateMarginTop = '0.75rem'; // Default margin
+      // --- 2. Apply Layout Fix (Universal) ---
+      // Since both WebOS 25 and 23 can suffer from the "0-height/invisible items" bug,
+      // we run the fix if *any* recognized UI is found.
+      this.applyNaturalFlow(panelElement);
 
-      if (this.webOSVersion === 25) {
-          extraHeightRem = 2.0;
-      } else if (this.webOSVersion === 24) {
-          extraHeightRem = 2.0;
-      } else if (this.webOSVersion === 23) {
-          extraHeightRem = 2.0;
-          dateMarginTop = '0.25rem'; // Tighter margin for webOS 23
-      } else if (this.webOSVersion <= 22) {
-          extraHeightRem = 2.0;
-          dateMarginTop = '0.25rem'; // Assuming similar to 23
-      }
+      // --- 3. Container Layout Fix ---
+      // Ensure the stats row wraps correctly when we add the 4th item
+      container.style.display = 'flex';
+      container.style.flexWrap = 'wrap';
+      container.style.justifyContent = 'center'; 
+      container.style.gap = '1.5rem'; 
+      container.style.height = 'auto';
+      container.style.overflow = 'visible';
 
-      // A. Fix Date Element
+      // --- 4. Locate Likes Element ---
+      const likesElement = container.querySelector(`div[aria-label*="likes"]${factoidClass}`) || 
+                           container.querySelector(`div[aria-label*="Likes"]${factoidClass}`);
+
+      if (!likesElement) return;
+
+      // --- 5. Visual Cleanup (Date Element) ---
       const dateElement = container.querySelector('div[idomkey="factoid-2"]');
-      if (dateElement && dateElement.dataset.rydFixed !== 'true') {
-        dateElement.style.flexBasis = '100%';
-        dateElement.style.width = '100%';
-        dateElement.style.marginTop = dateMarginTop;
-        dateElement.style.textAlign = 'center';
-
-        const valueElement = dateElement.querySelector(valueSelector);
-        const labelElement = dateElement.querySelector(labelSelector);
-        
-        if (valueElement && labelElement) {
-          valueElement.style.display = 'inline-block';
-          valueElement.style.marginRight = '0.4rem';
-          labelElement.style.display = 'inline-block';
-        } else if (valueElement) {
-          valueElement.style.display = 'inline-block';
-        }
-        dateElement.dataset.rydFixed = 'true';
+      if (dateElement) {
+        dateElement.style.marginTop = '0'; 
+        const vEl = dateElement.querySelector(valueSelector);
+        const lEl = dateElement.querySelector(labelSelector);
+        if(vEl) { vEl.style.display = 'inline-block'; vEl.style.marginRight = '0.4rem'; }
+        if(lEl) { lEl.style.display = 'inline-block'; }
       }
 
-      // B. Dynamic List Item Shifter
-      // Shift ALL list items relative to their NATIVE position.
-      
-      const allItems = panelElement.querySelectorAll(listItemClass);
-      
-      allItems.forEach(item => {
-        // Identify if this is the header (we need to grow it)
-        const isHeader = item.querySelector(useStandardSelectors ? 'ytlr-video-description-header-renderer' : '#structured-description-header\\:2g') 
-                         || item.innerHTML.includes('Likes'); // Fallback check
-
-        if (isHeader) {
-             // Grow the header
-             if (!item.dataset.rydHeightFixed) {
-                 const currentHeight = parseFloat(item.style.height || (useCompactLayout ? '7.5' : '9.5'));
-                 item.style.height = `${currentHeight + extraHeightRem}rem`;
-                 item.dataset.rydHeightFixed = 'true';
-                 this.log('info', `Adjusted header height +${extraHeightRem}rem`);
-             }
-        } else {
-             // This is a subsequent item (Channel, Description, Comments, etc.)
-             // We need to shift it down by extraHeightRem relative to its NATIVE position.
-             
-             const transform = item.style.transform;
-             const match = transform.match(/translateY\(([\d.-]+)rem\)/i);
-             
-             if (match) {
-                 const currentY = parseFloat(match[1]);
-                 
-                 // Check if we already shifted this item
-                 if (item.dataset.rydOriginalY) {
-                     const originalY = parseFloat(item.dataset.rydOriginalY);
-                     const expectedY = originalY + extraHeightRem;
-                     
-                     // If current Y is DIFFERENT from expected, YouTube moved it.
-                     // We must update our base reference.
-                     if (Math.abs(currentY - expectedY) > 0.1) {
-                         item.dataset.rydOriginalY = currentY.toString();
-                         item.style.transform = `translateY(${currentY + extraHeightRem}rem) translateZ(0px)`;
-                         this.log('debug', `Re-applying shift to moved item: ${currentY} -> ${currentY + extraHeightRem}`);
-                     }
-                 } else {
-                     // First time seeing this item
-                     item.dataset.rydOriginalY = currentY.toString();
-                     item.style.transform = `translateY(${currentY + extraHeightRem}rem) translateZ(0px)`;
-                     item.dataset.rydShifted = 'true';
-                     this.log('debug', `Shifted item: ${currentY} -> ${currentY + extraHeightRem}`);
-                 }
-             }
-        }
-      });
-
-      // --- 4. Dislike Injection ---
-      if (container.querySelector('#ryd-dislike-factoid')) {
-        return;
-      }
+      // --- 6. Dislike Injection ---
+      if (container.querySelector('#ryd-dislike-factoid')) return;
 
       this.log('info', 'Injecting dislike count...');
       const dislikeElement = likesElement.cloneNode(true);
       dislikeElement.id = 'ryd-dislike-factoid';
       dislikeElement.setAttribute('idomkey', 'factoid-ryd');
+      dislikeElement.style.flex = '0 0 auto'; 
       
       const valueElement = dislikeElement.querySelector(valueSelector); 
       const labelElement = dislikeElement.querySelector(labelSelector); 
@@ -315,9 +247,6 @@ class ReturnYouTubeDislike {
         valueElement.textContent = dislikeText; 
         labelElement.textContent = 'Dislikes';
         dislikeElement.setAttribute('aria-label', `${dislikeText} Dislikes`);
-      } else {
-        this.log('warn', 'Could not find value/label in cloned node.');
-        return;
       }
       
       likesElement.insertAdjacentElement('afterend', dislikeElement);
@@ -326,6 +255,65 @@ class ReturnYouTubeDislike {
     } catch (error) {
       this.log('error', 'Error during dislike injection check:', error);
     }
+  }
+
+  /**
+   * HELPER: Forces "Natural Flow" and Enables LG Remote Navigation
+   * Updated to support BOTH WebOS 23 (.TXB27d) and WebOS 25 (.ytVirtualListItem) classes.
+   */
+  applyNaturalFlow(panelElement) {
+      // 1. Fix the Scroll Container
+      const virtualList = panelElement.querySelector('yt-virtual-list');
+      if (virtualList) {
+          virtualList.style.height = 'auto';
+          virtualList.style.overflow = 'visible';
+          virtualList.style.display = 'block';
+      }
+
+      // 2. Fix the Wrapper
+      const internalWrapper = panelElement.querySelector('.NUDen');
+      if (internalWrapper) {
+          internalWrapper.style.position = 'relative'; 
+          internalWrapper.style.height = 'auto';      
+          internalWrapper.style.width = '100%';
+      }
+
+      // 3. Fix Items & Enable Focus (Targets both old and new class names)
+      const itemSelector = '.TXB27d, .ytVirtualListItem';
+      const items = panelElement.querySelectorAll(itemSelector);
+      
+      items.forEach(item => {
+          // Layout
+          item.style.position = 'relative'; 
+          item.style.transform = 'none';
+          item.style.height = 'auto';
+          item.style.marginBottom = '1rem'; 
+          item.style.width = '100%';
+          item.style.pointerEvents = 'auto';
+
+          // --- KEY FIX FOR REMOTE NAVIGATION ---
+          const focusable = item.querySelector('[hybridnavfocusable="true"]') || 
+                            item.querySelector('[role="menuitem"]') || 
+                            item.querySelector('button');
+                            
+          if (focusable) {
+              focusable.setAttribute('tabindex', '0');
+              // No background color listeners, preserving native UI style
+          }
+      });
+      
+      // 4. Expand Descriptions
+      const descBody = panelElement.querySelector('ytlr-expandable-video-description-body-renderer');
+      if (descBody) {
+          descBody.style.height = 'auto';
+          descBody.style.display = 'block';
+          
+          const sidesheet = descBody.querySelector('ytlr-sidesheet-item');
+          if(sidesheet) {
+              sidesheet.style.height = 'auto';
+              sidesheet.style.display = 'block';
+          }
+      }
   }
 
   formatNumber(num) {

@@ -1,4 +1,5 @@
 import CopyPlugin from 'copy-webpack-plugin';
+import TerserPlugin from 'terser-webpack-plugin';
 
 /** @type {(env: Record<string, string>) => (import('webpack').Configuration)[]} */
 const makeConfig = () => [
@@ -6,8 +7,9 @@ const makeConfig = () => [
     /**
      * NOTE: Builds with devtool = 'eval' contain very big eval chunks which seem
      * to cause segfaults (at least) on nodeJS v0.12.2 used on webOS 3.x.
+     * Set to false for smallest bundle size, or 'source-map' for debugging
      */
-    devtool: 'source-map',
+    devtool: false, // Change to 'source-map' if you need debugging
 
     entry: {
       index: './src/index.js',
@@ -48,12 +50,67 @@ const makeConfig = () => [
             { loader: 'style-loader' },
             {
               loader: 'css-loader',
-              options: { esModule: false, importLoaders: 1 }
+              options: { 
+                esModule: false, 
+                importLoaders: 1,
+                modules: false
+              }
             },
-            'postcss-loader'
+            {
+              loader: 'postcss-loader',
+              options: {
+                postcssOptions: {
+                  plugins: [
+                    ['cssnano', {
+                      preset: ['default', {
+                        discardComments: {
+                          removeAll: true
+                        },
+                        normalizeWhitespace: true,
+                        colormin: true,
+                        minifySelectors: true,
+                        minifyFontValues: true,
+                      }]
+                    }]
+                  ]
+                }
+              }
+            }
           ]
         }
       ]
+    },
+
+    optimization: {
+      minimize: true,
+      minimizer: [
+        new TerserPlugin({
+          terserOptions: {
+            format: {
+              comments: false, // Remove all comments
+              ascii_only: true, // Escape unicode characters
+            },
+            compress: {
+              drop_console: false, // Keep console.log (set true to remove)
+              drop_debugger: true, // Remove debugger statements
+              pure_funcs: ['console.debug', 'console.trace'], // Remove specific console methods
+              passes: 2, // Run compression multiple times for better results
+              unsafe: false, // Keep safe (set true for more aggressive compression)
+              unsafe_comps: false,
+              unsafe_math: false,
+              unsafe_proto: false,
+            },
+            mangle: {
+              safari10: true, // Ensure compatibility
+            },
+          },
+          extractComments: false,
+        }),
+      ],
+    },
+
+    performance: {
+      hints: false, // Disable performance warnings for large bundles
     },
 
     plugins: [

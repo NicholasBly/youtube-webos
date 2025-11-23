@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.3] - 2025/11/22
+
+### Notes
+YouTube has started rolling out a new UI on most webOS versions.
+From my testing, all webOS versions from 6 through 25 are all being served the new UI.
+If you're still on the old UI and have no bugs, please feel free to stay on 0.5.2 - I cannot test the old UIs anymore
+
+### YouTube's New UI Fixes
+- Fixed Return YouTube Dislike UI on description page (YouTube's new UI is broken, so if they fix it, expect it to break again :/)
+--No longer rely on specifically webOS version, apply if the new UI is detected
+- Implemented new SponsorBlock rules to detect YouTube UI instead of relying on webOS version only
+- Fixed SponsorBlock segments not appearing on progress bar if the loaded video lacks a multi-markers-player-bar-renderer
+
+### Added
+- Enhanced webOS version detection
+
+### Other Fixes
+- Fixed casting from android/iOS
+
+### Other / File Size Reductions
+- Added cssnano to remove comments from userScript.js build
+- Disable source maps for production
+- Bump dependencies
+- Implement some older bug fixes from webosbrew
+
 ## [0.5.2] - 2025/11/17
 
 ## Features & Improvements
