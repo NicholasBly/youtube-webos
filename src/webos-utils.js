@@ -1,10 +1,15 @@
 let cachedWebOSVersion = null;
+let cachedNewLayout = null;
 
 /**
  * Detects if the user is using the "New" YouTube UI
  * @returns {boolean}
  */
 export function isNewYouTubeLayout() {
+    if (cachedNewLayout !== null) {
+        return cachedNewLayout;
+    }
+
     // 1. Definitive DOM Check (Best for "Backported" UI on older OS)
     // The new UI uses <ytlr-app>, <ytlr-progress-bar>, etc.
     // The old UI uses standard <ytd-app> or <div id="player-api">
@@ -12,6 +17,7 @@ export function isNewYouTubeLayout() {
         document.querySelector('ytlr-progress-bar') || 
         document.querySelector('ytlr-multi-markers-player-bar-renderer')) {
         console.log('info', 'New YouTube UI detected via DOM tags');
+        cachedNewLayout = true;
         return true;
     }
 
@@ -21,9 +27,11 @@ export function isNewYouTubeLayout() {
     // Chrome 120+ (webOS 25) = New UI
     const chromeMatch = ua.match(/Chrome\/(\d+)/i) || ua.match(/Chromium\/(\d+)/i);
     if (chromeMatch && parseInt(chromeMatch[1]) >= 120) {
+        cachedNewLayout = true;
         return true;
     }
 
+    cachedNewLayout = false;
     return false;
 }
 
@@ -67,18 +75,22 @@ export function detectWebOSVersion() {
             }
             
             console.log('info', `Mapped to webOS TV ${webOSVersion} (Chrome ${chromeVersion})`);
+            cachedWebOSVersion = webOSVersion;
             return webOSVersion;
         }
         
+        cachedWebOSVersion = 24;
         return 24;
     } catch (e) {
         console.log('warn', 'Error detecting webOS version:', e);
+        cachedWebOSVersion = 24;
         return 24;
     }
 }
 
 export function resetWebOSVersionCache() {
     cachedWebOSVersion = null;
+    cachedNewLayout = null;
 }
 
 export function getCachedWebOSVersion() {

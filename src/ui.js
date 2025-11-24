@@ -14,15 +14,23 @@ import './return-dislike.js';
 import { initYouTubeFixes } from './yt-fixes.js';
 import { detectWebOSVersion } from './webos-utils.js';
 
+let cachedGuestMode = null;
+
 function isGuestMode() {
+  if (cachedGuestMode !== null) {
+    return cachedGuestMode;
+  }
+
   try {
     const lastIdentity = window.localStorage.getItem('yt.leanback.default::last-identity-used');
     if (lastIdentity) {
       const parsed = JSON.parse(lastIdentity);
       // If we found an identity, trust it definitively.
       if (parsed?.data?.identityType === 'UNAUTHENTICATED_IDENTITY_TYPE_GUEST') {
+        cachedGuestMode = true;
         return true;
       }
+      cachedGuestMode = false;
       return false; 
     }
 
@@ -31,12 +39,15 @@ function isGuestMode() {
     if (autoNav) {
       const parsed = JSON.parse(autoNav);
       if (parsed?.data?.guest === true) {
+        cachedGuestMode = true;
         return true;
       }
     }
+    cachedGuestMode = false;
     return false;
   } catch (e) {
     console.warn('Error detecting guest mode:', e);
+    cachedGuestMode = false;
     return false;
   }
 }

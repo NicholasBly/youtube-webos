@@ -35,6 +35,7 @@ export function initYouTubeFixes() {
 
 function isSignInPrompt(element) {
     if (!element || !element.matches || !element.matches('ytlr-alert-with-actions-renderer')) return false;
+    // Covers "Sign in to subscribe" and "Sign in to subscribe to this channel."
     return element.textContent.includes('Sign in to subscribe');
 }
 
@@ -43,20 +44,31 @@ function applyFixToPrompt(element) {
 
     console.log('[YT-Fixes] Found "Sign in" prompt. applying fixes...');
 
-    const listItem = element.closest('.ytVirtualListItem');
-    if (!listItem) return;
+    // 1. Find the Wrapper (List Item)
+    // Try the standard class first, then fallback to WebOS 25/New UI class (.TXB27d)
+    let listItem = element.closest('.ytVirtualListItem');
+    if (!listItem) {
+        listItem = element.closest('.TXB27d');
+    }
+
+    if (!listItem) {
+        // Last resort: look for the nearest absolute positioned div if classes changed again
+        const genericParent = element.closest('div[style*="position: absolute"]');
+        if (genericParent) listItem = genericParent;
+        else return; 
+    }
 
     const listContainer = listItem.parentElement;
     if (!listContainer) return;
 
-    // 1. Calculate how much space to remove
+    // 2. Calculate how much space to remove
     let heightToRemoveRem = 5.125; // Default fallback
     const heightMatch = listItem.style.height.match(/([\d.]+)rem/);
     if (heightMatch) {
         heightToRemoveRem = parseFloat(heightMatch[1]);
     }
 
-    // 2. NUKE FOCUS (Fixes the "Ghost Focus" issue)
+    // 3. NUKE FOCUS (Fixes the "Ghost Focus" issue)
     // We remove every attribute that tells the TV "I am clickable"
     element.removeAttribute('hybridnavfocusable');
     element.removeAttribute('tabindex');
@@ -70,10 +82,10 @@ function applyFixToPrompt(element) {
         btn.style.display = 'none'; // Visually hide button specifically
     });
 
-    // 3. Hide Visuals
+    // 4. Hide Visuals
     element.style.display = 'none';
     
-    // 4. Collapse Wrapper
+    // 5. Collapse Wrapper
     listItem.style.height = '0rem';
     listItem.style.visibility = 'hidden';
     listItem.style.pointerEvents = 'none'; // Ensures mouse/pointer can't hit it
@@ -82,13 +94,14 @@ function applyFixToPrompt(element) {
     element.dataset.ytFixApplied = 'true';
     listItem.dataset.ytFixCollapsed = 'true'; // Marker to skip shifting this one
 
-    // 5. Shift Siblings Up (Fixes the "Empty Space" issue)
+    // 6. Shift Siblings Up (Fixes the "Empty Space" issue)
     applyShiftToContainer(listContainer, heightToRemoveRem);
 }
 
 function applyShiftToContainer(container, shiftAmountRem) {
     // A. Shift all CURRENT items immediately
-    const currentItems = container.querySelectorAll('.ytVirtualListItem');
+    // Query both old class and New UI class
+    const currentItems = container.querySelectorAll('.ytVirtualListItem, .TXB27d');
     currentItems.forEach(node => shiftNodeUp(node, shiftAmountRem));
 
     // B. Watch for NEW items (scrolling down) and shift them too
@@ -97,8 +110,14 @@ function applyShiftToContainer(container, shiftAmountRem) {
     const shiftObserver = new MutationObserver((mutations) => {
         mutations.forEach(mutation => {
             mutation.addedNodes.forEach(node => {
-                if (node.nodeType === 1 && node.classList.contains('ytVirtualListItem')) {
-                    shiftNodeUp(node, shiftAmountRem);
+                if (node.nodeType === 1) {
+                    // Check if it is a list item (Old Class OR New Class)
+                    const isListItem = node.classList.contains('ytVirtualListItem') || 
+                                     node.classList.contains('TXB27d');
+                    
+                    if (isListItem) {
+                        shiftNodeUp(node, shiftAmountRem);
+                    }
                 }
             });
         });

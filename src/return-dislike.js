@@ -1,5 +1,4 @@
 import { configRead, configAddChangeListener } from './config.js';
-import { detectWebOSVersion } from './webos-utils.js';
 
 class ReturnYouTubeDislike {
   constructor(videoID) {
@@ -12,11 +11,8 @@ class ReturnYouTubeDislike {
     this.timers = new Map();
     this.observers = new Set();
     
-    this.webOSVersion = detectWebOSVersion();
 	this.panelContentObserver = null;
 	this.bodyObserver = null;
-    
-    this.log('info', `ReturnYouTubeDislike created for videoID: ${videoID} on webOS ${this.webOSVersion}`);
   }
   
   // Logging system
@@ -182,7 +178,7 @@ class ReturnYouTubeDislike {
       let container, factoidClass, valueSelector, labelSelector;
       
       if (standardContainer) {
-        // "Standard Mode" -> WebOS 25 / New UI / WebOS 22
+        // "Standard Mode" -> WebOS 25 / New UI
         this.log('debug', 'Standard UI detected (WebOS 25/Regular).');
         container = standardContainer;
         factoidClass = '.ytLrVideoDescriptionHeaderRendererFactoid';
@@ -291,7 +287,6 @@ class ReturnYouTubeDislike {
           item.style.width = '100%';
           item.style.pointerEvents = 'auto';
 
-          // --- KEY FIX FOR REMOTE NAVIGATION ---
           const focusable = item.querySelector('[hybridnavfocusable="true"]') || 
                             item.querySelector('[role="menuitem"]') || 
                             item.querySelector('button');

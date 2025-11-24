@@ -94,7 +94,7 @@ const makeConfig = () => [
               drop_console: false, // Keep console.log (set true to remove)
               drop_debugger: true, // Remove debugger statements
               pure_funcs: ['console.debug', 'console.trace'], // Remove specific console methods
-              passes: 2, // Run compression multiple times for better results
+              passes: 4, // Run compression multiple times for better results
               unsafe: false, // Keep safe (set true for more aggressive compression)
               unsafe_comps: false,
               unsafe_math: false,

@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.4] - 2025/11/24
+
+SponsorBlock Rewrite | SponsorBlock received a much needed overhaul!
+
+### Summary
+1. 99% reduction in CPU usage: setInterval polls 4-10 times a second, MutationObserver only fires when there is an update event.
+2. ~80% more efficient: segments were drawn one by one, forcing a layout recalculation for every single segment. Now, DocumentFragment batches everything into 1 single layout calculation.
+3. Removed layout thrashing: The old code read properties like .offsetWidth or .contains inside loops, forcing the browser to pause and calculate styles synchronously. The new code uses requestAnimationFrame, allowing the browser to check these values only when it is ready to paint the next frame.
+
+### Massive Performance Overhaul
+1. Removed Polling Loops: Replaced setInterval checks with MutationObserver
+2. Frame-Perfect Updates: All DOM checks are now throttled using requestAnimationFrame to prevent dropping frames during UI updates
+-- This draws segments the instant the progress bar is visible, eliminating slight delays
+3. Batch Rendering: Segments are now built in memory using DocumentFragment and appended in a single operation, rather than injecting elements one by one
+4. Memory Management: Implemented a better destroy() method that cleanly disconnects all observers and event listeners to prevent memory leaks
+
+### Fixes
+
+- Readded css rules for SponsorBlock on older webOS versions that aren't using the new UI yet (should make compatibility the same as 0.5.2 and before)
+- Fixed Guest Mode button not being hidden on new UI
+
+### Other Improvements
+
+- Cached some new elements from 0.5.0+ for better performance
+- New SponsorBlock rewrite reduces file size of userScript.js from 213kb to 194kb
+
 ## [0.5.3] - 2025/11/22
 
 ### Notes
