@@ -12,7 +12,7 @@ import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
 import { initYouTubeFixes } from './yt-fixes.js';
-import { detectWebOSVersion } from './webos-utils.js';
+import { WebOSVersion } from './webos-utils.js';
 
 let cachedGuestMode = null;
 
@@ -208,8 +208,12 @@ function createOptionsPanel() {
   );
 
   const elmHeading = document.createElement('h1');
-  const webOSVersion = detectWebOSVersion(); 
-  elmHeading.textContent = `YouTube Extended — webOS ${webOSVersion}`;
+  const webOSVersion = WebOSVersion(); 
+  if (webOSVersion === 25) {
+		  elmHeading.textContent = `YouTube Extended — webOS ${webOSVersion}`;
+	  } else {
+		  elmHeading.textContent = 'YouTube Extended';
+	  }
   elmContainer.appendChild(elmHeading);
 
   const contentWrapper = document.createElement('div');

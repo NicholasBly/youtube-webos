@@ -1,7 +1,7 @@
 import sha256_import from 'tiny-sha256';
 import { configRead, segmentTypes } from './config';
 import { showNotification } from './ui';
-import { detectWebOSVersion, isNewYouTubeLayout } from './webos-utils.js';
+import { WebOSVersion, isNewYouTubeLayout } from './webos-utils.js';
 
 let sha256 = sha256_import;
 
@@ -10,6 +10,16 @@ const SPONSORBLOCK_CONFIG = {
     fallbackAPI: 'https://sponsor.ajay.app/api',
     timeout: 5000,
     retryAttempts: 2
+};
+
+const CONFIG_MAPPING = {
+    sponsor: 'enableSponsorBlockSponsor',
+    intro: 'enableSponsorBlockIntro',
+    outro: 'enableSponsorBlockOutro',
+    interaction: 'enableSponsorBlockInteraction',
+    selfpromo: 'enableSponsorBlockSelfPromo',
+    music_offtopic: 'enableSponsorBlockMusicOfftopic',
+    preview: 'enableSponsorBlockPreview'
 };
 
 if (typeof sha256 !== 'function') {
@@ -28,7 +38,7 @@ class SponsorBlockHandler {
         
         // State
         this.isProcessing = false;
-        this.webOSVersion = detectWebOSVersion();
+        this.webOSVersion = WebOSVersion();
         this.isNewLayout = isNewYouTubeLayout();
         
         // Observers & Listeners
@@ -263,18 +273,17 @@ class SponsorBlockHandler {
         this.log('info', 'Overlay drawn (appended).');
     }
 
-    handleTimeUpdate() {
+	handleTimeUpdate() {
         if (!this.video || this.video.paused || this.video.seeking) return;
-        
         const currentTime = this.video.currentTime;
         for (let i = 0; i < this.segments.length; i++) {
             const seg = this.segments[i];
-            if (seg.category === 'poi_highlight') continue;
-
             if (currentTime >= seg.segment[0] && currentTime < seg.segment[1]) {
-                if (this.skippableCategories.includes(seg.category)) {
+                if (seg.category === 'poi_highlight') continue;
+                const configKey = CONFIG_MAPPING[seg.category];
+                if (configKey && configRead(configKey)) {
                     this.skipSegment(seg);
-                    return;
+                    return; 
                 }
             }
         }
@@ -352,14 +361,6 @@ class SponsorBlockHandler {
         let res = await tryFetch(SPONSORBLOCK_CONFIG.primaryAPI);
         if (!res) res = await tryFetch(SPONSORBLOCK_CONFIG.fallbackAPI);
         return res;
-    }
-
-    getSkippableCategories() {
-        const keys = [
-            'sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 
-            'music_offtopic', 'preview'
-        ];
-        return keys.filter(cat => configRead(`enableSponsorBlock${cat.charAt(0).toUpperCase() + cat.slice(1)}`));
     }
 
     injectCSS() {

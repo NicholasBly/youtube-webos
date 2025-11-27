@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.5] - 2025/11/26
+
+### Removed
+
+- Removed webOS version from green button UI header except for webOS 25
+-- Since webOS version ≠ YouTube UI, we only need to detect webOS 25 to apply the chromecast fix. Everything else will be detected via queryselectors to determine which YouTube UI is running.
+
+### Added
+
+- Updated webOS detection via firmware version
+-- If webOS 25 is detected, the chromecast fix is applied to fix the freezing issue
+
+### Fixes
+
+- Unchecking/checking a SponsorBlock segment from the green button UI while watching a video will update the skipping status accordingly
+
+### Performance
+
+- Cached several more elements:
+
+1. UI layout detection
+2. simulator only: chrome version detection
+3. config mapping for sponsorblock segments
+
 ## [0.5.4] - 2025/11/24
 
 SponsorBlock Rewrite | SponsorBlock received a much needed overhaul!

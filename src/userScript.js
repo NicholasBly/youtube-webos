@@ -2,6 +2,9 @@ import 'whatwg-fetch';
 import './domrect-polyfill';
 
 import { handleLaunch } from './utils';
+import { WebOSVersion, initializeWebOSVersion } from './webos-utils.js';
+
+import { initBlockWebOSCast } from './block-webos-cast'; 
 
 document.addEventListener(
   'webOSRelaunch',
@@ -15,8 +18,14 @@ document.addEventListener(
 import './adblock.js';
 import './shorts.js';
 import './sponsorblock.js';
-import './ui.js';
 import './font-fix.css';
 import './thumbnail-quality';
 import './screensaver-fix';
 import './yt-fixes.css';
+
+const version = WebOSVersion();
+
+  if (version === 25) {
+    console.info('[Main] Enabling webOS Google Cast Block');
+    initBlockWebOSCast();
+  }
