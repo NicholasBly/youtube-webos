@@ -180,18 +180,22 @@ class SponsorBlockHandler {
         // 1. Chapter Bar (Has priority)
         let target = document.querySelector('ytlr-multi-markers-player-bar-renderer');
         
+        if (target) {
+            const innerBar = target.querySelector('[idomkey="progress-bar"]');
+            if (innerBar) {
+                target = innerBar;
+                this.log('debug', 'Refined target to inner multi-marker bar');
+            }
+        }
+        
         // 2. Standard Bar
         if (!target) {
             const genericBar = document.querySelector('ytlr-progress-bar');
             if (genericBar) {
-                // STRICT CHECK: We MUST find the slider. 
-                // Do not fallback to genericBar or we get giant bars.
                 const slider = genericBar.querySelector('[idomkey="slider"]');
                 if (slider) {
                     target = slider;
                 } else {
-                    // Slider not ready? Wait for mutation observer.
-                    // this.log('debug', 'Generic bar found but no slider yet.');
                     return; 
                 }
             }
@@ -312,38 +316,32 @@ class SponsorBlockHandler {
             return false;
         }
 
-        const currentTime = this.video.currentTime;
-        let nextHighlight = null;
-        let minDiff = Infinity;
+        const highlight = this.segments.find(s => s.category === 'poi_highlight');
 
-        // Debug Log
-        const hls = this.segments.filter(s => s.category === 'poi_highlight');
-        this.log('debug', `Scanning ${hls.length} highlights. Time: ${currentTime.toFixed(2)}`);
-
-        this.segments.forEach(seg => {
-            if (seg.category !== 'poi_highlight') return;
-            
-            const diff = seg.segment[0] - currentTime;
-            
-            // Allow 0.1s buffer for "current" highlight
-            if (diff > -0.1 && diff < minDiff) {
-                minDiff = diff;
-                nextHighlight = seg;
-            }
-        });
-
-        if (nextHighlight) {
-            this.log('info', `Jumping to ${nextHighlight.segment[0]}`);
-            this.video.currentTime = nextHighlight.segment[0];
+        if (highlight) {
+            this.log('info', `Jumping to ${highlight.segment[0]}`);
+            this.video.currentTime = highlight.segment[0];
             showNotification('Jumped to Highlight');
             return true;
         }
 
-        this.log('info', 'No future highlight found');
+        this.log('info', 'No highlight found');
         return false;
     }
 
     // --- Utilities ---
+    getSkippableCategories() {
+        const categories = [];
+        if (configRead('enableSponsorBlockSponsor')) categories.push('sponsor');
+        if (configRead('enableSponsorBlockIntro')) categories.push('intro');
+        if (configRead('enableSponsorBlockOutro')) categories.push('outro');
+        if (configRead('enableSponsorBlockInteraction')) categories.push('interaction');
+        if (configRead('enableSponsorBlockSelfPromo')) categories.push('selfpromo');
+        if (configRead('enableSponsorBlockMusicOfftopic')) categories.push('music_offtopic');
+        if (configRead('enableSponsorBlockPreview')) categories.push('preview');
+        return categories;
+    }
+
     async fetchSegments(hashPrefix) {
         const categories = JSON.stringify([
             'sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 

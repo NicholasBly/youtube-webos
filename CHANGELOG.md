@@ -4,6 +4,66 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.6] - 2025/11/28
+
+### Green Button UI
+
+Moved panel offset to the left to better view other page elements
+
+### Added
+
+Added a restore recent search history feature to yt-fixes.js
+
+-- Sometimes, the recent search history can be blank
+
+-- Fix detects when the search history is empty, and looks for the recent search data in local storage and injects it back in
+
+-- Fix only runs once on startup the first time you visit the search page, and caches it for the rest of the session
+
+-- Might not work if the actual local storage key was deleted / doesn't exist (I don't know why that can happen but it does, another YouTube bug)
+
+### Bug Fixes
+
+Fixed SponsorBlock segments not appearing on ytlr-multi-markers-player-bar-renderer on the old UI (was only looking for [idomkey="slider"] (new UI selector) instead of [idomkey="progress-bar"]) (old UI selector)
+
+Jump to highlight now works at any point in the video
+
+## Return YouTube Dislike
+
+### Performance & Efficiency
+
+Debounced Observers: Switched from checking every single added node to a throttled approach that waits for DOM activity to settle, significantly reducing CPU load.
+
+Batch Styling: Replaced individual style property updates with batch CSS application to reduce browser reflows and layout thrashing.
+
+Optimized Loops: Replaced slower iterators with standard loops for faster execution on embedded processors.
+
+### Stability & Fixes
+
+Race Condition Prevention: Added active state checks to asynchronous callbacks, preventing errors if the user navigates away while data is loading.
+
+Robust Navigation: Replaced fragile manual string parsing with the standard URL API to reliably handle hash changes and parameters.
+
+Memory Safety: Improved cleanup logic to ensure observers and timers are strictly destroyed to prevent memory leaks.
+
+### Code Quality
+
+Centralized Selectors: Moved hardcoded class names into a single configuration object for easier maintenance and updates.
+
+Memory Optimization: Implemented method binding in the constructor to reuse function references rather than creating new instances on every execution.
+
+## adblock.js
+
+### Performance & Efficiency
+
+Unified JSON Interceptor: Merged shorts.js logic into adblock.js to eliminate double-wrapping of JSON.parse, reducing interception overhead by 50%.
+
+Removed Recursive Scanning: Replaced the expensive O(N) recursive search (findFirstObject) with O(1) direct path lookups for Shorts removal.
+
+Fail-Fast Logic: Implemented early exit checks to skip processing on non-relevant API responses, significantly reducing CPU usage on the main thread.
+
+Memory Efficiency: Switched to in-place array mutation for filtering content, reducing garbage collection pressure and memory spikes.
+
 ## [0.5.5] - 2025/11/26
 
 ### Removed

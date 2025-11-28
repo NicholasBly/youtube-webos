@@ -16,7 +16,6 @@ document.addEventListener(
 );
 
 import './adblock.js';
-import './shorts.js';
 import './sponsorblock.js';
 import './font-fix.css';
 import './thumbnail-quality';

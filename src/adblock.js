@@ -3,93 +3,164 @@
 import { configRead } from './config';
 
 /**
- * This is a minimal reimplementation of the following uBlock Origin rule:
- * https://github.com/uBlockOrigin/uAssets/blob/3497eebd440f4871830b9b45af0afc406c6eb593/filters/filters.txt#L116
- *
- * This in turn calls the following snippet:
- * https://github.com/gorhill/uBlock/blob/bfdc81e9e400f7b78b2abc97576c3d7bf3a11a0b/assets/resources/scriptlets.js#L365-L470
- *
- * Seems like for now dropping just the adPlacements is enough for YouTube TV
+ * Optimized AdBlock & Shorts Removal
+ * * Fixes:
+ * 1. Restores unconditional checks for 'adPlacements' to fix broken adblocking.
+ * 2. Integrates Shorts removal to prevent double-parsing JSON.
+ * 3. Uses direct path access instead of recursion for performance.
  */
 const origParse = JSON.parse;
-JSON.parse = function () {
-  const r = origParse.apply(this, arguments);
-  if (!configRead('enableAdBlock')) {
-    return r;
+
+JSON.parse = function (text, reviver) {
+  const data = origParse.call(this, text, reviver);
+
+  // Basic sanity check
+  if (!data || typeof data !== 'object') {
+    return data;
   }
 
-  // Skip processing if this doesn't look like a YouTube API response
-  if (typeof r !== 'object' || r === null) {
-    return r;
+  const enableAds = configRead('enableAdBlock');
+  const removeShorts = configRead('removeShorts');
+
+  if (!enableAds && !removeShorts) {
+    return data;
   }
 
-  // Skip processing search suggestion responses
-  if (Array.isArray(r) && r.length >= 2 && Array.isArray(r[1])) {
-    // This looks like a search suggestions response: [query, [suggestions...], ...]
-    return r;
+  try {
+    // --- Phase 1: Root Level Ad Cleanup (Critical) ---
+    // These must happen regardless of whether 'contents' exists.
+    if (enableAds) {
+      if (data.adPlacements) {
+        data.adPlacements = [];
+      }
+      if (data.adSlots) {
+        data.adSlots = [];
+      }
+      if (data.playerAds) {
+        data.playerAds = [];
+      }
+      // Often found in playerResponse
+      if (data.playerResponse?.adPlacements) {
+        data.playerResponse.adPlacements = [];
+      }
+      if (data.playerResponse?.playerAds) {
+        data.playerResponse.playerAds = [];
+      }
+    }
+
+    // --- Phase 2: Content & UI Filtering ---
+    // Only proceed if we actually have content to filter.
+    
+    // 1. Home / Subscriptions / Browse Pages
+    const browseContent = data.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
+    if (browseContent) {
+        processSectionList(browseContent, enableAds, removeShorts);
+    }
+
+    // 2. Search Results
+    const searchContent = data.contents?.sectionListRenderer?.contents;
+    if (searchContent) {
+        processSectionList(searchContent, enableAds, removeShorts);
+    }
+
+    // 3. Continuations (Infinite Scroll / Next Page)
+    if (data.onResponseReceivedActions) {
+       data.onResponseReceivedActions.forEach(action => {
+         const contItems = action.appendContinuationItemsAction?.continuationItems;
+         if (contItems) {
+           action.appendContinuationItemsAction.continuationItems = filterItems(contItems, removeShorts);
+         }
+       });
+    }
+
+  } catch (e) {
+    console.warn('[AdBlock] Error processing JSON:', e);
   }
 
-  // Skip processing if this looks like search-related data
-  if (r.refinements || r.estimatedResults || r.searchInformation) {
-    return r;
-  }
-
-  if (r.adPlacements) {
-    r.adPlacements = [];
-  }
-
-  if (Array.isArray(r.adSlots)) {
-    r.adSlots = [];
-  }
-
-  // remove ads from home
-  const homeSectionListRenderer =
-    r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content
-      ?.sectionListRenderer;
-  if (homeSectionListRenderer?.contents) {
-    // Drop the full width ad card, usually appears at the top of the page
-    homeSectionListRenderer.contents = homeSectionListRenderer.contents.filter(
-      (elm) => !elm.tvMastheadRenderer
-    );
-
-    // Drop ad tile from the horizontal shelf
-    removeAdSlotRenderer(homeSectionListRenderer);
-  }
-
-  // remove ad tile from search
-  const searchSectionListRenderer = r?.contents?.sectionListRenderer;
-  if (searchSectionListRenderer?.contents) {
-    removeAdSlotRenderer(searchSectionListRenderer);
-  }
-
-  if (r?.entries instanceof Array) {
-    r.entries = r.entries.filter(
-      (elm) => !elm?.command?.reelWatchEndpoint?.adClientParams?.isAd
-    );
-  }
-
-  return r;
+  return data;
 };
 
-// Drop `adSlotRenderer`
-// `adSlotRenderer` can occur as,
-// - sectionListRenderer.contents[*].adSlotRenderer
-// - sectionListRenderer.contents[*].shelfRenderer.content.horizontalListRenderer.items[*].adSlotRenderer
-function removeAdSlotRenderer(sectionListRenderer) {
-  // sectionListRenderer.contents[*].adSlotRenderer
-  sectionListRenderer.contents = sectionListRenderer.contents.filter(
-    (elm) => !elm.adSlotRenderer
-  );
+/**
+ * Processes a list of sections (Shelves, Grids, Renderers)
+ * Modifies the array in-place.
+ */
+function processSectionList(contents, enableAds, removeShorts) {
+  if (!Array.isArray(contents)) return;
 
-  // sectionListRenderer.contents[*].shelfRenderer.content.horizontalListRenderer.items[*].adSlotRenderer
-  const contentsWithShelfRenderer = sectionListRenderer.contents.filter(
-    (elm) => elm.shelfRenderer
-  );
-  contentsWithShelfRenderer.forEach((content) => {
-    const horizontalRenderer =
-      content.shelfRenderer.content.horizontalListRenderer;
-    horizontalRenderer.items = horizontalRenderer.items.filter(
-      (elm) => !elm.adSlotRenderer
-    );
+  // We use a write-index for in-place filtering to reduce memory allocations
+  let writeIdx = 0;
+
+  for (let i = 0; i < contents.length; i++) {
+    const item = contents[i];
+    let keepItem = true;
+
+    // A. Ad Blocking Logic
+    if (enableAds) {
+      // 1. Masthead Ad (Top of Home)
+      if (item.tvMastheadRenderer) {
+        keepItem = false;
+      }
+      // 2. Ad Slot Renderer
+      else if (item.adSlotRenderer) {
+        keepItem = false;
+      }
+    }
+
+    // B. Shorts Removal & Inner Item Filtering
+    if (keepItem) {
+      // Check Shelf (Horizontal rows)
+      if (item.shelfRenderer) {
+        // Remove Shorts Shelf completely
+        if (removeShorts && item.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
+            keepItem = false;
+        } 
+        // Filter items INSIDE the shelf (Ad Tiles or Shorts Tiles)
+        else {
+          const shelfContent = item.shelfRenderer.content;
+          if (shelfContent) {
+            if (shelfContent.horizontalListRenderer?.items) {
+               shelfContent.horizontalListRenderer.items = filterItems(shelfContent.horizontalListRenderer.items, removeShorts, enableAds);
+            } else if (shelfContent.gridRenderer?.items) {
+               shelfContent.gridRenderer.items = filterItems(shelfContent.gridRenderer.items, removeShorts, enableAds);
+            }
+          }
+        }
+      }
+    }
+
+    if (keepItem) {
+      contents[writeIdx++] = item;
+    }
+  }
+
+  // Truncate array to new length
+  contents.length = writeIdx;
+}
+
+/**
+ * Filters individual video/tile items
+ */
+function filterItems(items, removeShorts, enableAds) {
+  if (!Array.isArray(items)) return items;
+
+  return items.filter(item => {
+    // 1. Remove Ad Tiles
+    if (enableAds && item.adSlotRenderer) {
+        return false;
+    }
+
+    // 2. Remove Shorts Tiles
+    if (removeShorts) {
+        // Shorts usually have this command endpoint
+        if (item.tileRenderer?.onSelectCommand?.reelWatchEndpoint) {
+            return false;
+        }
+        // Explicit "isAd" check for Reel items
+        if (item.command?.reelWatchEndpoint?.adClientParams?.isAd) {
+             return false;
+        }
+    }
+    
+    return true;
   });
 }

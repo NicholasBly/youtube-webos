@@ -1,7 +1,7 @@
 .ytaf-ui-container {
   position: fixed;
-  top: 2%;
-  left: 50%;
+  top: 5%;
+  left: 30%;
   transform: translateX(-50%);
   width: min(95vw, 800px);
   max-height: 90vh;

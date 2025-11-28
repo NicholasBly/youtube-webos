@@ -4,471 +4,325 @@ class ReturnYouTubeDislike {
   constructor(videoID) {
     this.videoID = videoID;
     this.active = true;
-    this.debugMode = false; // Can be set based on config
-    
+    this.debugMode = false;
     this.dislikesCount = 0;
     
     this.timers = new Map();
     this.observers = new Set();
-    
-	this.panelContentObserver = null;
-	this.bodyObserver = null;
-  }
-  
-  // Logging system
-  log(level, message, ...args) {
-    const prefix = `[ReturnYouTubeDislike:${this.videoID}]`;
-    if (level === 'debug' && !this.debugMode) {
-      return;
-    }
-    // Simplified logger
-    console.log(prefix, `[${level.toUpperCase()}]`, message, ...args);
+
+    this.selectors = {
+        panel: 'ytlr-structured-description-content-renderer',
+        standardContainer: '.ytLrVideoDescriptionHeaderRendererFactoidContainer',
+        compactContainer: '.rznqCe',
+        items: '.TXB27d, .ytVirtualListItem',
+        virtualList: 'yt-virtual-list',
+        internalWrapper: '.NUDen'
+    };
+
+    this.uiMode = null; 
+
+    this.handleBodyMutation = this.handleBodyMutation.bind(this);
+    this.handlePanelMutation = this.handlePanelMutation.bind(this);
   }
 
-  // Centralized timer management
+  log(level, message, ...args) {
+    if (level === 'debug' && !this.debugMode) return;
+    console.log(`[RYD:${this.videoID}] [${level.toUpperCase()}]`, message, ...args);
+  }
+
+  // --- Timer Management ---
   setTimeout(callback, delay, name) {
     this.clearTimeout(name);
+    if (!this.active) return null; 
+
     const id = setTimeout(() => {
       this.timers.delete(name);
-      callback();
+      if (this.active) callback();
     }, delay);
     this.timers.set(name, id);
     return id;
   }
   
   clearTimeout(name) {
-    if (this.timers.has(name)) {
-      clearTimeout(this.timers.get(name));
+    const id = this.timers.get(name);
+    if (id) {
+      clearTimeout(id);
       this.timers.delete(name);
     }
   }
   
   clearAllTimers() {
-    for (const [name, id] of this.timers) {
-      clearTimeout(id);
-    }
+    this.timers.forEach(clearTimeout);
     this.timers.clear();
   }
 
+  // --- Initialization ---
   async init() {
-    this.log('info', 'Initializing Return YouTube Dislike...');
-    
+    this.log('info', 'Initializing...');
     try {
       await this.fetchVideoData();
+      if (!this.active) return; 
+
       if (this.dislikesCount > 0) {
         this.observeBodyForPanel();
-      } else {
-        this.log('info', 'No dislikes found, not observing panel.');
       }
     } catch (error) {
-      this.log('error', 'Error during initialization:', error);
+      this.log('error', 'Init error:', error);
     }
   }
 
   async fetchVideoData() {
-    if (!this.videoID) {
-      this.log('warn', 'No video ID provided');
-      return;
-    }
-    
+    if (!this.videoID) return;
     try {
-      this.log('info', 'Fetching data for video:', this.videoID);
-      
       const response = await fetch(`https://returnyoutubedislikeapi.com/votes?videoId=${this.videoID}`);
       const data = await response.json();
-      
-      if (data && typeof data.dislikes === 'number') {
-        this.dislikesCount = data.dislikes;
-        this.log('info', 'Data received - Dislikes:', this.dislikesCount);
-      } else {
-        this.log('warn', 'Invalid data received:', data);
-        this.dislikesCount = 0;
-      }
+      this.dislikesCount = data?.dislikes || 0;
+      this.log('info', 'Dislikes loaded:', this.dislikesCount);
     } catch (error) {
-      this.log('error', 'Error fetching video data:', error);
+      this.log('error', 'Fetch error:', error);
       this.dislikesCount = 0;
     }
   }
-  
-  /**
-   * (Observer 1) Watches the entire document for the description panel
-   * being added or removed.
-   */
-  observeBodyForPanel() {
-    this.cleanupObservers(); // Clear any old ones
-    const panelSelector = 'ytlr-structured-description-content-renderer';
-    
-    this.bodyObserver = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        // Watch for the panel being ADDED
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType === 1 && node.matches(panelSelector)) {
-            this.log('info', 'Description panel added. Running check and attaching content observer.');
-            // Run the check immediately
-            this.checkAndInjectDislike(node);
-            // Attach the persistent observer to this new panel
-            this.attachContentObserver(node);
-          }
-        }
-        // Watch for the panel being REMOVED
-        for (const node of mutation.removedNodes) {
-          if (node.nodeType === 1 && node.matches(panelSelector)) {
-            this.log('info', 'Description panel removed. Disconnecting content observer.');
-            // If the panel is removed, disconnect its observer
-            if (this.panelContentObserver) {
-              this.panelContentObserver.disconnect();
-              this.panelContentObserver = null;
-            }
-          }
-        }
-      }
-    });
 
+  // --- Observer Logic ---
+  observeBodyForPanel() {
+    this.cleanupBodyObserver();
+    
+    this.bodyObserver = new MutationObserver(this.handleBodyMutation);
     this.bodyObserver.observe(document.body, { childList: true, subtree: true });
     this.observers.add(this.bodyObserver);
+    this.log('info', 'Watching body for panel...');
 
-    this.log('info', 'Watching document for description panel...');
-    
-    // Also, check if panel is *already* open on load
-    const existingPanel = document.querySelector(panelSelector);
+    const existingPanel = document.querySelector(this.selectors.panel);
     if (existingPanel) {
-      this.log('info', 'Panel already open. Running check and attaching observer.');
-      this.checkAndInjectDislike(existingPanel);
-      this.attachContentObserver(existingPanel);
+      this.setupPanel(existingPanel);
     }
   }
 
-  /**
-   * (Observer 2) Attaches to a specific panel element and watches
-   * its content for any changes, re-running the injection check.
-   */
+  handleBodyMutation(mutations) {
+    if (!this.active) return;
+
+    let nodesAdded = false;
+    for (let i = 0; i < mutations.length; i++) {
+        if (mutations[i].addedNodes.length > 0) {
+            nodesAdded = true;
+            break;
+        }
+    }
+    if (!nodesAdded) return;
+
+    this.setTimeout(() => {
+        const panel = document.querySelector(this.selectors.panel);
+        if (panel) {
+            this.setupPanel(panel);
+        }
+    }, 50, 'findPanelDebounce');
+  }
+
+  setupPanel(panel) {
+      if (!this.active) return;
+      this.checkAndInjectDislike(panel);
+      this.attachContentObserver(panel);
+  }
+
   attachContentObserver(panelElement) {
-    // Disconnect any *previous* panel observer
-    if (this.panelContentObserver) {
-      this.panelContentObserver.disconnect();
-    }
-    
-    this.panelContentObserver = new MutationObserver((mutations) => {
-      // Any mutation inside the panel triggers a re-check
-      this.log('debug', 'Panel content changed, re-running injection check.');
-      this.checkAndInjectDislike(panelElement); 
-    });
-    
-    // Observe the panel itself for any child or subtree changes
-    this.panelContentObserver.observe(panelElement, { 
-      childList: true, 
-      subtree: true 
-    });
-    
-    this.log('info', 'Attached persistent content observer to panel.');
+    if (this.panelContentObserver) this.panelContentObserver.disconnect();
+
+    this.panelContentObserver = new MutationObserver(this.handlePanelMutation);
+    this.panelContentObserver.observe(panelElement, { childList: true, subtree: true });
+    this.log('info', 'Attached localized observer to panel.');
   }
 
-/**
-   * REPLACEMENT METHOD
-   * 1. Detects if we are in "Standard Mode" (WebOS 25+) or "Compact Mode" (WebOS 23).
-   * 2. Sets the correct variables for that mode.
-   * 3. Applies the layout fix and injects the dislike count.
-   */
+  handlePanelMutation() {
+      if (!this.active) return;
+      this.setTimeout(() => {
+          const panel = document.querySelector(this.selectors.panel);
+          if (panel) this.checkAndInjectDislike(panel);
+      }, 100, 'injectDebounce');
+  }
+
+  // --- Core Logic ---
+
   checkAndInjectDislike(panelElement) {
+    if (!this.active) return;
+
+    // 1. EARLY EXIT
+    if (document.getElementById('ryd-dislike-factoid')) return;
+
     try {
-      // --- 1. Feature Detection (Selector Strategy) ---
-      const standardContainer = panelElement.querySelector('.ytLrVideoDescriptionHeaderRendererFactoidContainer');
-      const compactContainer = panelElement.querySelector('.rznqCe');
-      
+      const standardContainer = panelElement.querySelector(this.selectors.standardContainer);
+      const compactContainer = panelElement.querySelector(this.selectors.compactContainer);
+
       let container, factoidClass, valueSelector, labelSelector;
-      
+
       if (standardContainer) {
-        // "Standard Mode" -> WebOS 25 / New UI
-        this.log('debug', 'Standard UI detected (WebOS 25/Regular).');
+        this.uiMode = 'standard';
         container = standardContainer;
         factoidClass = '.ytLrVideoDescriptionHeaderRendererFactoid';
         valueSelector = '.ytLrVideoDescriptionHeaderRendererValue';
         labelSelector = '.ytLrVideoDescriptionHeaderRendererLabel';
       } else if (compactContainer) {
-        // "Compact Mode" -> WebOS 23
-        this.log('debug', 'Compact UI detected (WebOS 23).');
+        this.uiMode = 'compact';
         container = compactContainer;
         factoidClass = '.nOJlw';
         valueSelector = '.axf6h';
         labelSelector = '.Ph2lNb';
       } else {
-        // No recognizable container found yet
         return;
       }
 
-      // --- 2. Apply Layout Fix (Universal) ---
-      // Since both WebOS 25 and 23 can suffer from the "0-height/invisible items" bug,
-      // we run the fix if *any* recognized UI is found.
-      this.applyNaturalFlow(panelElement);
-
-      // --- 3. Container Layout Fix ---
-      // Ensure the stats row wraps correctly when we add the 4th item
-      container.style.display = 'flex';
-      container.style.flexWrap = 'wrap';
-      container.style.justifyContent = 'center'; 
-      container.style.gap = '1.5rem'; 
-      container.style.height = 'auto';
-      container.style.overflow = 'visible';
-
-      // --- 4. Locate Likes Element ---
       const likesElement = container.querySelector(`div[aria-label*="likes"]${factoidClass}`) || 
                            container.querySelector(`div[aria-label*="Likes"]${factoidClass}`);
 
       if (!likesElement) return;
 
-      // --- 5. Visual Cleanup (Date Element) ---
       const dateElement = container.querySelector('div[idomkey="factoid-2"]');
+      
+      this.applyNaturalFlow(panelElement);
+
+      container.style.cssText = 'display:flex; flex-wrap:wrap; justify-content:center; gap:1.5rem; height:auto; overflow:visible;';
+
       if (dateElement) {
-        dateElement.style.marginTop = '0'; 
+        dateElement.style.marginTop = '0';
         const vEl = dateElement.querySelector(valueSelector);
         const lEl = dateElement.querySelector(labelSelector);
-        if(vEl) { vEl.style.display = 'inline-block'; vEl.style.marginRight = '0.4rem'; }
-        if(lEl) { lEl.style.display = 'inline-block'; }
+        if(vEl) vEl.style.cssText += 'display:inline-block; margin-right:0.4rem;';
+        if(lEl) lEl.style.cssText += 'display:inline-block;';
       }
-
-      // --- 6. Dislike Injection ---
-      if (container.querySelector('#ryd-dislike-factoid')) return;
 
       this.log('info', 'Injecting dislike count...');
       const dislikeElement = likesElement.cloneNode(true);
       dislikeElement.id = 'ryd-dislike-factoid';
       dislikeElement.setAttribute('idomkey', 'factoid-ryd');
-      dislikeElement.style.flex = '0 0 auto'; 
-      
-      const valueElement = dislikeElement.querySelector(valueSelector); 
-      const labelElement = dislikeElement.querySelector(labelSelector); 
-      
+      dislikeElement.style.flex = '0 0 auto';
+
+      const valueElement = dislikeElement.querySelector(valueSelector);
+      const labelElement = dislikeElement.querySelector(labelSelector);
+
       if (valueElement && labelElement) {
         const dislikeText = this.formatNumber(this.dislikesCount);
-        valueElement.textContent = dislikeText; 
+        valueElement.textContent = dislikeText;
         labelElement.textContent = 'Dislikes';
         dislikeElement.setAttribute('aria-label', `${dislikeText} Dislikes`);
       }
-      
+
       likesElement.insertAdjacentElement('afterend', dislikeElement);
-      this.log('info', 'Successfully injected dislike count.');
-      
+
     } catch (error) {
-      this.log('error', 'Error during dislike injection check:', error);
+      this.log('error', 'Injection error:', error);
     }
   }
 
-  /**
-   * HELPER: Forces "Natural Flow" and Enables LG Remote Navigation
-   * Updated to support BOTH WebOS 23 (.TXB27d) and WebOS 25 (.ytVirtualListItem) classes.
-   */
   applyNaturalFlow(panelElement) {
-      // 1. Fix the Scroll Container
-      const virtualList = panelElement.querySelector('yt-virtual-list');
-      if (virtualList) {
-          virtualList.style.height = 'auto';
-          virtualList.style.overflow = 'visible';
-          virtualList.style.display = 'block';
+      const virtualList = panelElement.querySelector(this.selectors.virtualList);
+      if (virtualList) virtualList.style.cssText += 'height:auto; overflow:visible; display:block;';
+
+      const internalWrapper = panelElement.querySelector(this.selectors.internalWrapper);
+      if (internalWrapper) internalWrapper.style.cssText += 'position:relative; height:auto; width:100%;';
+
+      const items = panelElement.querySelectorAll(this.selectors.items);
+      const len = items.length;
+      
+      for (let i = 0; i < len; i++) {
+          const item = items[i];
+          item.style.cssText += 'position:relative; transform:none; height:auto; margin-bottom:1rem; width:100%; pointer-events:auto;';
+          
+          const focusable = item.firstElementChild?.tagName === 'BUTTON' ? item.firstElementChild : item.querySelector('[tabindex]');
+          if (focusable) focusable.setAttribute('tabindex', '0');
       }
 
-      // 2. Fix the Wrapper
-      const internalWrapper = panelElement.querySelector('.NUDen');
-      if (internalWrapper) {
-          internalWrapper.style.position = 'relative'; 
-          internalWrapper.style.height = 'auto';      
-          internalWrapper.style.width = '100%';
-      }
-
-      // 3. Fix Items & Enable Focus (Targets both old and new class names)
-      const itemSelector = '.TXB27d, .ytVirtualListItem';
-      const items = panelElement.querySelectorAll(itemSelector);
-      
-      items.forEach(item => {
-          // Layout
-          item.style.position = 'relative'; 
-          item.style.transform = 'none';
-          item.style.height = 'auto';
-          item.style.marginBottom = '1rem'; 
-          item.style.width = '100%';
-          item.style.pointerEvents = 'auto';
-
-          const focusable = item.querySelector('[hybridnavfocusable="true"]') || 
-                            item.querySelector('[role="menuitem"]') || 
-                            item.querySelector('button');
-                            
-          if (focusable) {
-              focusable.setAttribute('tabindex', '0');
-              // No background color listeners, preserving native UI style
-          }
-      });
-      
-      // 4. Expand Descriptions
       const descBody = panelElement.querySelector('ytlr-expandable-video-description-body-renderer');
       if (descBody) {
-          descBody.style.height = 'auto';
-          descBody.style.display = 'block';
-          
+          descBody.style.cssText += 'height:auto; display:block;';
           const sidesheet = descBody.querySelector('ytlr-sidesheet-item');
-          if(sidesheet) {
-              sidesheet.style.height = 'auto';
-              sidesheet.style.display = 'block';
-          }
+          if (sidesheet) sidesheet.style.cssText += 'height:auto; display:block;';
       }
   }
 
   formatNumber(num) {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-    }
-    if (num >= 1000) {
-      return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
-    }
+    if (num >= 1e6) return (num / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (num >= 1e3) return (num / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
     return num.toString();
   }
 
-	cleanupObservers() {
-		if (this.bodyObserver) {
-		  this.bodyObserver.disconnect();
-		  this.observers.delete(this.bodyObserver);
-		  this.bodyObserver = null;
-		}
-		
-		if (this.panelContentObserver) {
-		  this.panelContentObserver.disconnect();
-		  this.panelContentObserver = null;
-		}
-		
-		// Fallback for any other observers
-		for (const observer of this.observers) {
-		  try {
-			observer.disconnect();
-		  } catch (e) {
-			// ignore
-		  }
-		}
-		this.observers.clear();
-	  }
+  cleanupBodyObserver() {
+    if (this.bodyObserver) {
+        this.bodyObserver.disconnect();
+        this.observers.delete(this.bodyObserver);
+        this.bodyObserver = null;
+    }
+  }
+
+  cleanupObservers() {
+    this.observers.forEach(obs => obs.disconnect());
+    this.observers.clear();
+    
+    this.bodyObserver = null;
+    if (this.panelContentObserver) {
+        this.panelContentObserver.disconnect();
+        this.panelContentObserver = null;
+    }
+  }
 
   destroy() {
-    this.log('info', 'Destroying ReturnYouTubeDislike instance.');
-    this.active = false;
+    this.log('info', 'Destroying...');
+    this.active = false; 
     
     this.clearAllTimers();
     this.cleanupObservers();
     
-    // Clean up the DOM element if we added it
-    const dislikeFactoid = document.getElementById('ryd-dislike-factoid');
-    if (dislikeFactoid) {
-      dislikeFactoid.remove();
-    }
-    
-    this.videoID = null;
+    const el = document.getElementById('ryd-dislike-factoid');
+    if (el) el.remove();
   }
 }
 
-// Global instance management
+// --- Global Management ---
 if (typeof window !== 'undefined') {
   window.returnYouTubeDislike = null;
 
-  function uninitializeReturnYouTubeDislike() {
-    if (window.returnYouTubeDislike) {
-      try {
-        window.returnYouTubeDislike.destroy();
-      } catch (err) {
-        console.warn('window.returnYouTubeDislike.destroy() failed!', err);
+  const cleanup = () => {
+      if (window.returnYouTubeDislike) {
+          window.returnYouTubeDislike.destroy();
+          window.returnYouTubeDislike = null;
       }
-      window.returnYouTubeDislike = null;
-      console.info("[ReturnYouTubeDislike] Uninitialized.");
-    }
-  }
+  };
 
-  const handleHashChangeForRYD = () => {
-    let currentPath = '';
-    let searchParamsString = '';
-    
-    try {
-      const hash = window.location.hash;
-      if (hash.startsWith('#')) {
-        const pathAndQuery = hash.substring(1);
-        const queryIndex = pathAndQuery.indexOf('?');
-        if (queryIndex !== -1) {
-          currentPath = pathAndQuery.substring(0, queryIndex);
-          searchParamsString = pathAndQuery.substring(queryIndex);
-        } else {
-          currentPath = pathAndQuery;
+  const handleHashChange = () => {
+    const urlStr = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+    if (!urlStr) { cleanup(); return; }
+
+    const url = new URL(urlStr, 'http://dummy.com'); 
+    const isWatch = url.pathname === '/watch';
+    const videoID = url.searchParams.get('v');
+
+    if (!isWatch || !videoID) {
+        cleanup();
+        return;
+    }
+
+    if (!window.returnYouTubeDislike || window.returnYouTubeDislike.videoID !== videoID) {
+        cleanup();
+        
+        let enabled = true;
+        if (typeof configRead === 'function') {
+            try { enabled = configRead('enableReturnYouTubeDislike'); } catch(e) {}
         }
-      }
-    } catch (e) {
-      console.error("[ReturnYouTubeDislike] Error parsing window.location.hash:", e);
-      currentPath = "/";
-    }
 
-    const searchParams = new URLSearchParams(searchParamsString);
-    const videoID = searchParams.get('v');
-
-    console.info(`[ReturnYouTubeDislike] Hash changed. Path: '${currentPath}', Video ID: '${videoID}'`);
-
-    if (currentPath !== '/watch' && window.returnYouTubeDislike) {
-      console.info('[ReturnYouTubeDislike] Not on a /watch path. Uninitializing.');
-      uninitializeReturnYouTubeDislike();
-      return;
-    }
-
-    const needsReload = videoID && (!window.returnYouTubeDislike || window.returnYouTubeDislike.videoID !== videoID);
-
-    if (needsReload) {
-      console.info(`[ReturnYouTubeDislike] Video ID changed to ${videoID} or not initialized. Reloading.`);
-      uninitializeReturnYouTubeDislike();
-
-      let rydEnabled = true;
-      try {
-        rydEnabled = configRead('enableReturnYouTubeDislike');
-      } catch (e) {
-        console.warn("[ReturnYouTubeDislike] Could not read 'enableReturnYouTubeDislike' config. Defaulting to enabled. Error:", e);
-      }
-      
-      if (rydEnabled) {
-        console.info(`[ReturnYouTubeDislike] Enabled. Initializing for video ID: ${videoID}`);
-        window.returnYouTubeDislike = new ReturnYouTubeDislike(videoID);
-        window.returnYouTubeDislike.init();
-      } else {
-        console.info('[ReturnYouTubeDislike] Disabled in config. Not loading.');
-      }
-    } else if (!videoID && window.returnYouTubeDislike) {
-      console.info('[ReturnYouTubeDislike] No video ID in URL. Uninitializing.');
-      uninitializeReturnYouTubeDislike();
+        if (enabled) {
+            window.returnYouTubeDislike = new ReturnYouTubeDislike(videoID);
+            window.returnYouTubeDislike.init();
+        }
     }
   };
 
-  // Listen for hash changes to handle navigation
-  window.addEventListener('hashchange', handleHashChangeForRYD, false);
+  window.addEventListener('hashchange', handleHashChange, { passive: true });
+  window.addEventListener('load', () => setTimeout(handleHashChange, 500));
 
-  // Also run on initial load
-  if (document.readyState === 'complete') {
-    setTimeout(handleHashChangeForRYD, 500);
-  } else {
-    window.addEventListener('load', () => setTimeout(handleHashChangeForRYD, 500));
+  if (typeof configAddChangeListener === 'function') {
+      configAddChangeListener('enableReturnYouTubeDislike', (evt) => {
+          evt.detail.newValue ? handleHashChange() : cleanup();
+      });
   }
-
-  // Listen for config changes
-  try {
-    configAddChangeListener('enableReturnYouTubeDislike', (evt) => {
-      if (evt.detail.newValue) {
-        handleHashChangeForRYD();
-      } else if (window.returnYouTubeDislike) {
-        uninitializeReturnYouTubeDislike();
-      }
-    });
-  } catch (e) {
-    console.warn('[ReturnYouTubeDislike] Could not set up config change listener:', e);
-  }
-
-} else {
-  console.warn("ReturnYouTubeDislike: 'window' object not found.");
-}
-
-// Dummy implementations if not provided
-if (typeof configRead === 'undefined') {
-  console.warn("configRead function is not defined. Using dummy implementation.");
-  window.configRead = function(key) {
-    if (key === 'enableReturnYouTubeDislike') return true;
-    return false;
-  };
 }
 
 export { ReturnYouTubeDislike };

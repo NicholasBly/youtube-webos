@@ -492,23 +492,11 @@ function applyOledMode(enabled) {
 initHideLogo();
 initHideEndcards();
 
-if (configRead('hideGuestSignInPrompts') && isGuestMode()) {
-  initYouTubeFixes();
-}
-
-if (isGuestMode()) {
-  configAddChangeListener('hideGuestSignInPrompts', (evt) => {
-    if (evt.detail.newValue) {
-      initYouTubeFixes();
-    } else {
-      showNotification('Reload required to disable fix');
-    }
-  });
-}
+initYouTubeFixes();
 
 // Listen for runtime changes to the toggle
 configAddChangeListener('hideGuestSignInPrompts', (evt) => {
-  if (evt.detail.newValue && isGuestMode()) {
+  if (evt.detail.newValue) {
     initYouTubeFixes();
   } else {
     showNotification('Reload required to disable fix');
