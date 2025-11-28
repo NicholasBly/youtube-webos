@@ -132,7 +132,7 @@
   justify-content: space-between;
   font-size: 24px; /* Original 16px */
   font-weight: 400;
-  line-height: 1.0; /* Original 1.4 */
+  line-height: 0.85; /* Original 1.4 */
   padding: 12px 0;
   cursor: pointer;
   transition: all 0.2s ease;

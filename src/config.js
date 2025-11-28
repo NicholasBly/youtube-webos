@@ -122,7 +122,8 @@ const configOptions = new Map([
     }
   ],
   ['enableOledCareMode', { default: false, desc: 'Enable OLED-Care mode (true black UI)' }],
-  ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Button' }]
+  ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Button' }],
+  ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }]
 ]);
 
 for (const [key, value] of Object.entries(segmentTypes)) {

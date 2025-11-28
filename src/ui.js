@@ -13,6 +13,7 @@ import './auto-login.js';
 import './return-dislike.js';
 import { initYouTubeFixes } from './yt-fixes.js';
 import { WebOSVersion } from './webos-utils.js';
+import { initVideoQuality } from './video-quality.js';
 
 let cachedGuestMode = null;
 
@@ -219,6 +220,7 @@ function createOptionsPanel() {
   const contentWrapper = document.createElement('div');
 
   contentWrapper.appendChild(createConfigCheckbox('enableAdBlock'));
+  contentWrapper.appendChild(createConfigCheckbox('forceHighResVideo'));
   contentWrapper.appendChild(createConfigCheckbox('upgradeThumbnails'));
   contentWrapper.appendChild(createConfigCheckbox('hideLogo'));
   contentWrapper.appendChild(createConfigCheckbox('enableOledCareMode'));
@@ -493,6 +495,7 @@ initHideLogo();
 initHideEndcards();
 
 initYouTubeFixes();
+initVideoQuality();
 
 // Listen for runtime changes to the toggle
 configAddChangeListener('hideGuestSignInPrompts', (evt) => {
