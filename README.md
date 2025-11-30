@@ -7,6 +7,7 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 - Full support for webOS 6, 22, 23, 24, and 25 (older versions are untested)
 - Enhanced Menu UI
 - Auto Login - bypasses account selection screen
+- Force Max Quality
 - Hide Endcards
 - SponsorBlock: Highlight feature added
 - Jump to highlight segment with blue button on LG remote
