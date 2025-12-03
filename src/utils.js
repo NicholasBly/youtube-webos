@@ -1,11 +1,16 @@
+/* src/utils.js */
 const CONTENT_INTENT_REGEX = /^.+(?=Content)/g;
 
 export function extractLaunchParams() {
   if (window.launchParams) {
-    return JSON.parse(window.launchParams);
-  } else {
-    return {};
+    try {
+      return JSON.parse(window.launchParams);
+    } catch (e) {
+      console.warn('Failed to parse launchParams', e);
+      return {};
+    }
   }
+  return {};
 }
 
 function getYTURL() {
@@ -16,12 +21,6 @@ function getYTURL() {
   return ytURL;
 }
 
-/**
- * Creates a new URLSearchPrams with the contents of `a` and `b`
- * @param {URLSearchParams} a
- * @param {URLSearchParams} b
- * @returns {URLSearchParams}
- */
 function concatSearchParams(a, b) {
   return new URLSearchParams([...a.entries(), ...b.entries()]);
 }
@@ -29,25 +28,13 @@ function concatSearchParams(a, b) {
 export function handleLaunch(params) {
   console.info('handleLaunch', params);
   let ytURL = getYTURL();
-
-  // We use our custom "target" param, since launches with "contentTarget"
-  // parameter do not respect "handlesRelaunch" appinfo option. We still
-  // fallback to "contentTarget" if our custom param is not specified.
-  //
   let { target, contentTarget = target } = params;
-
-  /** TODO: Handle google assistant
-   * Sample: {contentTarget: "v=v=<ID>", storeCaller: "voice", subReason: "voiceAgent", voiceEngine: "googleAssistant"}
-   */
 
   switch (typeof contentTarget) {
     case 'string': {
       if (contentTarget.indexOf(ytURL.origin) === 0) {
-        console.info('Launching from direct contentTarget');
-        ytURL = contentTarget;
+        ytURL = new URL(contentTarget);
       } else {
-        // Out of app dial launch with second screen on home: { contentTarget: 'pairingCode=<UUID>&theme=cl&dialLaunch=watch' }
-        console.info('Launching from partial contentTarget');
         if (contentTarget.indexOf('v=v=') === 0)
           contentTarget = contentTarget.substring(2);
 
@@ -59,29 +46,19 @@ export function handleLaunch(params) {
       break;
     }
     case 'object': {
-      console.info('Voice launch');
-
       const { intent, intentParam } = contentTarget;
-      // Ctrl+F tvhtml5LaunchUrlComponentChanged & REQUEST_ORIGIN_GOOGLE_ASSISTANT in base.js for info
       const search = ytURL.searchParams;
-      // contentTarget.intent's seen so far: PlayContent, SearchContent
       const voiceContentIntent = intent
         .match(CONTENT_INTENT_REGEX)?.[0]
         ?.toLowerCase();
 
       search.set('inApp', true);
-      search.set('vs', 9); // Voice System is VOICE_SYSTEM_LG_THINKQ
-      voiceContentIntent && search.set('va', voiceContentIntent);
-
-      // order is important
+      search.set('vs', 9); 
+      if (voiceContentIntent) search.set('va', voiceContentIntent);
       search.append('launch', 'voice');
-      voiceContentIntent === 'search' && search.append('launch', 'search');
-
+      if (voiceContentIntent === 'search') search.append('launch', 'search');
       search.set('vq', intentParam);
       break;
-    }
-    default: {
-      console.info('Default launch');
     }
   }
 
@@ -89,55 +66,60 @@ export function handleLaunch(params) {
 }
 
 /**
- * Wait for a child element to be added for which a predicate is true.
- *
- * When `observeAttributes` is false, the predicate is checked only when a node
- * is first added. If you want the predicate to run every time an attribute is
- * modified, set `observeAttributes` to true.
- * @template {Node} T
- * @param {Element} parent Root of tree to watch
- * @param {(node: Node) => node is T} predicate Function that checks whether its argument is the desired element
- * @param {boolean} observeAttributes Also run predicate on attribute changes
- * @param {AbortSignal=} abortSignal Signal that can be used to stop waiting
- * @return {Promise<T>} Matched element
+ * Wait for a child element to be added.
+ * Includes a safety timeout (default 30s) to prevent memory leaks.
  */
 export async function waitForChildAdd(
   parent,
   predicate,
   observeAttributes,
-  abortSignal
+  abortSignal,
+  timeoutMs = 30000
 ) {
   return new Promise((resolve, reject) => {
+    let timer = null;
+    
     const obs = new MutationObserver((mutations) => {
       for (const mut of mutations) {
-        switch (mut.type) {
-          case 'attributes': {
-            if (predicate(mut.target)) {
-              obs.disconnect();
-              resolve(mut.target);
+        if (mut.type === 'attributes') {
+          if (predicate(mut.target)) {
+            cleanup();
+            resolve(mut.target);
+            return;
+          }
+        } else if (mut.type === 'childList') {
+          for (const node of mut.addedNodes) {
+            if (predicate(node)) {
+              cleanup();
+              resolve(node);
               return;
             }
-            break;
-          }
-          case 'childList': {
-            for (const node of mut.addedNodes) {
-              if (predicate(node)) {
-                obs.disconnect();
-                resolve(node);
-                return;
-              }
-            }
-            break;
           }
         }
       }
     });
 
-    if (abortSignal) {
-      abortSignal.addEventListener('abort', () => {
+    const cleanup = () => {
         obs.disconnect();
+        if (timer) clearTimeout(timer);
+        if (abortSignal) abortSignal.removeEventListener('abort', onAbort);
+    };
+
+    const onAbort = () => {
+        cleanup();
         reject(new Error('aborted'));
-      });
+    };
+
+    if (abortSignal) {
+      abortSignal.addEventListener('abort', onAbort);
+    }
+
+    // Safety timeout
+    if (timeoutMs > 0) {
+        timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('waitForChildAdd timed out'));
+        }, timeoutMs);
     }
 
     obs.observe(parent, {
@@ -146,4 +128,18 @@ export async function waitForChildAdd(
       childList: true
     });
   });
+}
+
+// Simple throttle to reduce observer CPU load
+export function throttle(func, limit) {
+  let inThrottle;
+  return function() {
+    const args = arguments;
+    const context = this;
+    if (!inThrottle) {
+      func.apply(context, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  }
 }

@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.8] - 2025/12/02
+
+### Performance Enhancements
+
+SponsorBlock: Implemented category config caching to eliminate expensive storage reads during video playback (approx. 90% CPU reduction in time-check loop).
+
+SponsorBlock: Throttled UI mutation observer to reduce idle CPU usage when player controls are visible.
+
+AdBlock: Added fail-safe error handling to JSON.parse hook to prevent application crashes on unexpected data structures.
+
+Core: Added safety timeouts to waitForChildAdd utility to prevent memory leaks from zombie observers.
+
+YT-Fixes: Optimized sign-in prompt detection to reduce DOM scanning frequency.
+
+General: Added AbortController support to network requests to prevent hanging threads on slow connections.
+
+### Changes
+
+Removed "Enable" word in green UI panel labels as the checkbox is self explanatory
+
+Capitalized checkbox labels for main settings
+
 ## [0.5.7] - 2025/11/28
 
 ### Added

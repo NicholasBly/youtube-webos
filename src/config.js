@@ -44,14 +44,14 @@ export const segmentTypes = {
 };
 
 const configOptions = new Map([
-  ['enableAdBlock', { default: true, desc: 'Enable ad blocking' }],
+  ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
-  ['upgradeThumbnails', { default: false, desc: 'Upgrade thumbnail quality' }],
+  ['upgradeThumbnails', { default: false, desc: 'Upgrade Thumbnail Quality' }],
   [
     'removeShorts',
-    { default: false, desc: 'Remove Shorts from subscriptions' }
+    { default: false, desc: 'Remove Shorts From Subscriptions' }
   ],
-  ['enableSponsorBlock', { default: true, desc: 'Enable SponsorBlock' }],
+  ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
   [
     'enableSponsorBlockSponsor',
     { default: true, desc: 'Skip sponsor segments' }
@@ -83,7 +83,7 @@ const configOptions = new Map([
   'hideEndcards',
   {
     default: false,
-    desc: 'Hide endcards'
+    desc: 'Hide Endcards'
   }
   ],
   [
@@ -104,7 +104,7 @@ const configOptions = new Map([
   'enableAutoLogin',
   {
     default: true,
-    desc: 'Auto login'
+    desc: 'Auto Login'
   }
   ],
   [
@@ -118,10 +118,10 @@ const configOptions = new Map([
     'hideLogo',
     {
       default: false,
-      desc: 'Hide YouTube logo'
+      desc: 'Hide YouTube Logo'
     }
   ],
-  ['enableOledCareMode', { default: false, desc: 'Enable OLED-Care mode (true black UI)' }],
+  ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Button' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }]
 ]);
