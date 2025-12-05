@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.9] - 2025/12/05
+
+### Config UI panel
+
+Note: When adding new features the config panel ran out of space. So I decided to make a two page UI to have the main settings first and then the SponsorBlock settings second. Press left/right on your LG remote to switch pages.
+
+- Fixed non-music segments not showing a color picker option
+- Fixed old janky navigation behavior with left/right arrow buttons
+
+### SponsorBlock
+
+- Added Filler Tangents/Jokes segment type (default: disabled)
+- Added Hook/Greetings segment type (default: disabled)
+- Added mute segment type (default: disabled)
+
+Bump (update) dependencies
+
 ## [0.5.8] - 2025/12/02
 
 ### Performance Enhancements

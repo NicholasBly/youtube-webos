@@ -54,7 +54,8 @@
   margin-bottom: 0;
 }
 
-.ytaf-ui-container > div:not(:first-child) {
+/* Apply scrolling and padding to both pages */
+.ytaf-ui-container > div.ytaf-settings-page {
   padding: 0 32px 24px;
   overflow-y: auto;
   overflow-x: hidden;
@@ -402,4 +403,46 @@
 
 .ytaf-ui-container.oled-care .reset-color-btn:hover {
   background: #333333;
+}
+
+/* Navigation Hints for Pages */
+.ytaf-nav-hint {
+  display: flex;
+  align-items: center;
+  padding: 16px 0 8px;
+  font-size: 24px;
+  color: #aaaaaa;
+  cursor: pointer;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 16px;
+}
+
+.ytaf-nav-hint.right {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.ytaf-nav-hint.left {
+  justify-content: flex-start;
+  text-align: left;
+  border-top: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding: 8px 0 16px;
+}
+
+.ytaf-nav-hint span.arrow {
+  color: #ff0000;
+  font-weight: bold;
+  font-size: 28px;
+  margin: 0 12px;
+}
+
+.ytaf-nav-hint:hover {
+  color: #ffffff;
+}
+
+.ytaf-nav-hint:hover span.arrow {
+  transform: scale(1.2);
 }

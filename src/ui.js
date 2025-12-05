@@ -183,6 +183,28 @@ function createOptionsPanel() {
     true
   );
 
+  let activePage = 0; // 0: Main, 1: SponsorBlock
+  let pageMain = null;
+  let pageSponsor = null;
+
+  const setActivePage = (pageIndex) => {
+    if (pageIndex === 0) {
+      pageMain.style.display = 'block';
+      pageSponsor.style.display = 'none';
+      activePage = 0;
+      // Focus first element on return to main
+      pageMain.querySelector('input')?.focus();
+    } else {
+      pageMain.style.display = 'none';
+      pageSponsor.style.display = 'block';
+      activePage = 1;
+      // Focus the Back button or first input on switch
+      // Since Back button is a nav hint, maybe focus the master switch
+      // But purely focusing the container or first input is safer
+      pageSponsor.querySelector('input')?.focus();
+    }
+  };
+
   elmContainer.addEventListener(
     'keydown',
     (evt) => {
@@ -193,6 +215,52 @@ function createOptionsPanel() {
       }
 
       if (evt.keyCode in ARROW_KEY_CODE) {
+        // Handle Page Switching on Left/Right
+        const dir = ARROW_KEY_CODE[evt.keyCode];
+        if (dir === 'left' || dir === 'right') {
+          const preFocus = document.activeElement;
+
+          if (activePage === 1) {
+            const sponsorMainToggle = pageSponsor.querySelector('input');
+            if (dir === 'right' && preFocus === sponsorMainToggle) {
+               evt.preventDefault();
+               evt.stopPropagation();
+               return;
+            }
+
+            const isSubItemCheckbox = preFocus.matches('blockquote input[type="checkbox"]');
+            if (dir === 'left' && isSubItemCheckbox) {
+               setActivePage(0);
+               evt.preventDefault();
+               evt.stopPropagation();
+               return;
+            }
+          }
+
+          navigate(dir);
+          const postFocus = document.activeElement;
+
+          // If navigation didn't move focus (hit a wall)
+          if (preFocus === postFocus) {
+             if (dir === 'right' && activePage === 0) {
+               setActivePage(1);
+               evt.preventDefault();
+               evt.stopPropagation();
+               return;
+             }
+             if (dir === 'left' && activePage === 1) {
+               setActivePage(0);
+               evt.preventDefault();
+               evt.stopPropagation();
+               return;
+             }
+          }
+          // If we did navigate successfully (e.g. between color inputs), let it happen
+          evt.preventDefault();
+          evt.stopPropagation();
+          return;
+        }
+
         navigate(ARROW_KEY_CODE[evt.keyCode]);
       } else if (evt.keyCode === 13) {
         if (evt instanceof KeyboardEvent) {
@@ -217,43 +285,70 @@ function createOptionsPanel() {
 	  }
   elmContainer.appendChild(elmHeading);
 
-  const contentWrapper = document.createElement('div');
+  // --- Page 1: Main Settings ---
+  pageMain = document.createElement('div');
+  pageMain.classList.add('ytaf-settings-page');
+  pageMain.id = 'ytaf-page-main';
 
-  contentWrapper.appendChild(createConfigCheckbox('enableAdBlock'));
-  contentWrapper.appendChild(createConfigCheckbox('forceHighResVideo'));
-  contentWrapper.appendChild(createConfigCheckbox('upgradeThumbnails'));
-  contentWrapper.appendChild(createConfigCheckbox('hideLogo'));
-  contentWrapper.appendChild(createConfigCheckbox('enableOledCareMode'));
-  contentWrapper.appendChild(createConfigCheckbox('removeShorts'));
-  contentWrapper.appendChild(createConfigCheckbox('enableAutoLogin'));
-  contentWrapper.appendChild(createConfigCheckbox('hideEndcards'));
-  contentWrapper.appendChild(createConfigCheckbox('enableReturnYouTubeDislike'));
+  pageMain.appendChild(createConfigCheckbox('enableAdBlock'));
+  pageMain.appendChild(createConfigCheckbox('forceHighResVideo'));
+  pageMain.appendChild(createConfigCheckbox('upgradeThumbnails'));
+  pageMain.appendChild(createConfigCheckbox('hideLogo'));
+  pageMain.appendChild(createConfigCheckbox('enableOledCareMode'));
+  pageMain.appendChild(createConfigCheckbox('removeShorts'));
+  pageMain.appendChild(createConfigCheckbox('enableAutoLogin'));
+  pageMain.appendChild(createConfigCheckbox('hideEndcards'));
+  pageMain.appendChild(createConfigCheckbox('enableReturnYouTubeDislike'));
   if (isGuestMode()) {
-    contentWrapper.appendChild(createConfigCheckbox('hideGuestSignInPrompts'));
+    pageMain.appendChild(createConfigCheckbox('hideGuestSignInPrompts'));
   }
-  contentWrapper.appendChild(createConfigCheckbox('enableSponsorBlock'));
+  
+  // Navigation Hint (Next)
+  const navHintNext = document.createElement('div');
+  navHintNext.className = 'ytaf-nav-hint right';
+  navHintNext.innerHTML = 'SponsorBlock Settings <span class="arrow">&rarr;</span>';
+  navHintNext.addEventListener('click', () => setActivePage(1));
+  pageMain.appendChild(navHintNext);
+
+  elmContainer.appendChild(pageMain);
+
+  // --- Page 2: SponsorBlock Settings ---
+  pageSponsor = document.createElement('div');
+  pageSponsor.classList.add('ytaf-settings-page');
+  pageSponsor.id = 'ytaf-page-sponsor';
+  pageSponsor.style.display = 'none';
+
+  // Navigation Hint (Prev)
+  const navHintPrev = document.createElement('div');
+  navHintPrev.className = 'ytaf-nav-hint left';
+  navHintPrev.innerHTML = '<span class="arrow">&larr;</span> Main Settings';
+  navHintPrev.addEventListener('click', () => setActivePage(0));
+  pageSponsor.appendChild(navHintPrev);
+
+  pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
 
   const elmBlock = document.createElement('blockquote');
-
+  
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockSponsor'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockIntro'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockOutro'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockInteraction'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockSelfPromo'));
-  elmBlock.appendChild(
-    createConfigCheckbox('enableSponsorBlockMusicOfftopic')
-  );
+  elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockMusicOfftopic'));
+  elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockFiller'));
+  elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockHook'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockHighlight'));
-  elmBlock.appendChild(createConfigCheckbox('enableHighlightJump'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockPreview'));
-  contentWrapper.appendChild(elmBlock);
+  elmBlock.appendChild(createConfigCheckbox('enableHighlightJump'));
+  elmBlock.appendChild(createConfigCheckbox('enableMutedSegments'));
+  pageSponsor.appendChild(elmBlock);
 
   const elmSponsorLink = document.createElement('div');
   elmSponsorLink.innerHTML =
     '<small>Sponsor segments skipping - https://sponsor.ajay.app</small>';
-  contentWrapper.appendChild(elmSponsorLink);
+  pageSponsor.appendChild(elmSponsorLink);
 
-  elmContainer.appendChild(contentWrapper);
+  elmContainer.appendChild(pageSponsor);
 
   return elmContainer;
 }
@@ -268,12 +363,22 @@ let optionsPanelVisible = false;
  * @param {boolean} [visible=true] Whether to show the options panel.
  */
 function showOptionsPanel(visible) {
-  visible ??= true;
+	visible ??= true;
 
-  if (visible && !optionsPanelVisible) {
+	if (visible && !optionsPanelVisible) {
     console.info('Showing and focusing options panel!');
     optionsPanel.style.display = 'block';
-    optionsPanel.focus();
+    
+    const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input')).find(
+      (el) => el.offsetParent !== null
+    );
+
+    if (firstVisibleInput) {
+      firstVisibleInput.focus();
+    } else {
+      optionsPanel.focus();
+    }
+    
     optionsPanelVisible = true;
   } else if (!visible && optionsPanelVisible) {
     console.info('Hiding options panel!');

@@ -19,8 +19,10 @@ const CONFIG_MAPPING = {
     outro: 'enableSponsorBlockOutro',
     interaction: 'enableSponsorBlockInteraction',
     selfpromo: 'enableSponsorBlockSelfPromo',
-    music_offtopic: 'enableSponsorBlockMusicOfftopic',
-    preview: 'enableSponsorBlockPreview'
+    musicofftopic: 'enableSponsorBlockMusicOfftopic',
+    preview: 'enableSponsorBlockPreview',
+    filler: 'enableSponsorBlockFiller',
+    hook: 'enableSponsorBlockHook'
 };
 
 if (typeof sha256 !== 'function') {
@@ -41,6 +43,7 @@ class SponsorBlockHandler {
         
         // State
         this.isProcessing = false;
+        this.wasMutedBySB = false; // State for muting
         this.webOSVersion = WebOSVersion();
         this.isNewLayout = isNewYouTubeLayout();
         
@@ -229,7 +232,7 @@ class SponsorBlockHandler {
 
         this.overlay = document.createElement('div');
         this.overlay.id = 'previewbar';
-        this.overlay.appendChild(fragment);
+        this.overlay.appendChild(fragment); 
         this.progressBar.appendChild(this.overlay);
     }
 
@@ -237,10 +240,12 @@ class SponsorBlockHandler {
         if (!this.video || this.video.paused || this.video.seeking) return;
         
         const currentTime = this.video.currentTime;
+        let shouldBeMuted = false;
         
         // Performance: Use simple for loop
         for (let i = 0; i < this.segments.length; i++) {
             const seg = this.segments[i];
+            
             // Fast bounding box check
             if (currentTime < seg.segment[0] || currentTime >= seg.segment[1]) continue;
             
@@ -248,8 +253,31 @@ class SponsorBlockHandler {
 
             // Use cached category check (O(1))
             if (this.activeCategories.has(seg.category)) {
-                this.skipSegment(seg);
-                return; 
+                // If actionType is skip (default or explicit), skip it
+                if (!seg.actionType || seg.actionType === 'skip') {
+                    this.skipSegment(seg);
+                    return; 
+                }
+                
+                // If actionType is mute and mute is enabled, mark for mute
+                if (seg.actionType === 'mute' && configRead('enableMutedSegments')) {
+                    shouldBeMuted = true;
+                }
+            }
+        }
+
+        // Handle Muting State
+        if (shouldBeMuted) {
+            if (!this.wasMutedBySB) {
+                this.wasMutedBySB = true;
+                this.video.muted = true;
+                showNotification('Muting Segment');
+            }
+        } else {
+            if (this.wasMutedBySB) {
+                this.wasMutedBySB = false;
+                this.video.muted = false;
+                showNotification('Unmuting');
             }
         }
     }
@@ -274,15 +302,19 @@ class SponsorBlockHandler {
     async fetchSegments(hashPrefix) {
         const categories = JSON.stringify([
             'sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 
-            'music_offtopic', 'preview', 'chapter', 'poi_highlight'
+            'musicofftopic', 'preview', 'chapter', 'poi_highlight', 
+            'filler', 'hook'
         ]);
+        
+        // Request mute and skip actions
+        const actionTypes = JSON.stringify(['skip', 'mute']);
         
         const tryFetch = async (url) => {
             try {
                 // Add short timeout for fetch to prevent hanging
                 const controller = new AbortController();
                 const id = setTimeout(() => controller.abort(), SPONSORBLOCK_CONFIG.timeout);
-                const res = await fetch(`${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&videoID=${this.videoID}`, { signal: controller.signal });
+                const res = await fetch(`${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&actionTypes=${encodeURIComponent(actionTypes)}&videoID=${this.videoID}`, { signal: controller.signal });
                 clearTimeout(id);
                 if (res.ok) return await res.json();
             } catch(e) {}
@@ -317,6 +349,11 @@ class SponsorBlockHandler {
 
     destroy() {
         this.log('info', 'Destroying instance.');
+        // Ensure we unmute if we are destroyed while muting
+        if (this.wasMutedBySB && this.video) {
+            this.video.muted = false;
+        }
+        
         this.listeners.forEach((events, elem) => {
             events.forEach((handler, type) => elem.removeEventListener(type, handler));
         });

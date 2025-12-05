@@ -26,7 +26,7 @@ export const segmentTypes = {
     opacity: '0.7',
     name: 'self-promotion'
   },
-  music_offtopic: {
+  musicofftopic: {
     color: '#ff9900',
     opacity: '0.7',
     name: 'non-music part'
@@ -40,6 +40,16 @@ export const segmentTypes = {
     color: '#ff1684',
     opacity: '0.8',
     name: 'poi_highlight'
+  },
+  filler: {
+    color: '#7300ff',
+    opacity: '0.7',
+    name: 'tangents/jokes'
+  },
+  hook: {
+    color: '#395699',
+    opacity: '0.7',
+    name: 'hook/greetings'
   }
 };
 
@@ -52,6 +62,7 @@ const configOptions = new Map([
     { default: false, desc: 'Remove Shorts From Subscriptions' }
   ],
   ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
+  ['enableMutedSegments', { default: false, desc: 'Allow segments that mute audio' }],
   [
     'enableSponsorBlockSponsor',
     { default: true, desc: 'Skip sponsor segments' }
@@ -91,6 +102,20 @@ const configOptions = new Map([
     {
       default: true,
       desc: 'Show highlight segments'
+    }
+  ],
+  [
+    'enableSponsorBlockFiller',
+    {
+      default: false,
+      desc: 'Skip tangents/jokes'
+    }
+  ],
+  [
+    'enableSponsorBlockHook',
+    {
+      default: false,
+      desc: 'Skip hook/greetings'
     }
   ],
   [
