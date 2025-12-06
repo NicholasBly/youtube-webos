@@ -1,0 +1,17 @@
+{
+  "schema": "v2",
+  "packages": [
+    {
+      "id": "youtube.leanback.v4",
+      "version": "0.5.9",
+      "title": "YouTube AdFree",
+      "type": "web",
+      "description": "No description",
+      "downloadUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.5.9/youtube.leanback.v4_0.5.9_all.ipk",
+      "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
+      "iconUrl": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
+      "min_webos": "3.0"
+    }
+  ],
+  "date": "2025-12-05T19:41:54Z"
+}
