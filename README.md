@@ -3,22 +3,30 @@
 An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 ## Added Features
-
-- Full support for webOS 6, 22, 23, 24, and 25 (older versions are untested)
+- Full support for webOS 3, 4, 5, 6, 22, 23, 24, and 25 (older versions are untested)
 - Enhanced Menu UI
 - Auto Login - bypasses account selection screen
 - Force Max Quality
 - Hide Endcards
 - SponsorBlock: Highlight feature added
+- SponsorBlock: All segment types added (Hook, Tangents, muted segments)
 - Jump to highlight segment with blue button on LG remote
 - Toggle black screen with red button on LG remote for OLED TVs
 - Color selector for all SponsorBlock segments
-- Return YouTube Dislike
-- Bug fixes
+- Return YouTube Dislike - added to description tab in video
+- Bug fixes, UI fixes
+- Specific rules for different YouTube UI layouts
+
+## Improvements
+- Rewritten codebase optimized for performance and efficiency to support LG TV hardware
 
 Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-webos/blob/main/CHANGELOG.md)
 
-<img width="536" height="650" alt="webOS_TV_25_Simulator_1 4 3_PDIJPFaStZ" src="https://github.com/user-attachments/assets/9d52899c-9074-4fc8-89dd-9ebcb5f3a193" />
+<img width="537" height="426" alt="webOS_TV_25_Simulator_1 4 3_2JzXDl0CZk" src="https://github.com/user-attachments/assets/262c2fad-0f49-4ae0-b207-b119aae9553d" />
+
+<img width="537" height="490" alt="webOS_TV_25_Simulator_1 4 3_gzPklEHkPS" src="https://github.com/user-attachments/assets/8eb0a989-7f03-4d29-a7cf-5c9f2db70973" />
+
+
 
 <!--![Configuration Screen](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/webOS_TV_24_Simulator_mKe8Gv7zXq.png?raw=true)-->
 ![Segment Skipped](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/2_sm_new.png?raw=true)
