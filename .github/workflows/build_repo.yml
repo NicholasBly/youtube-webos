@@ -1,0 +1,119 @@
+name: Update Homebrew Repository
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+jobs:
+  update-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Generate repo.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_NAME: ${{ github.repository }}
+        run: |
+          import json
+          import os
+          import sys
+          import urllib.request
+          import hashlib
+          
+          # --- CONFIGURATION ---
+          APP_INFO_PATH = 'assets/appinfo.json' 
+          ICON_PATH_IN_REPO = 'assets/icon.png'
+          # ---------------------
+          
+          if not os.path.exists(APP_INFO_PATH):
+              print(f"Error: {APP_INFO_PATH} not found.")
+              sys.exit(1)
+              
+          with open(APP_INFO_PATH, 'r') as f:
+              app_info = json.load(f)
+          
+          repo_name = os.environ['REPO_NAME']
+          api_url = f"https://api.github.com/repos/{repo_name}/releases/latest"
+          
+          req = urllib.request.Request(api_url)
+          req.add_header('Authorization', f"Bearer {os.environ['GITHUB_TOKEN']}")
+          
+          try:
+              with urllib.request.urlopen(req) as response:
+                  release_data = json.load(response)
+          except Exception as e:
+              print(f"Failed to fetch release: {e}")
+              sys.exit(1)
+          
+          ipk_url = None
+          for asset in release_data['assets']:
+              if asset['name'].endswith('.ipk'):
+                  ipk_url = asset['browser_download_url']
+                  break
+          
+          if not ipk_url:
+              print("No .ipk file found in the latest release")
+              sys.exit(1)
+          
+          # Download IPK and calculate SHA256
+          print(f"Downloading IPK from {ipk_url}")
+          req = urllib.request.Request(ipk_url)
+          with urllib.request.urlopen(req) as response:
+              ipk_data = response.read()
+              sha256_hash = hashlib.sha256(ipk_data).hexdigest()
+          
+          print(f"SHA256: {sha256_hash}")
+          
+          manifest = {
+              "id": app_info.get('id'),
+              "version": app_info.get('version'),
+              "type": app_info.get('type', 'web'),
+              "title": app_info.get('title'),
+              "appDescription": app_info.get('description', app_info.get('title')),
+              "iconUri": f"https://raw.githubusercontent.com/{repo_name}/main/{ICON_PATH_IN_REPO}",
+              "sourceUrl": f"https://github.com/{repo_name}",
+              "rootRequired": False,
+              "ipkUrl": ipk_url,
+              "ipkHash": {
+                  "sha256": sha256_hash
+              }
+          }
+          
+          package = {
+              "id": app_info.get('id'),
+              "title": app_info.get('title'),
+              "iconUri": f"https://raw.githubusercontent.com/{repo_name}/main/{ICON_PATH_IN_REPO}",
+              "manifest": manifest
+          }
+          
+          repo_data = {
+              "paging": {
+                  "page": 1,
+                  "count": 1,
+                  "maxPage": 1,
+                  "itemsTotal": 1
+              },
+              "packages": [package]
+          }
+          
+          with open('repo.json', 'w') as f:
+              json.dump(repo_data, f, indent=2)
+          
+          print("repo.json generated successfully!")
+        shell: python
+        
+      - name: Commit and Push repo.json
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add repo.json
+          git commit -m "Update repo.json for new release" || echo "No changes to commit"
+          git push
