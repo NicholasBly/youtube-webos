@@ -77,7 +77,7 @@ jobs:
               "downloadUrl": ipk_url,
               "sourceUrl": f"https://github.com/{repo_name}",
               # This now points to assets/icon.png
-              "iconUrl": f"https://raw.githubusercontent.com/{repo_name}/{BRANCH_NAME}/{ICON_PATH_IN_REPO}",
+              "iconUrl": f"https://{repo_name.split('/')[0]}.github.io/{repo_name.split('/')[1]}/{ICON_PATH_IN_REPO}",
               "min_webos": "3.0"
           }
 
