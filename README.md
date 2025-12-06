@@ -45,8 +45,8 @@ Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-we
 
 ## Installation
 
-- Use [webOS Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel) - app is published in official webosbrew repo
-- Use [Device Manager app](https://github.com/webosbrew/dev-manager-desktop) - see [Releases](https://github.com/webosbrew/youtube-webos/releases) for a
+- Use [webOS Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel) - app is available via repo link: https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/repo.json
+- Use [Device Manager app](https://github.com/webosbrew/dev-manager-desktop) - see [Releases](https://github.com/NicholasBly/youtube-webos/releases) for a
   prebuilt `.ipk` binary file
 - Use [webOS TV CLI tools](https://webostv.developer.lge.com/develop/tools/cli-installation) -
   `ares-install youtube...ipk` (For more information on configuring the webOS CLI tools, see [below](#development-tv-setup))
@@ -54,6 +54,7 @@ Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-we
 ## Configuration
 
 Configuration screen can be opened by pressing 🟩 GREEN button on the remote.
+Black screen / OLED mode can be toggled by pressing 🟥 RED button on the remote.
 
 ### Autostart
 
@@ -83,7 +84,7 @@ luna-send-pub -n 1 'luna://com.webos.service.eim/deleteDevice' '{"appId":"youtub
 - Clone the repository
 
 ```sh
-git clone https://github.com/webosbrew/youtube-webos.git
+git clone https://github.com/NicholasBly/youtube-webos.git
 ```
 
 - Enter the folder and build the App, this will generate a `*.ipk` file.
