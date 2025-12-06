@@ -26,9 +26,9 @@ JSON.parse = function (text, reviver) {
     return data;
   }
 
-  // 2. Error handling wrapper for modification logic
+  // 2. Modification Logic
   try {
-    // --- Phase 1: Root Level Ad Cleanup (Critical) ---
+    // --- Phase 1: Root Level Ad Cleanup (Fast) ---
     if (enableAds) {
       if (data.adPlacements) data.adPlacements = [];
       if (data.adSlots) data.adSlots = [];
@@ -37,13 +37,16 @@ JSON.parse = function (text, reviver) {
       if (data.playerResponse?.playerAds) data.playerResponse.playerAds = [];
     }
 
-    // --- Phase 2: Content & UI Filtering ---
+    // --- Phase 2: Standard UI Filtering (Fast Path) ---
+    // Handle standard lists (Home Screen, Channel Pages)
     const browseContent = data.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
     if (browseContent) processSectionList(browseContent, enableAds, removeShorts);
 
+    // Handle Search Results
     const searchContent = data.contents?.sectionListRenderer?.contents;
     if (searchContent) processSectionList(searchContent, enableAds, removeShorts);
 
+    // Handle Lazy Loading / Pagination (Continuations)
     if (data.onResponseReceivedActions) {
        data.onResponseReceivedActions.forEach(action => {
          const contItems = action.appendContinuationItemsAction?.continuationItems;
@@ -53,13 +56,37 @@ JSON.parse = function (text, reviver) {
        });
     }
 
+    // --- Phase 3: Recursive Shorts Search (Robust Path) ---
+    // If we need to remove shorts, we run the recursive search logic from the old script.
+    // This catches 'gridRenderer' (Subscriptions) and 'gridContinuation' which standard paths often miss.
+    if (removeShorts) {
+      // 1. Find and scrub Grids (Subscriptions tab)
+      const gridRenderer = findFirstObject(data, 'gridRenderer');
+      if (gridRenderer?.items) {
+         gridRenderer.items = filterItems(gridRenderer.items, removeShorts, enableAds);
+      }
+
+      // 2. Find and scrub Grid Continuations (Scrolling down in Subscriptions)
+      const gridContinuation = findFirstObject(data, 'gridContinuation');
+      if (gridContinuation?.items) {
+         gridContinuation.items = filterItems(gridContinuation.items, removeShorts, enableAds);
+      }
+      
+      // 3. Find and scrub generic SectionLists (Catch-all)
+      const sectionList = findFirstObject(data, 'sectionListRenderer');
+      if (sectionList?.contents) {
+        processSectionList(sectionList.contents, enableAds, removeShorts);
+      }
+    }
+
   } catch (e) {
-    // Fail safe: If our logic errors, return the original data so the app doesn't crash
     console.warn('[AdBlock] Safety fallback triggered:', e);
   }
 
   return data;
 };
+
+// --- Helper Functions ---
 
 function processSectionList(contents, enableAds, removeShorts) {
   if (!Array.isArray(contents)) return;
@@ -69,24 +96,29 @@ function processSectionList(contents, enableAds, removeShorts) {
     const item = contents[i];
     let keepItem = true;
 
+    // Filter Ad Renderers
     if (enableAds) {
       if (item.tvMastheadRenderer || item.adSlotRenderer) {
         keepItem = false;
       }
     }
 
-    if (keepItem) {
-      if (item.shelfRenderer) {
-        if (removeShorts && item.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-            keepItem = false;
-        } else {
-          const shelfContent = item.shelfRenderer.content;
-          if (shelfContent) {
-            if (shelfContent.horizontalListRenderer?.items) {
-               shelfContent.horizontalListRenderer.items = filterItems(shelfContent.horizontalListRenderer.items, removeShorts, enableAds);
-            } else if (shelfContent.gridRenderer?.items) {
-               shelfContent.gridRenderer.items = filterItems(shelfContent.gridRenderer.items, removeShorts, enableAds);
-            }
+    // Filter Shelves
+    if (keepItem && item.shelfRenderer) {
+      const shelfType = item.shelfRenderer.tvhtml5ShelfRendererType;
+      
+      // Remove specific Shorts Shelves
+      if (removeShorts && shelfType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
+          keepItem = false;
+      } 
+      // Clean content inside standard Shelves
+      else {
+        const shelfContent = item.shelfRenderer.content;
+        if (shelfContent) {
+          if (shelfContent.horizontalListRenderer?.items) {
+             shelfContent.horizontalListRenderer.items = filterItems(shelfContent.horizontalListRenderer.items, removeShorts, enableAds);
+          } else if (shelfContent.gridRenderer?.items) {
+             shelfContent.gridRenderer.items = filterItems(shelfContent.gridRenderer.items, removeShorts, enableAds);
           }
         }
       }
@@ -102,14 +134,40 @@ function processSectionList(contents, enableAds, removeShorts) {
 function filterItems(items, removeShorts, enableAds) {
   if (!Array.isArray(items)) return items;
 
-  // Use a simple filter loop for speed
   return items.filter(item => {
+    // Block Ad Slots
     if (enableAds && item.adSlotRenderer) return false;
 
+    // Block Shorts
     if (removeShorts) {
+        // Logic from original shorts.js: Detect via reelWatchEndpoint
         if (item.tileRenderer?.onSelectCommand?.reelWatchEndpoint) return false;
+        
+        // Secondary detection for other contexts
         if (item.command?.reelWatchEndpoint?.adClientParams?.isAd) return false;
+        
+        // Catch-all for "Shorts" specific renderers
+        if (item.reelItemRenderer) return false;
     }
     return true;
   });
+}
+
+// Logic imported from shorts.js
+// Recursively finds the first instance of a key in the object tree.
+function findFirstObject(haystack, needle) {
+  // Optimization: If haystack is not an object or null, return null immediately
+  if (!haystack || typeof haystack !== 'object') return null;
+
+  for (const key in haystack) {
+    if (key === needle) {
+      return haystack[key];
+    }
+    // Only recurse if the property is an object (and not null)
+    if (typeof haystack[key] === 'object') {
+      const result = findFirstObject(haystack[key], needle);
+      if (result) return result;
+    }
+  }
+  return null;
 }

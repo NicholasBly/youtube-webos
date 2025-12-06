@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.0] - 2025/12/05
+
+### Added
+
+Homebrew channel support (beta)
+Add the following URL to the repo list: https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/repo.json
+
+### Fixes
+
+- Fixed "Remove Shorts From Subscriptions" https://github.com/NicholasBly/youtube-webos/issues/14
+- Fixed SponsorBlock initialization compatibility issue with older webOS versions - https://github.com/NicholasBly/youtube-webos/issues/15
+
 ## [0.5.9] - 2025/12/05
 
 ### Config UI panel

@@ -1,4 +1,6 @@
 import CopyPlugin from 'copy-webpack-plugin';
+import { TransformAsyncModulesPlugin } from 'transform-async-modules-webpack-plugin';
+import pkgJson from './package.json' with { type: 'json' };
 import TerserPlugin from 'terser-webpack-plugin';
 
 /** @type {(env: Record<string, string>) => (import('webpack').Configuration)[]} */
@@ -119,6 +121,15 @@ const makeConfig = () => [
           { context: 'assets', from: '**/*' },
           { context: 'src', from: 'index.html' }
         ]
+	}),
+      // babel doesn't transform top-level await.
+      // webpack transforms it to async modules.
+      // This plugin calls babel again to transform remove the `async` keyword usage after the fact.
+      new TransformAsyncModulesPlugin({
+        // @ts-expect-error Bad types
+        runtime: {
+          version: pkgJson.devDependencies['@babel/plugin-transform-runtime']
+        }
       })
     ]
   }

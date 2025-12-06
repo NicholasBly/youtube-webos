@@ -1,6 +1,6 @@
 {
   "name": "youtube-webos",
-  "version": "0.5.9",
+  "version": "0.6.0",
   "description": "Ad-free YouTube app for webOS",
   "type": "module",
   "main": "index.js",
@@ -60,6 +60,7 @@
     "postcss-preset-env": "^10.5.0",
     "prettier": "^3.7.4",
     "style-loader": "^4.0.0",
+    "transform-async-modules-webpack-plugin": "^1.1.1",
     "typescript": "^5.8.3",
     "webpack": "^5.103.0",
     "webpack-cli": "^6.0.1"

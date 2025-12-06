@@ -96,6 +96,7 @@ class SponsorBlockHandler {
                 this.start();
             }
         } catch (e) {
+			showNotification("SB Error: " + e.message);
             this.log('warn', 'Fetch failed', e);
         }
     }
@@ -311,12 +312,24 @@ class SponsorBlockHandler {
         
         const tryFetch = async (url) => {
             try {
-                // Add short timeout for fetch to prevent hanging
-                const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), SPONSORBLOCK_CONFIG.timeout);
-                const res = await fetch(`${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&actionTypes=${encodeURIComponent(actionTypes)}&videoID=${this.videoID}`, { signal: controller.signal });
-                clearTimeout(id);
-                if (res.ok) return await res.json();
+                // FALLBACK: Logic to support WebOS 3.x (No AbortController)
+                const fetchURL = `${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&actionTypes=${encodeURIComponent(actionTypes)}&videoID=${this.videoID}`;
+                
+                if (typeof AbortController !== 'undefined') {
+                    // Original Modern Logic
+                    const controller = new AbortController();
+                    const id = setTimeout(() => controller.abort(), SPONSORBLOCK_CONFIG.timeout);
+                    const res = await fetch(fetchURL, { signal: controller.signal });
+                    clearTimeout(id);
+                    if (res.ok) return await res.json();
+                } else {
+                    // Legacy Fallback for older TVs
+                    const res = await Promise.race([
+                        fetch(fetchURL),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), SPONSORBLOCK_CONFIG.timeout))
+                    ]);
+                    if (res.ok) return await res.json();
+                }
             } catch(e) {}
             return null;
         };
@@ -377,8 +390,17 @@ if (typeof window !== 'undefined') {
             if (hash.startsWith('#')) {
                 const parts = hash.split('?');
                 if (parts.length > 1) {
-                    const params = new URLSearchParams(parts[1]);
-                    videoID = params.get('v');
+                    // FALLBACK: Check if URLSearchParams is supported
+                    if (typeof URLSearchParams !== 'undefined') {
+                        const params = new URLSearchParams(parts[1]);
+                        videoID = params.get('v');
+                    } else {
+                        // Legacy Regex Fallback for WebOS 3.x
+                        const match = parts[1].match(/(?:[?&]|^)v=([^&]+)/);
+                        if (match) {
+                            videoID = match[1];
+                        }
+                    }
                 }
             }
         } catch(e) {}
