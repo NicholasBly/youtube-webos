@@ -21,8 +21,9 @@ JSON.parse = function (text, reviver) {
 
   const enableAds = configRead('enableAdBlock');
   const removeShorts = configRead('removeShorts');
+  const hideGuestPrompts = configRead('hideGuestSignInPrompts');
 
-  if (!enableAds && !removeShorts) {
+  if (!enableAds && !removeShorts && !hideGuestPrompts) {
     return data;
   }
 
@@ -40,42 +41,40 @@ JSON.parse = function (text, reviver) {
     // --- Phase 2: Standard UI Filtering (Fast Path) ---
     // Handle standard lists (Home Screen, Channel Pages)
     const browseContent = data.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
-    if (browseContent) processSectionList(browseContent, enableAds, removeShorts);
+    if (browseContent) processSectionList(browseContent, enableAds, removeShorts, hideGuestPrompts);
 
-    // Handle Search Results
+    // Handle Search Results (Fixes WEB_PAGE_TYPE_SEARCH)
     const searchContent = data.contents?.sectionListRenderer?.contents;
-    if (searchContent) processSectionList(searchContent, enableAds, removeShorts);
+    if (searchContent) processSectionList(searchContent, enableAds, removeShorts, hideGuestPrompts);
 
     // Handle Lazy Loading / Pagination (Continuations)
     if (data.onResponseReceivedActions) {
        data.onResponseReceivedActions.forEach(action => {
          const contItems = action.appendContinuationItemsAction?.continuationItems;
          if (contItems) {
-           action.appendContinuationItemsAction.continuationItems = filterItems(contItems, removeShorts, enableAds);
+           action.appendContinuationItemsAction.continuationItems = filterItems(contItems, removeShorts, enableAds, hideGuestPrompts);
          }
        });
     }
 
     // --- Phase 3: Recursive Shorts Search (Robust Path) ---
-    // If we need to remove shorts, we run the recursive search logic from the old script.
-    // This catches 'gridRenderer' (Subscriptions) and 'gridContinuation' which standard paths often miss.
-    if (removeShorts) {
+    if (removeShorts || hideGuestPrompts) {
       // 1. Find and scrub Grids (Subscriptions tab)
       const gridRenderer = findFirstObject(data, 'gridRenderer');
       if (gridRenderer?.items) {
-         gridRenderer.items = filterItems(gridRenderer.items, removeShorts, enableAds);
+         gridRenderer.items = filterItems(gridRenderer.items, removeShorts, enableAds, hideGuestPrompts);
       }
 
       // 2. Find and scrub Grid Continuations (Scrolling down in Subscriptions)
       const gridContinuation = findFirstObject(data, 'gridContinuation');
       if (gridContinuation?.items) {
-         gridContinuation.items = filterItems(gridContinuation.items, removeShorts, enableAds);
+         gridContinuation.items = filterItems(gridContinuation.items, removeShorts, enableAds, hideGuestPrompts);
       }
       
       // 3. Find and scrub generic SectionLists (Catch-all)
       const sectionList = findFirstObject(data, 'sectionListRenderer');
       if (sectionList?.contents) {
-        processSectionList(sectionList.contents, enableAds, removeShorts);
+        processSectionList(sectionList.contents, enableAds, removeShorts, hideGuestPrompts);
       }
     }
 
@@ -88,7 +87,7 @@ JSON.parse = function (text, reviver) {
 
 // --- Helper Functions ---
 
-function processSectionList(contents, enableAds, removeShorts) {
+function processSectionList(contents, enableAds, removeShorts, hideGuestPrompts) {
   if (!Array.isArray(contents)) return;
 
   let writeIdx = 0;
@@ -101,6 +100,14 @@ function processSectionList(contents, enableAds, removeShorts) {
       if (item.tvMastheadRenderer || item.adSlotRenderer) {
         keepItem = false;
       }
+    }
+
+    // Filter Guest Prompts (JSON Interception)
+    if (hideGuestPrompts) {
+        // "Make YouTube your own" banner
+        if (item.feedNudgeRenderer) keepItem = false;
+        // "Sign in to subscribe" prompts
+        if (item.alertWithActionsRenderer) keepItem = false;
     }
 
     // Filter Shelves
@@ -116,9 +123,9 @@ function processSectionList(contents, enableAds, removeShorts) {
         const shelfContent = item.shelfRenderer.content;
         if (shelfContent) {
           if (shelfContent.horizontalListRenderer?.items) {
-             shelfContent.horizontalListRenderer.items = filterItems(shelfContent.horizontalListRenderer.items, removeShorts, enableAds);
+             shelfContent.horizontalListRenderer.items = filterItems(shelfContent.horizontalListRenderer.items, removeShorts, enableAds, hideGuestPrompts);
           } else if (shelfContent.gridRenderer?.items) {
-             shelfContent.gridRenderer.items = filterItems(shelfContent.gridRenderer.items, removeShorts, enableAds);
+             shelfContent.gridRenderer.items = filterItems(shelfContent.gridRenderer.items, removeShorts, enableAds, hideGuestPrompts);
           }
         }
       }
@@ -131,39 +138,40 @@ function processSectionList(contents, enableAds, removeShorts) {
   contents.length = writeIdx;
 }
 
-function filterItems(items, removeShorts, enableAds) {
+function filterItems(items, removeShorts, enableAds, hideGuestPrompts) {
   if (!Array.isArray(items)) return items;
 
   return items.filter(item => {
     // Block Ad Slots
     if (enableAds && item.adSlotRenderer) return false;
 
+    // Block Guest Prompts inside lists
+    if (hideGuestPrompts) {
+        if (item.feedNudgeRenderer) return false;
+        if (item.alertWithActionsRenderer) return false;
+        
+        // [FIX] Removed 'gridButtonRenderer' block.
+        // This was causing the "Can't find anything to watch" section to break
+        // because it removed the "Refresh" button, leaving an empty list.
+    }
+
     // Block Shorts
     if (removeShorts) {
-        // Logic from original shorts.js: Detect via reelWatchEndpoint
         if (item.tileRenderer?.onSelectCommand?.reelWatchEndpoint) return false;
-        
-        // Secondary detection for other contexts
         if (item.command?.reelWatchEndpoint?.adClientParams?.isAd) return false;
-        
-        // Catch-all for "Shorts" specific renderers
         if (item.reelItemRenderer) return false;
     }
     return true;
   });
 }
 
-// Logic imported from shorts.js
-// Recursively finds the first instance of a key in the object tree.
 function findFirstObject(haystack, needle) {
-  // Optimization: If haystack is not an object or null, return null immediately
   if (!haystack || typeof haystack !== 'object') return null;
 
   for (const key in haystack) {
     if (key === needle) {
       return haystack[key];
     }
-    // Only recurse if the property is an object (and not null)
     if (typeof haystack[key] === 'object') {
       const result = findFirstObject(haystack[key], needle);
       if (result) return result;
