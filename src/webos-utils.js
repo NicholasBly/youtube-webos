@@ -67,17 +67,7 @@ export function WebOSVersion() {
     return cachedWebOSVersion;
   }
 
-  // No detection method succeeded
   console.warn('[WebOSUtils] Could not detect webOS version from user agent');
   cachedWebOSVersion = 0;
   return 0;
-}
-
-export function resetWebOSVersionCache() {
-  cachedWebOSVersion = null;
-  cachedNewLayout = null;
-}
-
-export function getCachedWebOSVersion() {
-  return cachedWebOSVersion;
 }

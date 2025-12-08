@@ -3,6 +3,7 @@ import sha256_import from 'tiny-sha256';
 import { configRead, configAddChangeListener, segmentTypes } from './config';
 import { showNotification } from './ui';
 import { WebOSVersion, isNewYouTubeLayout } from './webos-utils.js';
+import sponsorBlockUI from './Sponsorblock-UI.js';
 
 let sha256 = sha256_import;
 
@@ -82,6 +83,11 @@ class SponsorBlockHandler {
 
     async init() {
         if (!this.videoID) return;
+        
+        // [FIX] Clear the UI immediately when initializing a new video
+        // This prevents stale segments from showing while fetching or if no segments exist
+        sponsorBlockUI.updateSegments([]);
+
         const hash = sha256(this.videoID);
         if (!hash) return;
 
@@ -93,6 +99,10 @@ class SponsorBlockHandler {
             if (videoData && videoData.segments && videoData.segments.length) {
                 this.segments = videoData.segments;
                 this.log('info', `Found ${this.segments.length} segments.`);
+                
+                // Update UI with new segments
+                sponsorBlockUI.updateSegments(this.segments);
+                
                 this.start();
             }
         } catch (e) {
@@ -109,6 +119,7 @@ class SponsorBlockHandler {
         }
 
         this.injectCSS();
+        
         this.observePlayerUI();
         this.checkForProgressBar();
     }
@@ -362,6 +373,12 @@ class SponsorBlockHandler {
 
     destroy() {
         this.log('info', 'Destroying instance.');
+        
+        sponsorBlockUI.togglePopup(false); // Ensure popup is closed
+        
+        // [FIX] Clear the UI on destroy as well to be safe
+        sponsorBlockUI.updateSegments([]);
+
         // Ensure we unmute if we are destroyed while muting
         if (this.wasMutedBySB && this.video) {
             this.video.muted = false;
@@ -374,7 +391,6 @@ class SponsorBlockHandler {
         this.observers.forEach(obs => obs.disconnect());
         this.observers.clear();
         if (this.overlay) this.overlay.remove();
-        // Don't remove CSS, it might be used by next instance or just leave it
         this.segments = [];
     }
 }

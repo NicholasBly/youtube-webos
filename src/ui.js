@@ -1,3 +1,4 @@
+/* src/ui.js */
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
 import {
@@ -14,6 +15,7 @@ import './return-dislike.js';
 import { initYouTubeFixes } from './yt-fixes.js';
 import { WebOSVersion } from './webos-utils.js';
 import { initVideoQuality } from './video-quality.js';
+import sponsorBlockUI from './Sponsorblock-UI.js';
 
 let cachedGuestMode = null;
 
@@ -26,7 +28,6 @@ function isGuestMode() {
     const lastIdentity = window.localStorage.getItem('yt.leanback.default::last-identity-used');
     if (lastIdentity) {
       const parsed = JSON.parse(lastIdentity);
-      // If we found an identity, trust it definitively.
       if (parsed?.data?.identityType === 'UNAUTHENTICATED_IDENTITY_TYPE_GUEST') {
         cachedGuestMode = true;
         return true;
@@ -35,7 +36,6 @@ function isGuestMode() {
       return false; 
     }
 
-    // Only check fallback keys if lastIdentity was completely missing
     const autoNav = window.localStorage.getItem('yt.leanback.default::AUTONAV_FOR_LIVING_ROOM');
     if (autoNav) {
       const parsed = JSON.parse(autoNav);
@@ -53,17 +53,17 @@ function isGuestMode() {
   }
 }
 
-// We handle key events ourselves.
+function isWatchPage() {
+  return document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
+}
+
 window.__spatialNavigation__.keyMode = 'NONE';
 
 const ARROW_KEY_CODE = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' };
 
-// Red, Green, Yellow, Blue
-// 403,   404,    405,  406
-// ---,   172,    170,  191
 const colorCodeMap = new Map([
   [403, 'red'],
-  [166, 'red'], // fixed webOS24
+  [166, 'red'],
 
   [404, 'green'],
   [172, 'green'],
@@ -72,15 +72,10 @@ const colorCodeMap = new Map([
   [170, 'yellow'],
 
   [406, 'blue'],
-  [167, 'blue'], // fixed webOS24
+  [167, 'blue'],
   [191, 'blue']
 ]);
 
-/**
- * Returns the name of the color button associated with a code or null if not a color button.
- * @param {number} charCode KeyboardEvent.charCode property from event
- * @returns {string | null} Color name or null
- */
 function getKeyColor(charCode) {
   if (colorCodeMap.has(charCode)) {
     return colorCodeMap.get(charCode);
@@ -94,7 +89,6 @@ function createConfigCheckbox(key) {
   elmInput.type = 'checkbox';
   elmInput.checked = configRead(key);
 
-  /** @type {(evt: Event) => void} */
   const changeHandler = (evt) => {
     configWrite(key, evt.target.checked);
   };
@@ -107,17 +101,14 @@ function createConfigCheckbox(key) {
 
   const elmLabel = document.createElement('label');
   
-  // Create a container for the checkbox and text content
   const labelContent = document.createElement('div');
   labelContent.classList.add('label-content');
   
   labelContent.appendChild(elmInput);
-  // Use non-breaking space (U+00A0)
   labelContent.appendChild(document.createTextNode('\u00A0' + configGetDesc(key)));
   
   elmLabel.appendChild(labelContent);
 
-  // Check if this is a SponsorBlock segment type that has a corresponding color
   const segmentKey = key.replace('enableSponsorBlock', '').toLowerCase();
   const hasColorPicker = segmentTypes[segmentKey] || (segmentKey === 'highlight' && segmentTypes['poi_highlight']);
   
@@ -183,25 +174,28 @@ function createOptionsPanel() {
     true
   );
 
-  let activePage = 0; // 0: Main, 1: SponsorBlock
+  let activePage = 0; 
+  elmContainer.activePage = 0;
+  
   let pageMain = null;
   let pageSponsor = null;
 
   const setActivePage = (pageIndex) => {
+    activePage = pageIndex;
+    elmContainer.activePage = pageIndex;
+
     if (pageIndex === 0) {
       pageMain.style.display = 'block';
       pageSponsor.style.display = 'none';
-      activePage = 0;
-      // Focus first element on return to main
       pageMain.querySelector('input')?.focus();
+      sponsorBlockUI.togglePopup(false);
     } else {
       pageMain.style.display = 'none';
       pageSponsor.style.display = 'block';
-      activePage = 1;
-      // Focus the Back button or first input on switch
-      // Since Back button is a nav hint, maybe focus the master switch
-      // But purely focusing the container or first input is safer
       pageSponsor.querySelector('input')?.focus();
+      if (isWatchPage()) {
+        sponsorBlockUI.togglePopup(true);
+      }
     }
   };
 
@@ -215,7 +209,6 @@ function createOptionsPanel() {
       }
 
       if (evt.keyCode in ARROW_KEY_CODE) {
-        // Handle Page Switching on Left/Right
         const dir = ARROW_KEY_CODE[evt.keyCode];
         if (dir === 'left' || dir === 'right') {
           const preFocus = document.activeElement;
@@ -240,7 +233,6 @@ function createOptionsPanel() {
           navigate(dir);
           const postFocus = document.activeElement;
 
-          // If navigation didn't move focus (hit a wall)
           if (preFocus === postFocus) {
              if (dir === 'right' && activePage === 0) {
                setActivePage(1);
@@ -255,7 +247,6 @@ function createOptionsPanel() {
                return;
              }
           }
-          // If we did navigate successfully (e.g. between color inputs), let it happen
           evt.preventDefault();
           evt.stopPropagation();
           return;
@@ -285,7 +276,6 @@ function createOptionsPanel() {
 	  }
   elmContainer.appendChild(elmHeading);
 
-  // --- Page 1: Main Settings ---
   pageMain = document.createElement('div');
   pageMain.classList.add('ytaf-settings-page');
   pageMain.id = 'ytaf-page-main';
@@ -299,11 +289,11 @@ function createOptionsPanel() {
   pageMain.appendChild(createConfigCheckbox('enableAutoLogin'));
   pageMain.appendChild(createConfigCheckbox('hideEndcards'));
   pageMain.appendChild(createConfigCheckbox('enableReturnYouTubeDislike'));
+  pageMain.appendChild(createConfigCheckbox('enableChapterSkip'));
   if (isGuestMode()) {
     pageMain.appendChild(createConfigCheckbox('hideGuestSignInPrompts'));
   }
   
-  // Navigation Hint (Next)
   const navHintNext = document.createElement('div');
   navHintNext.className = 'ytaf-nav-hint right';
   navHintNext.innerHTML = 'SponsorBlock Settings <span class="arrow">&rarr;</span>';
@@ -312,13 +302,11 @@ function createOptionsPanel() {
 
   elmContainer.appendChild(pageMain);
 
-  // --- Page 2: SponsorBlock Settings ---
   pageSponsor = document.createElement('div');
   pageSponsor.classList.add('ytaf-settings-page');
   pageSponsor.id = 'ytaf-page-sponsor';
   pageSponsor.style.display = 'none';
 
-  // Navigation Hint (Prev)
   const navHintPrev = document.createElement('div');
   navHintPrev.className = 'ytaf-nav-hint left';
   navHintPrev.innerHTML = '<span class="arrow">&larr;</span> Main Settings';
@@ -358,16 +346,18 @@ document.body.appendChild(optionsPanel);
 
 let optionsPanelVisible = false;
 
-/**
- * Show or hide the options panel.
- * @param {boolean} [visible=true] Whether to show the options panel.
- */
 function showOptionsPanel(visible) {
 	visible ??= true;
 
 	if (visible && !optionsPanelVisible) {
     console.info('Showing and focusing options panel!');
     optionsPanel.style.display = 'block';
+    
+    if (optionsPanel.activePage === 1 && isWatchPage()) {
+        sponsorBlockUI.togglePopup(true);
+    } else {
+        sponsorBlockUI.togglePopup(false);
+    }
     
     const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input')).find(
       (el) => el.offsetParent !== null
@@ -383,12 +373,57 @@ function showOptionsPanel(visible) {
   } else if (!visible && optionsPanelVisible) {
     console.info('Hiding options panel!');
     optionsPanel.style.display = 'none';
+    
+    sponsorBlockUI.togglePopup(false);
+
     optionsPanel.blur();
     optionsPanelVisible = false;
   }
 }
 
 window.ytaf_showOptionsPanel = showOptionsPanel;
+
+function skipToNextChapter() {
+  const video = document.querySelector('video');
+  if (!video || !video.duration) return;
+
+  const progressBar = document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]');
+  if (!progressBar) {
+      showNotification('No chapters found');
+      return;
+  }
+
+  const chapterEls = Array.from(progressBar.children).filter(el => {
+    const key = el.getAttribute('idomkey');
+    return key && key.startsWith('chapter-');
+  });
+
+  if (chapterEls.length === 0) {
+      showNotification('No chapters found');
+      return;
+  }
+
+  let totalWidth = 0;
+  const chapterData = chapterEls.map(el => {
+      const width = parseFloat(el.style.width || '0');
+      const data = { width, startIndex: totalWidth };
+      totalWidth += width;
+      return data;
+  });
+
+  if (totalWidth === 0) return;
+
+  const timestamps = chapterData.map(c => (c.startIndex / totalWidth) * video.duration);
+  const currentTime = video.currentTime;
+  const nextTime = timestamps.find(t => t > currentTime + 1);
+
+  if (nextTime !== undefined && nextTime < video.duration) {
+      video.currentTime = nextTime;
+      showNotification('Skipped to next chapter');
+  } else {
+      showNotification('No next chapter');
+  }
+}
 
 const eventHandler = (evt) => {
   console.info(
@@ -405,12 +440,10 @@ const eventHandler = (evt) => {
     evt.preventDefault();
     evt.stopPropagation();
     if (evt.type === 'keydown') {
-      // Toggle visibility.
       showOptionsPanel(!optionsPanelVisible);
     }
     return false;
   } else if (keyColor === 'blue' && evt.type === 'keydown') {
-    // Handle blue button for highlight jumping
     console.info('Blue button pressed - attempting highlight jump');
     
     try {
@@ -444,6 +477,12 @@ const eventHandler = (evt) => {
     document.body.appendChild(overlay);
   }
   return false;
+} else if (evt.keyCode === 53 && evt.type === 'keydown') { // Key 5
+    if (configRead('enableChapterSkip')) {
+        skipToNextChapter();
+        evt.preventDefault();
+        evt.stopPropagation();
+    }
 }
   return true;
 };
@@ -482,14 +521,10 @@ export function showNotification(text, time = 3000) {
   }, time);
 }
 
-/**
- * Initialize ability to hide YouTube logo in top right corner.
- */
 function initHideLogo() {
   const style = document.createElement('style');
   document.head.appendChild(style);
 
-  /** @type {(hide: boolean) => void} */
   const setHidden = (hide) => {
     const visibility = hide ? 'hidden' : 'visible';
     style.textContent = `ytlr-redux-connect-ytlr-logo-entity { visibility: ${visibility}; }`;
@@ -506,7 +541,6 @@ function initHideEndcards() {
   const style = document.createElement('style');
   document.head.appendChild(style);
 
-  /** @type {(hide: boolean) => void} */
   const setHidden = (hide) => {
     const display = hide ? 'none' : 'block';
     style.textContent = `
@@ -522,35 +556,6 @@ function initHideEndcards() {
   configAddChangeListener('hideEndcards', (evt) => {
     setHidden(evt.detail.newValue);
   });
-}
-
-function applyUIFixes() {
-  try {
-    const bodyClasses = document.body.classList;
-
-    const observer = new MutationObserver(function bodyClassCallback(
-      _records,
-      _observer
-    ) {
-      try {
-        if (bodyClasses.contains('app-quality-root')) {
-          bodyClasses.remove('app-quality-root');
-        }
-      } catch (e) {
-        console.error('error in <body> class observer callback:', e);
-      }
-    });
-
-    observer.observe(document.body, {
-      subtree: false,
-      childList: false,
-      attributes: true,
-      attributeFilter: ['class'],
-      characterData: false
-    });
-  } catch (e) {
-    console.error('error setting up <body> class observer:', e);
-  }
 }
 
 function applyOledMode(enabled) {
@@ -595,14 +600,12 @@ function applyOledMode(enabled) {
   }
 }
 
-//applyUIFixes();
 initHideLogo();
 initHideEndcards();
 
 initYouTubeFixes();
 initVideoQuality();
 
-// Listen for runtime changes to the toggle
 configAddChangeListener('hideGuestSignInPrompts', (evt) => {
   if (evt.detail.newValue) {
     initYouTubeFixes();

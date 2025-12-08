@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.1] - 2025/12/08
+
+## Added
+
+### SponsorBlock
+
+Added a segment list overlay on the right side of the screen when viewing SponsorBlock settings during video playback.
+
+<img width="1280" height="720" alt="webOS_TV_23_Simulator_fiQJN1gMbf" src="https://github.com/user-attachments/assets/021722c6-11c7-4d3a-8e5a-d282b0a2a114" />
+
+### Video Playback
+
+Added "Chapter Skip" 
+
+- Press the 5 key on LG remote during video playback to automatically skip to the start of the next chapter. Only available on videos with chapters.
+
+Note: Since the 0-9 keys aren't utilized for anything during video playback, let me know what other features you'd like added as quick shortcuts.
+
+### Guest Mode
+
+Hide giant "Make YouTube your own" banner that appears on the home page
+
+## Fixes
+
+Search History Fix: Added 500ms wait for YouTube to naturally populate the search history before trying to inject results, fixing UI overlap in some cases
+
+## Changes
+
+Code cleanup of unused functions
+
+Removed userscript map file to decrease .ipk file size (~100kb from ~420kb)
+
 ## [0.6.0] - 2025/12/05
 
 ### Added

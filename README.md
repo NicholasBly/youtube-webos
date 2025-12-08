@@ -8,12 +8,16 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 - Auto Login - bypasses account selection screen
 - Force Max Quality
 - Hide Endcards
+
 - SponsorBlock: Highlight feature added
-- SponsorBlock: All segment types added (Hook, Tangents, muted segments)
-- Jump to highlight segment with blue button on LG remote
+-- All segment types added (Hook, Tangents, muted segments)
+-- Color selector for all segments
+-- Segment UI list replicating desktop segment list
+-- Jump to highlight segment with blue button on LG remote
+
 - Toggle black screen with red button on LG remote for OLED TVs
-- Color selector for all SponsorBlock segments
 - Return YouTube Dislike - added to description tab in video
+- Video Playback Shortcut - press 5 key to skip to the start of the next chapter
 - Bug fixes, UI fixes
 - Specific rules for different YouTube UI layouts
 

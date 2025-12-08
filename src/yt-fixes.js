@@ -1,4 +1,3 @@
-/* src/yt-fixes.js */
 import { configRead } from './config.js';
 
 let historyCache = false;
@@ -36,17 +35,27 @@ function attemptSearchHistoryFix() {
         return true;
     }
 
-    if (!suggestionsBox.dataset.historyFixed) {
-        const injected = populateSearchHistory(suggestionsBox);
-        if (injected) {
-            historyCache = true;
-            return true;
-        } else {
-            // If storage is empty, we stop trying to inject
-            historyCache = true; 
-            return true;
-        }
+    if (!suggestionsBox.dataset.historyCheckPending) {
+        suggestionsBox.dataset.historyCheckPending = 'true';
+        
+        // Give the app 500ms to populate the list naturally
+        setTimeout(() => {
+            // Ensure the box still exists in the DOM
+            if (!suggestionsBox.isConnected) return;
+
+            if (suggestionsBox.childElementCount === 0 && !suggestionsBox.dataset.historyFixed) {
+                const injected = populateSearchHistory(suggestionsBox);
+                if (injected) {
+                    historyCache = true;
+                }
+            } else {
+                historyCache = true;
+            }
+        }, 500); 
+
+        return true; 
     }
+
     return true; 
 }
 
@@ -116,11 +125,20 @@ function initSignInPromptFix() {
 function checkAndFixPrompts() {
     if (!configRead('hideGuestSignInPrompts')) return;
     
-    // Select all potential prompts that haven't been fixed yet
+    // 1. Subscription Prompts (existing)
     const prompts = document.querySelectorAll('ytlr-alert-with-actions-renderer:not([data-yt-fix-applied="true"])');
     prompts.forEach(prompt => {
         if (prompt.textContent.includes('Sign in to subscribe')) {
             applyFixToPrompt(prompt);
+        }
+    });
+
+    // 2. Home Page "Make YouTube your own" Banner (new)
+    // Targeting the inner ID provided in the user snippet
+    const nudges = document.querySelectorAll('[id^="ytlr-feed-nudge-renderer"]:not([data-yt-fix-applied="true"])');
+    nudges.forEach(nudge => {
+        if (nudge.textContent.includes('Make YouTube your own')) {
+             applyFixToPrompt(nudge);
         }
     });
 }
@@ -128,6 +146,7 @@ function checkAndFixPrompts() {
 function applyFixToPrompt(element) {
     if (element.dataset.ytFixApplied) return;
     
+    // Attempt to find the container list item to remove/hide
     let listItem = element.closest('.ytVirtualListItem') || 
                    element.closest('.TXB27d') || 
                    element.closest('div[style*="position: absolute"]');
@@ -138,6 +157,7 @@ function applyFixToPrompt(element) {
     const heightMatch = listItem.style.height.match(/([\d.]+)rem/);
     if (heightMatch) heightToRemoveRem = parseFloat(heightMatch[1]);
 
+    // Disable interactions on the prompt content itself
     element.removeAttribute('hybridnavfocusable');
     element.removeAttribute('tabindex');
     element.setAttribute('aria-hidden', 'true');
@@ -148,6 +168,7 @@ function applyFixToPrompt(element) {
         btn.style.display = 'none';
     });
 
+    // Hide the prompt and collapse the list item
     element.style.display = 'none';
     listItem.style.height = '0rem';
     listItem.style.visibility = 'hidden';
@@ -156,6 +177,7 @@ function applyFixToPrompt(element) {
     element.dataset.ytFixApplied = 'true';
     listItem.dataset.ytFixCollapsed = 'true';
 
+    // Shift subsequent items up to fill the gap
     applyShiftToContainer(listItem.parentElement, heightToRemoveRem);
 }
 

@@ -56,6 +56,7 @@ export const segmentTypes = {
 const configOptions = new Map([
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
+  ['enableChapterSkip', { default: false, desc: 'Chapter Skip with Key 5' }],
   ['upgradeThumbnails', { default: false, desc: 'Upgrade Thumbnail Quality' }],
   [
     'removeShorts',
@@ -147,7 +148,7 @@ const configOptions = new Map([
     }
   ],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
-  ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Button' }],
+  ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }]
 ]);
 
@@ -253,17 +254,6 @@ export function configAddChangeListener(key, callback) {
   const frag = configFrags[key];
 
   frag.addEventListener('ytafConfigChange', callback);
-}
-
-/**
- * Remove a listener for changes in the value of a specified config option
- * @param {string} key Config option to monitor
- * @param {(evt: Event) => void} callback Function to be called on change
- */
-export function configRemoveChangeListener(key, callback) {
-  const frag = configFrags[key];
-
-  frag.removeEventListener('ytafConfigChange', callback);
 }
 
 export function configGetDefault(key) {

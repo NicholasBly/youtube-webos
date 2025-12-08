@@ -129,17 +129,3 @@ export async function waitForChildAdd(
     });
   });
 }
-
-// Simple throttle to reduce observer CPU load
-export function throttle(func, limit) {
-  let inThrottle;
-  return function() {
-    const args = arguments;
-    const context = this;
-    if (!inThrottle) {
-      func.apply(context, args);
-      inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
-    }
-  }
-}
