@@ -26,7 +26,7 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-webos/blob/main/CHANGELOG.md)
 
-<img width="537" height="426" alt="webOS_TV_25_Simulator_1 4 3_2JzXDl0CZk" src="https://github.com/user-attachments/assets/262c2fad-0f49-4ae0-b207-b119aae9553d" />
+<img width="537" height="456" alt="webOS_TV_25_Simulator_1 4 3_Kb7eU6COPl" src="https://github.com/user-attachments/assets/37133081-9ffc-481b-aca8-884a2ccdfb3f" />
 
 <img width="537" height="490" alt="webOS_TV_25_Simulator_1 4 3_gzPklEHkPS" src="https://github.com/user-attachments/assets/8eb0a989-7f03-4d29-a7cf-5c9f2db70973" />
 
