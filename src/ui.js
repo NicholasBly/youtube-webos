@@ -16,6 +16,7 @@ import { initYouTubeFixes } from './yt-fixes.js';
 import { WebOSVersion } from './webos-utils.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
+import { sendKey, REMOTE_KEYS } from './utils.js';
 
 let cachedGuestMode = null;
 
@@ -516,21 +517,8 @@ async function skipToNextChapter() {
       skipToNextChapter.hasForced = true;
       wasForcedNow = true;
       showNotification('Loading chapters...');
-
-      // Simulate Enter (KeyCode 13, CharCode 0) to force player UI
-      const keyOpts = {
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-          view: window,
-          key: 'Enter',
-          keyCode: 13,
-          which: 13,
-          charCode: 0
-      };
-
-      document.body.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
-      document.body.dispatchEvent(new KeyboardEvent('keyup', keyOpts));
+	  
+	  sendKey(REMOTE_KEYS.ENTER);
 
       // Wait 500ms for UI to render and DOM to update
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -583,26 +571,7 @@ async function skipToNextChapter() {
 
 function simulateBack() {
     console.log('[Shortcut] Simulating Back/Escape...');
-    
-    const keyOpts = {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        view: window
-    };
-
-    // Send Escape (Standard Web)
-    const escDown = new KeyboardEvent('keydown', { ...keyOpts, key: 'Escape', keyCode: 27, which: 27 });
-    const escUp = new KeyboardEvent('keyup', { ...keyOpts, key: 'Escape', keyCode: 27, which: 27 });
-    
-    // Send WebOS Back (KeyCode 461)
-    const backDown = new KeyboardEvent('keydown', { ...keyOpts, key: 'Back', keyCode: 461, which: 461 });
-    const backUp = new KeyboardEvent('keyup', { ...keyOpts, key: 'Back', keyCode: 461, which: 461 });
-
-    document.body.dispatchEvent(escDown);
-    document.body.dispatchEvent(escUp);
-    document.body.dispatchEvent(backDown);
-    document.body.dispatchEvent(backUp);
+	sendKey(REMOTE_KEYS.BACK);
 }
 
 // Helper: Execute internal component logic
