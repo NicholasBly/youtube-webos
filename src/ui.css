@@ -1,3 +1,4 @@
+/* src/ui.css */
 .ytaf-ui-container {
   position: fixed;
   top: 5%;
@@ -138,7 +139,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   border-radius: 8px;
-  margin: 0 -8px;
+  margin: 0 -8px 4px; 
   padding-left: 8px;
   padding-right: 8px;
 }
@@ -445,4 +446,60 @@
 
 .ytaf-nav-hint:hover span.arrow {
   transform: scale(1.2);
+}
+
+/* Shortcut Page Styles */
+.shortcut-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 8px;
+  /* Added bottom margin to prevent spatial navigation from skipping items */
+  margin: 0 -8px 4px; 
+  padding-left: 8px;
+  padding-right: 8px;
+  font-size: 24px;
+}
+
+.shortcut-control-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateX(4px);
+}
+
+.shortcut-control-row:focus {
+  background: rgba(255, 0, 0, 0.1);
+  box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.3);
+  outline: none;
+}
+
+.shortcut-label {
+  font-weight: 400;
+  color: #e0e0e0;
+}
+
+.shortcut-value-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #ffffff;
+}
+
+.shortcut-value-container .arrow-btn {
+  color: #ff0000;
+  font-weight: bold;
+  font-size: 24px;
+  user-select: none;
+}
+
+.shortcut-value-container .current-value {
+  min-width: 150px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.ytaf-ui-container.oled-care .shortcut-control-row:hover {
+  background: #1a1a1a;
 }

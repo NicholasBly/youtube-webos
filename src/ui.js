@@ -1,4 +1,3 @@
-/* src/ui.js */
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
 import {
@@ -7,7 +6,8 @@ import {
   configWrite,
   configGetDesc,
   segmentTypes,
-  configGetDefault
+  configGetDefault,
+  shortcutActions
 } from './config.js';
 import './ui.css';
 import './auto-login.js';
@@ -23,7 +23,6 @@ function isGuestMode() {
   if (cachedGuestMode !== null) {
     return cachedGuestMode;
   }
-
   try {
     const lastIdentity = window.localStorage.getItem('yt.leanback.default::last-identity-used');
     if (lastIdentity) {
@@ -35,7 +34,6 @@ function isGuestMode() {
       cachedGuestMode = false;
       return false; 
     }
-
     const autoNav = window.localStorage.getItem('yt.leanback.default::AUTONAV_FOR_LIVING_ROOM');
     if (autoNav) {
       const parsed = JSON.parse(autoNav);
@@ -58,29 +56,18 @@ function isWatchPage() {
 }
 
 window.__spatialNavigation__.keyMode = 'NONE';
-
 const ARROW_KEY_CODE = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' };
-
 const colorCodeMap = new Map([
-  [403, 'red'],
-  [166, 'red'],
-
-  [404, 'green'],
-  [172, 'green'],
-
-  [405, 'yellow'],
-  [170, 'yellow'],
-
-  [406, 'blue'],
-  [167, 'blue'],
-  [191, 'blue']
+  [403, 'red'], [166, 'red'],
+  [404, 'green'], [172, 'green'],
+  [405, 'yellow'], [170, 'yellow'],
+  [406, 'blue'], [167, 'blue'], [191, 'blue']
 ]);
 
 function getKeyColor(charCode) {
   if (colorCodeMap.has(charCode)) {
     return colorCodeMap.get(charCode);
   }
-
   return null;
 }
 
@@ -151,6 +138,78 @@ function createConfigCheckbox(key) {
   return elmLabel;
 }
 
+function createShortcutControl(keyIndex) {
+  const configKey = `shortcut_key_${keyIndex}`;
+  const container = document.createElement('div');
+  container.classList.add('shortcut-control-row');
+  container.setAttribute('tabindex', '0'); 
+
+  const label = document.createElement('span');
+  label.textContent = `Key ${keyIndex}`;
+  label.classList.add('shortcut-label');
+
+  const valueContainer = document.createElement('div');
+  valueContainer.classList.add('shortcut-value-container');
+
+  const leftArrow = document.createElement('span');
+  leftArrow.textContent = '<';
+  leftArrow.classList.add('arrow-btn');
+
+  const valueText = document.createElement('span');
+  valueText.classList.add('current-value');
+  
+  const rightArrow = document.createElement('span');
+  rightArrow.textContent = '>';
+  rightArrow.classList.add('arrow-btn');
+
+  valueContainer.append(leftArrow, valueText, rightArrow);
+  container.append(label, valueContainer);
+
+  const actions = Object.keys(shortcutActions);
+  
+  const updateDisplay = () => {
+    const currentVal = configRead(configKey);
+    valueText.textContent = shortcutActions[currentVal] || currentVal;
+  };
+
+  const cycle = (dir) => {
+    const currentVal = configRead(configKey);
+    let idx = actions.indexOf(currentVal);
+    if (idx === -1) idx = 0;
+    
+    if (dir === 'next') {
+        idx = (idx + 1) % actions.length;
+    } else {
+        idx = (idx - 1 + actions.length) % actions.length;
+    }
+    configWrite(configKey, actions[idx]);
+    updateDisplay();
+  };
+
+  container.addEventListener('keydown', (e) => {
+      if (e.keyCode === 37) { // Left
+          cycle('prev');
+          e.stopPropagation(); 
+          e.preventDefault();
+      } else if (e.keyCode === 39) { // Right
+          cycle('next');
+          e.stopPropagation();
+          e.preventDefault();
+      } else if (e.keyCode === 13) { // Enter
+          cycle('next');
+          e.stopPropagation();
+          e.preventDefault();
+      }
+  });
+  
+  container.addEventListener('click', () => cycle('next'));
+  
+  configAddChangeListener(configKey, updateDisplay);
+  updateDisplay();
+
+  return container;
+}
+
 function createOptionsPanel() {
   const elmContainer = document.createElement('div');
 
@@ -179,23 +238,30 @@ function createOptionsPanel() {
   
   let pageMain = null;
   let pageSponsor = null;
+  let pageShortcuts = null;
 
   const setActivePage = (pageIndex) => {
     activePage = pageIndex;
     elmContainer.activePage = pageIndex;
 
-    if (pageIndex === 0) {
+    pageMain.style.display = 'none';
+    pageSponsor.style.display = 'none';
+    pageShortcuts.style.display = 'none';
+
+    if (pageIndex === 0) { // Main
       pageMain.style.display = 'block';
-      pageSponsor.style.display = 'none';
       pageMain.querySelector('input')?.focus();
       sponsorBlockUI.togglePopup(false);
-    } else {
-      pageMain.style.display = 'none';
+    } else if (pageIndex === 1) { // Sponsor
       pageSponsor.style.display = 'block';
       pageSponsor.querySelector('input')?.focus();
       if (isWatchPage()) {
         sponsorBlockUI.togglePopup(true);
       }
+    } else if (pageIndex === 2) { // Shortcuts
+      pageShortcuts.style.display = 'block';
+      pageShortcuts.querySelector('.shortcut-control-row')?.focus();
+      sponsorBlockUI.togglePopup(false);
     }
   };
 
@@ -213,6 +279,10 @@ function createOptionsPanel() {
         if (dir === 'left' || dir === 'right') {
           const preFocus = document.activeElement;
 
+          if (preFocus.classList.contains('shortcut-control-row')) {
+              return;
+          }
+
           if (activePage === 1) {
             const sponsorMainToggle = pageSponsor.querySelector('input');
             if (dir === 'right' && preFocus === sponsorMainToggle) {
@@ -220,7 +290,6 @@ function createOptionsPanel() {
                evt.stopPropagation();
                return;
             }
-
             const isSubItemCheckbox = preFocus.matches('blockquote input[type="checkbox"]');
             if (dir === 'left' && isSubItemCheckbox) {
                setActivePage(0);
@@ -234,18 +303,16 @@ function createOptionsPanel() {
           const postFocus = document.activeElement;
 
           if (preFocus === postFocus) {
-             if (dir === 'right' && activePage === 0) {
-               setActivePage(1);
-               evt.preventDefault();
-               evt.stopPropagation();
-               return;
+             if (dir === 'right') {
+               if (activePage === 0) setActivePage(1);
+               else if (activePage === 1) setActivePage(2);
+             } else if (dir === 'left') {
+               if (activePage === 1) setActivePage(0);
+               else if (activePage === 2) setActivePage(1);
              }
-             if (dir === 'left' && activePage === 1) {
-               setActivePage(0);
-               evt.preventDefault();
-               evt.stopPropagation();
-               return;
-             }
+             evt.preventDefault();
+             evt.stopPropagation();
+             return;
           }
           evt.preventDefault();
           evt.stopPropagation();
@@ -276,6 +343,7 @@ function createOptionsPanel() {
 	  }
   elmContainer.appendChild(elmHeading);
 
+  // --- Page 1: Main ---
   pageMain = document.createElement('div');
   pageMain.classList.add('ytaf-settings-page');
   pageMain.id = 'ytaf-page-main';
@@ -289,34 +357,35 @@ function createOptionsPanel() {
   pageMain.appendChild(createConfigCheckbox('enableAutoLogin'));
   pageMain.appendChild(createConfigCheckbox('hideEndcards'));
   pageMain.appendChild(createConfigCheckbox('enableReturnYouTubeDislike'));
-  pageMain.appendChild(createConfigCheckbox('enableChapterSkip'));
   if (isGuestMode()) {
     pageMain.appendChild(createConfigCheckbox('hideGuestSignInPrompts'));
   }
   
-  const navHintNext = document.createElement('div');
-  navHintNext.className = 'ytaf-nav-hint right';
-  navHintNext.innerHTML = 'SponsorBlock Settings <span class="arrow">&rarr;</span>';
-  navHintNext.addEventListener('click', () => setActivePage(1));
-  pageMain.appendChild(navHintNext);
+  const navHintNextMain = document.createElement('div');
+  navHintNextMain.className = 'ytaf-nav-hint right';
+  navHintNextMain.tabIndex = 0;
+  navHintNextMain.innerHTML = 'SponsorBlock Settings <span class="arrow">&rarr;</span>';
+  navHintNextMain.addEventListener('click', () => setActivePage(1));
+  pageMain.appendChild(navHintNextMain);
 
   elmContainer.appendChild(pageMain);
 
+  // --- Page 2: SponsorBlock ---
   pageSponsor = document.createElement('div');
   pageSponsor.classList.add('ytaf-settings-page');
   pageSponsor.id = 'ytaf-page-sponsor';
   pageSponsor.style.display = 'none';
 
-  const navHintPrev = document.createElement('div');
-  navHintPrev.className = 'ytaf-nav-hint left';
-  navHintPrev.innerHTML = '<span class="arrow">&larr;</span> Main Settings';
-  navHintPrev.addEventListener('click', () => setActivePage(0));
-  pageSponsor.appendChild(navHintPrev);
+  const navHintPrevSponsor = document.createElement('div');
+  navHintPrevSponsor.className = 'ytaf-nav-hint left';
+  navHintPrevSponsor.tabIndex = 0;
+  navHintPrevSponsor.innerHTML = '<span class="arrow">&larr;</span> Main Settings';
+  navHintPrevSponsor.addEventListener('click', () => setActivePage(0));
+  pageSponsor.appendChild(navHintPrevSponsor);
 
   pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
 
   const elmBlock = document.createElement('blockquote');
-  
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockSponsor'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockIntro'));
   elmBlock.appendChild(createConfigCheckbox('enableSponsorBlockOutro'));
@@ -336,7 +405,33 @@ function createOptionsPanel() {
     '<small>Sponsor segments skipping - https://sponsor.ajay.app</small>';
   pageSponsor.appendChild(elmSponsorLink);
 
+  const navHintNextSponsor = document.createElement('div');
+  navHintNextSponsor.className = 'ytaf-nav-hint right';
+  navHintNextSponsor.tabIndex = 0;
+  navHintNextSponsor.innerHTML = 'Shortcuts <span class="arrow">&rarr;</span>';
+  navHintNextSponsor.addEventListener('click', () => setActivePage(2));
+  pageSponsor.appendChild(navHintNextSponsor);
+
   elmContainer.appendChild(pageSponsor);
+
+  // --- Page 3: Shortcuts ---
+  pageShortcuts = document.createElement('div');
+  pageShortcuts.classList.add('ytaf-settings-page');
+  pageShortcuts.id = 'ytaf-page-shortcuts';
+  pageShortcuts.style.display = 'none';
+
+  const navHintPrevShortcuts = document.createElement('div');
+  navHintPrevShortcuts.className = 'ytaf-nav-hint left';
+  navHintPrevShortcuts.tabIndex = 0;
+  navHintPrevShortcuts.innerHTML = '<span class="arrow">&larr;</span> SponsorBlock Settings';
+  navHintPrevShortcuts.addEventListener('click', () => setActivePage(1));
+  pageShortcuts.appendChild(navHintPrevShortcuts);
+
+  for (let i = 0; i <= 9; i++) {
+      pageShortcuts.appendChild(createShortcutControl(i));
+  }
+
+  elmContainer.appendChild(pageShortcuts);
 
   return elmContainer;
 }
@@ -347,7 +442,9 @@ document.body.appendChild(optionsPanel);
 let optionsPanelVisible = false;
 
 function showOptionsPanel(visible) {
-	visible ??= true;
+	if (visible === undefined || visible === null) {
+    		visible = true;
+  	}
 
 	if (visible && !optionsPanelVisible) {
     console.info('Showing and focusing options panel!');
@@ -359,7 +456,7 @@ function showOptionsPanel(visible) {
         sponsorBlockUI.togglePopup(false);
     }
     
-    const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input')).find(
+    const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(
       (el) => el.offsetParent !== null
     );
 
@@ -383,26 +480,75 @@ function showOptionsPanel(visible) {
 
 window.ytaf_showOptionsPanel = showOptionsPanel;
 
-function skipToNextChapter() {
+async function skipToNextChapter() {
   const video = document.querySelector('video');
   if (!video || !video.duration) return;
 
-  const progressBar = document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]');
-  if (!progressBar) {
-      showNotification('No chapters found');
-      return;
+  // Track state to ensure we only force UI once per video session
+  // Initialize static properties if they don't exist
+  skipToNextChapter.lastSrc = skipToNextChapter.lastSrc || '';
+  skipToNextChapter.hasForced = skipToNextChapter.hasForced || false;
+
+  const currentSrc = video.src || window.location.href;
+  let wasForcedNow = false;
+  
+  // Reset forced state if the video URL/Source has changed
+  if (skipToNextChapter.lastSrc !== currentSrc) {
+      skipToNextChapter.lastSrc = currentSrc;
+      skipToNextChapter.hasForced = false;
   }
 
-  const chapterEls = Array.from(progressBar.children).filter(el => {
-    const key = el.getAttribute('idomkey');
-    return key && key.startsWith('chapter-');
-  });
+  // Helper to fetch chapters from the DOM
+  const getChapterEls = () => {
+      const bar = document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]');
+      if (!bar) return [];
+      return Array.from(bar.children).filter(el => {
+        const key = el.getAttribute('idomkey');
+        return key && key.startsWith('chapter-');
+      });
+  };
+
+  let chapterEls = getChapterEls();
+
+  // If no chapters found and we haven't forced the UI yet for this video
+  if (chapterEls.length === 0 && !skipToNextChapter.hasForced) {
+      console.log('[Chapters] No chapters found in DOM. Forcing UI open to load markers...');
+      skipToNextChapter.hasForced = true;
+      wasForcedNow = true;
+      showNotification('Loading chapters...');
+
+      // Simulate Enter (KeyCode 13, CharCode 0) to force player UI
+      const keyOpts = {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          view: window,
+          key: 'Enter',
+          keyCode: 13,
+          which: 13,
+          charCode: 0
+      };
+
+      document.body.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
+      document.body.dispatchEvent(new KeyboardEvent('keyup', keyOpts));
+
+      // Wait 500ms for UI to render and DOM to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Retry fetching chapters
+      chapterEls = getChapterEls();
+  }
 
   if (chapterEls.length === 0) {
       showNotification('No chapters found');
+      // If we forced it open but still didn't find chapters, we should probably close it back up
+      if (wasForcedNow) {
+           setTimeout(() => simulateBack(), 250);
+      }
       return;
   }
 
+  // --- Logic to calculate and skip ---
   let totalWidth = 0;
   const chapterData = chapterEls.map(el => {
       const width = parseFloat(el.style.width || '0');
@@ -420,9 +566,190 @@ function skipToNextChapter() {
   if (nextTime !== undefined && nextTime < video.duration) {
       video.currentTime = nextTime;
       showNotification('Skipped to next chapter');
+      
+      // If we opened the menu just to find chapters, close it now
+      if (wasForcedNow) {
+          // Give it a tiny delay to ensure the seek registers visually, then close
+          setTimeout(() => simulateBack(), 250); 
+      }
   } else {
       showNotification('No next chapter');
+      // Cleanup if we opened it for nothing
+      if (wasForcedNow) {
+           setTimeout(() => simulateBack(), 250);
+      }
   }
+}
+
+function simulateBack() {
+    console.log('[Shortcut] Simulating Back/Escape...');
+    
+    const keyOpts = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window
+    };
+
+    // Send Escape (Standard Web)
+    const escDown = new KeyboardEvent('keydown', { ...keyOpts, key: 'Escape', keyCode: 27, which: 27 });
+    const escUp = new KeyboardEvent('keyup', { ...keyOpts, key: 'Escape', keyCode: 27, which: 27 });
+    
+    // Send WebOS Back (KeyCode 461)
+    const backDown = new KeyboardEvent('keydown', { ...keyOpts, key: 'Back', keyCode: 461, which: 461 });
+    const backUp = new KeyboardEvent('keyup', { ...keyOpts, key: 'Back', keyCode: 461, which: 461 });
+
+    document.body.dispatchEvent(escDown);
+    document.body.dispatchEvent(escUp);
+    document.body.dispatchEvent(backDown);
+    document.body.dispatchEvent(backUp);
+}
+
+// Helper: Execute internal component logic
+function triggerInternal(element, name) {
+    if (!element) return false;
+    
+    // Try accessing the internal Polymer/Lit instance
+    const instance = element.__instance;
+    
+    if (instance && typeof instance.onSelect === 'function') {
+        console.log(`[Shortcut] Calling internal onSelect() for ${name}`);
+        try {
+            const mockEvent = {
+                type: 'click',
+                stopPropagation: () => {},
+                preventDefault: () => {},
+                target: element,
+                currentTarget: element
+            };
+
+            instance.onSelect(mockEvent); 
+            return true;
+        } catch (e) {
+            console.error(`[Shortcut] Internal call failed for ${name}:`, e);
+        }
+    }
+    
+    element.click();
+    return true;
+}
+
+function handleShortcutAction(action) {
+    const video = document.querySelector('video');
+    const player = document.querySelector('.html5-video-player') || document.getElementById('movie_player');
+
+    if (!video) return;
+
+    switch (action) {
+        case 'chapter_skip':
+            skipToNextChapter();
+            break;
+        case 'seek_15_fwd':
+            video.currentTime = Math.min(video.duration, video.currentTime + 15);
+            showNotification('Skipped +15s');
+            break;
+        case 'seek_15_back':
+            video.currentTime = Math.max(0, video.currentTime - 15);
+            showNotification('Skipped -15s');
+            break;
+        case 'play_pause':
+            if (video.paused) {
+                video.play();
+                showNotification('Playing');
+            } else {
+                video.pause();
+                showNotification('Paused');
+            }
+            break;
+
+        case 'toggle_subs':
+            if (player) {
+                // Ensure the captions module is loaded
+                if (typeof player.loadModule === 'function') {
+                    player.loadModule('captions');
+                }
+
+                // 1. Try the direct toggle method first (if available)
+                if (typeof player.toggleSubtitles === 'function') {
+                    player.toggleSubtitles();
+                    // We can't easily check the new state immediately, so we show a generic message
+                    // or try to read it back after a tiny delay
+                    setTimeout(() => {
+                         const track = player.getOption ? player.getOption('captions', 'track') : null;
+                         const isNowOn = track && (track.languageCode || track.vssId);
+                         showNotification(isNowOn ? 'Subtitles: ON' : 'Subtitles: OFF');
+                    }, 100);
+                    return;
+                }
+
+                // 2. Manual API Toggle (getOption / setOption)
+                if (typeof player.getOption === 'function' && typeof player.setOption === 'function') {
+                    try {
+                        const currentTrack = player.getOption('captions', 'track');
+                        // If 'languageCode' or 'vssId' is present, captions are ON.
+                        const isEnabled = currentTrack && (currentTrack.languageCode || currentTrack.vssId);
+
+                        if (isEnabled) {
+                            // Turn OFF by setting an empty track object
+                            player.setOption('captions', 'track', {});
+                            showNotification('Subtitles: OFF');
+                        } else {
+                            // Turn ON. We first try to get the 'tracklist' to find a default
+                            const trackList = player.getOption('captions', 'tracklist');
+                            if (trackList && trackList.length > 0) {
+                                // Prefer user's default language or English, otherwise first available
+                                // You can customize this logic
+                                const defaultTrack = trackList.find(t => t.languageCode === 'en') || trackList[0];
+                                player.setOption('captions', 'track', defaultTrack);
+                                showNotification(`Subtitles: ON (${defaultTrack.languageName || defaultTrack.languageCode})`);
+                            } else {
+                                // Blind attempt if tracklist is empty (sometimes required to kickstart it)
+                                player.setOption('captions', 'track', { languageCode: 'en' });
+                                showNotification('Subtitles: ON (Auto)');
+                            }
+                        }
+                        return;
+                    } catch (e) {
+                        console.error('Subtitle Toggle Error:', e);
+                    }
+                }
+            }
+
+            // 3. Fallback: If API fails, notify user
+            showNotification('Subtitle API Unavailable');
+            break;
+
+        case 'toggle_comments':
+            const commBtn = document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button');
+            
+            // Check active state via button OR visible panel
+            const isCommentsActive = commBtn && (
+                commBtn.getAttribute('aria-pressed') === 'true' || 
+                commBtn.getAttribute('aria-selected') === 'true'
+            );
+            const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer');
+            const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
+
+            if (isCommentsActive || isPanelVisible) {
+                // IF OPEN: Close via Back simulation
+                simulateBack();
+                showNotification('Closed Comments');
+            } else {
+                // IF CLOSED: Open via internal trigger
+                if (triggerInternal(commBtn, 'Comments')) {
+                    showNotification('Opened Comments');
+                } else {
+                    const titleBtn = document.querySelector('.ytlr-video-title') || document.querySelector('h1');
+                    if (titleBtn) {
+                        titleBtn.click();
+                        showNotification('Opened Desc (Title)');
+                    } else {
+                        showNotification('Comments Unavailable');
+                    }
+                }
+            }
+            break;
+    }
 }
 
 const eventHandler = (evt) => {
@@ -462,28 +789,35 @@ const eventHandler = (evt) => {
       console.warn('Error jumping to highlight:', e);
     }
   } else if (keyColor === 'red' && evt.type === 'keydown') {
-  console.info('OLED mode activated');
-  evt.preventDefault();
-  evt.stopPropagation();
-  
-  let overlay = document.getElementById('oled-black-overlay');
-  if (overlay) {
-    overlay.remove();
-	console.info('OLED mode deactivated');
-  } else {
-    overlay = document.createElement('div');
-    overlay.id = 'oled-black-overlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999';
-    document.body.appendChild(overlay);
-  }
-  return false;
-} else if (evt.keyCode === 53 && evt.type === 'keydown') { // Key 5
-    if (configRead('enableChapterSkip')) {
-        skipToNextChapter();
-        evt.preventDefault();
-        evt.stopPropagation();
+    console.info('OLED mode activated');
+    evt.preventDefault();
+    evt.stopPropagation();
+    
+    let overlay = document.getElementById('oled-black-overlay');
+    if (overlay) {
+      overlay.remove();
+      console.info('OLED mode deactivated');
+    } else {
+      overlay = document.createElement('div');
+      overlay.id = 'oled-black-overlay';
+      overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999';
+      document.body.appendChild(overlay);
     }
-}
+    return false;
+  } else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
+      // Check for user-defined shortcuts (Keys 0-9)
+      const keyIndex = evt.keyCode - 48;
+      const action = configRead(`shortcut_key_${keyIndex}`);
+	  
+	  evt.preventDefault();
+      evt.stopPropagation();
+      
+      if (action && action !== 'none') {
+          handleShortcutAction(action);
+          evt.preventDefault();
+          evt.stopPropagation();
+      }
+  }
   return true;
 };
 
@@ -520,6 +854,8 @@ export function showNotification(text, time = 3000) {
     }, 1000);
   }, time);
 }
+
+// ... (Rest of the file: initHideLogo, initHideEndcards, applyOledMode, etc. remains unchanged) ...
 
 function initHideLogo() {
   const style = document.createElement('style');

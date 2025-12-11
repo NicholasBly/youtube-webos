@@ -149,10 +149,6 @@ function filterItems(items, removeShorts, enableAds, hideGuestPrompts) {
     if (hideGuestPrompts) {
         if (item.feedNudgeRenderer) return false;
         if (item.alertWithActionsRenderer) return false;
-        
-        // [FIX] Removed 'gridButtonRenderer' block.
-        // This was causing the "Can't find anything to watch" section to break
-        // because it removed the "Refresh" button, leaving an empty list.
     }
 
     // Block Shorts
