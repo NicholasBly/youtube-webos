@@ -689,14 +689,18 @@ function handleShortcutAction(action) {
             break;
 
         case 'toggle_comments':
-            const commBtn = document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button');
+            const commBtn = document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') ||
+                            document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
             
             // Check active state via button OR visible panel
             const isCommentsActive = commBtn && (
                 commBtn.getAttribute('aria-pressed') === 'true' || 
                 commBtn.getAttribute('aria-selected') === 'true'
             );
-            const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer');
+            
+            const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || 
+                          document.querySelector('ytlr-engagement-panel-title-header-renderer');
+
             const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
 
             if (isCommentsActive || isPanelVisible) {

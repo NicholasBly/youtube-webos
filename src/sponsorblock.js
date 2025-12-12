@@ -2,7 +2,6 @@
 import sha256_import from 'tiny-sha256';
 import { configRead, configAddChangeListener, segmentTypes } from './config';
 import { showNotification } from './ui';
-import { WebOSVersion, isNewYouTubeLayout } from './webos-utils.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 
 let sha256 = sha256_import;
@@ -45,8 +44,6 @@ class SponsorBlockHandler {
         // State
         this.isProcessing = false;
         this.wasMutedBySB = false; // State for muting
-        this.webOSVersion = WebOSVersion();
-        this.isNewLayout = isNewYouTubeLayout();
         
         // Observers & Listeners
         this.observers = new Set();
