@@ -33,6 +33,7 @@ class SponsorBlockHandler {
     constructor(videoID) {
         this.videoID = videoID;
         this.segments = [];
+		this.highlightSegment = null;
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
@@ -94,7 +95,8 @@ class SponsorBlockHandler {
             const videoData = Array.isArray(data) ? data.find(x => x.videoID === this.videoID) : data;
             
             if (videoData && videoData.segments && videoData.segments.length) {
-                this.segments = videoData.segments;
+                this.segments = videoData.segments.sort((a, b) => a.segment[0] - b.segment[0]);
+                this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
                 this.log('info', `Found ${this.segments.length} segments.`);
                 
                 // Update UI with new segments
@@ -291,21 +293,21 @@ class SponsorBlockHandler {
         }
     }
 
-    skipSegment(segment) {
-        showNotification(`Skipped ${segmentTypes[segment.category]?.name || segment.category}`);
+	skipSegment(segment) {
         this.video.currentTime = segment.segment[1];
+        if (this.video.paused) this.video.play();
+        requestAnimationFrame(() => {
+            showNotification(`Skipped ${segmentTypes[segment.category]?.name || segment.category}`);
+        });
     }
 
     jumpToNextHighlight() {
-        if (!this.video || !configRead('enableSponsorBlockHighlight')) return false;
-
-        const highlight = this.segments.find(s => s.category === 'poi_highlight');
-        if (highlight) {
-            this.video.currentTime = highlight.segment[0];
+        if (!this.video || !this.highlightSegment || !configRead('enableSponsorBlockHighlight')) return false;
+        this.video.currentTime = this.highlightSegment.segment[0];
+        requestAnimationFrame(() => {
             showNotification('Jumped to Highlight');
-            return true;
-        }
-        return false;
+        });
+        return true;
     }
 
     async fetchSegments(hashPrefix) {

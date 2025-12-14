@@ -57,6 +57,7 @@ export const segmentTypes = {
 export const shortcutActions = {
   none: 'None',
   chapter_skip: 'Skip to Next Chapter',
+  chapter_skip_prev: 'Skip to Previous Chapter',
   seek_15_fwd: 'Fast Forward 15s',
   seek_15_back: 'Rewind 15s',
   play_pause: 'Play/Pause',

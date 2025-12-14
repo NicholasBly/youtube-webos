@@ -484,25 +484,23 @@ function showOptionsPanel(visible) {
 
 window.ytaf_showOptionsPanel = showOptionsPanel;
 
-async function skipToNextChapter() {
+async function skipChapter(direction = 'next') {
   const video = document.querySelector('video');
   if (!video || !video.duration) return;
 
-  // Track state to ensure we only force UI once per video session
-  // Initialize static properties if they don't exist
-  skipToNextChapter.lastSrc = skipToNextChapter.lastSrc || '';
-  skipToNextChapter.hasForced = skipToNextChapter.hasForced || false;
+  // Initialize static state to track if we've already forced the UI open
+  skipChapter.lastSrc = skipChapter.lastSrc || '';
+  skipChapter.hasForced = skipChapter.hasForced || false;
 
   const currentSrc = video.src || window.location.href;
   let wasForcedNow = false;
   
-  // Reset forced state if the video URL/Source has changed
-  if (skipToNextChapter.lastSrc !== currentSrc) {
-      skipToNextChapter.lastSrc = currentSrc;
-      skipToNextChapter.hasForced = false;
+  // Reset state if video changes
+  if (skipChapter.lastSrc !== currentSrc) {
+      skipChapter.lastSrc = currentSrc;
+      skipChapter.hasForced = false;
   }
 
-  // Helper to fetch chapters from the DOM
   const getChapterEls = () => {
       const bar = document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]');
       if (!bar) return [];
@@ -514,32 +512,26 @@ async function skipToNextChapter() {
 
   let chapterEls = getChapterEls();
 
-  // If no chapters found and we haven't forced the UI yet for this video
-  if (chapterEls.length === 0 && !skipToNextChapter.hasForced) {
-      console.log('[Chapters] No chapters found in DOM. Forcing UI open to load markers...');
-      skipToNextChapter.hasForced = true;
+  // Force UI open if no chapters found (only once per video)
+  if (chapterEls.length === 0 && !skipChapter.hasForced) {
+      console.log('[Chapters] No chapters found. Forcing UI...');
+      skipChapter.hasForced = true;
       wasForcedNow = true;
       showNotification('Loading chapters...');
 	  
 	  sendKey(REMOTE_KEYS.ENTER);
-
-      // Wait 500ms for UI to render and DOM to update
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Retry fetching chapters
       chapterEls = getChapterEls();
   }
 
   if (chapterEls.length === 0) {
       showNotification('No chapters found');
-      // If we forced it open but still didn't find chapters, we should probably close it back up
-      if (wasForcedNow) {
-           setTimeout(() => simulateBack(), 250);
-      }
+      if (wasForcedNow) setTimeout(() => simulateBack(), 250);
       return;
   }
 
-  // --- Logic to calculate and skip ---
+  // Calculate timestamps
   let totalWidth = 0;
   const chapterData = chapterEls.map(el => {
       const width = parseFloat(el.style.width || '0');
@@ -552,23 +544,43 @@ async function skipToNextChapter() {
 
   const timestamps = chapterData.map(c => (c.startIndex / totalWidth) * video.duration);
   const currentTime = video.currentTime;
-  const nextTime = timestamps.find(t => t > currentTime + 1);
+  let targetTime;
 
-  if (nextTime !== undefined && nextTime < video.duration) {
-      video.currentTime = nextTime;
-      showNotification('Skipped to next chapter');
-      
-      // If we opened the menu just to find chapters, close it now
-      if (wasForcedNow) {
-          // Give it a tiny delay to ensure the seek registers visually, then close
-          setTimeout(() => simulateBack(), 250); 
-      }
+  if (direction === 'next') {
+      // Find first timestamp significantly greater than current
+      targetTime = timestamps.find(t => t > currentTime + 1);
   } else {
-      showNotification('No next chapter');
-      // Cleanup if we opened it for nothing
-      if (wasForcedNow) {
-           setTimeout(() => simulateBack(), 250);
+      // Previous Logic: 
+      // 1. Identify current chapter index
+      let currentIdx = -1;
+      for (let i = 0; i < timestamps.length; i++) {
+          if (currentTime >= timestamps[i]) currentIdx = i;
+          else break;
       }
+
+      if (currentIdx !== -1) {
+          const chapterStart = timestamps[currentIdx];
+          // If we are more than 3 seconds into the chapter, restart it.
+          // Otherwise, go to the previous chapter.
+          if (currentTime - chapterStart > 3) {
+              targetTime = chapterStart;
+          } else if (currentIdx > 0) {
+              targetTime = timestamps[currentIdx - 1];
+          } else {
+              targetTime = 0; // Start of video
+          }
+      } else {
+          targetTime = 0;
+      }
+  }
+
+  if (targetTime !== undefined && targetTime < video.duration) {
+      video.currentTime = targetTime;
+      showNotification(direction === 'next' ? 'Next Chapter' : 'Previous Chapter');
+      if (wasForcedNow) setTimeout(() => simulateBack(), 250);
+  } else {
+      showNotification(direction === 'next' ? 'No next chapter' : 'Start of video');
+      if (wasForcedNow) setTimeout(() => simulateBack(), 250);
   }
 }
 
@@ -614,7 +626,10 @@ function handleShortcutAction(action) {
 
     switch (action) {
         case 'chapter_skip':
-            skipToNextChapter();
+            skipChapter('next');
+            break;
+		case 'chapter_skip_prev':
+            skipChapter('prev');
             break;
         case 'seek_15_fwd':
             video.currentTime = Math.min(video.duration, video.currentTime + 15);
