@@ -24,6 +24,38 @@ export const REMOTE_KEYS = {
   9: { code: 57, key: '9' }
 };
 
+let cachedGuestMode = null;
+
+export function isGuestMode() {
+  if (cachedGuestMode !== null) return cachedGuestMode;
+
+  try {
+    const lastIdentity = window.localStorage.getItem('yt.leanback.default::last-identity-used');
+    if (lastIdentity) {
+      const parsed = JSON.parse(lastIdentity);
+      if (parsed?.data?.identityType === 'UNAUTHENTICATED_IDENTITY_TYPE_GUEST') {
+        cachedGuestMode = true;
+        return true;
+      }
+      cachedGuestMode = false;
+      return false; 
+    }
+    const autoNav = window.localStorage.getItem('yt.leanback.default::AUTONAV_FOR_LIVING_ROOM');
+    if (autoNav) {
+      const parsed = JSON.parse(autoNav);
+      if (parsed?.data?.guest === true) {
+        cachedGuestMode = true;
+        return true;
+      }
+    }
+    
+    cachedGuestMode = false;
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
 export function sendKey(keyDef, target = document.body) {
   if (!keyDef || !keyDef.code) {
     console.warn('[Utils] Invalid key definition passed to sendKey');

@@ -1,6 +1,7 @@
 /* src/adblock.js */
 /* eslint no-redeclare: 0 */
 import { configRead } from './config';
+import { isGuestMode } from './utils';
 
 const origParse = JSON.parse;
 
@@ -29,8 +30,12 @@ JSON.parse = function (text, reviver) {
   }
 
   const enableAds = configRead('enableAdBlock');
-  const removeShorts = configRead('removeShorts');
+  let removeShorts = configRead('removeShorts');
   const hideGuestPrompts = configRead('hideGuestSignInPrompts');
+  
+  if (isGuestMode()) {
+      removeShorts = false;
+  }
 
   // If all features are disabled, just return
   if (!enableAds && !removeShorts && !hideGuestPrompts) {

@@ -16,41 +16,7 @@ import { initYouTubeFixes } from './yt-fixes.js';
 import { WebOSVersion } from './webos-utils.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { sendKey, REMOTE_KEYS } from './utils.js';
-
-let cachedGuestMode = null;
-
-function isGuestMode() {
-  if (cachedGuestMode !== null) {
-    return cachedGuestMode;
-  }
-  try {
-    const lastIdentity = window.localStorage.getItem('yt.leanback.default::last-identity-used');
-    if (lastIdentity) {
-      const parsed = JSON.parse(lastIdentity);
-      if (parsed?.data?.identityType === 'UNAUTHENTICATED_IDENTITY_TYPE_GUEST') {
-        cachedGuestMode = true;
-        return true;
-      }
-      cachedGuestMode = false;
-      return false; 
-    }
-    const autoNav = window.localStorage.getItem('yt.leanback.default::AUTONAV_FOR_LIVING_ROOM');
-    if (autoNav) {
-      const parsed = JSON.parse(autoNav);
-      if (parsed?.data?.guest === true) {
-        cachedGuestMode = true;
-        return true;
-      }
-    }
-    cachedGuestMode = false;
-    return false;
-  } catch (e) {
-    console.warn('Error detecting guest mode:', e);
-    cachedGuestMode = false;
-    return false;
-  }
-}
+import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
 
 function isWatchPage() {
   return document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
@@ -357,7 +323,9 @@ function createOptionsPanel() {
   pageMain.appendChild(createConfigCheckbox('upgradeThumbnails'));
   pageMain.appendChild(createConfigCheckbox('hideLogo'));
   pageMain.appendChild(createConfigCheckbox('enableOledCareMode'));
+  if (!isGuestMode()) {
   pageMain.appendChild(createConfigCheckbox('removeShorts'));
+  }
   pageMain.appendChild(createConfigCheckbox('enableAutoLogin'));
   pageMain.appendChild(createConfigCheckbox('hideEndcards'));
   pageMain.appendChild(createConfigCheckbox('enableReturnYouTubeDislike'));
@@ -650,60 +618,62 @@ function handleShortcutAction(action) {
             break;
 
         case 'toggle_subs':
+            let toggledViaApi = false;
+
+            // 1. Attempt Native Player API (Preferred)
             if (player) {
-                // Ensure the captions module is loaded
+                // Ensure the module is loaded (just in case)
                 if (typeof player.loadModule === 'function') {
                     player.loadModule('captions');
                 }
 
-                // 1. Try the direct toggle method first (if available)
-                if (typeof player.toggleSubtitles === 'function') {
-                    player.toggleSubtitles();
-                    // We can't easily check the new state immediately, so we show a generic message
-                    // or try to read it back after a tiny delay
-                    setTimeout(() => {
-                         const track = player.getOption ? player.getOption('captions', 'track') : null;
-                         const isNowOn = track && (track.languageCode || track.vssId);
-                         showNotification(isNowOn ? 'Subtitles: ON' : 'Subtitles: OFF');
-                    }, 100);
-                    return;
-                }
-
-                // 2. Manual API Toggle (getOption / setOption)
                 if (typeof player.getOption === 'function' && typeof player.setOption === 'function') {
                     try {
                         const currentTrack = player.getOption('captions', 'track');
-                        // If 'languageCode' or 'vssId' is present, captions are ON.
+                        // Check if captions are currently active
                         const isEnabled = currentTrack && (currentTrack.languageCode || currentTrack.vssId);
-
                         if (isEnabled) {
-                            // Turn OFF by setting an empty track object
+                            // Turn OFF via API
                             player.setOption('captions', 'track', {});
                             showNotification('Subtitles: OFF');
+                            toggledViaApi = true;
                         } else {
-                            // Turn ON. We first try to get the 'tracklist' to find a default
+                            // Turn ON via API
                             const trackList = player.getOption('captions', 'tracklist');
-                            if (trackList && trackList.length > 0) {
-                                // Prefer user's default language or English, otherwise first available
-                                // You can customize this logic
-                                const defaultTrack = trackList.find(t => t.languageCode === 'en') || trackList[0];
-                                player.setOption('captions', 'track', defaultTrack);
-                                showNotification(`Subtitles: ON (${defaultTrack.languageName || defaultTrack.languageCode})`);
-                            } else {
-                                // Blind attempt if tracklist is empty (sometimes required to kickstart it)
-                                player.setOption('captions', 'track', { languageCode: 'en' });
-                                showNotification('Subtitles: ON (Auto)');
+                            const videoData = player.getVideoData ? player.getVideoData() : null;
+                            
+                            // Find any valid track (API Tracklist OR Raw Metadata)
+                            const targetTrack = (trackList && trackList[0]) || 
+                                              (videoData && videoData.captionTracks && videoData.captionTracks[0]);
+
+                            if (targetTrack) {
+                                player.setOption('captions', 'track', targetTrack);
+                                showNotification(`Subtitles: ON (${targetTrack.languageName || targetTrack.name || targetTrack.languageCode})`);
+                                toggledViaApi = true;
                             }
                         }
-                        return;
                     } catch (e) {
-                        console.error('Subtitle Toggle Error:', e);
+                        console.warn('[Shortcut] Subtitle API Error:', e);
                     }
                 }
             }
-
-            // 3. Fallback: If API fails, notify user
-            showNotification('Subtitle API Unavailable');
+            // 2. DOM Fallback (Only runs if API failed/was empty)
+            if (!toggledViaApi) {
+                const capsBtn = document.querySelector('ytlr-captions-button ytlr-button') || 
+                                document.querySelector('ytlr-toggle-button-renderer ytlr-button');
+                if (capsBtn) {
+                    // Simulate a physical click on the button
+                    if (triggerInternal(capsBtn, 'Captions')) {
+                         // Read the new state from the button's aria-pressed attribute after a tiny delay
+                         setTimeout(() => {
+                             const isPressed = capsBtn.getAttribute('aria-pressed') === 'true';
+                             showNotification(isPressed ? 'Subtitles: ON' : 'Subtitles: OFF');
+                         }, 250);
+                         return;
+                    }
+                }
+                showNotification('No subtitles found');
+            }
             break;
 
         case 'toggle_comments':

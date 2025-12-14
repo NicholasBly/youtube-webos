@@ -182,7 +182,8 @@ class SponsorBlockHandler {
              return;
         }
 
-        let target = document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]') ||
+        let target = document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="segment"]') ||
+                     document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]') ||
                      document.querySelector('ytlr-multi-markers-player-bar-renderer') ||
                      document.querySelector('ytlr-progress-bar [idomkey="slider"]') ||
                      document.querySelector('.ytLrProgressBarSliderBase') || 
@@ -373,24 +374,35 @@ class SponsorBlockHandler {
     destroy() {
         this.log('info', 'Destroying instance.');
         
-        sponsorBlockUI.togglePopup(false); // Ensure popup is closed
-        
-        // [FIX] Clear the UI on destroy as well to be safe
+        // 1. Clean up UI
+        sponsorBlockUI.togglePopup(false); 
         sponsorBlockUI.updateSegments([]);
+        if (this.overlay) {
+            this.overlay.remove();
+            this.overlay = null; // Drop reference
+        }
 
-        // Ensure we unmute if we are destroyed while muting
+        // 2. Reset Audio State
         if (this.wasMutedBySB && this.video) {
             this.video.muted = false;
         }
         
+        // 3. Remove Event Listeners
         this.listeners.forEach((events, elem) => {
             events.forEach((handler, type) => elem.removeEventListener(type, handler));
         });
         this.listeners.clear();
+
+        // 4. Disconnect Observers
         this.observers.forEach(obs => obs.disconnect());
         this.observers.clear();
-        if (this.overlay) this.overlay.remove();
+        
+        // 5. Release Memory / DOM References
         this.segments = [];
+        this.highlightSegment = null;
+        this.video = null;
+        this.progressBar = null;
+        this.activeCategories = null;
     }
 }
 
