@@ -163,8 +163,11 @@ function createShortcutControl(keyIndex) {
   rightArrow.textContent = '>';
   rightArrow.classList.add('arrow-btn');
 
-  valueContainer.append(leftArrow, valueText, rightArrow);
-  container.append(label, valueContainer);
+  valueContainer.appendChild(leftArrow);
+  valueContainer.appendChild(valueText);
+  valueContainer.appendChild(rightArrow);
+  container.appendChild(label);
+  container.appendChild(valueContainer);
 
   const actions = Object.keys(shortcutActions);
   
@@ -827,8 +830,6 @@ export function showNotification(text, time = 3000) {
     }, 1000);
   }, time);
 }
-
-// ... (Rest of the file: initHideLogo, initHideEndcards, applyOledMode, etc. remains unchanged) ...
 
 function initHideLogo() {
   const style = document.createElement('style');
