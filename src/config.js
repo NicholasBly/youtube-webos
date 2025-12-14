@@ -160,7 +160,8 @@ const configOptions = new Map([
   ],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
-  ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }]
+  ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],
+  ['disableNotifications', { default: false, desc: 'Disable Notifications' }]
 ]);
 
 // Register shortcut keys 0-9
@@ -273,6 +274,12 @@ export function configAddChangeListener(key, callback) {
   const frag = configFrags[key];
 
   frag.addEventListener('ytafConfigChange', callback);
+}
+export function configRemoveChangeListener(key, callback) {
+  if (configFrags[key]) {
+    const frag = configFrags[key];
+    frag.removeEventListener('ytafConfigChange', callback);
+  }
 }
 
 export function configGetDefault(key) {

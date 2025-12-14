@@ -332,6 +332,7 @@ function createOptionsPanel() {
   if (isGuestMode()) {
     pageMain.appendChild(createConfigCheckbox('hideGuestSignInPrompts'));
   }
+  pageMain.appendChild(createConfigCheckbox('disableNotifications'));
   
   const navHintNextMain = document.createElement('div');
   navHintNextMain.className = 'ytaf-nav-hint right';
@@ -787,6 +788,7 @@ document.addEventListener('keypress', eventHandler, true);
 document.addEventListener('keyup', eventHandler, true);
 
 export function showNotification(text, time = 3000) {
+  if (configRead('disableNotifications')) return;
   if (!document.querySelector('.ytaf-notification-container')) {
     console.info('Adding notification container');
     const c = document.createElement('div');

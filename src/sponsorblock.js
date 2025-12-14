@@ -1,6 +1,6 @@
 /* src/sponsorblock.js */
 import sha256_import from 'tiny-sha256';
-import { configRead, configAddChangeListener, segmentTypes } from './config';
+import { configRead, configAddChangeListener, configRemoveChangeListener, segmentTypes } from './config';
 import { showNotification } from './ui';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 
@@ -49,6 +49,8 @@ class SponsorBlockHandler {
         // Observers & Listeners
         this.observers = new Set();
         this.listeners = new Map(); 
+		
+		this.configListeners = [];
         
         this.updateConfigCache();
         this.setupConfigListeners();
@@ -73,9 +75,11 @@ class SponsorBlockHandler {
         }
     }
 
-    setupConfigListeners() {
+	setupConfigListeners() {
         Object.values(CONFIG_MAPPING).forEach(key => {
-            configAddChangeListener(key, () => this.updateConfigCache());
+            const callback = () => this.updateConfigCache();
+            configAddChangeListener(key, callback);
+            this.configListeners.push({ key, callback });
         });
     }
 
@@ -352,7 +356,6 @@ class SponsorBlockHandler {
 
     injectCSS() {
         if (document.getElementById('sb-css')) return;
-        // ... (Keep existing CSS logic)
         const css = `
             #previewbar { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; pointer-events: none !important; z-index: 2000 !important; overflow: visible !important; }
             .previewbar { position: absolute !important; list-style: none !important; height: 100% !important; top: 0 !important; display: block !important; z-index: 2001 !important; }
@@ -379,25 +382,37 @@ class SponsorBlockHandler {
         sponsorBlockUI.updateSegments([]);
         if (this.overlay) {
             this.overlay.remove();
-            this.overlay = null; // Drop reference
+            this.overlay = null;
         }
 
-        // 2. Reset Audio State
+        // 2. Clean up Injected CSS
+        const style = document.getElementById('sb-css');
+        if (style) {
+            style.remove();
+        }
+
+        // 3. Reset Audio State
         if (this.wasMutedBySB && this.video) {
             this.video.muted = false;
         }
         
-        // 3. Remove Event Listeners
+        // 4. Remove DOM Event Listeners
         this.listeners.forEach((events, elem) => {
             events.forEach((handler, type) => elem.removeEventListener(type, handler));
         });
         this.listeners.clear();
 
-        // 4. Disconnect Observers
+        // 5. Disconnect Observers
         this.observers.forEach(obs => obs.disconnect());
         this.observers.clear();
+
+        // 6. Remove Config Listeners
+        this.configListeners.forEach(({ key, callback }) => {
+            configRemoveChangeListener(key, callback);
+        });
+        this.configListeners = [];
         
-        // 5. Release Memory / DOM References
+        // 7. Release Memory / DOM References
         this.segments = [];
         this.highlightSegment = null;
         this.video = null;
