@@ -1,3 +1,4 @@
+/* src/config.js */
 const CONFIG_KEY = 'ytaf-configuration';
 
 export const segmentTypes = {
@@ -53,10 +54,20 @@ export const segmentTypes = {
   }
 };
 
+export const shortcutActions = {
+  none: 'None',
+  chapter_skip: 'Skip to Next Chapter',
+  chapter_skip_prev: 'Skip to Previous Chapter',
+  seek_15_fwd: 'Fast Forward 15s',
+  seek_15_back: 'Rewind 15s',
+  play_pause: 'Play/Pause',
+  toggle_subs: 'Toggle Subtitles',
+  toggle_comments: 'Toggle Comments/Desc'
+};
+
 const configOptions = new Map([
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
-  ['enableChapterSkip', { default: false, desc: 'Chapter Skip with Key 5' }],
   ['upgradeThumbnails', { default: false, desc: 'Upgrade Thumbnail Quality' }],
   [
     'removeShorts',
@@ -149,8 +160,17 @@ const configOptions = new Map([
   ],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
-  ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }]
+  ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],
+  ['disableNotifications', { default: false, desc: 'Disable Notifications' }]
 ]);
+
+// Register shortcut keys 0-9
+for (let i = 0; i < 10; i++) {
+  configOptions.set(`shortcut_key_${i}`, {
+    default: i === 5 ? 'chapter_skip' : 'none',
+    desc: `Key ${i} Action`
+  });
+}
 
 for (const [key, value] of Object.entries(segmentTypes)) {
   configOptions.set(`${key}Color`, {
@@ -254,6 +274,12 @@ export function configAddChangeListener(key, callback) {
   const frag = configFrags[key];
 
   frag.addEventListener('ytafConfigChange', callback);
+}
+export function configRemoveChangeListener(key, callback) {
+  if (configFrags[key]) {
+    const frag = configFrags[key];
+    frag.removeEventListener('ytafConfigChange', callback);
+  }
 }
 
 export function configGetDefault(key) {

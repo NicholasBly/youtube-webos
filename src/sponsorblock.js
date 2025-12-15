@@ -1,8 +1,7 @@
 /* src/sponsorblock.js */
 import sha256_import from 'tiny-sha256';
-import { configRead, configAddChangeListener, segmentTypes } from './config';
+import { configRead, configAddChangeListener, configRemoveChangeListener, segmentTypes } from './config';
 import { showNotification } from './ui';
-import { WebOSVersion, isNewYouTubeLayout } from './webos-utils.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 
 let sha256 = sha256_import;
@@ -34,6 +33,7 @@ class SponsorBlockHandler {
     constructor(videoID) {
         this.videoID = videoID;
         this.segments = [];
+		this.highlightSegment = null;
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
@@ -45,17 +45,27 @@ class SponsorBlockHandler {
         // State
         this.isProcessing = false;
         this.wasMutedBySB = false; // State for muting
-        this.webOSVersion = WebOSVersion();
-        this.isNewLayout = isNewYouTubeLayout();
         
         // Observers & Listeners
         this.observers = new Set();
         this.listeners = new Map(); 
+		
+		this.configListeners = [];
+		this.rafIds = new Set();
         
         this.updateConfigCache();
         this.setupConfigListeners();
         
         this.log('info', `Created handler for ${this.videoID}`);
+    }
+	
+	requestAF(callback) {
+        const id = requestAnimationFrame(() => {
+            this.rafIds.delete(id);
+            callback();
+        });
+        this.rafIds.add(id);
+        return id;
     }
 
     log(level, message, ...args) {
@@ -75,9 +85,11 @@ class SponsorBlockHandler {
         }
     }
 
-    setupConfigListeners() {
+	setupConfigListeners() {
         Object.values(CONFIG_MAPPING).forEach(key => {
-            configAddChangeListener(key, () => this.updateConfigCache());
+            const callback = () => this.updateConfigCache();
+            configAddChangeListener(key, callback);
+            this.configListeners.push({ key, callback });
         });
     }
 
@@ -97,7 +109,8 @@ class SponsorBlockHandler {
             const videoData = Array.isArray(data) ? data.find(x => x.videoID === this.videoID) : data;
             
             if (videoData && videoData.segments && videoData.segments.length) {
-                this.segments = videoData.segments;
+                this.segments = videoData.segments.sort((a, b) => a.segment[0] - b.segment[0]);
+                this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
                 this.log('info', `Found ${this.segments.length} segments.`);
                 
                 // Update UI with new segments
@@ -162,19 +175,19 @@ class SponsorBlockHandler {
 
             if (shouldCheck) {
                 this.isProcessing = true;
-                requestAnimationFrame(() => {
+                this.requestAF(() => {
                     this.checkForProgressBar();
                     this.isProcessing = false;
                 });
             }
         });
 
-        domObserver.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class', 'style', 'hidden'] // Restrict attributes
-        });
+	domObserver.observe(document.body, {
+		childList: true,
+		subtree: true,
+		attributes: true,
+		attributeFilter: ['class', 'style', 'hidden']
+	});
         this.observers.add(domObserver);
     }
 
@@ -183,7 +196,8 @@ class SponsorBlockHandler {
              return;
         }
 
-        let target = document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]') ||
+        let target = document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="segment"]') ||
+                     document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]') ||
                      document.querySelector('ytlr-multi-markers-player-bar-renderer') ||
                      document.querySelector('ytlr-progress-bar [idomkey="slider"]') ||
                      document.querySelector('.ytLrProgressBarSliderBase') || 
@@ -294,21 +308,21 @@ class SponsorBlockHandler {
         }
     }
 
-    skipSegment(segment) {
-        showNotification(`Skipped ${segmentTypes[segment.category]?.name || segment.category}`);
+	skipSegment(segment) {
         this.video.currentTime = segment.segment[1];
+        if (this.video.paused) this.video.play();
+        this.requestAF(() => {
+            showNotification(`Skipped ${segmentTypes[segment.category]?.name || segment.category}`);
+        });
     }
 
     jumpToNextHighlight() {
-        if (!this.video || !configRead('enableSponsorBlockHighlight')) return false;
-
-        const highlight = this.segments.find(s => s.category === 'poi_highlight');
-        if (highlight) {
-            this.video.currentTime = highlight.segment[0];
+        if (!this.video || !this.highlightSegment || !configRead('enableSponsorBlockHighlight')) return false;
+        this.video.currentTime = this.highlightSegment.segment[0];
+        this.requestAF(() => {
             showNotification('Jumped to Highlight');
-            return true;
-        }
-        return false;
+        });
+        return true;
     }
 
     async fetchSegments(hashPrefix) {
@@ -352,7 +366,6 @@ class SponsorBlockHandler {
 
     injectCSS() {
         if (document.getElementById('sb-css')) return;
-        // ... (Keep existing CSS logic)
         const css = `
             #previewbar { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; pointer-events: none !important; z-index: 2000 !important; overflow: visible !important; }
             .previewbar { position: absolute !important; list-style: none !important; height: 100% !important; top: 0 !important; display: block !important; z-index: 2001 !important; }
@@ -373,29 +386,60 @@ class SponsorBlockHandler {
 
     destroy() {
         this.log('info', 'Destroying instance.');
+		
+		// Clear all pending Animation Frames
+		this.rafIds.forEach(id => cancelAnimationFrame(id));
+        this.rafIds.clear();
         
-        sponsorBlockUI.togglePopup(false); // Ensure popup is closed
-        
-        // [FIX] Clear the UI on destroy as well to be safe
+        // 1. Clean up UI
+        sponsorBlockUI.togglePopup(false); 
         sponsorBlockUI.updateSegments([]);
+        if (this.overlay) {
+            this.overlay.remove();
+            this.overlay = null;
+        }
 
-        // Ensure we unmute if we are destroyed while muting
+        // 2. Clean up Injected CSS
+        const style = document.getElementById('sb-css');
+        if (style) {
+            style.remove();
+        }
+
+        // 3. Reset Audio State
         if (this.wasMutedBySB && this.video) {
             this.video.muted = false;
         }
         
+        // 4. Remove DOM Event Listeners
         this.listeners.forEach((events, elem) => {
             events.forEach((handler, type) => elem.removeEventListener(type, handler));
         });
         this.listeners.clear();
+
+        // 5. Disconnect Observers
         this.observers.forEach(obs => obs.disconnect());
         this.observers.clear();
-        if (this.overlay) this.overlay.remove();
+
+        // 6. Remove Config Listeners
+        this.configListeners.forEach(({ key, callback }) => {
+            configRemoveChangeListener(key, callback);
+        });
+        this.configListeners = [];
+        
+        // 7. Release Memory / DOM References
         this.segments = [];
+        this.highlightSegment = null;
+        this.video = null;
+        this.progressBar = null;
+        this.activeCategories = null;
     }
 }
 
 if (typeof window !== 'undefined') {
+    if (window.__ytaf_sb_init) {
+        window.removeEventListener('hashchange', window.__ytaf_sb_init);
+    }
+
     window.sponsorblock = null;
 
     const initSB = () => {
@@ -427,7 +471,12 @@ if (typeof window !== 'undefined') {
         }
     };
 
+    window.__ytaf_sb_init = initSB;
     window.addEventListener('hashchange', initSB);
-    if (document.readyState === 'complete') setTimeout(initSB, 500);
-    else window.addEventListener('load', () => setTimeout(initSB, 500));
+
+    if (document.readyState === 'complete') {
+        setTimeout(initSB, 500);
+    } else {
+        window.addEventListener('load', () => setTimeout(initSB, 500), { once: true });
+    }
 }

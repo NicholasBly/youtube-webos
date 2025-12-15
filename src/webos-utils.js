@@ -12,7 +12,7 @@ export function isNewYouTubeLayout() {
   }
 
   // WebOS 24 / 25 typically uses this tag for the app host
-  cachedNewLayout = !!document.querySelector('ytLrAppHost');
+  cachedNewLayout = !!document.querySelector('gJiGL'); // ytLrAppHost previously
   
   if (cachedNewLayout) {
     console.info('[WebOSUtils] New YouTube UI detected');

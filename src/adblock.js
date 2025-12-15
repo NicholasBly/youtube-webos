@@ -1,181 +1,191 @@
 /* src/adblock.js */
 /* eslint no-redeclare: 0 */
-/* global fetch:writable */
 import { configRead } from './config';
+import { isGuestMode } from './utils';
 
-const origParse = JSON.parse;
+let origParse = JSON.parse;
+let isHooked = false;
 
-JSON.parse = function (text, reviver) {
-  // 1. Safe parsing
-  let data;
+// Define the hook logic separately
+function hookedParse(text, reviver) {
+  // 1. Perform the actual parsing first
+  var data;
   try {
-      data = origParse.call(this, text, reviver);
+    data = origParse.call(this, text, reviver);
   } catch (e) {
-      return origParse.call(this, text, reviver); // Fallback
+    return origParse.call(this, text, reviver);
   }
 
-  // Basic sanity check
+  // 2. Pre-flight Check: Performance Optimization
   if (!data || typeof data !== 'object') {
+    return data;
+  }
+  
+  var isAPIResponse = data.responseContext || data.playerResponse || data.onResponseReceivedActions || data.sectionListRenderer;
+  if (!isAPIResponse) {
     return data;
   }
 
   const enableAds = configRead('enableAdBlock');
-  const removeShorts = configRead('removeShorts');
+  let removeShorts = configRead('removeShorts');
   const hideGuestPrompts = configRead('hideGuestSignInPrompts');
+  
+  if (isGuestMode()) {
+      removeShorts = false;
+  }
 
   if (!enableAds && !removeShorts && !hideGuestPrompts) {
     return data;
   }
 
-  // 2. Modification Logic
   try {
-    // --- Phase 1: Root Level Ad Cleanup (Fast) ---
-    if (enableAds) {
+    // --- ACTION 1: Video Player Ads ---
+    if (enableAds && (data.playerResponse || data.videoDetails)) {
       if (data.adPlacements) data.adPlacements = [];
-      if (data.adSlots) data.adSlots = [];
       if (data.playerAds) data.playerAds = [];
-      if (data.playerResponse?.adPlacements) data.playerResponse.adPlacements = [];
-      if (data.playerResponse?.playerAds) data.playerResponse.playerAds = [];
+      if (data.adSlots) data.adSlots = [];
+      if (data.playerResponse) {
+        if (data.playerResponse.adPlacements) data.playerResponse.adPlacements = [];
+        if (data.playerResponse.playerAds) data.playerResponse.playerAds = [];
+      }
     }
 
-    // --- Phase 2: Standard UI Filtering (Fast Path) ---
-    // Handle standard lists (Home Screen, Channel Pages)
-    const browseContent = data.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
-    if (browseContent) processSectionList(browseContent, enableAds, removeShorts, hideGuestPrompts);
+    // --- ACTION 2: Browse/Home Screen Elements ---
+    var browseContent = data.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
+    if (browseContent) {
+      processSectionList(browseContent, enableAds, removeShorts, hideGuestPrompts);
+    }
 
-    // Handle Search Results (Fixes WEB_PAGE_TYPE_SEARCH)
-    const searchContent = data.contents?.sectionListRenderer?.contents;
-    if (searchContent) processSectionList(searchContent, enableAds, removeShorts, hideGuestPrompts);
+    var searchContent = data.contents?.sectionListRenderer?.contents;
+    if (searchContent) {
+      processSectionList(searchContent, enableAds, removeShorts, hideGuestPrompts);
+    }
 
-    // Handle Lazy Loading / Pagination (Continuations)
-    if (data.onResponseReceivedActions) {
-       data.onResponseReceivedActions.forEach(action => {
-         const contItems = action.appendContinuationItemsAction?.continuationItems;
+    // --- ACTION 2c: Lazy Loading ---
+    if (data.onResponseReceivedActions && Array.isArray(data.onResponseReceivedActions)) {
+       data.onResponseReceivedActions.forEach(function(action) {
+         var contItems = action.appendContinuationItemsAction?.continuationItems;
          if (contItems) {
            action.appendContinuationItemsAction.continuationItems = filterItems(contItems, removeShorts, enableAds, hideGuestPrompts);
+         }
+         var reloadItems = action.reloadContinuationItemsCommand?.continuationItems;
+         if (reloadItems) {
+            action.reloadContinuationItemsCommand.continuationItems = filterItems(reloadItems, removeShorts, enableAds, hideGuestPrompts);
          }
        });
     }
 
-    // --- Phase 3: Recursive Shorts Search (Robust Path) ---
+    // --- ACTION 3: Shorts & Guest Prompts ---
     if (removeShorts || hideGuestPrompts) {
-      // 1. Find and scrub Grids (Subscriptions tab)
-      const gridRenderer = findFirstObject(data, 'gridRenderer');
-      if (gridRenderer?.items) {
-         gridRenderer.items = filterItems(gridRenderer.items, removeShorts, enableAds, hideGuestPrompts);
-      }
-
-      // 2. Find and scrub Grid Continuations (Scrolling down in Subscriptions)
-      const gridContinuation = findFirstObject(data, 'gridContinuation');
-      if (gridContinuation?.items) {
-         gridContinuation.items = filterItems(gridContinuation.items, removeShorts, enableAds, hideGuestPrompts);
-      }
-      
-      // 3. Find and scrub generic SectionLists (Catch-all)
-      const sectionList = findFirstObject(data, 'sectionListRenderer');
-      if (sectionList?.contents) {
-        processSectionList(sectionList.contents, enableAds, removeShorts, hideGuestPrompts);
-      }
-    }
-
-  } catch (e) {
-    console.warn('[AdBlock] Safety fallback triggered:', e);
-  }
-
-  return data;
-};
-
-// --- Helper Functions ---
-
-function processSectionList(contents, enableAds, removeShorts, hideGuestPrompts) {
-  if (!Array.isArray(contents)) return;
-
-  let writeIdx = 0;
-  for (let i = 0; i < contents.length; i++) {
-    const item = contents[i];
-    let keepItem = true;
-
-    // Filter Ad Renderers
-    if (enableAds) {
-      if (item.tvMastheadRenderer || item.adSlotRenderer) {
-        keepItem = false;
-      }
-    }
-
-    // Filter Guest Prompts (JSON Interception)
-    if (hideGuestPrompts) {
-        // "Make YouTube your own" banner
-        if (item.feedNudgeRenderer) keepItem = false;
-        // "Sign in to subscribe" prompts
-        if (item.alertWithActionsRenderer) keepItem = false;
-    }
-
-    // Filter Shelves
-    if (keepItem && item.shelfRenderer) {
-      const shelfType = item.shelfRenderer.tvhtml5ShelfRendererType;
-      
-      // Remove specific Shorts Shelves
-      if (removeShorts && shelfType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-          keepItem = false;
-      } 
-      // Clean content inside standard Shelves
-      else {
-        const shelfContent = item.shelfRenderer.content;
-        if (shelfContent) {
-          if (shelfContent.horizontalListRenderer?.items) {
-             shelfContent.horizontalListRenderer.items = filterItems(shelfContent.horizontalListRenderer.items, removeShorts, enableAds, hideGuestPrompts);
-          } else if (shelfContent.gridRenderer?.items) {
-             shelfContent.gridRenderer.items = filterItems(shelfContent.gridRenderer.items, removeShorts, enableAds, hideGuestPrompts);
+      if (removeShorts) {
+          var gridRenderer = findFirstObject(data, 'gridRenderer');
+          if (gridRenderer?.items) {
+             gridRenderer.items = filterItems(gridRenderer.items, removeShorts, enableAds, hideGuestPrompts);
           }
+          var gridContinuation = findFirstObject(data, 'gridContinuation');
+          if (gridContinuation?.items) {
+             gridContinuation.items = filterItems(gridContinuation.items, removeShorts, enableAds, hideGuestPrompts);
+          }
+      }
+      if (hideGuestPrompts) {
+        var sectionList = findFirstObject(data, 'sectionListRenderer');
+        if (sectionList?.contents) {
+          processSectionList(sectionList.contents, enableAds, removeShorts, hideGuestPrompts);
         }
       }
     }
 
-    if (keepItem) {
-      contents[writeIdx++] = item;
+  } catch (e) {
+    console.warn('[AdBlock] Error during sanitization:', e);
+  }
+
+  return data;
+}
+
+/**
+ * Initializes the JSON.parse hook.
+ */
+export function initAdblock() {
+    if (isHooked) return;
+    console.info('[AdBlock] Hooking JSON.parse');
+    origParse = JSON.parse;
+    JSON.parse = function(text, reviver) {
+        return hookedParse.call(this, text, reviver);
+    };
+    isHooked = true;
+}
+
+/**
+ * Restores the original JSON.parse function.
+ * Call this to clean up the module.
+ */
+export function destroyAdblock() {
+    if (!isHooked) return;
+    console.info('[AdBlock] Restoring JSON.parse');
+    JSON.parse = origParse;
+    isHooked = false;
+}
+
+// Helper functions
+function processSectionList(contents, enableAds, removeShorts, hideGuestPrompts) {
+  if (!Array.isArray(contents)) return;
+  var writeIdx = 0;
+  for (var i = 0; i < contents.length; i++) {
+    var item = contents[i];
+    var keepItem = true;
+
+    if (enableAds && (item.tvMastheadRenderer || item.adSlotRenderer)) keepItem = false;
+    if (hideGuestPrompts && (item.feedNudgeRenderer || item.alertWithActionsRenderer)) keepItem = false;
+
+    if (keepItem && item.shelfRenderer) {
+      var shelf = item.shelfRenderer;
+      if (removeShorts && shelf.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
+          keepItem = false;
+      } else if (shelf.content) {
+          if (shelf.content.horizontalListRenderer?.items) {
+             shelf.content.horizontalListRenderer.items = filterItems(shelf.content.horizontalListRenderer.items, removeShorts, enableAds, hideGuestPrompts);
+          } else if (shelf.content.gridRenderer?.items) {
+             shelf.content.gridRenderer.items = filterItems(shelf.content.gridRenderer.items, removeShorts, enableAds, hideGuestPrompts);
+          }
+      }
     }
+
+    if (keepItem) contents[writeIdx++] = item;
   }
   contents.length = writeIdx;
 }
 
 function filterItems(items, removeShorts, enableAds, hideGuestPrompts) {
   if (!Array.isArray(items)) return items;
+  var result = [];
+  for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var keep = true;
 
-  return items.filter(item => {
-    // Block Ad Slots
-    if (enableAds && item.adSlotRenderer) return false;
+      if (enableAds && item.adSlotRenderer) keep = false;
+      if (hideGuestPrompts && (item.feedNudgeRenderer || item.alertWithActionsRenderer)) keep = false;
 
-    // Block Guest Prompts inside lists
-    if (hideGuestPrompts) {
-        if (item.feedNudgeRenderer) return false;
-        if (item.alertWithActionsRenderer) return false;
-        
-        // [FIX] Removed 'gridButtonRenderer' block.
-        // This was causing the "Can't find anything to watch" section to break
-        // because it removed the "Refresh" button, leaving an empty list.
-    }
+      if (removeShorts) {
+          if (item.tileRenderer?.onSelectCommand?.reelWatchEndpoint) keep = false;
+          if (item.reelItemRenderer) keep = false;
+          if (item.command?.reelWatchEndpoint?.adClientParams) keep = false;
+      }
 
-    // Block Shorts
-    if (removeShorts) {
-        if (item.tileRenderer?.onSelectCommand?.reelWatchEndpoint) return false;
-        if (item.command?.reelWatchEndpoint?.adClientParams?.isAd) return false;
-        if (item.reelItemRenderer) return false;
-    }
-    return true;
-  });
+      if (keep) result.push(item);
+  }
+  return result;
 }
 
 function findFirstObject(haystack, needle) {
   if (!haystack || typeof haystack !== 'object') return null;
-
-  for (const key in haystack) {
-    if (key === needle) {
-      return haystack[key];
-    }
-    if (typeof haystack[key] === 'object') {
-      const result = findFirstObject(haystack[key], needle);
+  if (haystack[needle]) return haystack[needle];
+  for (var key in haystack) {
+    if (haystack.hasOwnProperty(key) && typeof haystack[key] === 'object') {
+      var result = findFirstObject(haystack[key], needle);
       if (result) return result;
     }
   }
   return null;
 }
+
+initAdblock();
