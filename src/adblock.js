@@ -87,7 +87,7 @@ function hookedParse(text, reviver) {
              gridContinuation.items = filterItems(gridContinuation.items, removeShorts, enableAds, hideGuestPrompts);
           }
       }
-      if (hideGuestPrompts) {
+      if (removeShorts || hideGuestPrompts) {
         var sectionList = findFirstObject(data, 'sectionListRenderer');
         if (sectionList?.contents) {
           processSectionList(sectionList.contents, enableAds, removeShorts, hideGuestPrompts);

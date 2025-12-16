@@ -68,13 +68,22 @@ export function sendKey(keyDef, target = document.body) {
     composed: true,
     view: window,
     key: keyDef.key,
+	code: keyDef.key,
     keyCode: keyDef.code,
     which: keyDef.code,
     charCode: 0
   };
 
-  target.dispatchEvent(new KeyboardEvent('keydown', eventOpts));
-  target.dispatchEvent(new KeyboardEvent('keyup', eventOpts));
+  const keyDownEvt = new KeyboardEvent('keydown', eventOpts);
+  Object.defineProperty(keyDownEvt, 'keyCode', { get: () => keyDef.code });
+  Object.defineProperty(keyDownEvt, 'which', { get: () => keyDef.code });
+  
+  const keyUpEvt = new KeyboardEvent('keyup', eventOpts);
+  Object.defineProperty(keyUpEvt, 'keyCode', { get: () => keyDef.code });
+  Object.defineProperty(keyUpEvt, 'which', { get: () => keyDef.code });
+
+  target.dispatchEvent(keyDownEvt);
+  target.dispatchEvent(keyUpEvt);
 }
 
 export function extractLaunchParams() {

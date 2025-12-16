@@ -715,6 +715,7 @@ function handleShortcutAction(action) {
 }
 
 const eventHandler = (evt) => {
+  if (evt.repeat) return;
   console.info(
     'Key event:',
     evt.type,

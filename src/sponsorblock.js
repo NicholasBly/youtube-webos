@@ -51,11 +51,21 @@ class SponsorBlockHandler {
         this.listeners = new Map(); 
 		
 		this.configListeners = [];
+		this.rafIds = new Set();
         
         this.updateConfigCache();
         this.setupConfigListeners();
         
         this.log('info', `Created handler for ${this.videoID}`);
+    }
+	
+	requestAF(callback) {
+        const id = requestAnimationFrame(() => {
+            this.rafIds.delete(id);
+            callback();
+        });
+        this.rafIds.add(id);
+        return id;
     }
 
     log(level, message, ...args) {
@@ -165,19 +175,19 @@ class SponsorBlockHandler {
 
             if (shouldCheck) {
                 this.isProcessing = true;
-                requestAnimationFrame(() => {
+                this.requestAF(() => {
                     this.checkForProgressBar();
                     this.isProcessing = false;
                 });
             }
         });
 
-        domObserver.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class', 'style', 'hidden'] // Restrict attributes
-        });
+	domObserver.observe(document.body, {
+		childList: true,
+		subtree: true,
+		attributes: true,
+		attributeFilter: ['class', 'style', 'hidden']
+	});
         this.observers.add(domObserver);
     }
 
@@ -301,7 +311,7 @@ class SponsorBlockHandler {
 	skipSegment(segment) {
         this.video.currentTime = segment.segment[1];
         if (this.video.paused) this.video.play();
-        requestAnimationFrame(() => {
+        this.requestAF(() => {
             showNotification(`Skipped ${segmentTypes[segment.category]?.name || segment.category}`);
         });
     }
@@ -309,7 +319,7 @@ class SponsorBlockHandler {
     jumpToNextHighlight() {
         if (!this.video || !this.highlightSegment || !configRead('enableSponsorBlockHighlight')) return false;
         this.video.currentTime = this.highlightSegment.segment[0];
-        requestAnimationFrame(() => {
+        this.requestAF(() => {
             showNotification('Jumped to Highlight');
         });
         return true;
@@ -376,6 +386,10 @@ class SponsorBlockHandler {
 
     destroy() {
         this.log('info', 'Destroying instance.');
+		
+		// Clear all pending Animation Frames
+		this.rafIds.forEach(id => cancelAnimationFrame(id));
+        this.rafIds.clear();
         
         // 1. Clean up UI
         sponsorBlockUI.togglePopup(false); 
@@ -422,6 +436,10 @@ class SponsorBlockHandler {
 }
 
 if (typeof window !== 'undefined') {
+    if (window.__ytaf_sb_init) {
+        window.removeEventListener('hashchange', window.__ytaf_sb_init);
+    }
+
     window.sponsorblock = null;
 
     const initSB = () => {
@@ -453,7 +471,12 @@ if (typeof window !== 'undefined') {
         }
     };
 
+    window.__ytaf_sb_init = initSB;
     window.addEventListener('hashchange', initSB);
-    if (document.readyState === 'complete') setTimeout(initSB, 500);
-    else window.addEventListener('load', () => setTimeout(initSB, 500));
+
+    if (document.readyState === 'complete') {
+        setTimeout(initSB, 500);
+    } else {
+        window.addEventListener('load', () => setTimeout(initSB, 500), { once: true });
+    }
 }
