@@ -18,7 +18,6 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 - Toggle black screen with red button on LG remote for OLED TVs
 - Return YouTube Dislike - added to description tab in video
-- Video Playback Shortcut - press 5 key to skip to the start of the next chapter
 - Bug fixes, UI fixes
 - Specific rules for different YouTube UI layouts
 
