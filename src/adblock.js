@@ -50,7 +50,7 @@ function hookedParse(text, reviver) {
       }
     }
 
-    // --- ACTION 2: Browse/Home Screen Elements ---
+    // --- ACTION 2: Browse/Home Screen Elements (Fast Path) ---
     var browseContent = data.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
     if (browseContent) {
       processSectionList(browseContent, enableAds, removeShorts, hideGuestPrompts);
@@ -68,26 +68,28 @@ function hookedParse(text, reviver) {
          if (contItems) {
            action.appendContinuationItemsAction.continuationItems = filterItems(contItems, removeShorts, enableAds, hideGuestPrompts);
          }
-         var reloadItems = action.reloadContinuationItemsCommand?.continuationItems;
-         if (reloadItems) {
-            action.reloadContinuationItemsCommand.continuationItems = filterItems(reloadItems, removeShorts, enableAds, hideGuestPrompts);
-         }
        });
     }
 
-    // --- ACTION 3: Shorts & Guest Prompts ---
+    // --- ACTION 3: Recursive Search (Catch-all for edge cases) ---
     if (removeShorts || hideGuestPrompts) {
-      if (removeShorts) {
-          var gridRenderer = findFirstObject(data, 'gridRenderer');
-          if (gridRenderer?.items) {
-             gridRenderer.items = filterItems(gridRenderer.items, removeShorts, enableAds, hideGuestPrompts);
-          }
-          var gridContinuation = findFirstObject(data, 'gridContinuation');
-          if (gridContinuation?.items) {
-             gridContinuation.items = filterItems(gridContinuation.items, removeShorts, enableAds, hideGuestPrompts);
-          }
-      }
-      if (removeShorts || hideGuestPrompts) {
+      // Skip recursive search if we already processed standard paths above
+      var alreadyProcessed = browseContent || searchContent;
+      
+      if (!alreadyProcessed) {
+        // Find and process grids (Subscriptions tab)
+        var gridRenderer = findFirstObject(data, 'gridRenderer');
+        if (gridRenderer?.items) {
+           gridRenderer.items = filterItems(gridRenderer.items, removeShorts, enableAds, hideGuestPrompts);
+        }
+
+        // Find and process grid continuations (Scrolling)
+        var gridContinuation = findFirstObject(data, 'gridContinuation');
+        if (gridContinuation?.items) {
+           gridContinuation.items = filterItems(gridContinuation.items, removeShorts, enableAds, hideGuestPrompts);
+        }
+        
+        // Find and process generic section lists (Catch-all)
         var sectionList = findFirstObject(data, 'sectionListRenderer');
         if (sectionList?.contents) {
           processSectionList(sectionList.contents, enableAds, removeShorts, hideGuestPrompts);
