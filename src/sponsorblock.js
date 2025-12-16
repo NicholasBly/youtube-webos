@@ -182,12 +182,19 @@ class SponsorBlockHandler {
             }
         });
 
-	domObserver.observe(document.body, {
-		childList: true,
-		subtree: true,
-		attributes: true,
-		attributeFilter: ['class', 'style', 'hidden']
-	});
+		const playerRoot = document.querySelector('ytlr-app') || 
+                           document.getElementById('container') ||
+                           document.body;
+						   
+		console.log('[SponsorBlock] Observing player root:', playerRoot);
+
+        domObserver.observe(playerRoot, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'style', 'hidden']
+        });
+        
         this.observers.add(domObserver);
     }
 

@@ -4,6 +4,91 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.3] - 2025/12/16
+
+## Performance Optimizations
+
+### SponsorBlock
+
+Observe ytlr-app instead of the entire document.body for DOM changes, providing a significant performance and efficiency uplift
+
+## Bug Fixes
+
+### AdBlock.js
+
+Fix Block Shorts in Subscriptions - small typo from 0.6.2 update
+
+## Updates
+
+Bump Dependencies
+
+## [0.6.2] - 2025/12/15
+
+### Note
+
+Thank you for supporting my YouTube webOS extension. To those providing bug reports, feature requests, and feedback, I greatly appreciate it!
+
+New builds will be more thoroughly tested than before thanks to your feedback. If you'd like to test the latest updated builds before release, check the test branch. I will be uploading new builds there frequently. So far this 0.6.2 build has produced 8 test builds published there. 
+
+## Added
+
+Added third page to config UI - "Shortcuts"
+- Allows programming custom shortcuts to the 0-9 keys on the LG remote during video playback
+
+Options:
+-- Play/Pause Toggle
+-- Skip Forward 15 seconds
+-- Skip Backward 15 seconds
+-- Toggle Closed Captions/Subtitles
+-- Toggle Comments Menu
+-- Skip to start of next chapter
+-- Skip to start of previous chapter
+
+Added "Disable Notifications"
+
+## Performance Optimizations
+
+config.js: Added configRemoveChangeListener API
+- Previously there was no way to stop listening to setting changes, causing memory leaks when components were destroyed
+
+### AdBlock
+
+Refactored to support safe initialization and destruction
+
+Added protection against "double-hooking" JSON.parse (preventing stack overflows on script reloads)
+
+Implemented a smarter JSON parsing system:
+- Instead of intercepting and processing every single JSON, it will only parse JSON when necessary
+
+- Player Ads: Only search for playerAds if playerResponse or videoDetails exists
+- Home/Guest Prompts: Only search for tvBrowseRenderer or sectionListRenderer
+- Shorts: Only search gridRenderer if we are in a browse response and only when the Subscriptions tab is loaded
+
+Removed "Remove Shorts From Subscriptions" toggle if the user is in guest mode. This disables useless JSON parsing to improve performance
+
+### SponsorBlock
+
+Fixed multiple memory leaks in the SponsorBlockHandler
+- Now correctly tracks and removes configuration change listeners in destroy()
+- Cleaned up injected CSS styles (<style id="sb-css">) when the instance is destroyed
+- Centralized listener management to ensure no old event handlers remain active after video navigation
+
+- Cache highlight timestamp for faster playback
+- Prioritize video playback on segment skip for faster segment skipping
+- Optimization: sort segment data immediately on video load
+- Optimization: observePlayerUI() now only observes the video container instead of the entire html body
+- Optimization: Track and auto cleanup all pending animation frame requests and cancel them when destroy() is called.
+- Fixed display of segment overlays on videos with chapters (previously did not align properly when segment bar changed sizes)
+
+## General Fixes
+
+Fixed Chapter Skip when YouTube player UI was not loaded
+-- The YouTube player UI (progress bar) must be opened at least once in order to get data on chapters for the chapter skip feature to work
+-- The fix will automatically detect when the chapter bar is present but the chapter data is missing
+-- It will then toggle on the player UI quickly to grab that data and skip properly. This only occurs once per video load
+
+Fixed config UI spacing on older webOS versions
+
 ## [0.6.1] - 2025/12/08
 
 ## Added
