@@ -1,5 +1,3 @@
-/* src/adblock.js - OPTIMIZED VERSION */
-
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
 import { isGuestMode } from './utils';
 

@@ -129,6 +129,7 @@ function createConfigCheckbox(key) {
 function createSection(title, elements) {
     const fieldset = document.createElement('div');
     fieldset.classList.add('ytaf-settings-section');
+	fieldset.style.marginTop = '15px';
     fieldset.style.marginBottom = '15px';
     fieldset.style.padding = '10px';
     fieldset.style.border = '1px solid #444';
@@ -421,12 +422,12 @@ function createOptionsPanel() {
   pageMain.appendChild(createSection('Video Player', [
       createConfigCheckbox('forceHighResVideo'),
       createConfigCheckbox('hideEndcards'),
-      createConfigCheckbox('enableReturnYouTubeDislike'),
-      createConfigCheckbox('enableAutoLogin')
+      createConfigCheckbox('enableReturnYouTubeDislike')
   ]));
 
   // Group 3: User Interface
   pageMain.appendChild(createSection('Interface', [
+      createConfigCheckbox('enableAutoLogin'),
       createConfigCheckbox('upgradeThumbnails'),
       createConfigCheckbox('hideLogo'),
       createConfigCheckbox('enableOledCareMode'),
