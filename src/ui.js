@@ -1,5 +1,6 @@
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
+import QRious from 'qrious';
 import {
   configAddChangeListener,
   configRead,
@@ -17,6 +18,24 @@ import { WebOSVersion } from './webos-utils.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
+
+// --- Debug: Log Capture ---
+const logBuffer = [];
+let isLogCollectionEnabled = false;
+
+['log', 'info', 'warn', 'error'].forEach((method) => {
+  const orig = console[method];
+  console[method] = (...args) => {
+    if (isLogCollectionEnabled) {
+      logBuffer.push(`[${method.toUpperCase()}] ${args.join(' ')}`);
+      if (logBuffer.length > 50) logBuffer.shift(); 
+    }
+    orig.apply(console, args);
+  };
+});
+let debugClickCount = 0;
+let debugClickTimer = null;
+// --------------------------
 
 function isWatchPage() {
   return document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
@@ -209,6 +228,7 @@ function createOptionsPanel() {
   let pageMain = null;
   let pageSponsor = null;
   let pageShortcuts = null;
+  let pageDebug = null;
 
   const setActivePage = (pageIndex) => {
     activePage = pageIndex;
@@ -217,6 +237,7 @@ function createOptionsPanel() {
     pageMain.style.display = 'none';
     pageSponsor.style.display = 'none';
     pageShortcuts.style.display = 'none';
+    pageDebug.style.display = 'none';
 
     if (pageIndex === 0) { // Main
       pageMain.style.display = 'block';
@@ -232,8 +253,15 @@ function createOptionsPanel() {
       pageShortcuts.style.display = 'block';
       pageShortcuts.querySelector('.shortcut-control-row')?.focus();
       sponsorBlockUI.togglePopup(false);
+    } else if (pageIndex === 3) { // Debug
+      pageDebug.style.display = 'block';
+      pageDebug.querySelector('button')?.focus();
+      sponsorBlockUI.togglePopup(false);
     }
   };
+
+  // Expose method to switch to Debug page
+  elmContainer.goToDebug = () => setActivePage(3);
 
   elmContainer.addEventListener(
     'keydown',
@@ -279,6 +307,7 @@ function createOptionsPanel() {
              } else if (dir === 'left') {
                if (activePage === 1) setActivePage(0);
                else if (activePage === 2) setActivePage(1);
+               else if (activePage === 3) setActivePage(0); // Exit debug
              }
              evt.preventDefault();
              evt.stopPropagation();
@@ -406,6 +435,74 @@ function createOptionsPanel() {
 
   elmContainer.appendChild(pageShortcuts);
 
+  // --- Page 4: Debug ---
+  pageDebug = document.createElement('div');
+  pageDebug.classList.add('ytaf-settings-page');
+  pageDebug.style.display = 'none';
+  
+  const navHintExitDebug = document.createElement('div');
+  navHintExitDebug.className = 'ytaf-nav-hint left';
+  navHintExitDebug.tabIndex = 0;
+  navHintExitDebug.innerHTML = '<span class="arrow">&larr;</span> Exit Debug';
+  navHintExitDebug.addEventListener('click', () => setActivePage(0));
+  pageDebug.appendChild(navHintExitDebug);
+
+  const logLabel = document.createElement('label');
+  const logInput = document.createElement('input');
+  logInput.type = 'checkbox';
+  logInput.checked = isLogCollectionEnabled;
+  logInput.addEventListener('change', (e) => {
+      isLogCollectionEnabled = e.target.checked;
+	  if (!isLogCollectionEnabled) { logBuffer.length = 0; }
+  });
+  
+  const logContent = document.createElement('div');
+  logContent.classList.add('label-content');
+  logContent.appendChild(logInput);
+  logContent.appendChild(document.createTextNode('\u00A0Enable console log collection'));
+  logLabel.appendChild(logContent);
+  pageDebug.appendChild(logLabel);
+
+  const qrCanvas = document.createElement('canvas');
+  qrCanvas.style.cssText = 'display:block;margin:10px auto;background:white;padding:10px;border-radius:4px;max-width:600px;width:100%;height:auto;';
+  
+  const genQr = (text) => {
+    if (!text) { showNotification('Buffer Empty'); return; }
+    try {
+        new QRious({
+            element: qrCanvas,
+            value: text,
+            size: 600,
+            level: 'L'
+        });
+    } catch (e) {
+        console.error('QR Gen Error:', e);
+        showNotification('Data too big for QR');
+    }
+  };
+
+  const btnLogs = document.createElement('button');
+  btnLogs.textContent = 'Show Console Logs (QR)';
+  btnLogs.className = 'reset-color-btn';
+  btnLogs.style.fontSize = '24px';
+  btnLogs.style.marginBottom = '10px';
+  btnLogs.onclick = () => genQr(logBuffer.join('\n'));
+
+  const btnStore = document.createElement('button');
+  btnStore.textContent = 'Show Storage (QR)';
+  btnStore.className = 'reset-color-btn';
+  btnStore.style.fontSize = '24px';
+  btnStore.onclick = () => {
+      const configVal = localStorage.getItem('ytaf-configuration');
+      genQr(configVal || 'No Configuration Found');
+  };
+
+  pageDebug.appendChild(btnLogs);
+  pageDebug.appendChild(btnStore);
+  pageDebug.appendChild(qrCanvas);
+  elmContainer.appendChild(pageDebug);
+  // ---------------------
+
   return elmContainer;
 }
 
@@ -448,6 +545,8 @@ function showOptionsPanel(visible) {
 
     optionsPanel.blur();
     optionsPanelVisible = false;
+	clearTimeout(debugClickTimer);
+    debugClickCount = 0;
   }
 }
 
@@ -723,6 +822,35 @@ const eventHandler = (evt) => {
     evt.keyCode,
     evt.defaultPrevented
   );
+  
+  // --- Debug: Hold 0 Handling ---
+  // Intercept '0' Key (48) globally when options panel is visible.
+  // This must be done here because specific key handlers (shortcuts) might
+  // capture the event and stop propagation before it reaches the UI container.
+	if (evt.type === 'keydown' && optionsPanelVisible && evt.keyCode === 48) {
+         debugClickCount++;
+         // console.info(`Debug: Click count ${debugClickCount}`);
+         
+         clearTimeout(debugClickTimer);
+         
+         if (debugClickCount >= 5) {
+             console.info('Debug: Opening debug page');
+             if (optionsPanel.goToDebug) optionsPanel.goToDebug();
+             debugClickCount = 0;
+         } else {
+             // Reset count if user stops pressing for 2000ms
+             debugClickTimer = setTimeout(() => {
+                 debugClickCount = 0;
+             }, 2000); 
+         }
+     
+     // Block '0' from doing anything else while panel is open
+     evt.preventDefault();
+     evt.stopPropagation();
+     return false;
+  }
+  // ------------------------------
+
   const keyColor = getKeyColor(evt.charCode);
   
   if (keyColor === 'green') {
@@ -770,6 +898,18 @@ const eventHandler = (evt) => {
   } else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
       // Check for user-defined shortcuts (Keys 0-9)
       const keyIndex = evt.keyCode - 48;
+      
+      // If Options Panel is open, we generally shouldn't trigger video shortcuts
+      // to avoid confusion or accidental seeking while changing settings.
+      // (Except '0' which is handled above for Debug).
+      if (optionsPanelVisible) {
+          // Allow default bubbling or block it? 
+          // Current logic: block to prevent accidental shortcuts.
+          evt.preventDefault();
+          evt.stopPropagation();
+          return false;
+      }
+
       const action = configRead(`shortcut_key_${keyIndex}`);
 	  
 	  evt.preventDefault();
