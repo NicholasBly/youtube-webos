@@ -18,6 +18,7 @@ import { WebOSVersion } from './webos-utils.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
+import { initAdblock, destroyAdblock } from './adblock.js';
 
 // --- Debug: Log Capture ---
 const logBuffer = [];
@@ -122,6 +123,28 @@ function createConfigCheckbox(key) {
   }
 
   return elmLabel;
+}
+
+// Helper to create grouped sections
+function createSection(title, elements) {
+    const fieldset = document.createElement('div');
+    fieldset.classList.add('ytaf-settings-section');
+    fieldset.style.marginBottom = '15px';
+    fieldset.style.padding = '10px';
+    fieldset.style.border = '1px solid #444';
+    fieldset.style.borderRadius = '5px';
+    
+    const legend = document.createElement('div');
+    legend.textContent = title;
+    legend.style.color = '#aaa';
+    legend.style.fontSize = '22px';
+    legend.style.marginBottom = '5px';
+    legend.style.fontWeight = 'bold';
+    legend.style.textTransform = 'uppercase';
+    
+    fieldset.appendChild(legend);
+    elements.forEach(el => fieldset.appendChild(el));
+    return fieldset;
 }
 
 function createShortcutControl(keyIndex) {
@@ -260,7 +283,6 @@ function createOptionsPanel() {
     }
   };
 
-  // Expose method to switch to Debug page
   elmContainer.goToDebug = () => setActivePage(3);
 
   elmContainer.addEventListener(
@@ -342,27 +364,75 @@ function createOptionsPanel() {
 	  }
   elmContainer.appendChild(elmHeading);
 
-  // --- Page 1: Main ---
+  // --- Page 1: Main (Grouped) ---
   pageMain = document.createElement('div');
   pageMain.classList.add('ytaf-settings-page');
   pageMain.id = 'ytaf-page-main';
 
-  pageMain.appendChild(createConfigCheckbox('enableAdBlock'));
-  pageMain.appendChild(createConfigCheckbox('forceHighResVideo'));
-  pageMain.appendChild(createConfigCheckbox('upgradeThumbnails'));
-  pageMain.appendChild(createConfigCheckbox('hideLogo'));
-  pageMain.appendChild(createConfigCheckbox('enableOledCareMode'));
-  if (!isGuestMode()) {
-  pageMain.appendChild(createConfigCheckbox('removeShorts'));
-  }
-  pageMain.appendChild(createConfigCheckbox('enableAutoLogin'));
-  pageMain.appendChild(createConfigCheckbox('hideEndcards'));
-  pageMain.appendChild(createConfigCheckbox('enableReturnYouTubeDislike'));
-  if (isGuestMode()) {
-    pageMain.appendChild(createConfigCheckbox('hideGuestSignInPrompts'));
-  }
-  pageMain.appendChild(createConfigCheckbox('disableNotifications'));
+  // Group 1: Cosmetic Filtering (AdBlock Master)
+  const elAdBlock = createConfigCheckbox('enableAdBlock');
+  const cosmeticGroup = [elAdBlock];
   
+  let elRemoveShorts = null;
+  let elGuestPrompts = null;
+
+  if (!isGuestMode()) {
+      elRemoveShorts = createConfigCheckbox('removeShorts');
+      cosmeticGroup.push(elRemoveShorts);
+  }
+  
+  if (isGuestMode()) {
+      elGuestPrompts = createConfigCheckbox('hideGuestSignInPrompts');
+      cosmeticGroup.push(elGuestPrompts);
+  }
+
+  pageMain.appendChild(createSection('Cosmetic Filtering', cosmeticGroup));
+
+  // Logic: Disable sub-items if AdBlock is off
+  const handleAdBlockDependency = (isEnabled) => {
+      if (elRemoveShorts) {
+          const input = elRemoveShorts.querySelector('input');
+          if (input) {
+              input.disabled = !isEnabled;
+              elRemoveShorts.style.opacity = isEnabled ? '1' : '0.5';
+          }
+      }
+      if (elGuestPrompts) {
+          const input = elGuestPrompts.querySelector('input');
+          if (input) {
+              input.disabled = !isEnabled;
+              elGuestPrompts.style.opacity = isEnabled ? '1' : '0.5';
+          }
+      }
+  };
+
+  // Attach listener to AdBlock checkbox
+  const adBlockInput = elAdBlock.querySelector('input');
+  adBlockInput.addEventListener('change', (e) => handleAdBlockDependency(e.target.checked));
+  
+  // Initial State
+  handleAdBlockDependency(configRead('enableAdBlock'));
+  
+  // Also listen for external config changes
+  configAddChangeListener('enableAdBlock', (evt) => handleAdBlockDependency(evt.detail.newValue));
+
+
+  // Group 2: Video & Player
+  pageMain.appendChild(createSection('Video Player', [
+      createConfigCheckbox('forceHighResVideo'),
+      createConfigCheckbox('hideEndcards'),
+      createConfigCheckbox('enableReturnYouTubeDislike'),
+      createConfigCheckbox('enableAutoLogin')
+  ]));
+
+  // Group 3: User Interface
+  pageMain.appendChild(createSection('Interface', [
+      createConfigCheckbox('upgradeThumbnails'),
+      createConfigCheckbox('hideLogo'),
+      createConfigCheckbox('enableOledCareMode'),
+      createConfigCheckbox('disableNotifications')
+  ]));
+
   const navHintNextMain = document.createElement('div');
   navHintNextMain.className = 'ytaf-nav-hint right';
   navHintNextMain.tabIndex = 0;
@@ -371,6 +441,7 @@ function createOptionsPanel() {
   pageMain.appendChild(navHintNextMain);
 
   elmContainer.appendChild(pageMain);
+  // ------------------------------------
 
   // --- Page 2: SponsorBlock ---
   pageSponsor = document.createElement('div');
@@ -527,7 +598,7 @@ function showOptionsPanel(visible) {
     }
     
     const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(
-      (el) => el.offsetParent !== null
+      (el) => el.offsetParent !== null && !el.disabled 
     );
 
     if (firstVisibleInput) {
@@ -824,9 +895,6 @@ const eventHandler = (evt) => {
   );
   
   // --- Debug: Hold 0 Handling ---
-  // Intercept '0' Key (48) globally when options panel is visible.
-  // This must be done here because specific key handlers (shortcuts) might
-  // capture the event and stop propagation before it reaches the UI container.
 	if (evt.type === 'keydown' && optionsPanelVisible && evt.keyCode === 48) {
          debugClickCount++;
          // console.info(`Debug: Click count ${debugClickCount}`);
@@ -899,12 +967,7 @@ const eventHandler = (evt) => {
       // Check for user-defined shortcuts (Keys 0-9)
       const keyIndex = evt.keyCode - 48;
       
-      // If Options Panel is open, we generally shouldn't trigger video shortcuts
-      // to avoid confusion or accidental seeking while changing settings.
-      // (Except '0' which is handled above for Debug).
       if (optionsPanelVisible) {
-          // Allow default bubbling or block it? 
-          // Current logic: block to prevent accidental shortcuts.
           evt.preventDefault();
           evt.stopPropagation();
           return false;
@@ -1056,6 +1119,23 @@ applyOledMode(configRead('enableOledCareMode'));
 configAddChangeListener('enableOledCareMode', (evt) => {
   applyOledMode(evt.detail.newValue);
 });
+
+// --- UPDATED: Lifecycle Management (Master Switch) ---
+configAddChangeListener('enableAdBlock', (evt) => {
+  if (evt.detail.newValue) {
+    initAdblock();
+    showNotification('AdBlock Enabled');
+  } else {
+    destroyAdblock();
+    showNotification('AdBlock Disabled');
+  }
+});
+
+// Sync initial state
+if (!configRead('enableAdBlock')) {
+    destroyAdblock();
+}
+// -----------------------------------------------------
 
 setTimeout(() => {
   showNotification('Press [GREEN] to open SponsorBlock configuration screen');

@@ -213,7 +213,7 @@ function loadStoredConfig() {
 }
 
 // Use defaultConfig as a prototype so writes to localConfig don't change it.
-let localConfig = loadStoredConfig() ?? Object.create(defaultConfig);
+let localConfig = loadStoredConfig() || { ...defaultConfig };
 
 function configExists(key) {
   return configOptions.has(key);
