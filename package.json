@@ -1,6 +1,6 @@
 {
   "name": "youtube-webos",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "Ad-free YouTube app for webOS",
   "type": "module",
   "main": "index.js",
@@ -25,6 +25,7 @@
   "dependencies": {
     "@babel/runtime-corejs3": "^7.28.0",
     "core-js-pure": "^3.47.0",
+    "qrious": "^4.0.2",
     "regenerator-runtime": "^0.14.1",
     "tiny-sha256": "^1.0.2",
     "whatwg-fetch": "^3.6.20"

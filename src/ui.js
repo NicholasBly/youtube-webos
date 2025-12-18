@@ -1,5 +1,6 @@
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
+import QRious from 'qrious';
 import {
   configAddChangeListener,
   configRead,
@@ -17,6 +18,25 @@ import { WebOSVersion } from './webos-utils.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
+import { initAdblock, destroyAdblock } from './adblock.js';
+
+// --- Debug: Log Capture ---
+const logBuffer = [];
+let isLogCollectionEnabled = false;
+
+['log', 'info', 'warn', 'error'].forEach((method) => {
+  const orig = console[method];
+  console[method] = (...args) => {
+    if (isLogCollectionEnabled) {
+      logBuffer.push(`[${method.toUpperCase()}] ${args.join(' ')}`);
+      if (logBuffer.length > 50) logBuffer.shift(); 
+    }
+    orig.apply(console, args);
+  };
+});
+let debugClickCount = 0;
+let debugClickTimer = null;
+// --------------------------
 
 function isWatchPage() {
   return document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
@@ -103,6 +123,29 @@ function createConfigCheckbox(key) {
   }
 
   return elmLabel;
+}
+
+// Helper to create grouped sections
+function createSection(title, elements) {
+    const fieldset = document.createElement('div');
+    fieldset.classList.add('ytaf-settings-section');
+	fieldset.style.marginTop = '15px';
+    fieldset.style.marginBottom = '15px';
+    fieldset.style.padding = '10px';
+    fieldset.style.border = '1px solid #444';
+    fieldset.style.borderRadius = '5px';
+    
+    const legend = document.createElement('div');
+    legend.textContent = title;
+    legend.style.color = '#aaa';
+    legend.style.fontSize = '22px';
+    legend.style.marginBottom = '5px';
+    legend.style.fontWeight = 'bold';
+    legend.style.textTransform = 'uppercase';
+    
+    fieldset.appendChild(legend);
+    elements.forEach(el => fieldset.appendChild(el));
+    return fieldset;
 }
 
 function createShortcutControl(keyIndex) {
@@ -209,6 +252,7 @@ function createOptionsPanel() {
   let pageMain = null;
   let pageSponsor = null;
   let pageShortcuts = null;
+  let pageDebug = null;
 
   const setActivePage = (pageIndex) => {
     activePage = pageIndex;
@@ -217,6 +261,7 @@ function createOptionsPanel() {
     pageMain.style.display = 'none';
     pageSponsor.style.display = 'none';
     pageShortcuts.style.display = 'none';
+    pageDebug.style.display = 'none';
 
     if (pageIndex === 0) { // Main
       pageMain.style.display = 'block';
@@ -232,8 +277,14 @@ function createOptionsPanel() {
       pageShortcuts.style.display = 'block';
       pageShortcuts.querySelector('.shortcut-control-row')?.focus();
       sponsorBlockUI.togglePopup(false);
+    } else if (pageIndex === 3) { // Debug
+      pageDebug.style.display = 'block';
+      pageDebug.querySelector('button')?.focus();
+      sponsorBlockUI.togglePopup(false);
     }
   };
+
+  elmContainer.goToDebug = () => setActivePage(3);
 
   elmContainer.addEventListener(
     'keydown',
@@ -279,6 +330,7 @@ function createOptionsPanel() {
              } else if (dir === 'left') {
                if (activePage === 1) setActivePage(0);
                else if (activePage === 2) setActivePage(1);
+               else if (activePage === 3) setActivePage(0); // Exit debug
              }
              evt.preventDefault();
              evt.stopPropagation();
@@ -313,27 +365,75 @@ function createOptionsPanel() {
 	  }
   elmContainer.appendChild(elmHeading);
 
-  // --- Page 1: Main ---
+  // --- Page 1: Main (Grouped) ---
   pageMain = document.createElement('div');
   pageMain.classList.add('ytaf-settings-page');
   pageMain.id = 'ytaf-page-main';
 
-  pageMain.appendChild(createConfigCheckbox('enableAdBlock'));
-  pageMain.appendChild(createConfigCheckbox('forceHighResVideo'));
-  pageMain.appendChild(createConfigCheckbox('upgradeThumbnails'));
-  pageMain.appendChild(createConfigCheckbox('hideLogo'));
-  pageMain.appendChild(createConfigCheckbox('enableOledCareMode'));
-  if (!isGuestMode()) {
-  pageMain.appendChild(createConfigCheckbox('removeShorts'));
-  }
-  pageMain.appendChild(createConfigCheckbox('enableAutoLogin'));
-  pageMain.appendChild(createConfigCheckbox('hideEndcards'));
-  pageMain.appendChild(createConfigCheckbox('enableReturnYouTubeDislike'));
-  if (isGuestMode()) {
-    pageMain.appendChild(createConfigCheckbox('hideGuestSignInPrompts'));
-  }
-  pageMain.appendChild(createConfigCheckbox('disableNotifications'));
+  // Group 1: Cosmetic Filtering (AdBlock Master)
+  const elAdBlock = createConfigCheckbox('enableAdBlock');
+  const cosmeticGroup = [elAdBlock];
   
+  let elRemoveShorts = null;
+  let elGuestPrompts = null;
+
+  if (!isGuestMode()) {
+      elRemoveShorts = createConfigCheckbox('removeShorts');
+      cosmeticGroup.push(elRemoveShorts);
+  }
+  
+  if (isGuestMode()) {
+      elGuestPrompts = createConfigCheckbox('hideGuestSignInPrompts');
+      cosmeticGroup.push(elGuestPrompts);
+  }
+
+  pageMain.appendChild(createSection('Cosmetic Filtering', cosmeticGroup));
+
+  // Logic: Disable sub-items if AdBlock is off
+  const handleAdBlockDependency = (isEnabled) => {
+      if (elRemoveShorts) {
+          const input = elRemoveShorts.querySelector('input');
+          if (input) {
+              input.disabled = !isEnabled;
+              elRemoveShorts.style.opacity = isEnabled ? '1' : '0.5';
+          }
+      }
+      if (elGuestPrompts) {
+          const input = elGuestPrompts.querySelector('input');
+          if (input) {
+              input.disabled = !isEnabled;
+              elGuestPrompts.style.opacity = isEnabled ? '1' : '0.5';
+          }
+      }
+  };
+
+  // Attach listener to AdBlock checkbox
+  const adBlockInput = elAdBlock.querySelector('input');
+  adBlockInput.addEventListener('change', (e) => handleAdBlockDependency(e.target.checked));
+  
+  // Initial State
+  handleAdBlockDependency(configRead('enableAdBlock'));
+  
+  // Also listen for external config changes
+  configAddChangeListener('enableAdBlock', (evt) => handleAdBlockDependency(evt.detail.newValue));
+
+
+  // Group 2: Video & Player
+  pageMain.appendChild(createSection('Video Player', [
+      createConfigCheckbox('forceHighResVideo'),
+      createConfigCheckbox('hideEndcards'),
+      createConfigCheckbox('enableReturnYouTubeDislike')
+  ]));
+
+  // Group 3: User Interface
+  pageMain.appendChild(createSection('Interface', [
+      createConfigCheckbox('enableAutoLogin'),
+      createConfigCheckbox('upgradeThumbnails'),
+      createConfigCheckbox('hideLogo'),
+      createConfigCheckbox('enableOledCareMode'),
+      createConfigCheckbox('disableNotifications')
+  ]));
+
   const navHintNextMain = document.createElement('div');
   navHintNextMain.className = 'ytaf-nav-hint right';
   navHintNextMain.tabIndex = 0;
@@ -342,6 +442,7 @@ function createOptionsPanel() {
   pageMain.appendChild(navHintNextMain);
 
   elmContainer.appendChild(pageMain);
+  // ------------------------------------
 
   // --- Page 2: SponsorBlock ---
   pageSponsor = document.createElement('div');
@@ -406,6 +507,74 @@ function createOptionsPanel() {
 
   elmContainer.appendChild(pageShortcuts);
 
+  // --- Page 4: Debug ---
+  pageDebug = document.createElement('div');
+  pageDebug.classList.add('ytaf-settings-page');
+  pageDebug.style.display = 'none';
+  
+  const navHintExitDebug = document.createElement('div');
+  navHintExitDebug.className = 'ytaf-nav-hint left';
+  navHintExitDebug.tabIndex = 0;
+  navHintExitDebug.innerHTML = '<span class="arrow">&larr;</span> Exit Debug';
+  navHintExitDebug.addEventListener('click', () => setActivePage(0));
+  pageDebug.appendChild(navHintExitDebug);
+
+  const logLabel = document.createElement('label');
+  const logInput = document.createElement('input');
+  logInput.type = 'checkbox';
+  logInput.checked = isLogCollectionEnabled;
+  logInput.addEventListener('change', (e) => {
+      isLogCollectionEnabled = e.target.checked;
+	  if (!isLogCollectionEnabled) { logBuffer.length = 0; }
+  });
+  
+  const logContent = document.createElement('div');
+  logContent.classList.add('label-content');
+  logContent.appendChild(logInput);
+  logContent.appendChild(document.createTextNode('\u00A0Enable console log collection'));
+  logLabel.appendChild(logContent);
+  pageDebug.appendChild(logLabel);
+
+  const qrCanvas = document.createElement('canvas');
+  qrCanvas.style.cssText = 'display:block;margin:10px auto;background:white;padding:10px;border-radius:4px;max-width:600px;width:100%;height:auto;';
+  
+  const genQr = (text) => {
+    if (!text) { showNotification('Buffer Empty'); return; }
+    try {
+        new QRious({
+            element: qrCanvas,
+            value: text,
+            size: 600,
+            level: 'L'
+        });
+    } catch (e) {
+        console.error('QR Gen Error:', e);
+        showNotification('Data too big for QR');
+    }
+  };
+
+  const btnLogs = document.createElement('button');
+  btnLogs.textContent = 'Show Console Logs (QR)';
+  btnLogs.className = 'reset-color-btn';
+  btnLogs.style.fontSize = '24px';
+  btnLogs.style.marginBottom = '10px';
+  btnLogs.onclick = () => genQr(logBuffer.join('\n'));
+
+  const btnStore = document.createElement('button');
+  btnStore.textContent = 'Show Storage (QR)';
+  btnStore.className = 'reset-color-btn';
+  btnStore.style.fontSize = '24px';
+  btnStore.onclick = () => {
+      const configVal = localStorage.getItem('ytaf-configuration');
+      genQr(configVal || 'No Configuration Found');
+  };
+
+  pageDebug.appendChild(btnLogs);
+  pageDebug.appendChild(btnStore);
+  pageDebug.appendChild(qrCanvas);
+  elmContainer.appendChild(pageDebug);
+  // ---------------------
+
   return elmContainer;
 }
 
@@ -430,7 +599,7 @@ function showOptionsPanel(visible) {
     }
     
     const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(
-      (el) => el.offsetParent !== null
+      (el) => el.offsetParent !== null && !el.disabled 
     );
 
     if (firstVisibleInput) {
@@ -448,6 +617,8 @@ function showOptionsPanel(visible) {
 
     optionsPanel.blur();
     optionsPanelVisible = false;
+	clearTimeout(debugClickTimer);
+    debugClickCount = 0;
   }
 }
 
@@ -723,6 +894,32 @@ const eventHandler = (evt) => {
     evt.keyCode,
     evt.defaultPrevented
   );
+  
+  // --- Debug: Hold 0 Handling ---
+	if (evt.type === 'keydown' && optionsPanelVisible && evt.keyCode === 48) {
+         debugClickCount++;
+         // console.info(`Debug: Click count ${debugClickCount}`);
+         
+         clearTimeout(debugClickTimer);
+         
+         if (debugClickCount >= 5) {
+             console.info('Debug: Opening debug page');
+             if (optionsPanel.goToDebug) optionsPanel.goToDebug();
+             debugClickCount = 0;
+         } else {
+             // Reset count if user stops pressing for 2000ms
+             debugClickTimer = setTimeout(() => {
+                 debugClickCount = 0;
+             }, 2000); 
+         }
+     
+     // Block '0' from doing anything else while panel is open
+     evt.preventDefault();
+     evt.stopPropagation();
+     return false;
+  }
+  // ------------------------------
+
   const keyColor = getKeyColor(evt.charCode);
   
   if (keyColor === 'green') {
@@ -770,6 +967,13 @@ const eventHandler = (evt) => {
   } else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
       // Check for user-defined shortcuts (Keys 0-9)
       const keyIndex = evt.keyCode - 48;
+      
+      if (optionsPanelVisible) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          return false;
+      }
+
       const action = configRead(`shortcut_key_${keyIndex}`);
 	  
 	  evt.preventDefault();
@@ -916,6 +1120,23 @@ applyOledMode(configRead('enableOledCareMode'));
 configAddChangeListener('enableOledCareMode', (evt) => {
   applyOledMode(evt.detail.newValue);
 });
+
+// --- UPDATED: Lifecycle Management (Master Switch) ---
+configAddChangeListener('enableAdBlock', (evt) => {
+  if (evt.detail.newValue) {
+    initAdblock();
+    showNotification('AdBlock Enabled');
+  } else {
+    destroyAdblock();
+    showNotification('AdBlock Disabled');
+  }
+});
+
+// Sync initial state
+if (!configRead('enableAdBlock')) {
+    destroyAdblock();
+}
+// -----------------------------------------------------
 
 setTimeout(() => {
   showNotification('Press [GREEN] to open SponsorBlock configuration screen');

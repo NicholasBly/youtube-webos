@@ -170,18 +170,12 @@ class ReturnYouTubeDislike {
       } else {
         return;
       }
-
-      const likesElement = container.querySelector(`div[aria-label*="likes"]${factoidClass}`) || 
-                           container.querySelector(`div[aria-label*="Likes"]${factoidClass}`);
-
-      if (!likesElement) return;
-
-      const dateElement = container.querySelector('div[idomkey="factoid-2"]');
       
       this.applyNaturalFlow(panelElement);
 
       container.style.cssText = 'display:flex; flex-wrap:wrap; justify-content:center; gap:1.5rem; height:auto; overflow:visible;';
 
+      const dateElement = container.querySelector('div[idomkey="factoid-2"]');
       if (dateElement) {
         dateElement.style.marginTop = '0';
         const vEl = dateElement.querySelector(valueSelector);
@@ -189,6 +183,13 @@ class ReturnYouTubeDislike {
         if(vEl) vEl.style.cssText += 'display:inline-block; margin-right:0.4rem;';
         if(lEl) lEl.style.cssText += 'display:inline-block;';
       }
+
+      // Updated selector to use idomkey="factoid-0" (Language Agnostic)
+      const likesElement = container.querySelector(`div[idomkey="factoid-0"]${factoidClass}`) || 
+                           container.querySelector(`div[aria-label*="likes"]${factoidClass}`) || 
+                           container.querySelector(`div[aria-label*="Likes"]${factoidClass}`);
+
+      if (!likesElement) return;
 
       this.log('info', 'Injecting dislike count...');
       const dislikeElement = likesElement.cloneNode(true);
