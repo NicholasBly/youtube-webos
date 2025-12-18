@@ -4,6 +4,54 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.4] - 2025/12/17
+
+## Added
+
+### Debug Menu
+- Triggered by pressing the 0 key 5 times in a row while config UI menu is open
+-- Added "qrious" dependency to generate QR codes
+
+#### Features:
+- Generate QR code of last 50 lines of console logs
+-- Must enable checkbox "Enable console log collection" before console log data can be captured for collection
+
+- Generate QR code of localStorage saved configuration
+
+## Performance Optimizations
+
+### AdBlock.js
+
+Note: Should result in noticeably faster load times between page switching and video loading
+
+Cached config values for AdBlock, remove shorts, hide guest prompts
+-- 40-50% reduction in config read during JSON parsing
+
+Early Exit Optimizations
+-- reduce CPU usage and skip JSON filtering when unnecessary
+
+Cap maximum depth limit to findFirstObject
+-- Safety feature to prevent stack overflow
+
+Updated var -> const/let for modern syntax
+
+Previously implemented destroyAdblock() function is now called whenever AdBlock checkbox is disabled
+-- This will also disable "Remove Shorts From Subscriptions" and "Hide Guest Prompts" as these rely on the AdBlock JSON filtering engine (same behavior, but more transparent now)
+
+## Visual Changes
+
+Added sections to main config UI page
+
+Cosmetic Filtering -> Ad Blocking, Remove Shorts From Subscriptions, Guest Mode: Hide Sign-in Buttons (if applicable)
+Video Player -> Force Max Quality, Hide Endcards, Return YouTube Dislike
+Interface -> Auto Login, Upgrade Thumbnail Quality, Hide YouTube Logo, OLED-Care Mode, Disable Notifications
+
+## Fixes
+
+Fixed Return YouTube Dislike not displaying description panel correctly when language was not English
+
+Reverted dependency update to fix performance degradation for some users (from 0.6.4 build 2)
+
 ## [0.6.3] - 2025/12/16
 
 ## Performance Optimizations
