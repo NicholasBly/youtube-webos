@@ -831,8 +831,8 @@ function handleShortcutAction(action) {
             }
             // 2. DOM Fallback (Only runs if API failed/was empty)
             if (!toggledViaApi) {
-                const capsBtn = document.querySelector('ytlr-toggle-button-renderer ytlr-button') ||
-                                document.querySelector('ytlr-captions-button ytlr-button');
+                const capsBtn = document.querySelector('ytlr-captions-button ytlr-button') || 
+                                document.querySelector('ytlr-toggle-button-renderer ytlr-button');
                 if (capsBtn) {
                     // Simulate a physical click on the button
                     if (triggerInternal(capsBtn, 'Captions')) {
@@ -849,10 +849,19 @@ function handleShortcutAction(action) {
             break;
 
         case 'toggle_comments':
-			const commBtn = 
-					document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') ||
-					document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') ||
-					document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
+            const commIcon = document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb');
+            
+            let commBtn = commIcon ? commIcon.closest('ytlr-button') : null;
+
+            // 2. Fallback to positional selectors (Legacy method)
+            if (!commBtn) {
+                commBtn = 
+                    document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') ||
+                    document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') ||
+                    document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
+            }
+			
+			console.log(`[UI] Comments toggle button found via: `, commIcon);
             
             // Check active state via button OR visible panel
             const isCommentsActive = commBtn && (
