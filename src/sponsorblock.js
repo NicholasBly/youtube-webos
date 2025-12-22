@@ -3,7 +3,6 @@ import sha256_import from 'tiny-sha256';
 import { configRead, configAddChangeListener, configRemoveChangeListener, segmentTypes } from './config';
 import { showNotification } from './ui';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { sendKey, REMOTE_KEYS } from './utils.js';
 
 let sha256 = sha256_import;
 
@@ -38,10 +37,7 @@ class SponsorBlockHandler {
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
-        this.debugMode = false;
-		
-		this.uiHydrated = false;
-        this.hydrationStyle = null;
+        this.debugMode = false; 
         
         // Cache enabled categories to avoid configRead in tight loops
         this.activeCategories = new Set();
@@ -139,38 +135,6 @@ class SponsorBlockHandler {
         
         this.observePlayerUI();
         this.checkForProgressBar();
-    }
-	
-    async ensureUIHydrated() {
-        if (this.uiHydrated) {
-            return;
-        }
-
-        this.log('info', 'Hydrating Player UI (Hidden Sequence)...');
-
-        this.hydrationStyle = document.createElement('style');
-        this.hydrationStyle.textContent = `
-            div[idomkey="controlStateContainer"], .GLc3cc {
-                top: 2000% !important;
-                visibility: hidden !important;
-            }
-        `;
-        document.head.appendChild(this.hydrationStyle);
-
-        sendKey(REMOTE_KEYS.UP);
-
-        await new Promise(resolve => setTimeout(resolve, 150));
-
-        sendKey(REMOTE_KEYS.UP);
-        sendKey(REMOTE_KEYS.UP);
-
-        if (this.hydrationStyle) {
-            this.hydrationStyle.remove();
-            this.hydrationStyle = null;
-        }
-
-        this.uiHydrated = true;
-        this.log('info', 'UI Hydration Complete.');
     }
 
     observePlayerUI() {
@@ -438,12 +402,6 @@ class SponsorBlockHandler {
 		// Clear all pending Animation Frames
 		this.rafIds.forEach(id => cancelAnimationFrame(id));
         this.rafIds.clear();
-		
-		if (this.hydrationStyle) {
-            this.hydrationStyle.remove();
-            this.hydrationStyle = null;
-        }
-        this.uiHydrated = false;
         
         // 1. Clean up UI
         sponsorBlockUI.togglePopup(false); 
