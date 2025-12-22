@@ -635,6 +635,8 @@ function showOptionsPanel(visible) {
 }
 
 document.addEventListener('focus', (e) => {
+	const isSafeFocus = (optionsPanel && optionsPanel.contains(e.target)) || // Fix config UI fighting with SponsorBlock UI for focus
+                        (sponsorBlockUI.popup && sponsorBlockUI.popup.contains(e.target));
     if (optionsPanelVisible && optionsPanel && !optionsPanel.contains(e.target)) {
         e.stopPropagation();
         e.preventDefault();

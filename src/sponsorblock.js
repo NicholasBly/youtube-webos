@@ -37,7 +37,7 @@ class SponsorBlockHandler {
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
-        this.debugMode = false; 
+        this.debugMode = true; 
         
         // Cache enabled categories to avoid configRead in tight loops
         this.activeCategories = new Set();
@@ -113,10 +113,10 @@ class SponsorBlockHandler {
                 this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
                 this.log('info', `Found ${this.segments.length} segments.`);
                 
+				this.start();
+				
                 // Update UI with new segments
                 sponsorBlockUI.updateSegments(this.segments);
-                
-                this.start();
             }
         } catch (e) {
 			showNotification("SB Error: " + e.message);
@@ -128,13 +128,38 @@ class SponsorBlockHandler {
         this.video = document.querySelector('video');
         if (this.video) {
             this.addEvent(this.video, 'timeupdate', this.handleTimeUpdate.bind(this));
-            this.addEvent(this.video, 'durationchange', () => this.drawOverlay());
+            
+            // [Updated] Sanitize segments whenever duration changes (load or resolution switch)
+            this.addEvent(this.video, 'durationchange', () => {
+                this.sanitizeSegments();
+                this.drawOverlay();
+            });
+
+            // [New] If metadata is already loaded (e.g. late injection), sanitize immediately
+            if (this.video.duration) {
+                this.sanitizeSegments();
+            }
         }
 
         this.injectCSS();
         
         this.observePlayerUI();
         this.checkForProgressBar();
+    }
+	
+	sanitizeSegments() {
+        if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
+        
+        const duration = this.video.duration;
+        
+        this.segments.forEach(segment => {
+            // If the segment ends after the video ends, clamp it to the video duration
+            if (segment.segment[1] > duration) {
+                const oldEnd = segment.segment[1];
+                segment.segment[1] = duration;
+                this.log('info', `Clamped segment end from ${oldEnd} to ${duration}`);
+            }
+        });
     }
 
     observePlayerUI() {
