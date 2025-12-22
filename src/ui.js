@@ -622,23 +622,31 @@ function showOptionsPanel(visible) {
   }
 }
 
+document.addEventListener('focus', (e) => {
+    if (optionsPanelVisible && optionsPanel && !optionsPanel.contains(e.target)) {
+        e.stopPropagation();
+        e.preventDefault();
+        console.warn('[UI] Focus stolen by background element, reclaiming...');
+        const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(
+          (el) => el.offsetParent !== null && !el.disabled 
+        );
+        if (firstVisibleInput) {
+          firstVisibleInput.focus();
+        } else {
+          optionsPanel.focus();
+        }
+    }
+}, true);
+
 window.ytaf_showOptionsPanel = showOptionsPanel;
 
 async function skipChapter(direction = 'next') {
   const video = document.querySelector('video');
   if (!video || !video.duration) return;
 
-  // Initialize static state to track if we've already forced the UI open
-  skipChapter.lastSrc = skipChapter.lastSrc || '';
-  skipChapter.hasForced = skipChapter.hasForced || false;
-
-  const currentSrc = video.src || window.location.href;
-  let wasForcedNow = false;
-  
-  // Reset state if video changes
-  if (skipChapter.lastSrc !== currentSrc) {
-      skipChapter.lastSrc = currentSrc;
-      skipChapter.hasForced = false;
+  // 1. Ensure UI is hydrated (Hidden Open/Close Sequence) via SponsorBlock
+  if (window.sponsorblock) {
+      await window.sponsorblock.ensureUIHydrated();
   }
 
   const getChapterEls = () => {
@@ -650,24 +658,10 @@ async function skipChapter(direction = 'next') {
       });
   };
 
-  let chapterEls = getChapterEls();
-
-  // Force UI open if no chapters found (only once per video)
-  if (chapterEls.length === 0 && !skipChapter.hasForced) {
-      console.log('[Chapters] No chapters found. Forcing UI...');
-      skipChapter.hasForced = true;
-      wasForcedNow = true;
-      showNotification('Loading chapters...');
-	  
-	  sendKey(REMOTE_KEYS.ENTER);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      chapterEls = getChapterEls();
-  }
+  const chapterEls = getChapterEls();
 
   if (chapterEls.length === 0) {
       showNotification('No chapters found');
-      if (wasForcedNow) setTimeout(() => simulateBack(), 250);
       return;
   }
 
@@ -687,11 +681,8 @@ async function skipChapter(direction = 'next') {
   let targetTime;
 
   if (direction === 'next') {
-      // Find first timestamp significantly greater than current
       targetTime = timestamps.find(t => t > currentTime + 1);
   } else {
-      // Previous Logic: 
-      // 1. Identify current chapter index
       let currentIdx = -1;
       for (let i = 0; i < timestamps.length; i++) {
           if (currentTime >= timestamps[i]) currentIdx = i;
@@ -700,14 +691,12 @@ async function skipChapter(direction = 'next') {
 
       if (currentIdx !== -1) {
           const chapterStart = timestamps[currentIdx];
-          // If we are more than 3 seconds into the chapter, restart it.
-          // Otherwise, go to the previous chapter.
           if (currentTime - chapterStart > 3) {
               targetTime = chapterStart;
           } else if (currentIdx > 0) {
               targetTime = timestamps[currentIdx - 1];
           } else {
-              targetTime = 0; // Start of video
+              targetTime = 0;
           }
       } else {
           targetTime = 0;
@@ -717,10 +706,8 @@ async function skipChapter(direction = 'next') {
   if (targetTime !== undefined && targetTime < video.duration) {
       video.currentTime = targetTime;
       showNotification(direction === 'next' ? 'Next Chapter' : 'Previous Chapter');
-      if (wasForcedNow) setTimeout(() => simulateBack(), 250);
   } else {
       showNotification(direction === 'next' ? 'No next chapter' : 'Start of video');
-      if (wasForcedNow) setTimeout(() => simulateBack(), 250);
   }
 }
 
@@ -733,42 +720,60 @@ function simulateBack() {
 function triggerInternal(element, name) {
     if (!element) return false;
     
-    // Try accessing the internal Polymer/Lit instance
-    const instance = element.__instance;
+    let success = false;
     
+    // Try standard click
+    try {
+        element.click();
+        console.log(`[Shortcut] Standard click triggered for ${name}`);
+        success = true;
+    } catch (e) {
+        console.warn(`[Shortcut] Standard click failed for ${name}:`, e);
+    }
+    
+    // Also try internal method if available (for older webOS versions)
+    const instance = element.__instance;
     if (instance && typeof instance.onSelect === 'function') {
-        console.log(`[Shortcut] Calling internal onSelect() for ${name}`);
+        console.log(`[Shortcut] Also calling internal onSelect() for ${name}`);
         try {
             const mockEvent = {
                 type: 'click',
                 stopPropagation: () => {},
                 preventDefault: () => {},
                 target: element,
-                currentTarget: element
+                currentTarget: element,
+                bubbles: true,
+                cancelable: true
             };
 
-            instance.onSelect(mockEvent); 
-            return true;
+            instance.onSelect(mockEvent);
+            success = true;
         } catch (e) {
-            console.error(`[Shortcut] Internal call failed for ${name}:`, e);
+            console.warn(`[Shortcut] Internal call failed for ${name}:`, e);
         }
     }
     
-    element.click();
-    return true;
+    return success;
 }
 
-function handleShortcutAction(action) {
+async function handleShortcutAction(action) {
     const video = document.querySelector('video');
     const player = document.querySelector('.html5-video-player') || document.getElementById('movie_player');
 
     if (!video) return;
 
+    // Helper to ensure data is available before toggling UI elements
+    const ensureDataLoaded = async () => {
+        if (window.sponsorblock) {
+            await window.sponsorblock.ensureUIHydrated();
+        }
+    };
+
     switch (action) {
         case 'chapter_skip':
             skipChapter('next');
             break;
-		case 'chapter_skip_prev':
+        case 'chapter_skip_prev':
             skipChapter('prev');
             break;
         case 'seek_15_fwd':
@@ -790,33 +795,27 @@ function handleShortcutAction(action) {
             break;
 
         case 'toggle_subs':
+            // Ensure UI is loaded first
+            await ensureDataLoaded();
+
             let toggledViaApi = false;
 
-            // 1. Attempt Native Player API (Preferred)
+            // 1. Attempt Native Player API
             if (player) {
-                // Ensure the module is loaded (just in case)
-                if (typeof player.loadModule === 'function') {
-                    player.loadModule('captions');
-                }
-
+                if (typeof player.loadModule === 'function') player.loadModule('captions');
                 if (typeof player.getOption === 'function' && typeof player.setOption === 'function') {
                     try {
                         const currentTrack = player.getOption('captions', 'track');
-                        // Check if captions are currently active
                         const isEnabled = currentTrack && (currentTrack.languageCode || currentTrack.vssId);
                         if (isEnabled) {
-                            // Turn OFF via API
                             player.setOption('captions', 'track', {});
                             showNotification('Subtitles: OFF');
                             toggledViaApi = true;
                         } else {
-                            // Turn ON via API
                             const trackList = player.getOption('captions', 'tracklist');
                             const videoData = player.getVideoData ? player.getVideoData() : null;
-                            
-                            // Find any valid track (API Tracklist OR Raw Metadata)
-                            const targetTrack = (trackList && trackList[0]) || 
-                                              (videoData && videoData.captionTracks && videoData.captionTracks[0]);
+                            const targetTrack = (trackList && trackList[0]) ||
+                                (videoData && videoData.captionTracks && videoData.captionTracks[0]);
 
                             if (targetTrack) {
                                 player.setOption('captions', 'track', targetTrack);
@@ -824,72 +823,60 @@ function handleShortcutAction(action) {
                                 toggledViaApi = true;
                             }
                         }
-                    } catch (e) {
-                        console.warn('[Shortcut] Subtitle API Error:', e);
-                    }
+                    } catch (e) { console.warn('[Shortcut] Subtitle API Error:', e); }
                 }
             }
-            // 2. DOM Fallback (Only runs if API failed/was empty)
+            
+            // 2. DOM Fallback
             if (!toggledViaApi) {
-                const capsBtn = document.querySelector('ytlr-captions-button ytlr-button') || 
+                const capsBtn = document.querySelector('ytlr-captions-button yt-button-container') ||
+                                document.querySelector('ytlr-captions-button ytlr-button') ||
                                 document.querySelector('ytlr-toggle-button-renderer ytlr-button');
-                if (capsBtn) {
-                    // Simulate a physical click on the button
-                    if (triggerInternal(capsBtn, 'Captions')) {
-                         // Read the new state from the button's aria-pressed attribute after a tiny delay
-                         setTimeout(() => {
-                             const isPressed = capsBtn.getAttribute('aria-pressed') === 'true';
-                             showNotification(isPressed ? 'Subtitles: ON' : 'Subtitles: OFF');
-                         }, 250);
-                         return;
-                    }
+                
+                if (capsBtn && triggerInternal(capsBtn, 'Captions')) {
+                     setTimeout(() => {
+                        const isPressed = capsBtn.getAttribute('aria-pressed') === 'true';
+                        showNotification(isPressed ? 'Subtitles: ON' : 'Subtitles: OFF');
+                    }, 250);
+                } else {
+                    showNotification('No subtitles found');
                 }
-                showNotification('No subtitles found');
             }
             break;
 
         case 'toggle_comments':
-            const commIcon = document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb');
-            
-            let commBtn = commIcon ? commIcon.closest('ytlr-button') : null;
+            // Ensure UI is loaded first
+            await ensureDataLoaded();
 
-            // 2. Fallback to positional selectors (Legacy method)
+            let commBtn = document.querySelector('yt-button-container[aria-label="Comments"]');
             if (!commBtn) {
-                commBtn = 
-                    document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') ||
+                const commIcon = document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb');
+                commBtn = commIcon ? commIcon.closest('ytlr-button') : null;
+            }
+            if (!commBtn) {
+                commBtn = document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') ||
                     document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') ||
                     document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
             }
-			
-			console.log(`[UI] Comments toggle button found via: `, commIcon);
-            
-            // Check active state via button OR visible panel
+
             const isCommentsActive = commBtn && (
-                commBtn.getAttribute('aria-pressed') === 'true' || 
+                commBtn.getAttribute('aria-pressed') === 'true' ||
                 commBtn.getAttribute('aria-selected') === 'true'
             );
-            
-            const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || 
-                          document.querySelector('ytlr-engagement-panel-title-header-renderer');
-
+            const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') ||
+                document.querySelector('ytlr-engagement-panel-title-header-renderer');
             const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
 
             if (isCommentsActive || isPanelVisible) {
-                // IF OPEN: Close via Back simulation
                 simulateBack();
-                showNotification('Closed Comments');
+                //showNotification('Closed Comments');
             } else {
-                // IF CLOSED: Open via internal trigger
                 if (triggerInternal(commBtn, 'Comments')) {
-                    showNotification('Opened Comments');
+                    //showNotification('Opened Comments');
                 } else {
                     const titleBtn = document.querySelector('.ytlr-video-title') || document.querySelector('h1');
-                    if (titleBtn) {
-                        titleBtn.click();
-                        showNotification('Opened Desc (Title)');
-                    } else {
-                        showNotification('Comments Unavailable');
-                    }
+                    if (titleBtn) { titleBtn.click(); showNotification('Opened Desc'); } 
+                    else { showNotification('Comments Unavailable'); }
                 }
             }
             break;
@@ -1132,7 +1119,6 @@ configAddChangeListener('enableOledCareMode', (evt) => {
   applyOledMode(evt.detail.newValue);
 });
 
-// --- UPDATED: Lifecycle Management (Master Switch) ---
 configAddChangeListener('enableAdBlock', (evt) => {
   if (evt.detail.newValue) {
     initAdblock();
@@ -1147,7 +1133,6 @@ configAddChangeListener('enableAdBlock', (evt) => {
 if (!configRead('enableAdBlock')) {
     destroyAdblock();
 }
-// -----------------------------------------------------
 
 setTimeout(() => {
   showNotification('Press [GREEN] to open SponsorBlock configuration screen');
