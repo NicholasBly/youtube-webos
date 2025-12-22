@@ -1,4 +1,4 @@
-const sponsorBlockIcon = 'https://github.com/NicholasBly/youtube-webos/blob/main/src/icons/IconSponsorBlocker64px.png?raw=true';
+const sponsorBlockIcon = 'https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/IconSponsorBlocker64px.png';
 
 const STYLES = `
     /* --- Popup Styles --- */

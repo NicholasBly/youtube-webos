@@ -20,6 +20,8 @@ import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
 import { initAdblock, destroyAdblock } from './adblock.js';
 
+let lastSafeFocus = null;
+
 // --- Debug: Log Capture ---
 // const logBuffer = [];
 // let isLogCollectionEnabled = false;
@@ -616,8 +618,10 @@ function showOptionsPanel(visible) {
 
     if (firstVisibleInput) {
       firstVisibleInput.focus();
+	  lastSafeFocus = firstVisibleInput;
     } else {
       optionsPanel.focus();
+	  lastSafeFocus = optionsPanel;
     }
     
     optionsPanelVisible = true;
@@ -629,25 +633,30 @@ function showOptionsPanel(visible) {
 
     optionsPanel.blur();
     optionsPanelVisible = false;
+	lastSafeFocus = null;
 	// clearTimeout(debugClickTimer);
     // debugClickCount = 0;
   }
 }
 
 document.addEventListener('focus', (e) => {
-	const isSafeFocus = (optionsPanel && optionsPanel.contains(e.target)) || // Fix config UI fighting with SponsorBlock UI for focus
-                        (sponsorBlockUI.popup && sponsorBlockUI.popup.contains(e.target));
-    if (optionsPanelVisible && optionsPanel && !optionsPanel.contains(e.target)) {
+    if (!optionsPanelVisible) return;
+    const target = e.target;
+    const isSafeFocus = (optionsPanel && optionsPanel.contains(target)) || 
+                        (target.closest && target.closest('.sb-segments-popup'));
+    if (isSafeFocus) {
+        lastSafeFocus = target;
+    } else {
         e.stopPropagation();
         e.preventDefault();
-        console.warn('[UI] Focus stolen by background element, reclaiming...');
-        const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(
-          (el) => el.offsetParent !== null && !el.disabled 
-        );
-        if (firstVisibleInput) {
-          firstVisibleInput.focus();
+        if (lastSafeFocus && document.body.contains(lastSafeFocus)) {
+            lastSafeFocus.focus();
         } else {
-          optionsPanel.focus();
+            const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(
+              (el) => el.offsetParent !== null && !el.disabled 
+            );
+            if (firstVisibleInput) firstVisibleInput.focus();
+            else optionsPanel.focus();
         }
     }
 }, true);

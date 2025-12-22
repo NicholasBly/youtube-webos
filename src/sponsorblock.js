@@ -37,7 +37,7 @@ class SponsorBlockHandler {
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
-        this.debugMode = true; 
+        this.debugMode = false; 
         
         // Cache enabled categories to avoid configRead in tight loops
         this.activeCategories = new Set();
@@ -156,7 +156,7 @@ class SponsorBlockHandler {
             // If the segment ends after the video ends, clamp it to the video duration
             if (segment.segment[1] > duration) {
                 const oldEnd = segment.segment[1];
-                segment.segment[1] = duration;
+                segment.segment[1] = Math.max(0, duration - 0.001); // Fix webOS 5 video restarting issue on outro segments
                 this.log('info', `Clamped segment end from ${oldEnd} to ${duration}`);
             }
         });
