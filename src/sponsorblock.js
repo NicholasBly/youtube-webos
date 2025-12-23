@@ -3,6 +3,7 @@ import sha256_import from 'tiny-sha256';
 import { configRead, configAddChangeListener, configRemoveChangeListener, segmentTypes } from './config';
 import { showNotification } from './ui';
 import sponsorBlockUI from './Sponsorblock-UI.js';
+import { WebOSVersion } from './webos-utils.js';
 
 let sha256 = sha256_import;
 
@@ -37,7 +38,7 @@ class SponsorBlockHandler {
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
-        this.debugMode = false; 
+        this.debugMode = true; 
         
         // Cache enabled categories to avoid configRead in tight loops
         this.activeCategories = new Set();
@@ -150,14 +151,15 @@ class SponsorBlockHandler {
 	sanitizeSegments() {
         if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
         
+		console.log('[DEBUG] Sanitizing segments, duration:', this.video.duration);
         const duration = this.video.duration;
         
         this.segments.forEach(segment => {
             // If the segment ends after the video ends, clamp it to the video duration
-            if (segment.segment[1] > duration) {
+            if (segment.segment[1] >= duration) {
                 const oldEnd = segment.segment[1];
-                segment.segment[1] = Math.max(0, duration - 0.001); // Fix webOS 5 video restarting issue on outro segments
-                this.log('info', `Clamped segment end from ${oldEnd} to ${duration}`);
+                segment.segment[1] = Math.max(0, duration - 0.01); // Fix webOS 5 video restarting issue on outro segments
+                this.log('info', `Clamped segment end from ${oldEnd} to ${duration - 0.01}`);
             }
         });
     }
@@ -341,13 +343,32 @@ class SponsorBlockHandler {
     }
 
 	skipSegment(segment) {
-        this.video.currentTime = segment.segment[1];
-		const timeRemaining = this.video.duration - this.video.currentTime;
-        if (timeRemaining > 0.5) {
-            if (this.video.paused) {
-                this.video.play();
+		let skipTarget = segment.segment[1];
+        
+        // WebOS 5 Specific Check: Run the sanitize segment check/logic
+        if (WebOSVersion() === 5) {
+            const duration = this.video.duration;
+            if (skipTarget >= duration - 0.5) {
+                const buffer = 0.25; 
+                skipTarget = Math.max(0, duration - buffer);
+                if (buffer > 0.1 && !this.video.muted) {
+                     this.video.muted = true;
+                     setTimeout(() => { if(!this.video.paused) this.video.muted = false; }, 1000); 
+                }
             }
+			this.video.currentTime = skipTarget;
         }
+		else
+		{
+			this.video.currentTime = skipTarget;
+			const timeRemaining = this.video.duration - this.video.currentTime;
+			if (timeRemaining > 0.5) { 
+				if (this.video.paused) {
+					this.video.play();
+				}
+			}
+		}
+
         this.requestAF(() => {
             showNotification(`Skipped ${segmentTypes[segment.category]?.name || segment.category}`);
         });
