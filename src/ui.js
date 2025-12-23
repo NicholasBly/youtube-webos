@@ -1,6 +1,6 @@
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
-import QRious from 'qrious';
+// import QRious from 'qrious';
 import {
   configAddChangeListener,
   configRead,
@@ -20,23 +20,37 @@ import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
 import { initAdblock, destroyAdblock } from './adblock.js';
 
-// --- Debug: Log Capture ---
-const logBuffer = [];
-let isLogCollectionEnabled = false;
+let lastSafeFocus = null;
 
-['log', 'info', 'warn', 'error'].forEach((method) => {
-  const orig = console[method];
-  console[method] = (...args) => {
-    if (isLogCollectionEnabled) {
-      logBuffer.push(`[${method.toUpperCase()}] ${args.join(' ')}`);
-      if (logBuffer.length > 50) logBuffer.shift(); 
-    }
-    orig.apply(console, args);
-  };
-});
-let debugClickCount = 0;
-let debugClickTimer = null;
+// --- Debug: Log Capture ---
+// const logBuffer = [];
+// let isLogCollectionEnabled = false;
+
+// ['log', 'info', 'warn', 'error'].forEach((method) => {
+  // const orig = console[method];
+  // console[method] = (...args) => {
+    // if (isLogCollectionEnabled) {
+      // logBuffer.push(`[${method.toUpperCase()}] ${args.join(' ')}`);
+      // if (logBuffer.length > 50) logBuffer.shift(); 
+    // }
+    // orig.apply(console, args);
+  // };
+// });
+// let debugClickCount = 0;
+// let debugClickTimer = null;
 // --------------------------
+
+// Polyfill for Element.closest
+// if (!Element.prototype.closest) {
+  // Element.prototype.closest = function(s) {
+    // var el = this;
+    // do {
+      // if (Element.prototype.matches.call(el, s)) return el;
+      // el = el.parentElement || el.parentNode;
+    // } while (el !== null && el.nodeType === 1);
+    // return null;
+  // };
+// }
 
 function isWatchPage() {
   return document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
@@ -252,7 +266,7 @@ function createOptionsPanel() {
   let pageMain = null;
   let pageSponsor = null;
   let pageShortcuts = null;
-  let pageDebug = null;
+  // let pageDebug = null;
 
   const setActivePage = (pageIndex) => {
     activePage = pageIndex;
@@ -261,7 +275,7 @@ function createOptionsPanel() {
     pageMain.style.display = 'none';
     pageSponsor.style.display = 'none';
     pageShortcuts.style.display = 'none';
-    pageDebug.style.display = 'none';
+    // pageDebug.style.display = 'none';
 
     if (pageIndex === 0) { // Main
       pageMain.style.display = 'block';
@@ -277,14 +291,14 @@ function createOptionsPanel() {
       pageShortcuts.style.display = 'block';
       pageShortcuts.querySelector('.shortcut-control-row')?.focus();
       sponsorBlockUI.togglePopup(false);
-    } else if (pageIndex === 3) { // Debug
-      pageDebug.style.display = 'block';
-      pageDebug.querySelector('button')?.focus();
-      sponsorBlockUI.togglePopup(false);
-    }
+      } // else if (pageIndex === 3) { // Debug
+      // pageDebug.style.display = 'block';
+      // pageDebug.querySelector('button')?.focus();
+      // sponsorBlockUI.togglePopup(false);
+    // }
   };
 
-  elmContainer.goToDebug = () => setActivePage(3);
+  // elmContainer.goToDebug = () => setActivePage(3);
 
   elmContainer.addEventListener(
     'keydown',
@@ -330,7 +344,7 @@ function createOptionsPanel() {
              } else if (dir === 'left') {
                if (activePage === 1) setActivePage(0);
                else if (activePage === 2) setActivePage(1);
-               else if (activePage === 3) setActivePage(0); // Exit debug
+               // else if (activePage === 3) setActivePage(0); // Exit debug
              }
              evt.preventDefault();
              evt.stopPropagation();
@@ -508,71 +522,71 @@ function createOptionsPanel() {
   elmContainer.appendChild(pageShortcuts);
 
   // --- Page 4: Debug ---
-  pageDebug = document.createElement('div');
-  pageDebug.classList.add('ytaf-settings-page');
-  pageDebug.style.display = 'none';
+  // pageDebug = document.createElement('div');
+  // pageDebug.classList.add('ytaf-settings-page');
+  // pageDebug.style.display = 'none';
   
-  const navHintExitDebug = document.createElement('div');
-  navHintExitDebug.className = 'ytaf-nav-hint left';
-  navHintExitDebug.tabIndex = 0;
-  navHintExitDebug.innerHTML = '<span class="arrow">&larr;</span> Exit Debug';
-  navHintExitDebug.addEventListener('click', () => setActivePage(0));
-  pageDebug.appendChild(navHintExitDebug);
+  // const navHintExitDebug = document.createElement('div');
+  // navHintExitDebug.className = 'ytaf-nav-hint left';
+  // navHintExitDebug.tabIndex = 0;
+  // navHintExitDebug.innerHTML = '<span class="arrow">&larr;</span> Exit Debug';
+  // navHintExitDebug.addEventListener('click', () => setActivePage(0));
+  // pageDebug.appendChild(navHintExitDebug);
 
-  const logLabel = document.createElement('label');
-  const logInput = document.createElement('input');
-  logInput.type = 'checkbox';
-  logInput.checked = isLogCollectionEnabled;
-  logInput.addEventListener('change', (e) => {
-      isLogCollectionEnabled = e.target.checked;
-	  if (!isLogCollectionEnabled) { logBuffer.length = 0; }
-  });
+  // const logLabel = document.createElement('label');
+  // const logInput = document.createElement('input');
+  // logInput.type = 'checkbox';
+  // logInput.checked = isLogCollectionEnabled;
+  // logInput.addEventListener('change', (e) => {
+      // isLogCollectionEnabled = e.target.checked;
+	  // if (!isLogCollectionEnabled) { logBuffer.length = 0; }
+  // });
   
-  const logContent = document.createElement('div');
-  logContent.classList.add('label-content');
-  logContent.appendChild(logInput);
-  logContent.appendChild(document.createTextNode('\u00A0Enable console log collection'));
-  logLabel.appendChild(logContent);
-  pageDebug.appendChild(logLabel);
+  // const logContent = document.createElement('div');
+  // logContent.classList.add('label-content');
+  // logContent.appendChild(logInput);
+  // logContent.appendChild(document.createTextNode('\u00A0Enable console log collection'));
+  // logLabel.appendChild(logContent);
+  // pageDebug.appendChild(logLabel);
 
-  const qrCanvas = document.createElement('canvas');
-  qrCanvas.style.cssText = 'display:block;margin:10px auto;background:white;padding:10px;border-radius:4px;max-width:600px;width:100%;height:auto;';
+  // const qrCanvas = document.createElement('canvas');
+  // qrCanvas.style.cssText = 'display:block;margin:10px auto;background:white;padding:10px;border-radius:4px;max-width:600px;width:100%;height:auto;';
   
-  const genQr = (text) => {
-    if (!text) { showNotification('Buffer Empty'); return; }
-    try {
-        new QRious({
-            element: qrCanvas,
-            value: text,
-            size: 600,
-            level: 'L'
-        });
-    } catch (e) {
-        console.error('QR Gen Error:', e);
-        showNotification('Data too big for QR');
-    }
-  };
+  // const genQr = (text) => {
+    // if (!text) { showNotification('Buffer Empty'); return; }
+    // try {
+        // new QRious({
+            // element: qrCanvas,
+            // value: text,
+            // size: 600,
+            // level: 'L'
+        // });
+    // } catch (e) {
+        // console.error('QR Gen Error:', e);
+        // showNotification('Data too big for QR');
+    // }
+  // };
 
-  const btnLogs = document.createElement('button');
-  btnLogs.textContent = 'Show Console Logs (QR)';
-  btnLogs.className = 'reset-color-btn';
-  btnLogs.style.fontSize = '24px';
-  btnLogs.style.marginBottom = '10px';
-  btnLogs.onclick = () => genQr(logBuffer.join('\n'));
+  // const btnLogs = document.createElement('button');
+  // btnLogs.textContent = 'Show Console Logs (QR)';
+  // btnLogs.className = 'reset-color-btn';
+  // btnLogs.style.fontSize = '24px';
+  // btnLogs.style.marginBottom = '10px';
+  // btnLogs.onclick = () => genQr(logBuffer.join('\n'));
 
-  const btnStore = document.createElement('button');
-  btnStore.textContent = 'Show Storage (QR)';
-  btnStore.className = 'reset-color-btn';
-  btnStore.style.fontSize = '24px';
-  btnStore.onclick = () => {
-      const configVal = localStorage.getItem('ytaf-configuration');
-      genQr(configVal || 'No Configuration Found');
-  };
+  // const btnStore = document.createElement('button');
+  // btnStore.textContent = 'Show Storage (QR)';
+  // btnStore.className = 'reset-color-btn';
+  // btnStore.style.fontSize = '24px';
+  // btnStore.onclick = () => {
+      // const configVal = localStorage.getItem('ytaf-configuration');
+      // genQr(configVal || 'No Configuration Found');
+  // };
 
-  pageDebug.appendChild(btnLogs);
-  pageDebug.appendChild(btnStore);
-  pageDebug.appendChild(qrCanvas);
-  elmContainer.appendChild(pageDebug);
+  // pageDebug.appendChild(btnLogs);
+  // pageDebug.appendChild(btnStore);
+  // pageDebug.appendChild(qrCanvas);
+  // elmContainer.appendChild(pageDebug);
   // ---------------------
 
   return elmContainer;
@@ -604,8 +618,10 @@ function showOptionsPanel(visible) {
 
     if (firstVisibleInput) {
       firstVisibleInput.focus();
+	  lastSafeFocus = firstVisibleInput;
     } else {
       optionsPanel.focus();
+	  lastSafeFocus = optionsPanel;
     }
     
     optionsPanelVisible = true;
@@ -617,10 +633,33 @@ function showOptionsPanel(visible) {
 
     optionsPanel.blur();
     optionsPanelVisible = false;
-	clearTimeout(debugClickTimer);
-    debugClickCount = 0;
+	lastSafeFocus = null;
+	// clearTimeout(debugClickTimer);
+    // debugClickCount = 0;
   }
 }
+
+document.addEventListener('focus', (e) => {
+    if (!optionsPanelVisible) return;
+    const target = e.target;
+    const isSafeFocus = (optionsPanel && optionsPanel.contains(target)) || 
+                        (target.closest && target.closest('.sb-segments-popup'));
+    if (isSafeFocus) {
+        lastSafeFocus = target;
+    } else {
+        e.stopPropagation();
+        e.preventDefault();
+        if (lastSafeFocus && document.body.contains(lastSafeFocus)) {
+            lastSafeFocus.focus();
+        } else {
+            const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(
+              (el) => el.offsetParent !== null && !el.disabled 
+            );
+            if (firstVisibleInput) firstVisibleInput.focus();
+            else optionsPanel.focus();
+        }
+    }
+}, true);
 
 window.ytaf_showOptionsPanel = showOptionsPanel;
 
@@ -733,29 +772,40 @@ function simulateBack() {
 function triggerInternal(element, name) {
     if (!element) return false;
     
-    // Try accessing the internal Polymer/Lit instance
-    const instance = element.__instance;
+    let success = false;
     
+    // Try standard click
+    try {
+        element.click();
+        console.log(`[Shortcut] Standard click triggered for ${name}`);
+        success = true;
+    } catch (e) {
+        console.warn(`[Shortcut] Standard click failed for ${name}:`, e);
+    }
+    
+    // Also try internal method if available (for older webOS versions)
+    const instance = element.__instance;
     if (instance && typeof instance.onSelect === 'function') {
-        console.log(`[Shortcut] Calling internal onSelect() for ${name}`);
+        console.log(`[Shortcut] Also calling internal onSelect() for ${name}`);
         try {
             const mockEvent = {
                 type: 'click',
                 stopPropagation: () => {},
                 preventDefault: () => {},
                 target: element,
-                currentTarget: element
+                currentTarget: element,
+                bubbles: true,
+                cancelable: true
             };
 
-            instance.onSelect(mockEvent); 
-            return true;
+            instance.onSelect(mockEvent);
+            success = true;
         } catch (e) {
-            console.error(`[Shortcut] Internal call failed for ${name}:`, e);
+            console.warn(`[Shortcut] Internal call failed for ${name}:`, e);
         }
     }
     
-    element.click();
-    return true;
+    return success;
 }
 
 function handleShortcutAction(action) {
@@ -768,7 +818,7 @@ function handleShortcutAction(action) {
         case 'chapter_skip':
             skipChapter('next');
             break;
-		case 'chapter_skip_prev':
+        case 'chapter_skip_prev':
             skipChapter('prev');
             break;
         case 'seek_15_fwd':
@@ -813,10 +863,10 @@ function handleShortcutAction(action) {
                             // Turn ON via API
                             const trackList = player.getOption('captions', 'tracklist');
                             const videoData = player.getVideoData ? player.getVideoData() : null;
-                            
+
                             // Find any valid track (API Tracklist OR Raw Metadata)
-                            const targetTrack = (trackList && trackList[0]) || 
-                                              (videoData && videoData.captionTracks && videoData.captionTracks[0]);
+                            const targetTrack = (trackList && trackList[0]) ||
+                                (videoData && videoData.captionTracks && videoData.captionTracks[0]);
 
                             if (targetTrack) {
                                 player.setOption('captions', 'track', targetTrack);
@@ -831,17 +881,19 @@ function handleShortcutAction(action) {
             }
             // 2. DOM Fallback (Only runs if API failed/was empty)
             if (!toggledViaApi) {
-                const capsBtn = document.querySelector('ytlr-captions-button ytlr-button') || 
+                const capsBtn = document.querySelector('ytlr-captions-button yt-button-container') || // New selector
+                                document.querySelector('ytlr-captions-button ytlr-button') ||
                                 document.querySelector('ytlr-toggle-button-renderer ytlr-button');
+                
                 if (capsBtn) {
                     // Simulate a physical click on the button
                     if (triggerInternal(capsBtn, 'Captions')) {
-                         // Read the new state from the button's aria-pressed attribute after a tiny delay
-                         setTimeout(() => {
-                             const isPressed = capsBtn.getAttribute('aria-pressed') === 'true';
-                             showNotification(isPressed ? 'Subtitles: ON' : 'Subtitles: OFF');
-                         }, 250);
-                         return;
+                        // Read the new state from the button's aria-pressed attribute after a tiny delay
+                        setTimeout(() => {
+                            const isPressed = capsBtn.getAttribute('aria-pressed') === 'true';
+                            showNotification(isPressed ? 'Subtitles: ON' : 'Subtitles: OFF');
+                        }, 250);
+                        return;
                     }
                 }
                 showNotification('No subtitles found');
@@ -849,28 +901,44 @@ function handleShortcutAction(action) {
             break;
 
         case 'toggle_comments':
-            const commBtn = document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') ||
-                            document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
-            
+            // 1. Try explicit new selector first
+            let commBtn = document.querySelector('yt-button-container[aria-label="Comments"]');
+
+            // 2. Fallback to icon search
+            if (!commBtn) {
+                const commIcon = document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb');
+                commBtn = commIcon ? commIcon.closest('ytlr-button') : null;
+            }
+
+            // 3. Fallback to positional selectors (Legacy method)
+            if (!commBtn) {
+                commBtn =
+                    document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') ||
+                    document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') ||
+                    document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
+            }
+
+            if(commBtn) console.log(`[UI] Comments toggle button found:`, commBtn);
+
             // Check active state via button OR visible panel
             const isCommentsActive = commBtn && (
-                commBtn.getAttribute('aria-pressed') === 'true' || 
+                commBtn.getAttribute('aria-pressed') === 'true' ||
                 commBtn.getAttribute('aria-selected') === 'true'
             );
-            
-            const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || 
-                          document.querySelector('ytlr-engagement-panel-title-header-renderer');
+
+            const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') ||
+                document.querySelector('ytlr-engagement-panel-title-header-renderer');
 
             const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
 
             if (isCommentsActive || isPanelVisible) {
                 // IF OPEN: Close via Back simulation
                 simulateBack();
-                showNotification('Closed Comments');
+                //showNotification('Closed Comments');
             } else {
                 // IF CLOSED: Open via internal trigger
                 if (triggerInternal(commBtn, 'Comments')) {
-                    showNotification('Opened Comments');
+                    //showNotification('Opened Comments');
                 } else {
                     const titleBtn = document.querySelector('.ytlr-video-title') || document.querySelector('h1');
                     if (titleBtn) {
@@ -896,28 +964,28 @@ const eventHandler = (evt) => {
   );
   
   // --- Debug: Hold 0 Handling ---
-	if (evt.type === 'keydown' && optionsPanelVisible && evt.keyCode === 48) {
-         debugClickCount++;
-         // console.info(`Debug: Click count ${debugClickCount}`);
+	// if (evt.type === 'keydown' && optionsPanelVisible && evt.keyCode === 48) {
+         // debugClickCount++;
+         // // console.info(`Debug: Click count ${debugClickCount}`);
          
-         clearTimeout(debugClickTimer);
+         // clearTimeout(debugClickTimer);
          
-         if (debugClickCount >= 5) {
-             console.info('Debug: Opening debug page');
-             if (optionsPanel.goToDebug) optionsPanel.goToDebug();
-             debugClickCount = 0;
-         } else {
-             // Reset count if user stops pressing for 2000ms
-             debugClickTimer = setTimeout(() => {
-                 debugClickCount = 0;
-             }, 2000); 
-         }
+         // if (debugClickCount >= 5) {
+             // console.info('Debug: Opening debug page');
+             // if (optionsPanel.goToDebug) optionsPanel.goToDebug();
+             // debugClickCount = 0;
+         // } else {
+             // // Reset count if user stops pressing for 2000ms
+             // debugClickTimer = setTimeout(() => {
+                 // debugClickCount = 0;
+             // }, 2000); 
+         // }
      
-     // Block '0' from doing anything else while panel is open
-     evt.preventDefault();
-     evt.stopPropagation();
-     return false;
-  }
+     // // Block '0' from doing anything else while panel is open
+     // evt.preventDefault();
+     // evt.stopPropagation();
+     // return false;
+  // }
   // ------------------------------
 
   const keyColor = getKeyColor(evt.charCode);
@@ -931,23 +999,31 @@ const eventHandler = (evt) => {
     }
     return false;
   } else if (keyColor === 'blue' && evt.type === 'keydown') {
+	if (!isWatchPage()) return true;
     console.info('Blue button pressed - attempting highlight jump');
     
+    const jumpEnabled = configRead('enableHighlightJump');
+    if (!jumpEnabled) return true; // Let default behavior happen
+    
+    // Prevent default early to avoid race condition
+    evt.preventDefault();
+    evt.stopPropagation();
+    
     try {
-      const jumpEnabled = configRead('enableHighlightJump');
-      if (jumpEnabled && window.sponsorblock) {
+      if (window.sponsorblock) {
         const jumped = window.sponsorblock.jumpToNextHighlight();
-        if (jumped) {
-          evt.preventDefault();
-          evt.stopPropagation();
-          return false;
-        } else {
+        if (!jumped) {
           showNotification('No highlights found in this video');
         }
+      } else {
+        showNotification('SponsorBlock not loaded');
       }
     } catch (e) {
       console.warn('Error jumping to highlight:', e);
+      showNotification('Error: Unable to jump to highlight');
     }
+    
+    return false;
   } else if (keyColor === 'red' && evt.type === 'keydown') {
     console.info('OLED mode activated');
     evt.preventDefault();
@@ -975,46 +1051,51 @@ const eventHandler = (evt) => {
       }
 
       const action = configRead(`shortcut_key_${keyIndex}`);
-	  
-	  evt.preventDefault();
-      evt.stopPropagation();
       
       if (action && action !== 'none') {
-          handleShortcutAction(action);
           evt.preventDefault();
           evt.stopPropagation();
+          handleShortcutAction(action);
       }
   }
   return true;
 };
 
+// Only listen to keydown - keypress is deprecated and keyup is unnecessary
+// This prevents triple event processing (66% reduction in overhead)
 document.addEventListener('keydown', eventHandler, true);
-document.addEventListener('keypress', eventHandler, true);
-document.addEventListener('keyup', eventHandler, true);
+
+// Cache the notification container reference for better performance
+let notificationContainer = null;
 
 export function showNotification(text, time = 3000) {
   if (configRead('disableNotifications')) return;
-  if (!document.querySelector('.ytaf-notification-container')) {
+  
+  // Create container only once (eliminates repeated DOM queries)
+  if (!notificationContainer) {
     console.info('Adding notification container');
-    const c = document.createElement('div');
-	c.classList.add('ytaf-notification-container');
-	if (configRead('enableOledCareMode')) {
-	  c.classList.add('oled-care');
-	}
-	document.body.appendChild(c);
+    notificationContainer = document.createElement('div');
+    notificationContainer.classList.add('ytaf-notification-container');
+    if (configRead('enableOledCareMode')) {
+      notificationContainer.classList.add('oled-care');
+    }
+    document.body.appendChild(notificationContainer);
   }
 
   const elm = document.createElement('div');
   const elmInner = document.createElement('div');
   elmInner.innerText = text;
-  elmInner.classList.add('message');
-  elmInner.classList.add('message-hidden');
+  elmInner.classList.add('message', 'message-hidden');
   elm.appendChild(elmInner);
-  document.querySelector('.ytaf-notification-container').appendChild(elm);
+  notificationContainer.appendChild(elm);
 
-  setTimeout(() => {
-    elmInner.classList.remove('message-hidden');
-  }, 100);
+  // Use requestAnimationFrame for smoother animations
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      elmInner.classList.remove('message-hidden');
+    });
+  });
+
   setTimeout(() => {
     elmInner.classList.add('message-hidden');
     setTimeout(() => {
@@ -1062,13 +1143,11 @@ function initHideEndcards() {
 
 function applyOledMode(enabled) {
   const optionsPanel = document.querySelector('.ytaf-ui-container');
-  const notificationContainer = document.querySelector(
-    '.ytaf-notification-container'
-  );
 
   const oledClass = 'oled-care';
   if (enabled) {
     optionsPanel?.classList.add(oledClass);
+    // Use cached notification container
     notificationContainer?.classList.add(oledClass);
 
     const style = document.createElement('style');
@@ -1096,6 +1175,7 @@ function applyOledMode(enabled) {
 
   } else {
     optionsPanel?.classList.remove(oledClass);
+    // Use cached notification container
     notificationContainer?.classList.remove(oledClass);
 
     document.getElementById('style-gray-ui-oled-care')?.remove();
@@ -1121,7 +1201,6 @@ configAddChangeListener('enableOledCareMode', (evt) => {
   applyOledMode(evt.detail.newValue);
 });
 
-// --- UPDATED: Lifecycle Management (Master Switch) ---
 configAddChangeListener('enableAdBlock', (evt) => {
   if (evt.detail.newValue) {
     initAdblock();
@@ -1136,7 +1215,6 @@ configAddChangeListener('enableAdBlock', (evt) => {
 if (!configRead('enableAdBlock')) {
     destroyAdblock();
 }
-// -----------------------------------------------------
 
 setTimeout(() => {
   showNotification('Press [GREEN] to open SponsorBlock configuration screen');

@@ -1,71 +1,101 @@
 import { configRead, configAddChangeListener } from './config.js';
 
+// Global cache for API responses (shared across instances)
+const dislikeCache = new Map();
+const CACHE_DURATION = 300000; // 5 minutes
+
+// Feature detection for compatibility
+const HAS_ABORT_CONTROLLER = typeof AbortController !== 'undefined';
+const HAS_INTERSECTION_OBSERVER = typeof IntersectionObserver !== 'undefined';
+
 class ReturnYouTubeDislike {
   constructor(videoID) {
     this.videoID = videoID;
     this.active = true;
-    this.debugMode = false;
     this.dislikesCount = 0;
+    this.initialInjectionDone = false;
     
-    this.timers = new Map();
+    this.timers = {};
     this.observers = new Set();
+    this.abortController = null;
+    this.panelElement = null;
 
     this.selectors = {
         panel: 'ytlr-structured-description-content-renderer',
+        mainContainer: 'zylon-provider-3',
         standardContainer: '.ytLrVideoDescriptionHeaderRendererFactoidContainer',
-        compactContainer: '.rznqCe',
-        items: '.TXB27d, .ytVirtualListItem',
-        virtualList: 'yt-virtual-list',
-        internalWrapper: '.NUDen'
+        compactContainer: '.rznqCe'
     };
 
-    this.uiMode = null; 
+    // UI mode configurations
+    this.modeConfigs = {
+        standard: {
+            containerSelector: this.selectors.standardContainer,
+            factoidClass: '.ytLrVideoDescriptionHeaderRendererFactoid',
+            valueSelector: '.ytLrVideoDescriptionHeaderRendererValue',
+            labelSelector: '.ytLrVideoDescriptionHeaderRendererLabel'
+        },
+        compact: {
+            containerSelector: this.selectors.compactContainer,
+            factoidClass: '.nOJlw',
+            valueSelector: '.axf6h',
+            labelSelector: '.Ph2lNb'
+        }
+    };
 
     this.handleBodyMutation = this.handleBodyMutation.bind(this);
     this.handlePanelMutation = this.handlePanelMutation.bind(this);
   }
 
   log(level, message, ...args) {
-    if (level === 'debug' && !this.debugMode) return;
     console.log(`[RYD:${this.videoID}] [${level.toUpperCase()}]`, message, ...args);
   }
 
   // --- Timer Management ---
   setTimeout(callback, delay, name) {
-    this.clearTimeout(name);
-    if (!this.active) return null; 
+    clearTimeout(this.timers[name]);
+    if (!this.active) return null;
 
-    const id = setTimeout(() => {
-      this.timers.delete(name);
+    this.timers[name] = setTimeout(() => {
+      delete this.timers[name];
       if (this.active) callback();
     }, delay);
-    this.timers.set(name, id);
-    return id;
+    return this.timers[name];
   }
   
   clearTimeout(name) {
-    const id = this.timers.get(name);
-    if (id) {
-      clearTimeout(id);
-      this.timers.delete(name);
+    if (this.timers[name]) {
+      clearTimeout(this.timers[name]);
+      delete this.timers[name];
     }
   }
   
   clearAllTimers() {
-    this.timers.forEach(clearTimeout);
-    this.timers.clear();
+    // Use Object.keys for compatibility
+    Object.keys(this.timers).forEach(key => clearTimeout(this.timers[key]));
+    this.timers = {};
   }
 
   // --- Initialization ---
   async init() {
     this.log('info', 'Initializing...');
+    
+    // Log feature availability for debugging
+    if (!HAS_ABORT_CONTROLLER) {
+      this.log('info', 'AbortController not available - request cancellation disabled');
+    }
+    if (!HAS_INTERSECTION_OBSERVER) {
+      this.log('info', 'IntersectionObserver not available - visibility detection disabled');
+    }
+    
     try {
       await this.fetchVideoData();
-      if (!this.active) return; 
 
-      if (this.dislikesCount > 0) {
-        this.observeBodyForPanel();
-      }
+      if (!this.active) return;
+
+	  this.injectPersistentStyles();
+
+      this.observeBodyForPanel();
     } catch (error) {
       this.log('error', 'Init error:', error);
     }
@@ -73,14 +103,68 @@ class ReturnYouTubeDislike {
 
   async fetchVideoData() {
     if (!this.videoID) return;
+    
+    // Check cache first
+    const cached = dislikeCache.get(this.videoID);
+    if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
+        this.dislikesCount = cached.dislikes;
+        this.log('info', 'Dislikes loaded from cache:', this.dislikesCount);
+        return;
+    }
+    
+    // Abort any previous request
+    if (HAS_ABORT_CONTROLLER) {
+        if (this.abortController) {
+            this.abortController.abort();
+        }
+        this.abortController = new AbortController();
+    }
+    
     try {
-      const response = await fetch(`https://returnyoutubedislikeapi.com/votes?videoId=${this.videoID}`);
+      const fetchOptions = {};
+      if (HAS_ABORT_CONTROLLER && this.abortController) {
+          fetchOptions.signal = this.abortController.signal;
+      }
+      
+      const response = await Promise.race([
+        fetch(`https://returnyoutubedislikeapi.com/votes?videoId=${this.videoID}`, fetchOptions),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 8000)
+        )
+      ]);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
       this.dislikesCount = data?.dislikes || 0;
+      
+      // Cache the result
+      dislikeCache.set(this.videoID, {
+        dislikes: this.dislikesCount,
+        timestamp: Date.now()
+      });
+      
+      // Limit cache size
+      if (dislikeCache.size > 50) {
+        const firstKey = dislikeCache.keys().next().value;
+        dislikeCache.delete(firstKey);
+      }
+      
       this.log('info', 'Dislikes loaded:', this.dislikesCount);
     } catch (error) {
-      this.log('error', 'Fetch error:', error);
+      // Only check for AbortError if AbortController is available
+      if (HAS_ABORT_CONTROLLER && error.name === 'AbortError') {
+        // Silently ignore abort errors
+      } else {
+        this.log('error', 'Fetch error:', error);
+      }
       this.dislikesCount = 0;
+    } finally {
+      if (HAS_ABORT_CONTROLLER) {
+        this.abortController = null;
+      }
     }
   }
 
@@ -88,10 +172,14 @@ class ReturnYouTubeDislike {
   observeBodyForPanel() {
     this.cleanupBodyObserver();
     
+    const mainContainer = document.querySelector(this.selectors.mainContainer) || document.body;
+	
+	console.log('[RYD] Observing player root:', mainContainer);
+    
     this.bodyObserver = new MutationObserver(this.handleBodyMutation);
-    this.bodyObserver.observe(document.body, { childList: true, subtree: true });
+    this.bodyObserver.observe(mainContainer, { childList: true, subtree: true });
     this.observers.add(this.bodyObserver);
-    this.log('info', 'Watching body for panel...');
+    this.log('info', 'Watching container for panel...');
 
     const existingPanel = document.querySelector(this.selectors.panel);
     if (existingPanel) {
@@ -102,148 +190,210 @@ class ReturnYouTubeDislike {
   handleBodyMutation(mutations) {
     if (!this.active) return;
 
-    let nodesAdded = false;
-    for (let i = 0; i < mutations.length; i++) {
-        if (mutations[i].addedNodes.length > 0) {
-            nodesAdded = true;
-            break;
-        }
-    }
-    if (!nodesAdded) return;
+    // Optimized check using .some()
+    if (!mutations.some(m => m.addedNodes.length > 0)) return;
 
-    this.setTimeout(() => {
-        const panel = document.querySelector(this.selectors.panel);
-        if (panel) {
-            this.setupPanel(panel);
-        }
-    }, 50, 'findPanelDebounce');
+    const panel = document.querySelector(this.selectors.panel);
+    if (!panel) return;
+    
+    this.setupPanel(panel);
   }
 
   setupPanel(panel) {
       if (!this.active) return;
+      this.panelElement = panel; // Cache reference
+      
       this.checkAndInjectDislike(panel);
       this.attachContentObserver(panel);
+      
+      // Only setup IntersectionObserver if available
+      if (HAS_INTERSECTION_OBSERVER) {
+          this.setupIntersectionObserver(panel);
+      }
   }
 
   attachContentObserver(panelElement) {
-    if (this.panelContentObserver) this.panelContentObserver.disconnect();
+    if (this.panelContentObserver) {
+        this.panelContentObserver.disconnect();
+        this.observers.delete(this.panelContentObserver);
+    }
 
     this.panelContentObserver = new MutationObserver(this.handlePanelMutation);
-    this.panelContentObserver.observe(panelElement, { childList: true, subtree: true });
-    this.log('info', 'Attached localized observer to panel.');
+    this.panelContentObserver.observe(panelElement, { 
+        childList: true, 
+        subtree: true 
+    });
+    this.observers.add(this.panelContentObserver);
+    this.log('info', 'Attached panel observer.');
+  }
+
+  setupIntersectionObserver(panelElement) {
+    if (!HAS_INTERSECTION_OBSERVER) {
+        this.log('info', 'IntersectionObserver not available, skipping visibility detection');
+        return;
+    }
+    
+    if (this.intersectionObserver) {
+        this.intersectionObserver.disconnect();
+        this.observers.delete(this.intersectionObserver);
+    }
+
+    this.intersectionObserver = new IntersectionObserver((entries) => {
+        if (!this.active) return;
+        if (entries[0].isIntersecting) {
+            this.checkAndInjectDislike(this.panelElement);
+        }
+    }, { threshold: 0.1 });
+    
+    this.intersectionObserver.observe(panelElement);
+    this.observers.add(this.intersectionObserver);
+    this.log('info', 'Intersection observer active');
   }
 
   handlePanelMutation() {
       if (!this.active) return;
+      
       this.setTimeout(() => {
-          const panel = document.querySelector(this.selectors.panel);
-          if (panel) this.checkAndInjectDislike(panel);
-      }, 100, 'injectDebounce');
+          if (!this.active || !this.panelElement) return;
+          this.checkAndInjectDislike(this.panelElement);
+      }, 200, 'injectDebounce');
   }
 
   // --- Core Logic ---
-
   checkAndInjectDislike(panelElement) {
     if (!this.active) return;
 
-    // 1. EARLY EXIT
+    // Early exit if already exists
     if (document.getElementById('ryd-dislike-factoid')) return;
 
     try {
-      const standardContainer = panelElement.querySelector(this.selectors.standardContainer);
-      const compactContainer = panelElement.querySelector(this.selectors.compactContainer);
-
-      let container, factoidClass, valueSelector, labelSelector;
-
-      if (standardContainer) {
-        this.uiMode = 'standard';
-        container = standardContainer;
-        factoidClass = '.ytLrVideoDescriptionHeaderRendererFactoid';
-        valueSelector = '.ytLrVideoDescriptionHeaderRendererValue';
-        labelSelector = '.ytLrVideoDescriptionHeaderRendererLabel';
-      } else if (compactContainer) {
-        this.uiMode = 'compact';
-        container = compactContainer;
-        factoidClass = '.nOJlw';
-        valueSelector = '.axf6h';
-        labelSelector = '.Ph2lNb';
-      } else {
-        return;
-      }
+      // Determine UI mode
+      const standardContainer = panelElement.querySelector(this.modeConfigs.standard.containerSelector);
+      const compactContainer = panelElement.querySelector(this.modeConfigs.compact.containerSelector);
       
-      this.applyNaturalFlow(panelElement);
+      const mode = standardContainer ? this.modeConfigs.standard :
+                   compactContainer ? this.modeConfigs.compact : null;
+      
+      if (!mode) return;
 
-      container.style.cssText = 'display:flex; flex-wrap:wrap; justify-content:center; gap:1.5rem; height:auto; overflow:visible;';
+      const container = standardContainer || compactContainer;
 
-      const dateElement = container.querySelector('div[idomkey="factoid-2"]');
-      if (dateElement) {
-        dateElement.style.marginTop = '0';
-        const vEl = dateElement.querySelector(valueSelector);
-        const lEl = dateElement.querySelector(labelSelector);
-        if(vEl) vEl.style.cssText += 'display:inline-block; margin-right:0.4rem;';
-        if(lEl) lEl.style.cssText += 'display:inline-block;';
-      }
-
-      // Updated selector to use idomkey="factoid-0" (Language Agnostic)
-      const likesElement = container.querySelector(`div[idomkey="factoid-0"]${factoidClass}`) || 
-                           container.querySelector(`div[aria-label*="likes"]${factoidClass}`) || 
-                           container.querySelector(`div[aria-label*="Likes"]${factoidClass}`);
+      // Optimized single query with case-insensitive search
+      const likesElement = container.querySelector(
+          `div[idomkey="factoid-0"]${mode.factoidClass}, ` +
+          `div[aria-label*="like"]${mode.factoidClass}, ` +
+          `div[aria-label*="Like"]${mode.factoidClass}`
+      );
 
       if (!likesElement) return;
 
       this.log('info', 'Injecting dislike count...');
-      const dislikeElement = likesElement.cloneNode(true);
+      
+      // Shallow clone and rebuild (more efficient)
+      const dislikeElement = likesElement.cloneNode(false);
       dislikeElement.id = 'ryd-dislike-factoid';
       dislikeElement.setAttribute('idomkey', 'factoid-ryd');
-      dislikeElement.style.flex = '0 0 auto';
+      dislikeElement.innerHTML = likesElement.innerHTML;
 
-      const valueElement = dislikeElement.querySelector(valueSelector);
-      const labelElement = dislikeElement.querySelector(labelSelector);
+      const valueElement = dislikeElement.querySelector(mode.valueSelector);
+      const labelElement = dislikeElement.querySelector(mode.labelSelector);
 
       if (valueElement && labelElement) {
         const dislikeText = this.formatNumber(this.dislikesCount);
         valueElement.textContent = dislikeText;
         labelElement.textContent = 'Dislikes';
         dislikeElement.setAttribute('aria-label', `${dislikeText} Dislikes`);
+        dislikeElement.setAttribute('role', 'text');
+        dislikeElement.setAttribute('tabindex', '-1'); // TV accessibility
       }
 
       likesElement.insertAdjacentElement('afterend', dislikeElement);
+	  
+	  container.classList.add('ryd-ready');
+      
+      // Mark initial injection as complete
+      this.initialInjectionDone = true;
 
     } catch (error) {
       this.log('error', 'Injection error:', error);
     }
   }
 
-  applyNaturalFlow(panelElement) {
-      const virtualList = panelElement.querySelector(this.selectors.virtualList);
-      if (virtualList) virtualList.style.cssText += 'height:auto; overflow:visible; display:block;';
-
-      const internalWrapper = panelElement.querySelector(this.selectors.internalWrapper);
-      if (internalWrapper) internalWrapper.style.cssText += 'position:relative; height:auto; width:100%;';
-
-      const items = panelElement.querySelectorAll(this.selectors.items);
-      const len = items.length;
-      
-      for (let i = 0; i < len; i++) {
-          const item = items[i];
-          item.style.cssText += 'position:relative; transform:none; height:auto; margin-bottom:1rem; width:100%; pointer-events:auto;';
-          
-          const focusable = item.firstElementChild?.tagName === 'BUTTON' ? item.firstElementChild : item.querySelector('[tabindex]');
-          if (focusable) focusable.setAttribute('tabindex', '0');
-      }
-
-      const descBody = panelElement.querySelector('ytlr-expandable-video-description-body-renderer');
-      if (descBody) {
-          descBody.style.cssText += 'height:auto; display:block;';
-          const sidesheet = descBody.querySelector('ytlr-sidesheet-item');
-          if (sidesheet) sidesheet.style.cssText += 'height:auto; display:block;';
-      }
-  }
-
   formatNumber(num) {
     if (num >= 1e6) return (num / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
     if (num >= 1e3) return (num / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
     return num.toString();
+  }
+  
+  injectPersistentStyles() {
+    // Only inject once globally (not per instance)
+    if (document.getElementById('ryd-persistent-styles')) return;
+    
+    const styleElement = document.createElement('style');
+    styleElement.id = 'ryd-persistent-styles';
+    styleElement.textContent = `
+      ytlr-structured-description-content-renderer .ytLrVideoDescriptionHeaderRendererFactoidContainer.ryd-ready,
+      ytlr-structured-description-content-renderer .rznqCe.ryd-ready {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 1.5rem !important;
+        height: auto !important;
+        overflow: visible !important;
+      }
+      
+      ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] {
+        margin-top: 0 !important;
+      }
+      ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .ytLrVideoDescriptionHeaderRendererValue,
+      ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .axf6h {
+        display: inline-block !important;
+        margin-right: 0.4rem !important;
+      }
+      ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .ytLrVideoDescriptionHeaderRendererLabel,
+      ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .Ph2lNb {
+        display: inline-block !important;
+      }
+      
+      /* Virtual list natural flow fixes (Keep global as these are structural fixes) */
+      ytlr-structured-description-content-renderer yt-virtual-list {
+        height: auto !important;
+        overflow: visible !important;
+        display: block !important;
+      }
+      ytlr-structured-description-content-renderer .NUDen {
+        position: relative !important;
+        height: auto !important;
+        width: 100% !important;
+      }
+      ytlr-structured-description-content-renderer .TXB27d,
+      ytlr-structured-description-content-renderer .ytVirtualListItem {
+        position: relative !important;
+        transform: none !important;
+        height: auto !important;
+        margin-bottom: 1rem !important;
+        width: 100% !important;
+        pointer-events: auto !important;
+      }
+      
+      /* Description body fixes */
+      ytlr-structured-description-content-renderer ytlr-expandable-video-description-body-renderer {
+        height: auto !important;
+        display: block !important;
+      }
+      ytlr-structured-description-content-renderer ytlr-expandable-video-description-body-renderer ytlr-sidesheet-item {
+        height: auto !important;
+        display: block !important;
+      }
+      
+      /* RYD dislike element styling */
+      #ryd-dislike-factoid {
+        flex: 0 0 auto !important;
+      }
+    `;
+    
+    document.head.appendChild(styleElement);
+    this.log('info', 'Persistent styles injected');
   }
 
   cleanupBodyObserver() {
@@ -259,21 +409,38 @@ class ReturnYouTubeDislike {
     this.observers.clear();
     
     this.bodyObserver = null;
-    if (this.panelContentObserver) {
-        this.panelContentObserver.disconnect();
-        this.panelContentObserver = null;
-    }
+    this.panelContentObserver = null;
+    this.intersectionObserver = null;
   }
 
   destroy() {
     this.log('info', 'Destroying...');
-    this.active = false; 
+    this.active = false;
     
+    // Abort any in-flight requests (if AbortController is available)
+    if (HAS_ABORT_CONTROLLER && this.abortController) {
+        this.abortController.abort();
+        this.abortController = null;
+    }
+    
+    // Clear all timers
     this.clearAllTimers();
+    
+    // Disconnect all observers
     this.cleanupObservers();
     
+    // Remove injected elements
     const el = document.getElementById('ryd-dislike-factoid');
     if (el) el.remove();
+    
+    // Only remove styles if this is the last/only instance
+    if (window.returnYouTubeDislike === this) {
+        const styles = document.getElementById('ryd-persistent-styles');
+        if (styles) styles.remove();
+    }
+    
+    // Clear references for garbage collection
+    this.panelElement = null;
   }
 }
 
@@ -290,9 +457,12 @@ if (typeof window !== 'undefined') {
 
   const handleHashChange = () => {
     const urlStr = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
-    if (!urlStr) { cleanup(); return; }
+    if (!urlStr) { 
+        cleanup(); 
+        return; 
+    }
 
-    const url = new URL(urlStr, 'http://dummy.com'); 
+    const url = new URL(urlStr, 'http://dummy.com');
     const isWatch = url.pathname === '/watch';
     const videoID = url.searchParams.get('v');
 
@@ -301,12 +471,17 @@ if (typeof window !== 'undefined') {
         return;
     }
 
+    // Only create new instance if video changed
     if (!window.returnYouTubeDislike || window.returnYouTubeDislike.videoID !== videoID) {
         cleanup();
         
         let enabled = true;
         if (typeof configRead === 'function') {
-            try { enabled = configRead('enableReturnYouTubeDislike'); } catch(e) {}
+            try { 
+                enabled = configRead('enableReturnYouTubeDislike'); 
+            } catch(e) {
+                console.warn('Config read failed:', e);
+            }
         }
 
         if (enabled) {
@@ -316,14 +491,25 @@ if (typeof window !== 'undefined') {
     }
   };
 
+  // Event listeners
   window.addEventListener('hashchange', handleHashChange, { passive: true });
-  window.addEventListener('load', () => setTimeout(handleHashChange, 500));
+  
+  // Delayed init for SPA load
+  if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', () => setTimeout(handleHashChange, 500));
+  } else {
+      setTimeout(handleHashChange, 500);
+  }
 
+  // Config change listener
   if (typeof configAddChangeListener === 'function') {
       configAddChangeListener('enableReturnYouTubeDislike', (evt) => {
           evt.detail.newValue ? handleHashChange() : cleanup();
       });
   }
+  
+  // Cleanup on unload
+  window.addEventListener('beforeunload', cleanup, { passive: true });
 }
 
 export { ReturnYouTubeDislike };

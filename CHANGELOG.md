@@ -4,6 +4,81 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.5] - 2025/12/23
+
+## Note
+
+Starting with this build, there are two versions available:
+
+**webOS 22+ (Optimized)**
++ Runs native ES6+ code with no transpilation (translated code) for maximum performance
++ Removes 130kb+ of polyfills and compatibility layers from the compiled script: ~100kb vs. ~230kb
++ Requires webOS 22 or newer
+
+**Legacy (All Devices)**
++ ES5-transpiled code with polyfills for compatibility
++ Works on webOS 3.0 and newer
++ Same functionality as all previous releases
++ ~230kb file size to stay under 250kb performance target
+
+## Code Optimizations
+
+### SponsorBlock
+
+Performance: Implemented additional AbortController logic to fix race conditions where segments from previous videos could persist during rapid navigation
+Optimization: Added debouncing to initialization and cached muted segment value to reduce CPU usage during playback
+
+### Return YouTube Dislike
+
+Modern code improvements: Abort controller and intersection observer functions available on webOS 22 +
++  Instead of adding polyfills to support webOS 3, kept it simple and just added fallback functionality to keep the bundle light and efficient
+
+Switched mutation observer from document.body to zylon-provider-3 to reduce an optimize CPU usage
+
+Fixed pop in of dislike value when opening description panel
++  Implemented css builder for building/deploying description panel - more efficient and instantaneous when opening
+
+Fixed panelContentObserver memory leak
+Fixed race condition on cleanup
+Fixed redundant panel queries
+Fixed style pollution across instances
+
+### Force Max Quality
+
+Switched from html body MutationObserver to polling (60-80% CPU reduction)
+Fixes: memory leaks, race conditions, deduplications
+All resources properly cleaned up
+Code reduction
+
+### ui.js
+
+Removed keypress and keyup eventListeners - fixes duplicate actions and unnecessary listeners
+Optimized notification function - cached container reference, eliminating DOM queries after first call
+Fixed redundant preventDefault calls - Cleaner logic, only prevents when needed
+Fixed highlight jump race condition - Prevents default early, better error handling
+Updated OLED mode - Uses cached notification container
+
+## Fixes
+
+Fix to Subtitles toggle / comments toggle
++  Fixed webOS 3 missing polyfill for toggle comments
++  Depending on webOS you might need to toggle the YouTube player UI once for subtitles/comments to work
+
+Fixed outro segments on webOS 5 and 6 potentially setting video playback to a time longer than the video length, causing the video to loop - https://github.com/NicholasBly/youtube-webos/issues/26
++ For webOS 5, the last segment skip within 0.5s of video duration will temporarily mute the video to not cause an audio blip
+
+Fixed config UI sometimes losing focus if YouTube is loading something in the background
+
+Fixed config UI fighting for focus if opened on top of a playing video with the progress bar visible, causing inability to scroll options temporarily
+
+Fixed notifications duplicating on key presses
+
+## Removed
+
+Removed debug menu for main release
+
+Removed notifications for shortcut toggling comments in video
+
 ## [0.6.4] - 2025/12/17
 
 ## Added
