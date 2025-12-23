@@ -38,7 +38,7 @@ class SponsorBlockHandler {
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
-        this.debugMode = false; 
+        this.debugMode = true; 
         
         // Cache enabled categories to avoid configRead in tight loops
         this.activeCategories = new Set();
@@ -157,22 +157,6 @@ class SponsorBlockHandler {
         
         this.observePlayerUI();
         this.checkForProgressBar();
-    }
-	
-	sanitizeSegments() {
-        if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
-        
-		this.log('debug', 'Sanitizing segments, duration:', this.video.duration);
-        const duration = this.video.duration;
-        
-        this.segments.forEach(segment => {
-            // If the segment ends after the video ends, clamp it to the video duration
-            if (segment.segment[1] >= duration) {
-                const oldEnd = segment.segment[1];
-                segment.segment[1] = Math.max(0, duration - 0.01); // Fix webOS 5 video restarting issue on outro segments
-                this.log('info', `Clamped segment end from ${oldEnd} to ${duration - 0.01}`);
-            }
-        });
     }
 
     observePlayerUI() {
@@ -308,7 +292,7 @@ class SponsorBlockHandler {
     }
 
     handleTimeUpdate() {
-        if (!this.video || !this.video.isConnected || this.video.paused || this.video.seeking) return;
+        if (!this.video || (this.video.isConnected === false) || this.video.paused || this.video.seeking) return;
         
         const currentTime = this.video.currentTime;
         let shouldBeMuted = false;
@@ -352,6 +336,23 @@ class SponsorBlockHandler {
             }
         }
     }
+	
+	sanitizeSegments() {
+        if (WebOSVersion() !== 5) return;
+        if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
+		
+        this.log('debug', 'Sanitizing segments for WebOS 5, duration:', this.video.duration);
+        const duration = this.video.duration;
+		
+        this.segments.forEach(segment => {
+            if (segment.segment[1] >= duration - 0.5) {
+                const oldEnd = segment.segment[1];
+                segment.segment[1] = Math.max(0, duration - 0.30);
+                 
+                this.log('info', `Clamped segment end from ${oldEnd} to ${segment.segment[1]}`);
+            }
+        });
+    }
 
 	skipSegment(segment) {
 		let skipTarget = segment.segment[1];
@@ -363,9 +364,13 @@ class SponsorBlockHandler {
                 const buffer = 0.25; 
                 skipTarget = Math.max(0, duration - buffer);
                 if (buffer > 0.1 && !this.video.muted) {
-                     this.video.muted = true;
-                     setTimeout(() => { if(!this.video.paused) this.video.muted = false; }, 1000); 
-                }
+                 this.video.muted = true;
+                 setTimeout(() => { 
+                     if (this.video.paused || this.video.currentTime < 5) {
+                         this.video.muted = false; 
+                     }
+                 }, 1000); 
+            }
             }
         }
 		
