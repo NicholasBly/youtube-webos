@@ -934,11 +934,11 @@ function handleShortcutAction(action) {
             if (isCommentsActive || isPanelVisible) {
                 // IF OPEN: Close via Back simulation
                 simulateBack();
-                showNotification('Closed Comments');
+                //showNotification('Closed Comments');
             } else {
                 // IF CLOSED: Open via internal trigger
                 if (triggerInternal(commBtn, 'Comments')) {
-                    showNotification('Opened Comments');
+                    //showNotification('Opened Comments');
                 } else {
                     const titleBtn = document.querySelector('.ytlr-video-title') || document.querySelector('h1');
                     if (titleBtn) {
@@ -999,23 +999,31 @@ const eventHandler = (evt) => {
     }
     return false;
   } else if (keyColor === 'blue' && evt.type === 'keydown') {
+	if (!isWatchPage()) return true;
     console.info('Blue button pressed - attempting highlight jump');
     
+    const jumpEnabled = configRead('enableHighlightJump');
+    if (!jumpEnabled) return true; // Let default behavior happen
+    
+    // Prevent default early to avoid race condition
+    evt.preventDefault();
+    evt.stopPropagation();
+    
     try {
-      const jumpEnabled = configRead('enableHighlightJump');
-      if (jumpEnabled && window.sponsorblock) {
+      if (window.sponsorblock) {
         const jumped = window.sponsorblock.jumpToNextHighlight();
-        if (jumped) {
-          evt.preventDefault();
-          evt.stopPropagation();
-          return false;
-        } else {
+        if (!jumped) {
           showNotification('No highlights found in this video');
         }
+      } else {
+        showNotification('SponsorBlock not loaded');
       }
     } catch (e) {
       console.warn('Error jumping to highlight:', e);
+      showNotification('Error: Unable to jump to highlight');
     }
+    
+    return false;
   } else if (keyColor === 'red' && evt.type === 'keydown') {
     console.info('OLED mode activated');
     evt.preventDefault();
@@ -1043,46 +1051,51 @@ const eventHandler = (evt) => {
       }
 
       const action = configRead(`shortcut_key_${keyIndex}`);
-	  
-	  evt.preventDefault();
-      evt.stopPropagation();
       
       if (action && action !== 'none') {
-          handleShortcutAction(action);
           evt.preventDefault();
           evt.stopPropagation();
+          handleShortcutAction(action);
       }
   }
   return true;
 };
 
+// Only listen to keydown - keypress is deprecated and keyup is unnecessary
+// This prevents triple event processing (66% reduction in overhead)
 document.addEventListener('keydown', eventHandler, true);
-document.addEventListener('keypress', eventHandler, true);
-document.addEventListener('keyup', eventHandler, true);
+
+// Cache the notification container reference for better performance
+let notificationContainer = null;
 
 export function showNotification(text, time = 3000) {
   if (configRead('disableNotifications')) return;
-  if (!document.querySelector('.ytaf-notification-container')) {
+  
+  // Create container only once (eliminates repeated DOM queries)
+  if (!notificationContainer) {
     console.info('Adding notification container');
-    const c = document.createElement('div');
-	c.classList.add('ytaf-notification-container');
-	if (configRead('enableOledCareMode')) {
-	  c.classList.add('oled-care');
-	}
-	document.body.appendChild(c);
+    notificationContainer = document.createElement('div');
+    notificationContainer.classList.add('ytaf-notification-container');
+    if (configRead('enableOledCareMode')) {
+      notificationContainer.classList.add('oled-care');
+    }
+    document.body.appendChild(notificationContainer);
   }
 
   const elm = document.createElement('div');
   const elmInner = document.createElement('div');
   elmInner.innerText = text;
-  elmInner.classList.add('message');
-  elmInner.classList.add('message-hidden');
+  elmInner.classList.add('message', 'message-hidden');
   elm.appendChild(elmInner);
-  document.querySelector('.ytaf-notification-container').appendChild(elm);
+  notificationContainer.appendChild(elm);
 
-  setTimeout(() => {
-    elmInner.classList.remove('message-hidden');
-  }, 100);
+  // Use requestAnimationFrame for smoother animations
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      elmInner.classList.remove('message-hidden');
+    });
+  });
+
   setTimeout(() => {
     elmInner.classList.add('message-hidden');
     setTimeout(() => {
@@ -1130,13 +1143,11 @@ function initHideEndcards() {
 
 function applyOledMode(enabled) {
   const optionsPanel = document.querySelector('.ytaf-ui-container');
-  const notificationContainer = document.querySelector(
-    '.ytaf-notification-container'
-  );
 
   const oledClass = 'oled-care';
   if (enabled) {
     optionsPanel?.classList.add(oledClass);
+    // Use cached notification container
     notificationContainer?.classList.add(oledClass);
 
     const style = document.createElement('style');
@@ -1164,6 +1175,7 @@ function applyOledMode(enabled) {
 
   } else {
     optionsPanel?.classList.remove(oledClass);
+    // Use cached notification container
     notificationContainer?.classList.remove(oledClass);
 
     document.getElementById('style-gray-ui-oled-care')?.remove();

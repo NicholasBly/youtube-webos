@@ -38,7 +38,7 @@ class SponsorBlockHandler {
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
-        this.debugMode = true; 
+        this.debugMode = false; 
         
         // Cache enabled categories to avoid configRead in tight loops
         this.activeCategories = new Set();
@@ -47,12 +47,16 @@ class SponsorBlockHandler {
         this.isProcessing = false;
         this.wasMutedBySB = false; // State for muting
         
+        this.mutedSegmentsEnabled = false;
+        
         // Observers & Listeners
         this.observers = new Set();
         this.listeners = new Map(); 
 		
 		this.configListeners = [];
 		this.rafIds = new Set();
+        
+        this.abortController = null;
         
         this.updateConfigCache();
         this.setupConfigListeners();
@@ -84,29 +88,36 @@ class SponsorBlockHandler {
                 this.activeCategories.add(cat);
             }
         }
+        this.mutedSegmentsEnabled = configRead('enableMutedSegments');
     }
 
 	setupConfigListeners() {
+        this.boundConfigUpdate = this.updateConfigCache.bind(this);
         Object.values(CONFIG_MAPPING).forEach(key => {
-            const callback = () => this.updateConfigCache();
-            configAddChangeListener(key, callback);
-            this.configListeners.push({ key, callback });
+            configAddChangeListener(key, this.boundConfigUpdate);
+            this.configListeners.push({ key, callback: this.boundConfigUpdate });
         });
+        // Also listen to muted segments config
+        configAddChangeListener('enableMutedSegments', this.boundConfigUpdate);
+        this.configListeners.push({ key: 'enableMutedSegments', callback: this.boundConfigUpdate });
     }
 
     async init() {
         if (!this.videoID) return;
-        
-        // [FIX] Clear the UI immediately when initializing a new video
-        // This prevents stale segments from showing while fetching or if no segments exist
+		
+        const initVideoID = this.videoID;
         sponsorBlockUI.updateSegments([]);
-
         const hash = sha256(this.videoID);
         if (!hash) return;
-
         const hashPrefix = hash.substring(0, 4);
         try {
             const data = await this.fetchSegments(hashPrefix);
+            
+            if (this.videoID !== initVideoID) {
+                this.log('info', 'Video changed during fetch, aborting init');
+                return;
+            }
+            
             const videoData = Array.isArray(data) ? data.find(x => x.videoID === this.videoID) : data;
             
             if (videoData && videoData.segments && videoData.segments.length) {
@@ -151,7 +162,7 @@ class SponsorBlockHandler {
 	sanitizeSegments() {
         if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
         
-		console.log('[DEBUG] Sanitizing segments, duration:', this.video.duration);
+		this.log('debug', 'Sanitizing segments, duration:', this.video.duration);
         const duration = this.video.duration;
         
         this.segments.forEach(segment => {
@@ -297,7 +308,7 @@ class SponsorBlockHandler {
     }
 
     handleTimeUpdate() {
-        if (!this.video || this.video.paused || this.video.seeking) return;
+        if (!this.video || !this.video.isConnected || this.video.paused || this.video.seeking) return;
         
         const currentTime = this.video.currentTime;
         let shouldBeMuted = false;
@@ -320,7 +331,7 @@ class SponsorBlockHandler {
                 }
                 
                 // If actionType is mute and mute is enabled, mark for mute
-                if (seg.actionType === 'mute' && configRead('enableMutedSegments')) {
+                if (seg.actionType === 'mute' && this.mutedSegmentsEnabled) {
                     shouldBeMuted = true;
                 }
             }
@@ -356,16 +367,15 @@ class SponsorBlockHandler {
                      setTimeout(() => { if(!this.video.paused) this.video.muted = false; }, 1000); 
                 }
             }
-			this.video.currentTime = skipTarget;
         }
-		else
-		{
-			this.video.currentTime = skipTarget;
+		
+		this.video.currentTime = skipTarget;
+		
+		// Resume playback if not near end (non-WebOS5 only)
+		if (WebOSVersion() !== 5) {
 			const timeRemaining = this.video.duration - this.video.currentTime;
-			if (timeRemaining > 0.5) { 
-				if (this.video.paused) {
-					this.video.play();
-				}
+			if (timeRemaining > 0.5 && this.video.paused) { 
+				this.video.play();
 			}
 		}
 
@@ -393,14 +403,18 @@ class SponsorBlockHandler {
         // Request mute and skip actions
         const actionTypes = JSON.stringify(['skip', 'mute']);
         
+        if (this.abortController) {
+            this.abortController.abort();
+        }
+        
         const tryFetch = async (url) => {
             try {
                 // FALLBACK: Logic to support WebOS 3.x (No AbortController)
                 const fetchURL = `${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&actionTypes=${encodeURIComponent(actionTypes)}&videoID=${this.videoID}`;
                 
                 if (typeof AbortController !== 'undefined') {
-                    // Original Modern Logic
-                    const controller = new AbortController();
+                    this.abortController = new AbortController();
+                    const controller = this.abortController;
                     const id = setTimeout(() => controller.abort(), SPONSORBLOCK_CONFIG.timeout);
                     const res = await fetch(fetchURL, { signal: controller.signal });
                     clearTimeout(id);
@@ -413,7 +427,9 @@ class SponsorBlockHandler {
                     ]);
                     if (res.ok) return await res.json();
                 }
-            } catch(e) {}
+            } catch(e) {
+                this.log('warn', 'Fetch attempt failed:', e.message);
+            }
             return null;
         };
 
@@ -448,6 +464,11 @@ class SponsorBlockHandler {
 		// Clear all pending Animation Frames
 		this.rafIds.forEach(id => cancelAnimationFrame(id));
         this.rafIds.clear();
+        
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
         
         // 1. Clean up UI
         sponsorBlockUI.togglePopup(false); 
@@ -499,34 +520,46 @@ if (typeof window !== 'undefined') {
     }
 
     window.sponsorblock = null;
+    
+    let initTimeout = null;
 
     const initSB = () => {
-        if (window.sponsorblock) window.sponsorblock.destroy();
-        let videoID = null;
-        try {
-            const hash = window.location.hash;
-            if (hash.startsWith('#')) {
-                const parts = hash.split('?');
-                if (parts.length > 1) {
-                    // FALLBACK: Check if URLSearchParams is supported
-                    if (typeof URLSearchParams !== 'undefined') {
-                        const params = new URLSearchParams(parts[1]);
-                        videoID = params.get('v');
-                    } else {
-                        // Legacy Regex Fallback for WebOS 3.x
-                        const match = parts[1].match(/(?:[?&]|^)v=([^&]+)/);
-                        if (match) {
-                            videoID = match[1];
+        // Clear any pending init
+        if (initTimeout) {
+            clearTimeout(initTimeout);
+        }
+        
+        // Debounce to handle rapid navigation
+        initTimeout = setTimeout(() => {
+            if (window.sponsorblock) window.sponsorblock.destroy();
+            let videoID = null;
+            try {
+                const hash = window.location.hash;
+                if (hash.startsWith('#')) {
+                    const parts = hash.split('?');
+                    if (parts.length > 1) {
+                        // FALLBACK: Check if URLSearchParams is supported
+                        if (typeof URLSearchParams !== 'undefined') {
+                            const params = new URLSearchParams(parts[1]);
+                            videoID = params.get('v');
+                        } else {
+                            // Legacy Regex Fallback for WebOS 3.x
+                            const match = parts[1].match(/(?:[?&]|^)v=([^&]+)/);
+                            if (match) {
+                                videoID = match[1];
+                            }
                         }
                     }
                 }
-            }
-        } catch(e) {}
+            } catch(e) {}
 
-        if (videoID && configRead('enableSponsorBlock')) {
-            window.sponsorblock = new SponsorBlockHandler(videoID);
-            window.sponsorblock.init();
-        }
+            if (videoID && configRead('enableSponsorBlock')) {
+                window.sponsorblock = new SponsorBlockHandler(videoID);
+                window.sponsorblock.init();
+            }
+            
+            initTimeout = null;
+        }, 300); // Debounce delay
     };
 
     window.__ytaf_sb_init = initSB;
