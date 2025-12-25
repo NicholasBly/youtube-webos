@@ -1,13 +1,13 @@
 {
   "name": "youtube-webos",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "Ad-free YouTube app for webOS",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "build": "webpack --mode=production",
+    "build:modern": "webpack --mode=production --env modern",
     "build:dev": "webpack --mode=development",
-    "build:analyze": "webpack --mode=production --env analyze",
     "package": "ares-package -n dist",
     "deploy": "node tools/deploy.js",
     "inspect": "ares-inspect youtube.leanback.v4",
@@ -64,7 +64,6 @@
     "transform-async-modules-webpack-plugin": "^1.1.1",
     "typescript": "^5.8.3",
     "webpack": "^5.103.0",
-    "webpack-bundle-analyzer": "^5.1.0",
     "webpack-cli": "^6.0.1"
   },
   "engines": {

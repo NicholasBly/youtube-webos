@@ -38,7 +38,7 @@ class SponsorBlockHandler {
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
-        this.debugMode = true; 
+        this.debugMode = false;
         
         // Cache enabled categories to avoid configRead in tight loops
         this.activeCategories = new Set();

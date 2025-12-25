@@ -2,137 +2,159 @@ import CopyPlugin from 'copy-webpack-plugin';
 import { TransformAsyncModulesPlugin } from 'transform-async-modules-webpack-plugin';
 import pkgJson from './package.json' with { type: 'json' };
 import TerserPlugin from 'terser-webpack-plugin';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /** @type {(env: Record<string, string>) => (import('webpack').Configuration)[]} */
-const makeConfig = () => [
-  {
-    /**
-     * NOTE: Builds with devtool = 'eval' contain very big eval chunks which seem
-     * to cause segfaults (at least) on nodeJS v0.12.2 used on webOS 3.x.
-     * Set to false for smallest bundle size, or 'source-map' for debugging
-     */
-    devtool: false, // Change to 'source-map' if you need debugging
+const makeConfig = (env) => {
+  const isModern = env && env.modern;
 
-    entry: {
-      index: './src/index.js',
-      userScript: {
-        import: './src/userScript.js',
-        filename: 'webOSUserScripts/[name].js'
-      }
-    },
-
-    resolve: {
-      extensions: ['.mjs', '.cjs', '.js', '.json', '.ts']
-    },
-
-    module: {
-      rules: [
-        {
-          test: /\.[mc]?[jt]s$/i,
-
-          loader: 'babel-loader',
-          exclude: [
-            // Some module should not be transpiled by Babel
-            // See https://github.com/zloirock/core-js/issues/743#issuecomment-572074215
-            // \\ for Windows, / for macOS and Linux
-            /node_modules[\\/]core-js/,
-            /node_modules[\\/]webpack[\\/]buildin/
-          ],
-          options: {
-            cacheDirectory: true
-          },
-          resolve: {
-            // File extension DON'T MATTER in a bundler.
-            fullySpecified: false
-          }
-        },
-        {
-          test: /\.css$/i,
-          use: [
-            { loader: 'style-loader' },
-            {
-              loader: 'css-loader',
-              options: { 
-                esModule: false, 
-                importLoaders: 1,
-                modules: false
-              }
+  return [
+    {
+      target: isModern ? 'browserslist:chrome 87' : ['web', 'es5'],
+      devtool: false,
+      entry: {
+        index: './src/index.js',
+        userScript: {
+          import: './src/userScript.js',
+          filename: 'webOSUserScripts/[name].js'
+        }
+      },
+      resolve: {
+        extensions: ['.mjs', '.cjs', '.js', '.json', '.ts'],
+        alias: isModern ? {
+          // Strip global polyfills for modern build
+          'core-js-pure': false,
+          '@babel/runtime-corejs3': false,
+          'regenerator-runtime': false,
+          'regenerator-runtime/runtime': false,
+          'whatwg-fetch': false,
+          
+          // Strip local polyfills
+          //[path.resolve(__dirname, 'src/spatial-navigation-polyfill.js')]: false,
+          [path.resolve(__dirname, 'src/domrect-polyfill.js')]: false
+        } : {}
+      },
+      module: {
+        rules: [
+          {
+            test: /\.[mc]?[jt]s$/i,
+            loader: 'babel-loader',
+            // Restore original exclude for legacy to maintain compatibility
+            // Modern build excludes all node_modules for speed
+            exclude: isModern 
+              ? /node_modules/ 
+              : [
+                  /node_modules[\\/]core-js/,
+                  /node_modules[\\/]webpack[\\/]buildin/
+                ],
+            options: isModern ? {
+              // modern config
+              cacheDirectory: true,
+              babelrc: false,
+              configFile: false,
+              presets: [
+                ['@babel/preset-env', {
+                  targets: "chrome 87", 
+                  bugfixes: true,
+                  modules: false,
+                  useBuiltIns: false
+                }]
+                // REMOVED missing '@babel/preset-typescript'
+              ],
+              plugins: [
+                 // Use the plugin you already have installed instead of the preset
+                 ['@babel/plugin-transform-typescript', { strictMode: true }]
+              ]
+            } : {
+              // LEGACY CONFIGURATION (Uses babel.config.js)
+              cacheDirectory: true
             },
-            {
-              loader: 'postcss-loader',
-              options: {
-                postcssOptions: {
-                  plugins: [
-                    ['cssnano', {
-                      preset: ['default', {
-                        discardComments: {
-                          removeAll: true
-                        },
-                        normalizeWhitespace: true,
-                        colormin: true,
-                        minifySelectors: true,
-                        minifyFontValues: true,
+            resolve: {
+              fullySpecified: false
+            }
+          },
+          {
+            test: /\.css$/i,
+            use: [
+              { loader: 'style-loader' },
+              {
+                loader: 'css-loader',
+                options: { 
+                  esModule: false, 
+                  importLoaders: 1,
+                  modules: false
+                }
+              },
+              {
+                loader: 'postcss-loader',
+                options: {
+                  postcssOptions: {
+                    plugins: [
+                      ['cssnano', {
+                        preset: ['default', {
+                          discardComments: { removeAll: true },
+                          normalizeWhitespace: true,
+                          colormin: true,
+                          minifySelectors: true,
+                          minifyFontValues: true,
+                        }]
                       }]
-                    }]
-                  ]
+                    ]
+                  }
                 }
               }
-            }
-          ]
-        }
-      ]
-    },
-
-    optimization: {
-      minimize: true,
-      minimizer: [
-        new TerserPlugin({
-          terserOptions: {
-            format: {
-              comments: false, // Remove all comments
-              ascii_only: true, // Escape unicode characters
-            },
-            compress: {
-              drop_console: false, // Keep console.log (set true to remove)
-              drop_debugger: true, // Remove debugger statements
-              pure_funcs: ['console.debug', 'console.trace'], // Remove specific console methods
-              passes: 4, // Run compression multiple times for better results
-              unsafe: false, // Keep safe (set true for more aggressive compression)
-              unsafe_comps: false,
-              unsafe_math: false,
-              unsafe_proto: false,
-            },
-            mangle: {
-              safari10: true, // Ensure compatibility
-            },
-          },
-          extractComments: false,
-        }),
-      ],
-    },
-
-    performance: {
-      hints: false, // Disable performance warnings for large bundles
-    },
-
-    plugins: [
-      new CopyPlugin({
-        patterns: [
-          { context: 'assets', from: '**/*' },
-          { context: 'src', from: 'index.html' }
+            ]
+          }
         ]
-	}),
-      // babel doesn't transform top-level await.
-      // webpack transforms it to async modules.
-      // This plugin calls babel again to transform remove the `async` keyword usage after the fact.
-      new TransformAsyncModulesPlugin({
-        // @ts-expect-error Bad types
-        runtime: {
-          version: pkgJson.devDependencies['@babel/plugin-transform-runtime']
-        }
-      })
-    ]
-  }
-];
+      },
+      optimization: {
+        minimize: true,
+        minimizer: [
+          new TerserPlugin({
+            terserOptions: {
+              format: {
+                comments: false,
+                ascii_only: true,
+              },
+              compress: {
+                drop_console: false,
+                drop_debugger: true,
+                passes: 4,
+                arrows: isModern,
+                ecma: isModern ? 2020 : 5,
+              },
+              mangle: isModern ? true : { safari10: true },
+            },
+            extractComments: false,
+          }),
+        ],
+      },
+      performance: {
+        hints: false,
+      },
+      plugins: [
+        new CopyPlugin({
+          patterns: [
+            { context: 'assets', from: '**/*' },
+            { context: 'src', from: 'index.html' }
+          ]
+        }),
+        // Only add Async Module support for Legacy builds
+        ...(isModern ? [] : [
+          new TransformAsyncModulesPlugin({
+            // @ts-expect-error Bad types
+            runtime: {
+              version: pkgJson.devDependencies['@babel/plugin-transform-runtime']
+            }
+          })
+        ])
+      ]
+    }
+  ];
+};
 
 export default makeConfig;

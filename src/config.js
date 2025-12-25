@@ -70,8 +70,12 @@ const configOptions = new Map([
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
   ['upgradeThumbnails', { default: false, desc: 'Upgrade Thumbnail Quality' }],
   [
-    'removeShorts',
-    { default: false, desc: 'Remove Shorts From Subscriptions' }
+    'removeGlobalShorts', 
+    { default: false, desc: 'Remove Shorts (Global)' }
+  ],
+  [
+    'removeTopLiveGames', 
+    { default: false, desc: 'Remove Top Live Games' }
   ],
   ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
   ['enableMutedSegments', { default: false, desc: 'Allow segments that mute audio' }],

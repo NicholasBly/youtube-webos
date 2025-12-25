@@ -388,13 +388,14 @@ function createOptionsPanel() {
   const elAdBlock = createConfigCheckbox('enableAdBlock');
   const cosmeticGroup = [elAdBlock];
   
-  let elRemoveShorts = null;
+  let elRemoveGlobalShorts = null;
+  let elRemoveTopLiveGames = null;
   let elGuestPrompts = null;
-
-  if (!isGuestMode()) {
-      elRemoveShorts = createConfigCheckbox('removeShorts');
-      cosmeticGroup.push(elRemoveShorts);
-  }
+  
+  elRemoveGlobalShorts = createConfigCheckbox('removeGlobalShorts');
+  elRemoveTopLiveGames = createConfigCheckbox('removeTopLiveGames');
+  cosmeticGroup.push(elRemoveGlobalShorts);
+  cosmeticGroup.push(elRemoveTopLiveGames);
   
   if (isGuestMode()) {
       elGuestPrompts = createConfigCheckbox('hideGuestSignInPrompts');
@@ -403,34 +404,51 @@ function createOptionsPanel() {
 
   pageMain.appendChild(createSection('Cosmetic Filtering', cosmeticGroup));
 
-  // Logic: Disable sub-items if AdBlock is off
-  const handleAdBlockDependency = (isEnabled) => {
-      if (elRemoveShorts) {
-          const input = elRemoveShorts.querySelector('input');
+  // Logic: Manage dependencies (AdBlock Master Switch & Shorts Overlap)
+  const updateDependencyState = () => {
+      const isAdBlockOn = configRead('enableAdBlock');
+      const isGlobalShortsOn = configRead('removeGlobalShorts');
+
+      const setState = (el, enabled) => {
+          if (!el) return;
+          const input = el.querySelector('input');
           if (input) {
-              input.disabled = !isEnabled;
-              elRemoveShorts.style.opacity = isEnabled ? '1' : '0.5';
+              input.disabled = !enabled;
+              el.style.opacity = enabled ? '1' : '0.5';
           }
+      };
+
+      // 1. If AdBlock is OFF, disable all sub-settings
+      if (!isAdBlockOn) {
+          setState(elRemoveGlobalShorts, false);
+          setState(elRemoveTopLiveGames, false);
+          setState(elGuestPrompts, false);
+          return;
       }
-      if (elGuestPrompts) {
-          const input = elGuestPrompts.querySelector('input');
-          if (input) {
-              input.disabled = !isEnabled;
-              elGuestPrompts.style.opacity = isEnabled ? '1' : '0.5';
-          }
-      }
+
+      // 2. AdBlock is ON, so enable general sub-settings
+      setState(elRemoveGlobalShorts, true);
+      setState(elRemoveTopLiveGames, true);
+      setState(elGuestPrompts, true);
   };
 
-  // Attach listener to AdBlock checkbox
+  // Attach listeners to inputs
   const adBlockInput = elAdBlock.querySelector('input');
-  adBlockInput.addEventListener('change', (e) => handleAdBlockDependency(e.target.checked));
-  
-  // Initial State
-  handleAdBlockDependency(configRead('enableAdBlock'));
-  
-  // Also listen for external config changes
-  configAddChangeListener('enableAdBlock', (evt) => handleAdBlockDependency(evt.detail.newValue));
+  adBlockInput.addEventListener('change', updateDependencyState);
 
+  if (elRemoveGlobalShorts) {
+      const globalShortsInput = elRemoveGlobalShorts.querySelector('input');
+      globalShortsInput.addEventListener('change', updateDependencyState);
+      
+      // Listen for external config changes to global shorts
+      configAddChangeListener('removeGlobalShorts', (evt) => updateDependencyState());
+  }
+  
+  // Listen for external config changes to AdBlock
+  configAddChangeListener('enableAdBlock', (evt) => updateDependencyState());
+
+  // Initialize State
+  updateDependencyState();
 
   // Group 2: Video & Player
   pageMain.appendChild(createSection('Video Player', [
