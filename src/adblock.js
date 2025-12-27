@@ -1,10 +1,9 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
-import { isGuestMode } from './utils';
 
 // ============================================================================
 // DEBUG CONFIGURATION
 // ============================================================================
-const DEBUG = true; // <--- Keep this TRUE to see the new structure logs
+const DEBUG = true;
 
 function debugLog(msg, ...args) {
   if (DEBUG) console.log(`[AdBlock] ${msg}`, ...args);
@@ -35,8 +34,11 @@ const SCHEMA_REGISTRY = {
   
   typeSignatures: {
     PLAYER: { 
-      textPattern: '"playerResponse"' 
+      textPattern: '"streamingData"' 
     },
+	GUEST: {
+	  textPattern: '"currentVideoThumbnail"' 
+	},
     HOME_BROWSE: { 
       textPattern: '"tvSurfaceContentRenderer"',
       excludePattern: '"tvSecondaryNavRenderer"' 
@@ -61,6 +63,9 @@ const SCHEMA_REGISTRY = {
   },
   
   paths: {
+	GUEST: {
+      pivotPath: 'contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents'
+    },
     HOME_BROWSE: {
       mainContent: 'contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents'
     },
@@ -82,7 +87,7 @@ function updateConfigCache() {
     enableAdBlock: configRead('enableAdBlock'),
     removeGlobalShorts: configRead('removeGlobalShorts'),
     removeTopLiveGames: configRead('removeTopLiveGames'),
-    hideGuestPrompts: isGuestMode() && configRead('hideGuestSignInPrompts'),
+    hideGuestPrompts: configRead('hideGuestSignInPrompts'),
     lastUpdate: Date.now()
   };
 }
@@ -131,7 +136,7 @@ function hookedParse(text, reviver) {
       if (DEBUG) debugLog(`Schema Match: [${responseType}] - Payload size: ${text.length} chars`);
       applySchemaFilters(data, responseType, config, needsContentFiltering);
     } 
-    else if (responseType === 'ACTION' || responseType === 'PLAYER') {
+    else if (responseType === 'ACTION' || responseType === 'PLAYER' || responseType === 'GUEST') {
       if (DEBUG) debugLog(`Schema Match: [${responseType}] - Payload size: ${text.length} chars`);
       applySchemaFilters(data, responseType, config, needsContentFiltering);
     } 
@@ -198,6 +203,24 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
   switch (responseType) {
     case 'PLAYER':
       if (config.enableAdBlock) removePlayerAdsOptimized(data);
+	  break;
+	  
+	  case 'GUEST':
+	  if (config.hideGuestPrompts && schema && schema.pivotPath) {
+          const pivotContents = getByPath(data, schema.pivotPath);
+          if (pivotContents && Array.isArray(pivotContents)) {
+              let writeIdx = 0;
+              for (let i = 0; i < pivotContents.length; i++) {
+                  if (pivotContents[i].alertWithActionsRenderer) {
+                      if (DEBUG) debugLog('GUEST: Removed alertWithActionsRenderer');
+                      continue;
+                  }
+                  if (writeIdx !== i) pivotContents[writeIdx] = pivotContents[i];
+                  writeIdx++;
+              }
+              pivotContents.length = writeIdx;
+          }
+      }
       break;
       
     case 'HOME_BROWSE':
