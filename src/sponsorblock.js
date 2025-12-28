@@ -1,4 +1,3 @@
-/* src/sponsorblock.js */
 import sha256_import from 'tiny-sha256';
 import { configRead, configAddChangeListener, configRemoveChangeListener, segmentTypes } from './config';
 import { showNotification } from './ui';
@@ -26,6 +25,13 @@ const CONFIG_MAPPING = {
     hook: 'enableSponsorBlockHook'
 };
 
+const CHAIN_SKIP_CONSTANTS = {
+    START_THRESHOLD: 0.5,
+    OVERLAP_TOLERANCE: 0.2,
+    UNMUTE_DELAY: 600,
+    MIN_PLAYBACK_TIME: 0.1
+};
+
 if (typeof sha256 !== 'function') {
     sha256 = () => null;
 }
@@ -34,40 +40,51 @@ class SponsorBlockHandler {
     constructor(videoID) {
         this.videoID = videoID;
         this.segments = [];
-		this.highlightSegment = null;
+        this.highlightSegment = null;
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
         this.debugMode = false;
         
-        // Cache enabled categories to avoid configRead in tight loops
+        // Tracking state
+        this.lastSkipTime = -1;
+        this.lastSkippedSegmentIndex = -1;
+        this.hasPerformedChainSkip = false;
+        this.skipSegments = [];
+        this.nextSegmentIndex = 0;
+        this.nextSegmentStart = Infinity;
+        
+        // Status flags
         this.activeCategories = new Set();
-        
-        // State
         this.isProcessing = false;
-        this.wasMutedBySB = false; // State for muting
+        this.isSkipping = false;
+        this.wasMutedBySB = false;
+        this.isDestroyed = false;
         
-        this.mutedSegmentsEnabled = false;
-        
-        // Observers & Listeners
+        // Listeners & Observers
         this.observers = new Set();
-        this.listeners = new Map(); 
-		
-		this.configListeners = [];
-		this.rafIds = new Set();
+        this.listeners = new Map();
+        this.configListeners = [];
+        this.rafIds = new Set();
         
         this.abortController = null;
+        this.unmuteTimeoutId = null;
+        
+        // High Frequency Polling
+        this.pollingRafId = null;
+        this.boundHighFreqLoop = this.highFreqLoop.bind(this);
         
         this.updateConfigCache();
         this.setupConfigListeners();
         
         this.log('info', `Created handler for ${this.videoID}`);
     }
-	
-	requestAF(callback) {
+    
+    requestAF(callback) {
+        if (this.isDestroyed) return;
         const id = requestAnimationFrame(() => {
             this.rafIds.delete(id);
-            callback();
+            if (!this.isDestroyed) callback();
         });
         this.rafIds.add(id);
         return id;
@@ -76,7 +93,6 @@ class SponsorBlockHandler {
     log(level, message, ...args) {
         if (level === 'debug' && !this.debugMode) return;
         if (level === 'info' && !this.debugMode) return;
-        
         const prefix = `[SB:${this.videoID}]`;
         console[level === 'warn' ? 'warn' : 'log'](prefix, message, ...args);
     }
@@ -88,72 +104,254 @@ class SponsorBlockHandler {
                 this.activeCategories.add(cat);
             }
         }
-        this.mutedSegmentsEnabled = configRead('enableMutedSegments');
+        this.rebuildSkipSegments();
+    }
+    
+    rebuildSkipSegments() {
+        this.stopHighFreqLoop();
+        this.skipSegments = [];
+        
+        for (let i = 0; i < this.segments.length; i++) {
+            const seg = this.segments[i];
+            if (seg.category === 'poi_highlight') continue;
+            if (!this.activeCategories.has(seg.category)) continue;
+            if (!seg.actionType || seg.actionType === 'skip') {
+                this.skipSegments.push({
+                    start: seg.segment[0],
+                    end: seg.segment[1],
+                    category: seg.category,
+                    originalIndex: i
+                });
+            }
+        }
+        this.resetSegmentTracking();
     }
 
-	setupConfigListeners() {
+    resetSegmentTracking() {
+        this.nextSegmentIndex = 0;
+        this.nextSegmentStart = this.skipSegments.length > 0 ? this.skipSegments[0].start : Infinity;
+    }
+    
+    findSegmentAtTime(time) {
+        let left = 0; 
+        let right = this.skipSegments.length - 1;
+        
+        while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            const seg = this.skipSegments[mid];
+            
+            if (time >= seg.start && time < seg.end) {
+                return mid;
+            } else if (time < seg.start) {
+                right = mid - 1;
+            } else {
+                left = mid + 1;
+            }
+        }
+        return -1;
+    }
+
+    setupConfigListeners() {
         this.boundConfigUpdate = this.updateConfigCache.bind(this);
         Object.values(CONFIG_MAPPING).forEach(key => {
             configAddChangeListener(key, this.boundConfigUpdate);
             this.configListeners.push({ key, callback: this.boundConfigUpdate });
         });
-        // Also listen to muted segments config
         configAddChangeListener('enableMutedSegments', this.boundConfigUpdate);
         this.configListeners.push({ key: 'enableMutedSegments', callback: this.boundConfigUpdate });
     }
 
+    buildSkipChain(segments) {
+        if (!segments || segments.length === 0) return null;
+
+        const firstSeg = segments[0];
+        if (firstSeg.segment[0] >= CHAIN_SKIP_CONSTANTS.START_THRESHOLD) return null;
+
+        let finalSeekTime = firstSeg.segment[1];
+        const chainParts = [`${firstSeg.category}[${firstSeg.segment[0].toFixed(1)}s-${firstSeg.segment[1].toFixed(1)}s]`];
+
+        for (let i = 1; i < segments.length; i++) {
+            const current = segments[i];
+            const gapToNext = current.segment[0] - finalSeekTime;
+            
+            if (gapToNext <= CHAIN_SKIP_CONSTANTS.OVERLAP_TOLERANCE) {
+                if (current.segment[1] > finalSeekTime) {
+                    chainParts.push(`${current.category}[${current.segment[0].toFixed(1)}s-${current.segment[1].toFixed(1)}s]`);
+                    finalSeekTime = current.segment[1];
+                }
+            } else {
+                break;
+            }
+        }
+
+        if (chainParts.length === 1 && finalSeekTime - firstSeg.segment[0] < 1) return null;
+
+        return {
+            endTime: finalSeekTime,
+            chainDescription: chainParts.join(' → ')
+        };
+    }
+
+    executeChainSkip(video) {
+        if (!video || this.hasPerformedChainSkip || this.isDestroyed) return false;
+		if (video.readyState === 0) {
+            const retry = () => {
+                video.removeEventListener('loadedmetadata', retry);
+                if (!this.isDestroyed) this.executeChainSkip(video);
+            };
+            video.addEventListener('loadedmetadata', retry);
+            return false;
+        }
+        if (video.currentTime > CHAIN_SKIP_CONSTANTS.START_THRESHOLD) return false;
+
+        const enabledSegs = this.segments.filter(s => 
+            s.category !== 'poi_highlight' && this.activeCategories.has(s.category)
+        );
+
+        const chain = this.buildSkipChain(enabledSegs);
+        if (!chain) return false;
+
+        if (chain.endTime >= video.duration) return false;
+
+        this.log('info', `Executing chain skip: ${chain.chainDescription}`);
+        
+        const originalMuteState = video.muted;
+        window.__sb_pending_unmute = true;
+        this.wasMutedBySB = true;
+        video.muted = true;
+        
+        const onSeeked = () => {
+            video.removeEventListener('seeked', onSeeked);
+            
+            if (this.isDestroyed) return;
+
+            const checkReady = () => {
+                if (this.isDestroyed) return;
+                
+                if (video.readyState >= 3) {
+                    video.muted = originalMuteState;
+                    window.__sb_pending_unmute = false;
+                    this.wasMutedBySB = false;
+                    if (this.unmuteTimeoutId) {
+                        clearTimeout(this.unmuteTimeoutId);
+                        this.unmuteTimeoutId = null;
+                    }
+                } else {
+                    this.unmuteTimeoutId = setTimeout(checkReady, 50);
+                }
+            };
+            checkReady();
+        };
+        
+        video.addEventListener('seeked', onSeeked);
+        
+        this.unmuteTimeoutId = setTimeout(() => {
+            if (this.isDestroyed) return;
+            video.removeEventListener('seeked', onSeeked);
+            if (video.readyState >= 2) {
+                video.muted = originalMuteState;
+                window.__sb_pending_unmute = false;
+                this.wasMutedBySB = false;
+            }
+            this.unmuteTimeoutId = null;
+        }, CHAIN_SKIP_CONSTANTS.UNMUTE_DELAY);
+        
+        video.currentTime = chain.endTime;
+        this.lastSkipTime = chain.endTime;
+        this.hasPerformedChainSkip = true;
+        
+        this.requestAF(() => {
+            const categories = chain.chainDescription.split(' → ')
+                .map(part => part.split('[')[0])
+                .filter((cat, idx, arr) => arr.indexOf(cat) === idx)
+                .map(cat => segmentTypes[cat]?.name || cat);
+            
+            showNotification(`Skipped ${categories.join(', ')}`);
+        });
+        
+        return true;
+    }
+
     async init() {
-        if (!this.videoID) return;
-		
+        if (window.__sb_pending_unmute) {
+            const v = document.querySelector('video');
+            if (v) v.muted = false;
+            window.__sb_pending_unmute = false;
+        }
+
+        if (!this.videoID || this.isDestroyed) return;
+        
         const initVideoID = this.videoID;
         sponsorBlockUI.updateSegments([]);
+        
         const hash = sha256(this.videoID);
         if (!hash) return;
         const hashPrefix = hash.substring(0, 4);
+        
         try {
             const data = await this.fetchSegments(hashPrefix);
             
-            if (this.videoID !== initVideoID) {
-                this.log('info', 'Video changed during fetch, aborting init');
-                return;
-            }
+            if (this.isDestroyed || this.videoID !== initVideoID) return;
             
             const videoData = Array.isArray(data) ? data.find(x => x.videoID === this.videoID) : data;
             
             if (videoData && videoData.segments && videoData.segments.length) {
                 this.segments = videoData.segments.sort((a, b) => a.segment[0] - b.segment[0]);
                 this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
-                this.log('info', `Found ${this.segments.length} segments.`);
+                this.rebuildSkipSegments();
                 
-				this.start();
-				
-                // Update UI with new segments
+                const video = document.querySelector('video');
+                if (video) {
+                    this.executeChainSkip(video);
+                }
+                
+                this.start();
                 sponsorBlockUI.updateSegments(this.segments);
             }
         } catch (e) {
-			showNotification("SB Error: " + e.message);
-            this.log('warn', 'Fetch failed', e);
+            if (!this.isDestroyed) {
+                showNotification("SB Error: " + e.message);
+                this.log('warn', 'Fetch failed', e);
+            }
         }
     }
 
     start() {
         this.video = document.querySelector('video');
-        if (this.video) {
-            this.addEvent(this.video, 'timeupdate', this.handleTimeUpdate.bind(this));
-            
-            // [Updated] Sanitize segments whenever duration changes (load or resolution switch)
-            this.addEvent(this.video, 'durationchange', () => {
-                this.sanitizeSegments();
-                this.drawOverlay();
-            });
-
-            // [New] If metadata is already loaded (e.g. late injection), sanitize immediately
-            if (this.video.duration) {
-                this.sanitizeSegments();
-            }
-        }
+        if (!this.video) return;
 
         this.injectCSS();
+        this.addEvent(this.video, 'timeupdate', this.handleTimeUpdate.bind(this));
+        
+        this.addEvent(this.video, 'seeked', () => {
+            if (this.isDestroyed) return;
+            
+            // 1. Safety: Stop any existing poll immediately to prevent race conditions
+            this.stopHighFreqLoop();
+            
+            // 2. Critical Logic: Handle Manual Seeks
+            if (!this.isSkipping) {
+                // Reset search cursor so we don't miss segments 'behind' us
+                this.lastSkipTime = -1;
+                this.lastSkippedSegmentIndex = -1;
+                this.resetSegmentTracking();
+
+                // FORCE CHECK: Instantly check if we landed in a segment or need to start polling
+                // This fixes Bug 2 (audio leak) and Bug 1 (missed poll start)
+                this.handleTimeUpdate();
+            }
+            
+            this.isSkipping = false;
+        });
+        
+        this.addEvent(this.video, 'durationchange', () => {
+            this.sanitizeSegments();
+            this.drawOverlay();
+        });
+
+        if (this.video.duration) {
+            this.sanitizeSegments();
+        }
         
         this.observePlayerUI();
         this.checkForProgressBar();
@@ -161,13 +359,11 @@ class SponsorBlockHandler {
 
     observePlayerUI() {
         const domObserver = new MutationObserver((mutations) => {
-            if (this.isProcessing) return;
+            if (this.isProcessing || this.isDestroyed) return;
             
             let shouldCheck = false;
-            // Optimize: Iterate backwards and break early if possible,
-            // or just check if relevant nodes are involved.
+            
             for (const m of mutations) {
-                // Optimization: Don't check attributes of unrelated elements
                 if (m.type === 'attributes' && m.target !== this.progressBar) continue;
 
                 if (m.type === 'childList') {
@@ -180,7 +376,6 @@ class SponsorBlockHandler {
                          break;
                     }
                     
-                    // Only check added nodes if we don't have a progress bar or it's potentially new UI
                     for (const node of m.addedNodes) {
                         if (node.nodeType === 1 && (
                             node.nodeName.includes('PLAYER-BAR') || 
@@ -204,11 +399,9 @@ class SponsorBlockHandler {
             }
         });
 
-		const playerRoot = document.querySelector('ytlr-app') || 
+        const playerRoot = document.querySelector('ytlr-app') || 
                            document.getElementById('container') ||
                            document.body;
-						   
-		console.log('[SponsorBlock] Observing player root:', playerRoot);
 
         domObserver.observe(playerRoot, {
             childList: true,
@@ -221,6 +414,7 @@ class SponsorBlockHandler {
     }
 
     checkForProgressBar() {
+        if (this.isDestroyed) return;
         if (this.overlay && document.body.contains(this.overlay) && this.progressBar && document.body.contains(this.progressBar)) {
              return;
         }
@@ -243,7 +437,7 @@ class SponsorBlockHandler {
     }
 
     drawOverlay() {
-        if (!this.progressBar || !this.segments.length) return;
+        if (!this.progressBar || !this.segments.length || this.isDestroyed) return;
         
         const duration = this.video ? this.video.duration : 0;
         if (!duration || isNaN(duration)) return;
@@ -255,7 +449,6 @@ class SponsorBlockHandler {
 
         this.segments.forEach(segment => {
             const isHighlight = segment.category === 'poi_highlight';
-            // Use Cached Config
             if (isHighlight && !highlightEnabled) return;
             if (!isHighlight && !this.activeCategories.has(segment.category)) return;
 
@@ -263,7 +456,6 @@ class SponsorBlockHandler {
             const div = document.createElement('div');
             
             const colorKey = isHighlight ? 'poi_highlightColor' : `${segment.category}Color`;
-            // We still read config for color, but that's one-time per overlay draw, not per frame.
             const color = configRead(colorKey) || segmentTypes[segment.category]?.color || '#00d400';
             
             div.style.backgroundColor = color;
@@ -291,121 +483,159 @@ class SponsorBlockHandler {
         this.progressBar.appendChild(this.overlay);
     }
 
-    handleTimeUpdate() {
-        if (!this.video || (this.video.isConnected === false) || this.video.paused || this.video.seeking) return;
-        
-        const currentTime = this.video.currentTime;
-        let shouldBeMuted = false;
-        
-        // Performance: Use simple for loop
-        for (let i = 0; i < this.segments.length; i++) {
-            const seg = this.segments[i];
-            
-            // Fast bounding box check
-            if (currentTime < seg.segment[0] || currentTime >= seg.segment[1]) continue;
-            
-            if (seg.category === 'poi_highlight') continue;
-
-            // Use cached category check (O(1))
-            if (this.activeCategories.has(seg.category)) {
-                // If actionType is skip (default or explicit), skip it
-                if (!seg.actionType || seg.actionType === 'skip') {
-                    this.skipSegment(seg);
-                    return; 
-                }
-                
-                // If actionType is mute and mute is enabled, mark for mute
-                if (seg.actionType === 'mute' && this.mutedSegmentsEnabled) {
-                    shouldBeMuted = true;
-                }
-            }
-        }
-
-        // Handle Muting State
-        if (shouldBeMuted) {
-            if (!this.wasMutedBySB) {
-                this.wasMutedBySB = true;
-                this.video.muted = true;
-                showNotification('Muting Segment');
-            }
-        } else {
-            if (this.wasMutedBySB) {
-                this.wasMutedBySB = false;
-                this.video.muted = false;
-                showNotification('Unmuting');
-            }
-        }
-    }
-	
-	sanitizeSegments() {
+    sanitizeSegments() {
         if (WebOSVersion() !== 5) return;
         if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
-		
-        this.log('debug', 'Sanitizing segments for WebOS 5, duration:', this.video.duration);
+        
         const duration = this.video.duration;
-		
         this.segments.forEach(segment => {
             if (segment.segment[1] >= duration - 0.5) {
-                const oldEnd = segment.segment[1];
                 segment.segment[1] = Math.max(0, duration - 0.30);
-                 
-                this.log('info', `Clamped segment end from ${oldEnd} to ${segment.segment[1]}`);
             }
         });
     }
 
-	skipSegment(segment) {
-		let skipTarget = segment.segment[1];
+    startHighFreqLoop() {
+        if (!this.pollingRafId && this.nextSegmentStart !== Infinity && !this.isDestroyed) {
+            this.pollingRafId = requestAnimationFrame(this.boundHighFreqLoop);
+        }
+    }
+
+    stopHighFreqLoop() {
+        if (this.pollingRafId) {
+            cancelAnimationFrame(this.pollingRafId);
+            this.pollingRafId = null;
+        }
+    }
+
+    highFreqLoop() {
+        if (this.isDestroyed || !this.video || this.video.paused || this.isSkipping) {
+            this.stopHighFreqLoop();
+            return;
+        }
+
+        if (this.video.currentTime >= this.nextSegmentStart) {
+            this.handleTimeUpdate();
+            this.stopHighFreqLoop();
+        } else {
+            this.pollingRafId = requestAnimationFrame(this.boundHighFreqLoop);
+        }
+    }
+
+    handleTimeUpdate() {
+        // Removed paused check here to allow manual invocation from seeked listener
+        if (this.isDestroyed || !this.video || this.video.seeking || this.video.readyState === 0) return;
         
-        // WebOS 5 Specific Check: Run the sanitize segment check/logic
+        const currentTime = this.video.currentTime;
+
+        // Optimization: Early exit if we are far from the next segment
+        const timeToNext = this.nextSegmentStart - currentTime;
+        
+        if (timeToNext > 0) {
+            // Trigger high precision polling when close
+            if (timeToNext < 1.0 && !this.pollingRafId) {
+                this.startHighFreqLoop();
+            }
+            return;
+        }
+        
+        const segmentIdx = this.findSegmentAtTime(currentTime);
+        
+        if (segmentIdx === -1) {
+            for (let i = this.nextSegmentIndex; i < this.skipSegments.length; i++) {
+                if (this.skipSegments[i].start > currentTime) {
+                    this.nextSegmentIndex = i;
+                    this.nextSegmentStart = this.skipSegments[i].start;
+                    return;
+                }
+            }
+            this.nextSegmentStart = Infinity;
+            return;
+        }
+        
+        const seg = this.skipSegments[segmentIdx];
+        let jumpTarget = seg.end;
+        const skippedCategories = [segmentTypes[seg.category]?.name || seg.category];
+        
+        for (let i = segmentIdx + 1; i < this.skipSegments.length; i++) {
+            const next = this.skipSegments[i];
+            if (next.start > jumpTarget + 0.2) break;
+            
+            jumpTarget = Math.max(jumpTarget, next.end);
+            skippedCategories.push(segmentTypes[next.category]?.name || next.category);
+        }
+        
+        if (segmentIdx === this.lastSkippedSegmentIndex && Math.abs(currentTime - this.lastSkipTime) < 0.1) {
+            return;
+        }
+        
+        this.isSkipping = true;
+        this.lastSkipTime = currentTime;
+        this.lastSkippedSegmentIndex = segmentIdx;
+        
         if (WebOSVersion() === 5) {
             const duration = this.video.duration;
-            if (skipTarget >= duration - 0.5) {
-                const buffer = 0.25; 
-                skipTarget = Math.max(0, duration - buffer);
-                if (buffer > 0.1 && !this.video.muted) {
-                 this.video.muted = true;
-                 setTimeout(() => { 
-                     if (this.video.paused || this.video.currentTime < 5) {
-                         this.video.muted = false; 
-                     }
-                 }, 1000); 
-            }
+            if (jumpTarget >= duration - 0.5) {
+                jumpTarget = Math.max(0, duration - 0.25);
+                if (!this.video.muted) {
+                    this.video.muted = true;
+                    setTimeout(() => { 
+                        if (this.video && !this.isDestroyed && (this.video.paused || this.video.currentTime < 5)) {
+                            this.video.muted = false; 
+                        }
+                    }, 1000); 
+                }
             }
         }
-		
-		this.video.currentTime = skipTarget;
-		
-		// Resume playback if not near end (non-WebOS5 only)
-		if (WebOSVersion() !== 5) {
-			const timeRemaining = this.video.duration - this.video.currentTime;
-			if (timeRemaining > 0.5 && this.video.paused) { 
-				this.video.play();
-			}
-		}
-
+        
+        this.video.currentTime = jumpTarget;
+        
+        if (WebOSVersion() !== 5) {
+            const timeRemaining = this.video.duration - this.video.currentTime;
+            if (timeRemaining > 0.5 && this.video.paused) { 
+                this.video.play();
+            }
+        }
+        
+        this.nextSegmentIndex = segmentIdx + 1;
+        if (this.nextSegmentIndex < this.skipSegments.length) {
+            this.nextSegmentStart = this.skipSegments[this.nextSegmentIndex].start;
+        } else {
+            this.nextSegmentStart = Infinity;
+        }
+        
         this.requestAF(() => {
-            showNotification(`Skipped ${segmentTypes[segment.category]?.name || segment.category}`);
+            const uniqueNames = [...new Set(skippedCategories)];
+            let formattedName = uniqueNames[0];
+            
+            if (uniqueNames.length === 2) {
+                formattedName = `${uniqueNames[0]} and ${uniqueNames[1]}`;
+            } else if (uniqueNames.length > 2) {
+                const last = uniqueNames.pop();
+                formattedName = `${uniqueNames.join(', ')}, and ${last}`;
+            }
+            
+            showNotification(`Skipped ${formattedName}`);
         });
+        
+        this.log('info', `Skipped to ${jumpTarget}`);
     }
 
     jumpToNextHighlight() {
         if (!this.video || !this.highlightSegment || !configRead('enableSponsorBlockHighlight')) return false;
         this.video.currentTime = this.highlightSegment.segment[0];
-        this.requestAF(() => {
-            showNotification('Jumped to Highlight');
-        });
+        this.requestAF(() => showNotification('Jumped to Highlight'));
         return true;
     }
 
     async fetchSegments(hashPrefix) {
+        if (this.isDestroyed) return null;
+        
         const categories = JSON.stringify([
             'sponsor', 'intro', 'outro', 'interaction', 'selfpromo', 
             'musicofftopic', 'preview', 'chapter', 'poi_highlight', 
             'filler', 'hook'
         ]);
-        
-        // Request mute and skip actions
         const actionTypes = JSON.stringify(['skip', 'mute']);
         
         if (this.abortController) {
@@ -413,8 +643,8 @@ class SponsorBlockHandler {
         }
         
         const tryFetch = async (url) => {
+            if (this.isDestroyed) return null;
             try {
-                // FALLBACK: Logic to support WebOS 3.x (No AbortController)
                 const fetchURL = `${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&actionTypes=${encodeURIComponent(actionTypes)}&videoID=${this.videoID}`;
                 
                 if (typeof AbortController !== 'undefined') {
@@ -425,7 +655,6 @@ class SponsorBlockHandler {
                     clearTimeout(id);
                     if (res.ok) return await res.json();
                 } else {
-                    // Legacy Fallback for older TVs
                     const res = await Promise.race([
                         fetch(fetchURL),
                         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), SPONSORBLOCK_CONFIG.timeout))
@@ -433,7 +662,9 @@ class SponsorBlockHandler {
                     if (res.ok) return await res.json();
                 }
             } catch(e) {
-                this.log('warn', 'Fetch attempt failed:', e.message);
+                if (!this.isDestroyed && e.name !== 'AbortError') {
+                    this.log('warn', 'Fetch attempt failed:', e.message);
+                }
             }
             return null;
         };
@@ -464,18 +695,29 @@ class SponsorBlockHandler {
     }
 
     destroy() {
+        this.isDestroyed = true;
         this.log('info', 'Destroying instance.');
-		
-		// Clear all pending Animation Frames
-		this.rafIds.forEach(id => cancelAnimationFrame(id));
+        
+        this.rafIds.forEach(id => cancelAnimationFrame(id));
         this.rafIds.clear();
+
+        this.stopHighFreqLoop();
+        
+        if (this.unmuteTimeoutId) {
+            clearTimeout(this.unmuteTimeoutId);
+            this.unmuteTimeoutId = null;
+        }
+        
+        if (this.wasMutedBySB && this.video) {
+            this.video.muted = false;
+        }
+        window.__sb_pending_unmute = false;
         
         if (this.abortController) {
             this.abortController.abort();
             this.abortController = null;
         }
         
-        // 1. Clean up UI
         sponsorBlockUI.togglePopup(false); 
         sponsorBlockUI.updateSegments([]);
         if (this.overlay) {
@@ -483,59 +725,42 @@ class SponsorBlockHandler {
             this.overlay = null;
         }
 
-        // 2. Clean up Injected CSS
         const style = document.getElementById('sb-css');
-        if (style) {
-            style.remove();
-        }
-
-        // 3. Reset Audio State
-        if (this.wasMutedBySB && this.video) {
-            this.video.muted = false;
-        }
+        if (style) style.remove();
         
-        // 4. Remove DOM Event Listeners
         this.listeners.forEach((events, elem) => {
             events.forEach((handler, type) => elem.removeEventListener(type, handler));
         });
         this.listeners.clear();
 
-        // 5. Disconnect Observers
         this.observers.forEach(obs => obs.disconnect());
         this.observers.clear();
 
-        // 6. Remove Config Listeners
         this.configListeners.forEach(({ key, callback }) => {
             configRemoveChangeListener(key, callback);
         });
         this.configListeners = [];
         
-        // 7. Release Memory / DOM References
         this.segments = [];
-        this.highlightSegment = null;
+        this.skipSegments = [];
         this.video = null;
         this.progressBar = null;
-        this.activeCategories = null;
     }
 }
 
+// Global Initialization Logic
 if (typeof window !== 'undefined') {
     if (window.__ytaf_sb_init) {
         window.removeEventListener('hashchange', window.__ytaf_sb_init);
     }
 
     window.sponsorblock = null;
-    
     let initTimeout = null;
 
     const initSB = () => {
-        // Clear any pending init
-        if (initTimeout) {
-            clearTimeout(initTimeout);
-        }
+        if (initTimeout) clearTimeout(initTimeout);
         
-        // Debounce to handle rapid navigation
-        initTimeout = setTimeout(() => {
+        const run = () => {
             if (window.sponsorblock) window.sponsorblock.destroy();
             let videoID = null;
             try {
@@ -543,16 +768,12 @@ if (typeof window !== 'undefined') {
                 if (hash.startsWith('#')) {
                     const parts = hash.split('?');
                     if (parts.length > 1) {
-                        // FALLBACK: Check if URLSearchParams is supported
                         if (typeof URLSearchParams !== 'undefined') {
                             const params = new URLSearchParams(parts[1]);
                             videoID = params.get('v');
                         } else {
-                            // Legacy Regex Fallback for WebOS 3.x
                             const match = parts[1].match(/(?:[?&]|^)v=([^&]+)/);
-                            if (match) {
-                                videoID = match[1];
-                            }
+                            if (match) videoID = match[1];
                         }
                     }
                 }
@@ -562,9 +783,10 @@ if (typeof window !== 'undefined') {
                 window.sponsorblock = new SponsorBlockHandler(videoID);
                 window.sponsorblock.init();
             }
-            
             initTimeout = null;
-        }, 300); // Debounce delay
+        };
+
+        initTimeout = setTimeout(run, 10);
     };
 
     window.__ytaf_sb_init = initSB;

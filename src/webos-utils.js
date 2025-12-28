@@ -53,6 +53,13 @@ export function WebOSVersion() {
       return 5;
     }
 	
+	if (majorVersion === 3) {
+      console.info(`[WebOSUtils] Detected webOS 6 via firmware version: ${firmwareVersion}`);
+      cachedWebOSVersion = 5;
+      return 5;
+    }
+	
+	
     console.info(`[WebOSUtils] Found firmware version ${firmwareVersion}, but no mapping available`);
   }
 

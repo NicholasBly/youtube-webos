@@ -9,11 +9,9 @@ function debugLog(msg, ...args) {
   if (DEBUG) console.log(`[AdBlock] ${msg}`, ...args);
 }
 
-// Module state
 let origParse = JSON.parse;
 let isHooked = false;
 
-// Cache config values
 let configCache = {
   enableAdBlock: true,
   removeGlobalShorts: false,
@@ -22,13 +20,11 @@ let configCache = {
   lastUpdate: 0
 };
 
-// Pre-compile string patterns
 const PATTERN_CACHE = {
   shorts: 'shorts',
   topLiveGames: 'top live games'
 };
 
-// SCHEMA REGISTRY
 const SCHEMA_REGISTRY = {
   enabled: true, 
   
@@ -56,9 +52,9 @@ const SCHEMA_REGISTRY = {
     ACTION: { 
       textPattern: '"onResponseReceivedActions"' 
     },
-    // NEW: Explicitly ignore common logging/heartbeat packets to silence debug noise
+    // Explicitly ignore common logging/heartbeat packets to silence debug noise
     IGNORED: {
-      textPattern: '"logEntry"' // Example: Logging packets often have this
+      textPattern: '"logEntry"'
     }
   },
   
@@ -206,8 +202,18 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
 	  break;
 	  
 	  case 'GUEST':
-	  if (config.hideGuestPrompts && schema && schema.pivotPath) {
-          const pivotContents = getByPath(data, schema.pivotPath);
+	  if (config.hideGuestPrompts) {
+          let pivotContents = schema && schema.pivotPath ? getByPath(data, schema.pivotPath) : null;
+          
+          // Fallback to deep search if path not found
+          if (!pivotContents) {
+              const sectionList = findFirstObject(data, 'sectionListRenderer', 15);
+              if (sectionList && sectionList.contents) {
+                  pivotContents = sectionList.contents;
+                  if (DEBUG) debugLog('GUEST: Using fallback search (schema path failed)');
+              }
+          }
+          
           if (pivotContents && Array.isArray(pivotContents)) {
               let writeIdx = 0;
               for (let i = 0; i < pivotContents.length; i++) {
@@ -224,12 +230,26 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
       break;
       
     case 'HOME_BROWSE':
-      const contents = getByPath(data, schema.mainContent);
+      let contents = getByPath(data, schema.mainContent);
+      if (!contents) {
+          const sectionList = findFirstObject(data, 'sectionListRenderer', 15);
+          if (sectionList && sectionList.contents) {
+              contents = sectionList.contents;
+              if (DEBUG) debugLog('HOME_BROWSE: Using fallback search');
+          }
+      }
       if (contents) processSectionListOptimized(contents, config, needsContentFiltering, 'HOME_BROWSE');
       break;
 
     case 'SEARCH':
-      const searchContents = getByPath(data, schema.mainContent);
+      let searchContents = getByPath(data, schema.mainContent);
+      if (!searchContents) {
+          const sectionList = findFirstObject(data, 'sectionListRenderer', 15);
+          if (sectionList && sectionList.contents) {
+              searchContents = sectionList.contents;
+              if (DEBUG) debugLog('SEARCH: Using fallback search');
+          }
+      }
       if (searchContents) processSectionListOptimized(searchContents, config, needsContentFiltering, 'SEARCH');
       break;
 
@@ -244,11 +264,17 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
       break;
       
     case 'CONTINUATION':
-      if (schema.sectionPath) {
+      let foundContent = false;
+      
+      if (schema && schema.sectionPath) {
         const sectionCont = getByPath(data, schema.sectionPath);
-        if (sectionCont) processSectionListOptimized(sectionCont, config, needsContentFiltering, 'CONT_SECTION');
+        if (sectionCont) {
+            processSectionListOptimized(sectionCont, config, needsContentFiltering, 'CONT_SECTION');
+            foundContent = true;
+        }
       }
-      if (schema.gridPath) {
+      
+      if (schema && schema.gridPath) {
         const gridCont = getByPath(data, schema.gridPath);
         if (gridCont && Array.isArray(gridCont)) {
           const filtered = filterItemsOptimized(gridCont, config, needsContentFiltering);
@@ -256,16 +282,36 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
              debugLog(`Grid Continuation: Removed ${gridCont.length - filtered.length} items`);
           }
           setByPath(data, schema.gridPath, filtered);
+          foundContent = true;
         }
+      }
+      
+      // Fallback if both paths failed
+      if (!foundContent) {
+          const sectionList = findFirstObject(data, 'sectionListRenderer', 10);
+          if (sectionList && sectionList.contents) {
+              processSectionListOptimized(sectionList.contents, config, needsContentFiltering, 'CONT_FALLBACK');
+              if (DEBUG) debugLog('CONTINUATION: Using fallback search');
+          } else {
+              const gridCont = findFirstObject(data, 'gridContinuation', 10);
+              if (gridCont && gridCont.items) {
+                  const filtered = filterItemsOptimized(gridCont.items, config, needsContentFiltering);
+                  if (DEBUG && filtered.length !== gridCont.items.length) {
+                      debugLog(`CONTINUATION Fallback: Removed ${gridCont.items.length - filtered.length} items`);
+                  }
+                  gridCont.items = filtered;
+              }
+          }
       }
       break;
       
     case 'ACTION':
       const actions = data.onResponseReceivedActions;
-      if (actions?.length) {
+      if (actions && actions.length) {
         for (let i = 0; i < actions.length; i++) {
-          const items = actions[i].appendContinuationItemsAction?.continuationItems ||
-                       actions[i].reloadContinuationItemsCommand?.continuationItems;
+          const action = actions[i];
+          const items = (action.appendContinuationItemsAction && action.appendContinuationItemsAction.continuationItems) ||
+                       (action.reloadContinuationItemsCommand && action.reloadContinuationItemsCommand.continuationItems);
           if (items) processSectionListOptimized(items, config, needsContentFiltering, 'ACTION');
         }
       }
