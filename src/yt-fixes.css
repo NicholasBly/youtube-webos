@@ -11,6 +11,12 @@
   opacity: 0.6;
 }
 
+/* move stats for nerds UI to the left side of the screen so it's not blocked by the settings panel */
+.iLKnN .html5-video-info-panel {
+	right: 40rem !important;
+	top: 12rem !important;
+}
+
 /**
  * Dirty hack to fix offset <video> on shorts on older webOS versions.
  * This shouldn't work but it does 😵‍💫.

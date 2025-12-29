@@ -108,6 +108,18 @@ function hookedParse(text, reviver) {
   if (!data || typeof data !== 'object') {
     return data;
   }
+  
+  const isAPIResponse = !!(
+    data.responseContext ||
+    data.playerResponse ||
+    data.onResponseReceivedActions ||
+    data.sectionListRenderer ||
+    data.reloadContinuationItemsCommand
+  );
+
+  if (!isAPIResponse) {
+    return data;
+  }
 
   // 3. Get Config
   const config = getCachedConfig();
@@ -140,7 +152,9 @@ function hookedParse(text, reviver) {
       // Fallback & Miss Analysis
 	  if(text.length > 10000) { // indicates real page refresh
 		if (DEBUG) logSchemaMiss(data, text.length);
-		applyFallbackFilters(data, config, needsContentFiltering);
+		if (!Array.isArray(data)) {
+            applyFallbackFilters(data, config, needsContentFiltering);
+        }
 	  }
     }
   } catch (e) {

@@ -74,6 +74,10 @@ class SponsorBlockHandler {
         this.pollingRafId = null;
         this.boundHighFreqLoop = this.highFreqLoop.bind(this);
         
+        this.configCache = {};      
+        this.categoryNameCache = new Map();     
+        this.lastOverlayHash = null;
+        
         this.updateConfigCache();
         this.setupConfigListeners();
         
@@ -91,38 +95,60 @@ class SponsorBlockHandler {
     }
 
     log(level, message, ...args) {
-        if (level === 'debug' && !this.debugMode) return;
-        if (level === 'info' && !this.debugMode) return;
+        if ((level === 'debug' || level === 'info') && !this.debugMode) return;
+        
         const prefix = `[SB:${this.videoID}]`;
         console[level === 'warn' ? 'warn' : 'log'](prefix, message, ...args);
     }
 
     updateConfigCache() {
         this.activeCategories.clear();
+        this.configCache = {}; // Clear cache
+        
         for (const [cat, configKey] of Object.entries(CONFIG_MAPPING)) {
-            if (configRead(configKey)) {
+            const isEnabled = configRead(configKey);
+            this.configCache[configKey] = isEnabled; // Cache the value
+            if (isEnabled) {
                 this.activeCategories.add(cat);
             }
         }
+        
+        this.configCache.enableMutedSegments = configRead('enableMutedSegments');
+        this.configCache.enableSponsorBlockHighlight = configRead('enableSponsorBlockHighlight');
+        
         this.rebuildSkipSegments();
     }
     
     rebuildSkipSegments() {
         this.stopHighFreqLoop();
+        
+        if (!this.segments || this.segments.length === 0) {
+            this.skipSegments = [];
+            this.resetSegmentTracking();
+            return;
+        }
+        
+        if (this.activeCategories.size === 0) {
+            this.skipSegments = [];
+            this.resetSegmentTracking();
+            return;
+        }
+        
         this.skipSegments = [];
         
         for (let i = 0; i < this.segments.length; i++) {
             const seg = this.segments[i];
+            
             if (seg.category === 'poi_highlight') continue;
             if (!this.activeCategories.has(seg.category)) continue;
-            if (!seg.actionType || seg.actionType === 'skip') {
-                this.skipSegments.push({
-                    start: seg.segment[0],
-                    end: seg.segment[1],
-                    category: seg.category,
-                    originalIndex: i
-                });
-            }
+            if (seg.actionType && seg.actionType !== 'skip') continue;
+            
+            this.skipSegments.push({
+                start: seg.segment[0],
+                end: seg.segment[1],
+                category: seg.category,
+                originalIndex: i
+            });
         }
         this.resetSegmentTracking();
     }
@@ -133,11 +159,13 @@ class SponsorBlockHandler {
     }
     
     findSegmentAtTime(time) {
+        if (this.skipSegments.length === 0) return -1;
+        
         let left = 0; 
         let right = this.skipSegments.length - 1;
         
         while (left <= right) {
-            const mid = Math.floor((left + right) / 2);
+            const mid = (left + right) >>> 1;
             const seg = this.skipSegments[mid];
             
             if (time >= seg.start && time < seg.end) {
@@ -153,12 +181,13 @@ class SponsorBlockHandler {
 
     setupConfigListeners() {
         this.boundConfigUpdate = this.updateConfigCache.bind(this);
-        Object.values(CONFIG_MAPPING).forEach(key => {
+        
+        const configKeys = [...Object.values(CONFIG_MAPPING), 'enableMutedSegments'];
+        
+        for (const key of configKeys) {
             configAddChangeListener(key, this.boundConfigUpdate);
             this.configListeners.push({ key, callback: this.boundConfigUpdate });
-        });
-        configAddChangeListener('enableMutedSegments', this.boundConfigUpdate);
-        this.configListeners.push({ key: 'enableMutedSegments', callback: this.boundConfigUpdate });
+        }
     }
 
     buildSkipChain(segments) {
@@ -174,13 +203,11 @@ class SponsorBlockHandler {
             const current = segments[i];
             const gapToNext = current.segment[0] - finalSeekTime;
             
-            if (gapToNext <= CHAIN_SKIP_CONSTANTS.OVERLAP_TOLERANCE) {
-                if (current.segment[1] > finalSeekTime) {
-                    chainParts.push(`${current.category}[${current.segment[0].toFixed(1)}s-${current.segment[1].toFixed(1)}s]`);
-                    finalSeekTime = current.segment[1];
-                }
-            } else {
-                break;
+            if (gapToNext > CHAIN_SKIP_CONSTANTS.OVERLAP_TOLERANCE) break;
+            
+            if (current.segment[1] > finalSeekTime) {
+                chainParts.push(`${current.category}[${current.segment[0].toFixed(1)}s-${current.segment[1].toFixed(1)}s]`);
+                finalSeekTime = current.segment[1];
             }
         }
 
@@ -194,7 +221,8 @@ class SponsorBlockHandler {
 
     executeChainSkip(video) {
         if (!video || this.hasPerformedChainSkip || this.isDestroyed) return false;
-		if (video.readyState === 0) {
+        
+        if (video.readyState === 0) {
             const retry = () => {
                 video.removeEventListener('loadedmetadata', retry);
                 if (!this.isDestroyed) this.executeChainSkip(video);
@@ -202,11 +230,14 @@ class SponsorBlockHandler {
             video.addEventListener('loadedmetadata', retry);
             return false;
         }
+        
         if (video.currentTime > CHAIN_SKIP_CONSTANTS.START_THRESHOLD) return false;
 
         const enabledSegs = this.segments.filter(s => 
             s.category !== 'poi_highlight' && this.activeCategories.has(s.category)
         );
+        
+        if (enabledSegs.length === 0) return false;
 
         const chain = this.buildSkipChain(enabledSegs);
         if (!chain) return false;
@@ -264,12 +295,19 @@ class SponsorBlockHandler {
             const categories = chain.chainDescription.split(' → ')
                 .map(part => part.split('[')[0])
                 .filter((cat, idx, arr) => arr.indexOf(cat) === idx)
-                .map(cat => segmentTypes[cat]?.name || cat);
+                .map(cat => this.getCategoryName(cat));
             
             showNotification(`Skipped ${categories.join(', ')}`);
         });
         
         return true;
+    }
+
+    getCategoryName(category) {
+        if (!this.categoryNameCache.has(category)) {
+            this.categoryNameCache.set(category, segmentTypes[category]?.name || category);
+        }
+        return this.categoryNameCache.get(category);
     }
 
     async init() {
@@ -286,6 +324,7 @@ class SponsorBlockHandler {
         
         const hash = sha256(this.videoID);
         if (!hash) return;
+        
         const hashPrefix = hash.substring(0, 4);
         
         try {
@@ -295,19 +334,19 @@ class SponsorBlockHandler {
             
             const videoData = Array.isArray(data) ? data.find(x => x.videoID === this.videoID) : data;
             
-            if (videoData && videoData.segments && videoData.segments.length) {
-                this.segments = videoData.segments.sort((a, b) => a.segment[0] - b.segment[0]);
-                this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
-                this.rebuildSkipSegments();
-                
-                const video = document.querySelector('video');
-                if (video) {
-                    this.executeChainSkip(video);
-                }
-                
-                this.start();
-                sponsorBlockUI.updateSegments(this.segments);
+            if (!videoData?.segments?.length) return;
+            
+            this.segments = videoData.segments.sort((a, b) => a.segment[0] - b.segment[0]);
+            this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
+            this.rebuildSkipSegments();
+            
+            const video = document.querySelector('video');
+            if (video) {
+                this.executeChainSkip(video);
             }
+            
+            this.start();
+            sponsorBlockUI.updateSegments(this.segments);
         } catch (e) {
             if (!this.isDestroyed) {
                 showNotification("SB Error: " + e.message);
@@ -323,21 +362,32 @@ class SponsorBlockHandler {
         this.injectCSS();
         this.addEvent(this.video, 'timeupdate', this.handleTimeUpdate.bind(this));
         
+        this.addEvent(this.video, 'ended', () => {
+            this.hasPerformedChainSkip = false;
+        });
+
+        this.addEvent(this.video, 'play', () => {
+            if (this.video.currentTime < CHAIN_SKIP_CONSTANTS.START_THRESHOLD) {
+                this.hasPerformedChainSkip = false;
+                this.executeChainSkip(this.video);
+            }
+        });
+        
         this.addEvent(this.video, 'seeked', () => {
             if (this.isDestroyed) return;
             
-            // 1. Safety: Stop any existing poll immediately to prevent race conditions
             this.stopHighFreqLoop();
             
-            // 2. Critical Logic: Handle Manual Seeks
+            if (this.video.currentTime < CHAIN_SKIP_CONSTANTS.START_THRESHOLD) {
+                this.hasPerformedChainSkip = false;
+                // Try to execute chain skip immediately
+                this.executeChainSkip(this.video);
+            }
+
             if (!this.isSkipping) {
-                // Reset search cursor so we don't miss segments 'behind' us
                 this.lastSkipTime = -1;
                 this.lastSkippedSegmentIndex = -1;
                 this.resetSegmentTracking();
-
-                // FORCE CHECK: Instantly check if we landed in a segment or need to start polling
-                // This fixes Bug 2 (audio leak) and Bug 1 (missed poll start)
                 this.handleTimeUpdate();
             }
             
@@ -415,16 +465,25 @@ class SponsorBlockHandler {
 
     checkForProgressBar() {
         if (this.isDestroyed) return;
-        if (this.overlay && document.body.contains(this.overlay) && this.progressBar && document.body.contains(this.progressBar)) {
+        if (this.overlay && document.body.contains(this.overlay) && 
+            this.progressBar && document.body.contains(this.progressBar)) {
              return;
         }
 
-        let target = document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="segment"]') ||
-                     document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]') ||
-                     document.querySelector('ytlr-multi-markers-player-bar-renderer') ||
-                     document.querySelector('ytlr-progress-bar [idomkey="slider"]') ||
-                     document.querySelector('.ytLrProgressBarSliderBase') || 
-                     document.querySelector('.afTAdb');
+        const selectors = [
+            'ytlr-multi-markers-player-bar-renderer [idomkey="segment"]',
+            'ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]',
+            'ytlr-multi-markers-player-bar-renderer',
+            'ytlr-progress-bar [idomkey="slider"]',
+            '.ytLrProgressBarSliderBase',
+            '.afTAdb'
+        ];
+
+        let target = null;
+        for (const selector of selectors) {
+            target = document.querySelector(selector);
+            if (target) break;
+        }
 
         if (target) {
             this.progressBar = target;
@@ -442,15 +501,24 @@ class SponsorBlockHandler {
         const duration = this.video ? this.video.duration : 0;
         if (!duration || isNaN(duration)) return;
 
+        const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${this.configCache.enableSponsorBlockHighlight}`;
+        if (overlayHash === this.lastOverlayHash && this.overlay && document.body.contains(this.overlay)) {
+            return;
+        }
+        this.lastOverlayHash = overlayHash;
+
         if (this.overlay) this.overlay.remove();
 
         const fragment = document.createDocumentFragment();
-        const highlightEnabled = configRead('enableSponsorBlockHighlight');
+        const highlightEnabled = this.configCache.enableSponsorBlockHighlight;
 
         this.segments.forEach(segment => {
             const isHighlight = segment.category === 'poi_highlight';
-            if (isHighlight && !highlightEnabled) return;
-            if (!isHighlight && !this.activeCategories.has(segment.category)) return;
+            
+            if ((isHighlight && !highlightEnabled) || 
+                (!isHighlight && !this.activeCategories.has(segment.category))) {
+                return;
+            }
 
             const [start, end] = segment.segment;
             const div = document.createElement('div');
@@ -485,14 +553,15 @@ class SponsorBlockHandler {
 
     sanitizeSegments() {
         if (WebOSVersion() !== 5) return;
-        if (!this.video || !this.video.duration || isNaN(this.video.duration)) return;
+        if (!this.video?.duration || isNaN(this.video.duration)) return;
         
         const duration = this.video.duration;
-        this.segments.forEach(segment => {
+        
+        for (const segment of this.segments) {
             if (segment.segment[1] >= duration - 0.5) {
                 segment.segment[1] = Math.max(0, duration - 0.30);
             }
-        });
+        }
     }
 
     startHighFreqLoop() {
@@ -523,16 +592,12 @@ class SponsorBlockHandler {
     }
 
     handleTimeUpdate() {
-        // Removed paused check here to allow manual invocation from seeked listener
         if (this.isDestroyed || !this.video || this.video.seeking || this.video.readyState === 0) return;
         
         const currentTime = this.video.currentTime;
-
-        // Optimization: Early exit if we are far from the next segment
         const timeToNext = this.nextSegmentStart - currentTime;
         
         if (timeToNext > 0) {
-            // Trigger high precision polling when close
             if (timeToNext < 1.0 && !this.pollingRafId) {
                 this.startHighFreqLoop();
             }
@@ -555,14 +620,14 @@ class SponsorBlockHandler {
         
         const seg = this.skipSegments[segmentIdx];
         let jumpTarget = seg.end;
-        const skippedCategories = [segmentTypes[seg.category]?.name || seg.category];
+        const skippedCategories = [this.getCategoryName(seg.category)];
         
         for (let i = segmentIdx + 1; i < this.skipSegments.length; i++) {
             const next = this.skipSegments[i];
             if (next.start > jumpTarget + 0.2) break;
             
             jumpTarget = Math.max(jumpTarget, next.end);
-            skippedCategories.push(segmentTypes[next.category]?.name || next.category);
+            skippedCategories.push(this.getCategoryName(next.category));
         }
         
         if (segmentIdx === this.lastSkippedSegmentIndex && Math.abs(currentTime - this.lastSkipTime) < 0.1) {
@@ -606,14 +671,11 @@ class SponsorBlockHandler {
         
         this.requestAF(() => {
             const uniqueNames = [...new Set(skippedCategories)];
-            let formattedName = uniqueNames[0];
-            
-            if (uniqueNames.length === 2) {
-                formattedName = `${uniqueNames[0]} and ${uniqueNames[1]}`;
-            } else if (uniqueNames.length > 2) {
-                const last = uniqueNames.pop();
-                formattedName = `${uniqueNames.join(', ')}, and ${last}`;
-            }
+            const formattedName = uniqueNames.length === 1 
+                ? uniqueNames[0]
+                : uniqueNames.length === 2
+                    ? `${uniqueNames[0]} and ${uniqueNames[1]}`
+                    : `${uniqueNames.slice(0, -1).join(', ')}, and ${uniqueNames[uniqueNames.length - 1]}`;
             
             showNotification(`Skipped ${formattedName}`);
         });
@@ -622,7 +684,8 @@ class SponsorBlockHandler {
     }
 
     jumpToNextHighlight() {
-        if (!this.video || !this.highlightSegment || !configRead('enableSponsorBlockHighlight')) return false;
+        if (!this.video || !this.highlightSegment || !this.configCache.enableSponsorBlockHighlight) return false;
+        
         this.video.currentTime = this.highlightSegment.segment[0];
         this.requestAF(() => showNotification('Jumped to Highlight'));
         return true;
@@ -644,29 +707,34 @@ class SponsorBlockHandler {
         
         const tryFetch = async (url) => {
             if (this.isDestroyed) return null;
+            
             try {
                 const fetchURL = `${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&actionTypes=${encodeURIComponent(actionTypes)}&videoID=${this.videoID}`;
                 
-                if (typeof AbortController !== 'undefined') {
+                const hasAbortController = typeof AbortController !== 'undefined';
+                
+                if (hasAbortController) {
                     this.abortController = new AbortController();
-                    const controller = this.abortController;
-                    const id = setTimeout(() => controller.abort(), SPONSORBLOCK_CONFIG.timeout);
-                    const res = await fetch(fetchURL, { signal: controller.signal });
-                    clearTimeout(id);
-                    if (res.ok) return await res.json();
+                    const timeoutId = setTimeout(() => this.abortController.abort(), SPONSORBLOCK_CONFIG.timeout);
+                    
+                    const res = await fetch(fetchURL, { signal: this.abortController.signal });
+                    clearTimeout(timeoutId);
+                    
+                    return res.ok ? await res.json() : null;
                 } else {
                     const res = await Promise.race([
                         fetch(fetchURL),
                         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), SPONSORBLOCK_CONFIG.timeout))
                     ]);
-                    if (res.ok) return await res.json();
+                    
+                    return res.ok ? await res.json() : null;
                 }
             } catch(e) {
                 if (!this.isDestroyed && e.name !== 'AbortError') {
                     this.log('warn', 'Fetch attempt failed:', e.message);
                 }
+                return null;
             }
-            return null;
         };
 
         let res = await tryFetch(SPONSORBLOCK_CONFIG.primaryAPI);
@@ -676,6 +744,7 @@ class SponsorBlockHandler {
 
     injectCSS() {
         if (document.getElementById('sb-css')) return;
+        
         const css = `
             #previewbar { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; pointer-events: none !important; z-index: 2000 !important; overflow: visible !important; }
             .previewbar { position: absolute !important; list-style: none !important; height: 100% !important; top: 0 !important; display: block !important; z-index: 2001 !important; }
@@ -745,10 +814,12 @@ class SponsorBlockHandler {
         this.skipSegments = [];
         this.video = null;
         this.progressBar = null;
+        
+        this.configCache = {};
+        this.categoryNameCache.clear();
     }
 }
 
-// Global Initialization Logic
 if (typeof window !== 'undefined') {
     if (window.__ytaf_sb_init) {
         window.removeEventListener('hashchange', window.__ytaf_sb_init);
@@ -763,6 +834,7 @@ if (typeof window !== 'undefined') {
         const run = () => {
             if (window.sponsorblock) window.sponsorblock.destroy();
             let videoID = null;
+            
             try {
                 const hash = window.location.hash;
                 if (hash.startsWith('#')) {
@@ -777,7 +849,9 @@ if (typeof window !== 'undefined') {
                         }
                     }
                 }
-            } catch(e) {}
+            } catch(e) {
+                // Silently fail on parse errors
+            }
 
             if (videoID && configRead('enableSponsorBlock')) {
                 window.sponsorblock = new SponsorBlockHandler(videoID);
