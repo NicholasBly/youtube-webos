@@ -21,6 +21,7 @@ import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
 import { initAdblock, destroyAdblock } from './adblock.js';
 
 let lastSafeFocus = null;
+let oledKeepAliveTimer = null;
 
 // --- Debug: Log Capture ---
 // const logBuffer = [];
@@ -1051,11 +1052,23 @@ const eventHandler = (evt) => {
     if (overlay) {
       overlay.remove();
       console.info('OLED mode deactivated');
+
+      if (oledKeepAliveTimer) {
+        clearInterval(oledKeepAliveTimer);
+        oledKeepAliveTimer = null;
+      }
     } else {
       overlay = document.createElement('div');
       overlay.id = 'oled-black-overlay';
       overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999';
       document.body.appendChild(overlay);
+
+      // Start timer: Every 30 minutes, send UP twice to prevent sleep
+      oledKeepAliveTimer = setInterval(() => {
+        console.info('OLED Keep-alive: Sending UP x2');
+        sendKey(REMOTE_KEYS.UP);
+        setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
+      }, 30 * 60 * 1000);
     }
     return false;
   } else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
