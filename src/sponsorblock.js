@@ -556,11 +556,20 @@ class SponsorBlockHandler {
         if (!this.video?.duration || isNaN(this.video.duration)) return;
         
         const duration = this.video.duration;
+        let changed = false;
         
         for (const segment of this.segments) {
             if (segment.segment[1] >= duration - 0.5) {
                 segment.segment[1] = Math.max(0, duration - 0.30);
+                changed = true;
             }
+        }
+
+        // IMPORTANT: If we modified the raw segments, we MUST rebuild the skip lookup table
+        // Otherwise, the skip logic still sees the old end times (e.g. 100s) and loops 
+        // when we jump to the safe zone (99.7s).
+        if (changed) {
+            this.rebuildSkipSegments();
         }
     }
 
@@ -615,6 +624,13 @@ class SponsorBlockHandler {
                 }
             }
             this.nextSegmentStart = Infinity;
+            return;
+        }
+
+        // Guard against spam loop on WebOS 5/Legacy at the end of video
+        if (WebOSVersion() === 5 && 
+            segmentIdx === this.lastSkippedSegmentIndex && 
+            this.video.duration - currentTime < 1.0) {
             return;
         }
         

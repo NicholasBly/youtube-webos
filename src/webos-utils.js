@@ -23,9 +23,10 @@ export function isNewYouTubeLayout() {
 
 /**
  * Detects the webOS version using the User Agent string.
- * Prioritizes firmware version from _TV_O18 pattern (e.g., 33.22.52 = webOS 25).
+ * Prioritizes firmware version for newer models (webOS 25+).
+ * Uses webOS.TV year detection for legacy models (2021 and older).
  * Falls back to Chrome version detection for simulator environments.
- * @returns {number} webOS version number (25, 24, 23, 22, 6, 5, 4, 3, or 0 if unknown)
+ * @returns {number} webOS version number (25, or 5 for legacy/unknown)
  */
 export function WebOSVersion() {
   if (cachedWebOSVersion !== null) {
@@ -34,36 +35,35 @@ export function WebOSVersion() {
 
   const ua = window.navigator.userAgent;
 
-  // Primary detection: Extract firmware version from _TV_O18/x.x.x pattern
+  // 1. Check Firmware Version (Primary for webOS 25+)
   const firmwareMatch = ua.match(/_TV_O18\/(\d+\.\d+\.\d+)/);
-  
   if (firmwareMatch) {
     const firmwareVersion = firmwareMatch[1];
     const majorVersion = parseInt(firmwareVersion.split('.')[0], 10);
     
+    // Detect webOS 25 (Firmware major version >= 33)
     if (majorVersion >= 33) {
       console.info(`[WebOSUtils] Detected webOS 25 via firmware version: ${firmwareVersion}`);
       cachedWebOSVersion = 25;
       return 25;
     }
-	
-	if (majorVersion === 4) {
-      console.info(`[WebOSUtils] Detected webOS 5 via firmware version: ${firmwareVersion}`);
-      cachedWebOSVersion = 5;
-      return 5;
-    }
-	
-	if (majorVersion === 3) {
-      console.info(`[WebOSUtils] Detected webOS 6 via firmware version: ${firmwareVersion}`);
-      cachedWebOSVersion = 5;
-      return 5;
-    }
-	
-	
-    console.info(`[WebOSUtils] Found firmware version ${firmwareVersion}, but no mapping available`);
   }
 
-  // Fallback: Chrome version detection (for simulator environments)
+  // 2. Check Platform Year (Primary for Legacy webOS 3, 4, 5, 6)
+  // Format: (webOS.TV-YYYY)
+  const platformMatch = ua.match(/webOS\.TV-(\d{4})/);
+  if (platformMatch) {
+    const year = parseInt(platformMatch[1], 10);
+
+    // If year is 2021 or below, treat as legacy webOS (returns 5)
+    if (year <= 2021) {
+      console.info(`[WebOSUtils] Detected Legacy webOS via platform year: ${year}`);
+      cachedWebOSVersion = 5;
+      return 5;
+    }
+  }
+
+  // 3. Fallback: Chrome version detection (for simulator environments)
   const chromeMatch = ua.match(/Chrome\/(\d+)/);
   
   if (chromeMatch) {
@@ -72,6 +72,8 @@ export function WebOSVersion() {
     
     if (chromeVersion >= 120) {
       cachedWebOSVersion = 25;
+    } else if (chromeVersion <= 79) {
+      cachedWebOSVersion = 5;
     } else {
       cachedWebOSVersion = 0;
     }
