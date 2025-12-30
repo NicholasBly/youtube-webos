@@ -4,11 +4,13 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 ## Added Features
 - Full support for webOS 3, 4, 5, 6, 22, 23, 24, and 25 (older versions are untested)
+- Enhanced AdBlock Engine: New schema-based filtering system (cleaner Home, Search, and Shorts)
 - Enhanced Menu UI
 - Auto Login - bypasses account selection screen
 - Force Max Quality
 - Hide Endcards
 - Shortcuts - Programmable 0-9 key shortcuts during video playback
+- Guest Mode: Hides annoying "Sign in" prompts
 
 - SponsorBlock: Highlight feature added
 -- All segment types added (Hook, Tangents, muted segments)
@@ -16,7 +18,7 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 -- Segment UI list replicating desktop segment list
 -- Jump to highlight segment with blue button on LG remote
 
-- Toggle black screen with red button on LG remote for OLED TVs
+- Toggle display on/off with red button on LG remote for OLED TVs + persistent keepalive
 - Return YouTube Dislike - added to description tab in video
 - Bug fixes, UI fixes
 - Specific rules for different YouTube UI layouts
@@ -26,7 +28,7 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-webos/blob/main/CHANGELOG.md)
 
-<img width="537" height="450" alt="webOS_TV_25_Simulator_1 4 3_cNtrOpwkMt" src="https://github.com/user-attachments/assets/ce136794-d27f-4c9c-bcb8-6b0a495e3207" />
+<img width="537" height="619" alt="webOS_TV_23_Simulator_xaDtLYrmOo" src="https://github.com/user-attachments/assets/35f472bd-4563-4772-907a-2e748c843e25" />
 
 <img width="537" height="569" alt="webOS_TV_25_Simulator_1 4 3_g0uM4TjeIc" src="https://github.com/user-attachments/assets/857a939f-80d6-4cc4-9ecd-d07ecd02b552" />
 
