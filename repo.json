@@ -19,9 +19,9 @@
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.6.5/youtube.leanback.v4_0.6.5_all.ipk",
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.6.6/youtube.leanback.v4_0.6.6_all.ipk",
         "ipkHash": {
-          "sha256": "32bfa2362d8db58e131005f86fd795eec48904a5a8a056445066af2dcb7a856f"
+          "sha256": "08b997e3ee92f211eda91ab1770b06926037a7b20022491dbf77485c6810485f"
         }
       }
     }
