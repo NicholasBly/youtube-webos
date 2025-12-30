@@ -4,6 +4,63 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.6] - 2025/12/29
+
+## Added
+Feature request - OLED black screen keepalive to keep videos playing indefinitely - https://github.com/NicholasBly/youtube-webos/issues/30
+Feature request - added css override rules for fixing YouTube's stats for nerds panel - https://github.com/NicholasBly/youtube-webos/issues/28
+
+## SponsorBlock.js
+
+Implemented skip chaining
++ Recognizes when multiple segments run parallel and only skips to the end of the chain, making one clean skip
++ Each segment in the chain will be listed in the notification
+
+Implemented high precision skipping
++ When within 1 second from a segment, a high precision animationFrame waits for the exact frame to skip
++ + Fixes skipping taking too long where you might see a few frames within the segment
+
+## AdBlock.js
+### Cosmetic Filtering
+Added "Top Live Games" and "Remove Shorts (Global)"
++ "Remove Shorts Global" replaces "Remove Shorts From Subscriptions" and simply removes shorts on every navigation page
+
+### Performance
+
+Rewrote adblock + cosmetic filtering engine
++ 15-20x faster filtering through schema path optimization
++ + Direct scan to known locations in JSON instead of blindly searching 100,000+ lines on every page reload
++ + If the direct path search fails due to YouTube server-side changes, it falls back to the original method, which ensures full functionality
++ + Saves 200-400ms per page load and reduces CPU cycles significantly
+
+### Optimizations
+
++ Early Exit - added logic to instantly skip processing for irrelevant network responses (logging, metrics, etc.).
++ Optimized path access with caching - eliminates repeated .split() calls
++ Replaced includes() with indexOf() for better string comparison performance
++ Added comprehensive error handling with try-catch throughout filtering pipeline
++ Implemented fallback deep search when schema patterns don't match
+
+### Bug Fixes
+
++ Fixed inefficient title checking that called getShelfTitleOptimized() 2-3x per shelf
++ Added missing parse error handling to prevent crashes on malformed JSON
++ Fixed config cache to properly update on configuration changes
++ Added fallback mechanism for unknown/new YouTube API response types
+
++ Added webOS 3, 4, and 6 to the existing webOS 5 SponsorBlock logic fixing skipping infinite loop/restart bug - https://github.com/NicholasBly/youtube-webos/issues/26#issuecomment-3693879890
+
+## Webpack / Building
+
+Added dual build capability
++ Build modern version (no polyfills, supports webOS 22 + via command: npm run build:modern)
++ Build legacy version (webOS 3.0 + with npm run build)
+
+Shortcuts via build-local modern.cmd and build-local.cmd
+
++ Fixed .cmd shortcuts always performing a clean install, leading to slow build times
++ + Checks if node_modules folder exists already, if not, perform a clean install
+
 ## [0.6.5] - 2025/12/23
 
 ## Note

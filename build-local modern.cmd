@@ -18,7 +18,7 @@ if not exist "node_modules\" (
 )
 
 echo [2/4] Building project...
-call npm run build
+call npm run build:modern
 if !errorlevel! neq 0 (
     echo ERROR: npm run build failed
     echo Press any key to close...
