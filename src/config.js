@@ -66,6 +66,7 @@ export const shortcutActions = {
 };
 
 const configOptions = new Map([
+  ['uiTheme', { default: 'blue-force-field', desc: 'UI Theme' }],
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
   ['upgradeThumbnails', { default: false, desc: 'Upgrade Thumbnail Quality' }],

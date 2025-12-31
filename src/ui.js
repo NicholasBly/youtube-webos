@@ -14,7 +14,6 @@ import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
 import { initYouTubeFixes } from './yt-fixes.js';
-import { WebOSVersion } from './webos-utils.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
@@ -253,12 +252,12 @@ function createOptionsPanel() {
   elmContainer.addEventListener(
     'focus',
     () => console.info('Options panel focused!'),
-    true
+    false
   );
   elmContainer.addEventListener(
     'blur',
     () => console.info('Options panel blurred!'),
-    true
+    false
   );
 
   let activePage = 0; 
@@ -304,21 +303,16 @@ function createOptionsPanel() {
   elmContainer.addEventListener(
     'keydown',
     (evt) => {
-      console.info('Options panel key event:', evt.type, evt.charCode);
-
       if (getKeyColor(evt.charCode) === 'green') {
         return;
       }
-
       if (evt.keyCode in ARROW_KEY_CODE) {
         const dir = ARROW_KEY_CODE[evt.keyCode];
         if (dir === 'left' || dir === 'right') {
           const preFocus = document.activeElement;
-
           if (preFocus.classList.contains('shortcut-control-row')) {
               return;
           }
-
           if (activePage === 1) {
             const sponsorMainToggle = pageSponsor.querySelector('input');
             if (dir === 'right' && preFocus === sponsorMainToggle) {
@@ -371,13 +365,47 @@ function createOptionsPanel() {
     true
   );
 
-  const elmHeading = document.createElement('h1');
-  const webOSVersion = WebOSVersion(); 
-  if (webOSVersion === 25) {
-		  elmHeading.textContent = `YouTube Extended — webOS ${webOSVersion}`;
-	  } else {
-		  elmHeading.textContent = 'YouTube Extended';
-	  }
+ const elmHeading = document.createElement('h1');
+  
+  const toggleTheme = (evt) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    const currentTheme = configRead('uiTheme');
+    const newTheme = currentTheme === 'blue-force-field' ? 'classic-red' : 'blue-force-field';
+    configWrite('uiTheme', newTheme);
+  };
+
+  const logoBlue = document.createElement('img');
+  logoBlue.src = 'https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/NB%20Logo-gigapixel.png';
+  logoBlue.alt = 'Logo';
+  logoBlue.classList.add('ytaf-logo', 'logo-blue'); 
+  logoBlue.title = 'Click to switch theme';
+  logoBlue.addEventListener('click', toggleTheme);
+  
+  const logoRed = document.createElement('img');
+  logoRed.src = 'https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/NB%20Logo-gigapixel2.png';
+  logoRed.alt = 'Logo';
+  logoRed.classList.add('ytaf-logo', 'logo-red'); 
+  logoRed.title = 'Click to switch theme';
+  logoRed.style.display = 'none'; 
+  logoRed.addEventListener('click', toggleTheme);
+  
+  const logoDark = document.createElement('img');
+  logoDark.src = 'https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/NB%20Logo-gigapixel4.png';
+  logoDark.alt = 'Logo';
+  logoDark.classList.add('ytaf-logo', 'logo-dark'); 
+  logoDark.title = 'Click to switch theme';
+  logoDark.style.display = 'none'; 
+  logoDark.addEventListener('click', toggleTheme);
+  
+  const titleText = document.createElement('span');
+  titleText.textContent = 'YouTube Extended';
+  
+  elmHeading.appendChild(titleText);
+  elmHeading.appendChild(logoBlue);
+  elmHeading.appendChild(logoRed);
+  elmHeading.appendChild(logoDark);
+  
   elmContainer.appendChild(elmHeading);
 
   // --- Page 1: Main (Grouped) ---
@@ -1058,6 +1086,9 @@ const eventHandler = (evt) => {
         oledKeepAliveTimer = null;
       }
     } else {
+	  if (optionsPanelVisible) {
+        showOptionsPanel(false);
+      }
       overlay = document.createElement('div');
       overlay.id = 'oled-black-overlay';
       overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999';
@@ -1172,45 +1203,79 @@ function initHideEndcards() {
   });
 }
 
+// Centralized logic for logo visibility
+function updateLogoState() {
+  const theme = configRead('uiTheme');
+  const isOled = configRead('enableOledCareMode');
+
+  const logoBlue = document.querySelector('.ytaf-logo.logo-blue');
+  const logoRed = document.querySelector('.ytaf-logo.logo-red');
+  const logoDark = document.querySelector('.ytaf-logo.logo-dark');
+
+  // Safety check
+  if (!logoBlue || !logoRed || !logoDark) return;
+
+  if (isOled) {
+    // If OLED mode is active, FORCE the dark logo regardless of theme
+    logoBlue.style.display = 'none';
+    logoRed.style.display = 'none';
+    logoDark.style.display = '';
+  } else {
+    // If OLED is off, revert to theme preference
+    logoDark.style.display = 'none';
+    
+    if (theme === 'classic-red') {
+      logoRed.style.display = '';
+      logoBlue.style.display = 'none';
+    } else {
+      logoRed.style.display = 'none';
+      logoBlue.style.display = '';
+    }
+  }
+}
+
 function applyOledMode(enabled) {
   const optionsPanel = document.querySelector('.ytaf-ui-container');
 
   const oledClass = 'oled-care';
   if (enabled) {
     optionsPanel?.classList.add(oledClass);
-    // Use cached notification container
     notificationContainer?.classList.add(oledClass);
 
     const style = document.createElement('style');
     style.id = 'style-gray-ui-oled-care';
-
     style.textContent = `
-      #container {
-        background-color: black !important;
-      }
-
-      .ytLrGuideResponseMask {
-        background-color: black !important;
-      }
-
-      .ytLrGuideResponseGradient {
-        display: none;
-      }
-
-      .ytLrAnimatedOverlayContainer {
-        background-color: black !important;
-      }
+      #container { background-color: black !important; }
+      .ytLrGuideResponseMask { background-color: black !important; }
+      .ytLrGuideResponseGradient { display: none; }
+      .ytLrAnimatedOverlayContainer { background-color: black !important; }
     `;
-
     document.head.appendChild(style);
-
   } else {
     optionsPanel?.classList.remove(oledClass);
-    // Use cached notification container
     notificationContainer?.classList.remove(oledClass);
-
     document.getElementById('style-gray-ui-oled-care')?.remove();
   }
+  
+  // Update logos whenever OLED mode changes
+  updateLogoState();
+}
+
+function applyTheme(theme) {
+  const optionsPanel = document.querySelector('.ytaf-ui-container');
+  const notificationContainer = document.querySelector('.ytaf-notification-container');
+  
+  // Handle CSS Classes
+  if (theme === 'classic-red') {
+    optionsPanel?.classList.add('theme-classic-red');
+    notificationContainer?.classList.add('theme-classic-red');
+  } else {
+    optionsPanel?.classList.remove('theme-classic-red');
+    notificationContainer?.classList.remove('theme-classic-red');
+  }
+  
+  // Update logos whenever Theme changes
+  updateLogoState();
 }
 
 initHideLogo();
@@ -1227,9 +1292,16 @@ configAddChangeListener('hideGuestSignInPrompts', (evt) => {
   }
 });
 
+// Initialize OLED Mode
 applyOledMode(configRead('enableOledCareMode'));
 configAddChangeListener('enableOledCareMode', (evt) => {
   applyOledMode(evt.detail.newValue);
+});
+
+// Initialize Theme
+applyTheme(configRead('uiTheme'));
+configAddChangeListener('uiTheme', (evt) => {
+  applyTheme(evt.detail.newValue);
 });
 
 configAddChangeListener('enableAdBlock', (evt) => {
