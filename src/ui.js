@@ -1111,12 +1111,20 @@ const eventHandler = (evt) => {
           evt.stopPropagation();
           return false;
       }
+	  
+	  // prevent shortcut keys on non-videos
+	  if (!isWatchPage()) {
+          return true;
+      }
 
       const action = configRead(`shortcut_key_${keyIndex}`);
-      
+	  
+	  // Always prevent default behavior for number keys on watch page
+      // This prevents unassigned keys from triggering the player UI
+      evt.preventDefault();
+      evt.stopPropagation();
+	  
       if (action && action !== 'none') {
-          evt.preventDefault();
-          evt.stopPropagation();
           handleShortcutAction(action);
       }
   }

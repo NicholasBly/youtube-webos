@@ -17,6 +17,12 @@
 	top: 12rem !important;
 }
 
+/* Fill in gaps between multiline titles in new YouTube UI 12/31/25 */
+.app-quality-root .SK1srf .WVWtef, .app-quality-root .SK1srf .niS3yd {
+padding-bottom: 4px !important;
+padding-top: 4px !important;
+}
+
 /**
  * Dirty hack to fix offset <video> on shorts on older webOS versions.
  * This shouldn't work but it does 😵‍💫.

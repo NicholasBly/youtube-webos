@@ -329,18 +329,21 @@ class SponsorBlockHandler {
         
         try {
             const data = await this.fetchSegments(hashPrefix);
-            
             if (this.isDestroyed || this.videoID !== initVideoID) return;
-            
             const videoData = Array.isArray(data) ? data.find(x => x.videoID === this.videoID) : data;
-            
             if (!videoData?.segments?.length) return;
             
             this.segments = videoData.segments.sort((a, b) => a.segment[0] - b.segment[0]);
-            this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
-            this.rebuildSkipSegments();
-            
-            const video = document.querySelector('video');
+			this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
+
+			// Clamp segments to video duration if available
+			const video = document.querySelector('video');
+			if (video && video.duration && !isNaN(video.duration)) {
+				this.clampSegmentsToDuration(video.duration);
+			}
+
+			this.rebuildSkipSegments();
+
             if (video) {
                 this.executeChainSkip(video);
             }
@@ -572,6 +575,16 @@ class SponsorBlockHandler {
             this.rebuildSkipSegments();
         }
     }
+	
+	clampSegmentsToDuration(duration) {
+    if (!duration || isNaN(duration)) return;
+    
+    for (const segment of this.segments) {
+        if (segment.segment[1] > duration) {
+            segment.segment[1] = duration;
+        }
+    }
+	}
 
     startHighFreqLoop() {
         if (!this.pollingRafId && this.nextSegmentStart !== Infinity && !this.isDestroyed) {

@@ -409,7 +409,7 @@
   text-align: left; 
   border-top: none; 
   border-bottom: 1px solid rgba(0, 212, 255, 0.2);
-  margin-top: 0; 
+  margin-top: 5px; 
   margin-bottom: 16px; 
   padding: 8px 0 16px;
 }
