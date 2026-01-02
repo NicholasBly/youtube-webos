@@ -21,6 +21,7 @@ import './font-fix.css';
 import './thumbnail-quality';
 import './screensaver-fix';
 import './yt-fixes.css';
+import './watch.js';
 
 const version = WebOSVersion();
 

@@ -66,6 +66,7 @@ export const shortcutActions = {
 };
 
 const configOptions = new Map([
+  ['uiTheme', { default: 'blue-force-field', desc: 'UI Theme' }],
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
   ['upgradeThumbnails', { default: false, desc: 'Upgrade Thumbnail Quality' }],
@@ -160,6 +161,13 @@ const configOptions = new Map([
     {
       default: false,
       desc: 'Hide YouTube Logo'
+    }
+  ],
+    [
+    'showWatch',
+    {
+      default: false,
+      desc: 'Display Time in UI'
     }
   ],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],

@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.7] - 2026/01/02
+
+## Added
+
+Added new theme to config UI: Blueprint
+Added logo to config UI header
++ Click the logo to toggle between themes
+
+Force Max Quality now sets the local storage key yt-player-quality to 4320 (max) on load/video changes
+
+Added "Display Time in UI" from https://github.com/webosbrew/youtube-webos - https://github.com/NicholasBly/youtube-webos/issues/32
++ Improvement: Time UI background now matches background color based on OLED mode toggle
+
+## Changes
+
+Added code to ensure config UI is closed when activating OLED mode so the persistent keepalive has access to YouTube's controls
+
+## Fixes
+
+Attempted fix to black screen on first video load using Force Max Quality
++ Only sets max quality on buffering state instead of buffering and unstarted state
+Fixed shortcut keys activating on the search page
+Fixed shortcut keys with no action assigned toggling the player UI when pressed
+Fixed config UI css rules that weren't compatible with webOS 3
+
+### SponsorBlock.js
+
+Clamp segments that are outside the bounds of the video duration
+If segments start after the video's duration, they won't show on the progress bar
++ Sometimes SponsorBlock segments are submitted and the video creator edits something out of the video making it shorter, causing segments to start after the video ends
+
+## YouTube UI Updates - yt-fixes.css
+
+Video player: multiline video titles closes gap between lines, making it easier to read on new UI
+
 ## [0.6.6] - 2025/12/29
 
 ## Added

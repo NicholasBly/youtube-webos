@@ -1,4 +1,13 @@
-/* src/ui.css */
+/* Optimized for LG webOS 3.0+ Performance */
+
+/* Optional animation - can be disabled for better performance */
+@keyframes blueprintPulse {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.25; }
+}
+
+/* Removed unused forceFieldGlow animation */
+
 .ytaf-ui-container {
   position: fixed;
   top: 5%;
@@ -7,22 +16,27 @@
   width: 95vw;
   max-width: 800px;
   max-height: 90vh;
-  
-  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-  border: 1px solid #3f3f3f;
-  border-radius: 16px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 
-              0 0 0 1px rgba(255, 255, 255, 0.05);
-  
   color: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 48px; /* Original 16px */
+  font-size: 48px;
   z-index: 1000;
-  
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background: linear-gradient(135deg, #001a2e 0%, #002840 50%, #001a2e 100%);
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  border-radius: 16px;
+  /* Simplified box-shadow for better performance */
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
 }
 
+.ytaf-ui-container.theme-classic-red {
+  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+  border: 1px solid #3f3f3f;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
+}
+
+/* Optional blueprint effect - disable for maximum performance */
 .ytaf-ui-container::before {
   content: '';
   position: absolute;
@@ -30,11 +44,23 @@
   left: 0;
   right: 0;
   bottom: 0;
+  background-image: 
+    linear-gradient(rgba(0, 212, 255, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.15) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: -1px -1px;
+  pointer-events: none;
+  /* Animation disabled by default for performance - uncomment to enable */
+  /* animation: blueprintPulse 8s ease-in-out infinite; */
+  z-index: 0;
+}
+
+.ytaf-ui-container.theme-classic-red::before {
   background: linear-gradient(45deg, 
     rgba(255, 0, 0, 0.05) 0%, 
     rgba(255, 255, 255, 0.02) 50%, 
     rgba(255, 0, 0, 0.05) 100%);
-  pointer-events: none;
+  animation: none;
 }
 
 .ytaf-ui-container > * {
@@ -44,19 +70,37 @@
 
 .ytaf-ui-container h1 {
   margin: 0;
-  padding: 24px 32px 16px;
+  padding: 16px 32px 12px;
   text-align: center;
-  font-size: 42px; /* Original 28px */
+  font-size: 42px;
   font-weight: 600;
-  background: linear-gradient(135deg, #ff0000, #ff4444);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  border-bottom: 1px solid #3f3f3f;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.3);
   margin-bottom: 0;
+  color: #00d4ff;
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* Apply scrolling and padding to both pages */
+.ytaf-ui-container.theme-classic-red h1 {
+  color: #ff4444;
+  text-shadow: none;
+  border-bottom: 1px solid #3f3f3f;
+}
+
+.ytaf-ui-container .ytaf-logo {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+  transition: transform 0.2s ease;
+  margin-left: 12px;
+}
+
+.ytaf-ui-container .ytaf-logo:hover {
+  transform: scale(1.1);
+}
+
 .ytaf-ui-container > div.ytaf-settings-page {
   padding: 0 32px 24px;
   overflow-y: auto;
@@ -65,24 +109,26 @@
   min-height: 0;
 }
 
-/* Custom scrollbar */
 .ytaf-ui-container > div::-webkit-scrollbar {
   width: 8px;
 }
 
 .ytaf-ui-container > div::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 212, 255, 0.05);
   border-radius: 4px;
 }
 
 .ytaf-ui-container > div::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, #ff0000, #cc0000);
+  background: #0099cc;
   border-radius: 4px;
-  transition: background 0.2s ease;
 }
 
-.ytaf-ui-container > div::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, #ff3333, #ff0000);
+.ytaf-ui-container.theme-classic-red > div::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ytaf-ui-container.theme-classic-red > div::-webkit-scrollbar-thumb {
+  background: #cc0000;
 }
 
 .ytaf-ui-container input[type='checkbox'] {
@@ -92,25 +138,40 @@
   margin-right: 12px;
   appearance: none;
   -webkit-appearance: none;
-  background: #2a2a2a;
-  border: 2px solid #4a4a4a;
+  background: rgba(0, 50, 80, 0.8);
+  border: 2px solid rgba(0, 150, 200, 0.5);
   border-radius: 4px;
   position: relative;
   cursor: pointer;
-  transition: all 0.2s ease;
   flex-shrink: 0;
+  transition: all 0.2s ease;
 }
 
 .ytaf-ui-container input[type='checkbox']:hover {
-  border-color: #ff0000;
-  background: #333333;
+  border-color: #00d4ff;
   transform: scale(1.05);
 }
 
 .ytaf-ui-container input[type='checkbox']:checked {
-  background: linear-gradient(135deg, #ff0000, #cc0000);
+  background: #00d4ff;
+  border-color: #00d4ff;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
+}
+
+.ytaf-ui-container.theme-classic-red input[type='checkbox'] {
+  background: #2a2a2a;
+  border: 2px solid #4a4a4a;
+}
+
+.ytaf-ui-container.theme-classic-red input[type='checkbox']:hover {
   border-color: #ff0000;
-  box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+  background: #333333;
+}
+
+.ytaf-ui-container.theme-classic-red input[type='checkbox']:checked {
+  background: #cc0000;
+  border-color: #ff0000;
+  box-shadow: none;
 }
 
 .ytaf-ui-container input[type='checkbox']:checked::after {
@@ -125,24 +186,28 @@
 }
 
 .ytaf-ui-container input[type='checkbox']:focus {
-  outline: 2px solid #ff0000;
+  outline: 2px solid #00d4ff;
   outline-offset: 2px;
+}
+
+.ytaf-ui-container.theme-classic-red input[type='checkbox']:focus {
+  outline: 2px solid #ff0000;
 }
 
 .ytaf-ui-container label {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 24px; /* Original 16px */
+  font-size: 24px;
   font-weight: 400;
-  line-height: 0.85; /* Original 1.4 */
+  line-height: 0.85;
   padding: 12px 0;
   cursor: pointer;
-  transition: all 0.2s ease;
   border-radius: 8px;
   margin: 0 -8px 4px; 
   padding-left: 8px;
   padding-right: 8px;
+  transition: all 0.2s ease;
 }
 
 .ytaf-ui-container label .label-content {
@@ -154,53 +219,73 @@
 .ytaf-ui-container label .color-picker-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
   margin-left: auto;
   flex-shrink: 0;
 }
 
+.ytaf-ui-container label .color-picker-controls > * {
+  margin-left: 8px;
+}
+
+.ytaf-ui-container label .color-picker-controls > *:first-child {
+  margin-left: 0;
+}
+
 .ytaf-ui-container label:hover {
+  background: rgba(0, 212, 255, 0.1);
+  transform: translateX(4px);
+}
+
+.ytaf-ui-container.theme-classic-red label:hover {
   background: rgba(255, 255, 255, 0.05);
   transform: translateX(4px);
 }
 
-.ytaf-ui-container label:focus-within {
+.ytaf-ui-container label:focus-within,
+.ytaf-ui-container .shortcut-control-row:focus {
+  background: rgba(0, 212, 255, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px #00d4ff;
+  outline: none;
+}
+
+.ytaf-ui-container.theme-classic-red label:focus-within,
+.ytaf-ui-container.theme-classic-red .shortcut-control-row:focus {
   background: rgba(255, 0, 0, 0.1);
-  box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.3);
+  box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.5);
 }
 
 .ytaf-ui-container blockquote {
   margin: 16px 0 16px 24px;
   padding-left: 24px;
-  border-left: 3px solid #ff0000;
-  background: rgba(255, 0, 0, 0.05);
+  border-left: 3px solid #00d4ff;
+  background: rgba(0, 212, 255, 0.05);
   border-radius: 0 8px 8px 0;
 }
 
-.ytaf-ui-container blockquote label {
-  font-size: 20px; /* Original 15px */
-  color: #e0e0e0;
-  padding: 8px 0; /* 8px in normal mode */
+.ytaf-ui-container.theme-classic-red blockquote {
+  border-left: 3px solid #ff0000;
+  background: rgba(255, 0, 0, 0.05);
 }
 
-.ytaf-ui-container.guest-mode blockquote label {
-  padding: 6px 0; /* 6px in guest mode */
+.ytaf-ui-container blockquote label {
+  font-size: 20px;
+  color: #e0e0e0;
+  padding: 8px 0;
 }
 
 .ytaf-ui-container small {
   display: block;
   text-align: center;
   color: #888888;
-  font-size: 16px; /* Original 13px */
+  font-size: 16px;
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid #3f3f3f;
+  border-top: 1px solid rgba(0, 212, 255, 0.2);
 }
 
-/* Focus styles for TV navigation */
-.ytaf-ui-container :focus {
-  outline: 3px solid #ff0000;
-  outline-offset: 2px;
+.ytaf-ui-container.theme-classic-red small {
+  border-top: 1px solid #3f3f3f;
 }
 
 .ytaf-notification-container {
@@ -213,49 +298,32 @@
 }
 
 .ytaf-notification-container .message {
-  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-  border: 1px solid #3f3f3f;
+  background: #002840;
+  border: 1px solid rgba(0, 212, 255, 0.4);
   color: white;
   padding: 16px 20px;
   margin-bottom: 12px;
   border-radius: 12px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  transition: opacity 0.3s ease, transform 0.3s ease;
   opacity: 1;
   transform: translateX(0);
-  border-left: 4px solid #ff0000;
+  border-left: 4px solid #00d4ff;
   font-weight: 500;
   line-height: 1.4;
-  display: block;
-  float: none;
+}
+
+.ytaf-notification-container.theme-classic-red .message {
+  background: #1a1a1a;
+  border: 1px solid #3f3f3f;
+  border-left: 4px solid #ff0000;
 }
 
 .ytaf-notification-container .message-hidden {
   opacity: 0;
-  transform: translateX(100%);
-  margin-bottom: 0;
-  padding: 0 20px;
-  max-height: 0;
-  overflow: hidden;
+  transform: translateX(20px);
 }
 
-/* Smooth animations */
-@keyframes slideInFromRight {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.ytaf-notification-container .message {
-  animation: slideInFromRight 0.3s ease-out;
-}
-
-/* Responsive adjustments */
 @media (max-width: 768px) {
   .ytaf-ui-container {
     width: 95vw;
@@ -265,30 +333,230 @@
   
   .ytaf-ui-container h1 {
     font-size: 24px;
-    padding: 20px 24px 12px;
+    padding: 14px 24px 10px;
   }
   
-  .ytaf-ui-container > div:not(:first-child) {
-    padding: 0 24px 20px;
+  .ytaf-ui-container .ytaf-logo {
+    width: 45px;
+    height: 45px;
   }
 }
 
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  .ytaf-ui-container {
-    background: #000000;
-    border: 2px solid #ffffff;
-  }
-  
-  .ytaf-ui-container input[type='checkbox']:checked {
-    background: #ffffff;
-    color: #000000;
-  }
+/* OLED Care Mode - Optimized for OLED displays */
+.ytaf-ui-container.oled-care {
+  background: #000000;
+  border-color: #333;
+  box-shadow: none;
 }
 
-/* Styling for Color Pickers */
-.ytaf-ui-container label.color-picker-label {
+.ytaf-ui-container.oled-care::before {
+  background: none;
+}
+
+.ytaf-ui-container.oled-care input[type='checkbox'] {
+  background: #000;
+  border-color: #555;
+}
+
+.ytaf-ui-container.oled-care input[type='checkbox']:checked {
+  background: #555;
+}
+
+.ytaf-ui-container.oled-care .shortcut-control-row:hover,
+.ytaf-ui-container.oled-care label:hover {
+  background: #222;
+}
+
+/* OLED Care Mode - Notifications */
+.ytaf-notification-container.oled-care .message {
+  background: #000000;
+  border: 1px solid #00d4ff;
+  border-left: 4px solid #00d4ff;
+  box-shadow: none;
+  color: #cccccc;
+}
+
+.ytaf-notification-container.oled-care.theme-classic-red .message {
+  border: 1px solid #ff4444;
+  border-left: 4px solid #ff4444;
+}
+
+/* Navigation Hints */
+.ytaf-nav-hint {
+  display: flex;
+  align-items: center;
+  padding: 16px 0 8px;
+  font-size: 24px;
+  color: #5599aa;
+  cursor: pointer;
+  border-top: 1px solid rgba(0, 212, 255, 0.2);
+  margin-top: 16px;
+  transition: all 0.2s ease;
+}
+
+.ytaf-ui-container.theme-classic-red .ytaf-nav-hint {
+  color: #cccccc;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ytaf-nav-hint:hover {
+  color: #ffffff;
+}
+
+.ytaf-nav-hint:focus {
+  outline: none;
+  background: rgba(0, 212, 255, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px #00d4ff;
+}
+
+.ytaf-ui-container.theme-classic-red .ytaf-nav-hint:focus {
+  background: rgba(255, 0, 0, 0.1);
+  box-shadow: 0 0 0 2px #ff0000;
+}
+
+.ytaf-ui-container.oled-care .ytaf-nav-hint:focus {
+  background: #222;
+  box-shadow: 0 0 0 2px #555;
+}
+
+.ytaf-nav-hint.right { 
+  justify-content: flex-end; 
+  text-align: right; 
+}
+
+.ytaf-nav-hint.left { 
+  justify-content: flex-start; 
+  text-align: left; 
+  border-top: none; 
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  margin-top: 5px; 
+  margin-bottom: 16px; 
+  padding: 8px 0 16px;
+}
+
+.ytaf-ui-container.theme-classic-red .ytaf-nav-hint.left {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ytaf-nav-hint span.arrow {
+  color: #00d4ff;
+  font-weight: bold;
+  font-size: 28px;
+  margin: 0 12px;
+  transition: transform 0.2s ease;
+}
+
+.ytaf-nav-hint:hover span.arrow {
+  transform: scale(1.2);
+}
+
+.ytaf-ui-container.theme-classic-red .ytaf-nav-hint span.arrow {
+  color: #ff4444;
+}
+
+/* Shortcut Controls - Optimized spacing for spatial navigation */
+.shortcut-control-row {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  padding: 12px 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 24px;
+  /* Critical: margin prevents spatial navigation from skipping */
+  margin: 0 -8px 4px;
+  transition: all 0.2s ease;
+}
+
+.shortcut-control-row:hover {
+  background: rgba(0, 212, 255, 0.1);
+  transform: translateX(4px);
+}
+
+.ytaf-ui-container.theme-classic-red .shortcut-control-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateX(4px);
+}
+
+.shortcut-label { 
+  color: #b8e6f5;
+  font-weight: 400;
+}
+
+.ytaf-ui-container.theme-classic-red .shortcut-label { 
+  color: #e0e0e0; 
+}
+
+.shortcut-value-container {
+  display: flex;
+  align-items: center;
+  color: #ffffff;
+}
+
+.shortcut-value-container > * {
+  margin-left: 12px;
+}
+
+.shortcut-value-container > *:first-child {
+  margin-left: 0;
+}
+
+.shortcut-value-container .arrow-btn {
+  color: #00d4ff;
+  font-weight: bold;
+  font-size: 24px;
+  user-select: none;
+}
+
+.ytaf-ui-container.theme-classic-red .shortcut-value-container .arrow-btn {
+  color: #ff4444;
+}
+
+.shortcut-value-container .current-value {
+  min-width: 150px;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Color Picker Controls */
+.reset-color-btn {
+  background: rgba(0, 100, 150, 0.5);
+  color: #ffffff;
+  border: 1px solid rgba(0, 150, 200, 0.5);
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin-right: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+}
+
+.ytaf-ui-container.theme-classic-red .reset-color-btn {
+  background: #4f4f4f;
+  border: 1px solid #666666;
+  box-shadow: none;
+}
+
+.reset-color-btn:hover {
+  background: rgba(0, 150, 200, 0.7);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
+}
+
+.ytaf-ui-container.theme-classic-red .reset-color-btn:hover {
+  background: #6a6a6a;
+  box-shadow: none;
+}
+
+.reset-color-btn:focus {
+  outline: 2px solid #00d4ff;
+  outline-offset: 1px;
+}
+
+.ytaf-ui-container.theme-classic-red .reset-color-btn:focus {
+  outline: 2px solid #ff0000;
 }
 
 .ytaf-ui-container input[type='color'] {
@@ -296,10 +564,16 @@
   appearance: none;
   width: 40px;
   height: 24px;
-  border: 1px solid #4a4a4a;
+  border: 1px solid rgba(0, 150, 200, 0.5);
   border-radius: 4px;
   background-color: transparent;
   cursor: pointer;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+}
+
+.ytaf-ui-container.theme-classic-red input[type='color'] {
+  border: 1px solid #4a4a4a;
+  box-shadow: none;
 }
 
 .ytaf-ui-container input[type='color']::-webkit-color-swatch-wrapper {
@@ -309,198 +583,4 @@
 .ytaf-ui-container input[type='color']::-webkit-color-swatch {
   border: none;
   border-radius: 4px;
-}
-
-/* OLED-Care Mode */
-.ytaf-ui-container.oled-care {
-  background: #000000;
-  border-color: #383838;
-  box-shadow: 0 0 0 1px #383838;
-}
-
-.ytaf-ui-container.oled-care::before {
-  background: none;
-}
-
-.ytaf-ui-container.oled-care h1 {
- background: none;
- -webkit-text-fill-color: #999999;
- border-bottom-color: #383838;
-}
-
-.ytaf-ui-container.oled-care > div::-webkit-scrollbar-track {
-  background: #080808;
-}
-
-.ytaf-ui-container.oled-care > div::-webkit-scrollbar-thumb {
-  background: #999999;
-}
-
-.ytaf-ui-container.oled-care input[type='checkbox'] {
-  background: #111;
-  border-color: #555;
-}
-
-.ytaf-ui-container.oled-care input[type='checkbox']:hover {
-  border-color: #999999;
-}
-
-.ytaf-ui-container.oled-care input[type='checkbox']:checked {
-  background: #999999;
-  border-color: #999999;
-}
-
-.ytaf-ui-container.oled-care label:hover {
-  background: #1a1a1a;
-}
-
-.ytaf-ui-container.oled-care blockquote {
-  border-left-color: #999999;
-  background: rgba(153, 153, 153, 0.08);
-}
-
-.ytaf-ui-container.oled-care small {
-  border-top-color: #383838;
-}
-
-.ytaf-notification-container.oled-care .message {
-  background: #000000;
-  border-color: #383838;
-  border-left-color: #999999;
-}
-
-.color-picker-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.reset-color-btn {
-  background: #4f4f4f;
-  color: #ffffff;
-  border: 1px solid #666666;
-  border-radius: 4px;
-  padding: 2px 8px;
-  margin-right: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: background 0.2s ease;
-  flex-shrink: 0;
-}
-
-.reset-color-btn:hover {
-  background: #6a6a6a;
-}
-
-.reset-color-btn:focus {
-  outline: 2px solid #ff0000;
-  outline-offset: 1px;
-}
-
-.ytaf-ui-container.oled-care .reset-color-btn {
-  background: #222222;
-  border-color: #555555;
-}
-
-.ytaf-ui-container.oled-care .reset-color-btn:hover {
-  background: #333333;
-}
-
-/* Navigation Hints for Pages */
-.ytaf-nav-hint {
-  display: flex;
-  align-items: center;
-  padding: 16px 0 8px;
-  font-size: 24px;
-  color: #aaaaaa;
-  cursor: pointer;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  margin-top: 16px;
-}
-
-.ytaf-nav-hint.right {
-  justify-content: flex-end;
-  text-align: right;
-}
-
-.ytaf-nav-hint.left {
-  justify-content: flex-start;
-  text-align: left;
-  border-top: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-top: 0;
-  margin-bottom: 16px;
-  padding: 8px 0 16px;
-}
-
-.ytaf-nav-hint span.arrow {
-  color: #ff0000;
-  font-weight: bold;
-  font-size: 28px;
-  margin: 0 12px;
-}
-
-.ytaf-nav-hint:hover {
-  color: #ffffff;
-}
-
-.ytaf-nav-hint:hover span.arrow {
-  transform: scale(1.2);
-}
-
-/* Shortcut Page Styles */
-.shortcut-control-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 0;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border-radius: 8px;
-  /* Added bottom margin to prevent spatial navigation from skipping items */
-  margin: 0 -8px 4px; 
-  padding-left: 8px;
-  padding-right: 8px;
-  font-size: 24px;
-}
-
-.shortcut-control-row:hover {
-  background: rgba(255, 255, 255, 0.05);
-  transform: translateX(4px);
-}
-
-.shortcut-control-row:focus {
-  background: rgba(255, 0, 0, 0.1);
-  box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.3);
-  outline: none;
-}
-
-.shortcut-label {
-  font-weight: 400;
-  color: #e0e0e0;
-}
-
-.shortcut-value-container {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: #ffffff;
-}
-
-.shortcut-value-container .arrow-btn {
-  color: #ff0000;
-  font-weight: bold;
-  font-size: 24px;
-  user-select: none;
-}
-
-.shortcut-value-container .current-value {
-  min-width: 150px;
-  text-align: center;
-  font-weight: 500;
-}
-
-.ytaf-ui-container.oled-care .shortcut-control-row:hover {
-  background: #1a1a1a;
 }
