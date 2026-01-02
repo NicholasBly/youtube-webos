@@ -163,6 +163,13 @@ const configOptions = new Map([
       desc: 'Hide YouTube Logo'
     }
   ],
+    [
+    'showWatch',
+    {
+      default: false,
+      desc: 'Display time in UI'
+    }
+  ],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],

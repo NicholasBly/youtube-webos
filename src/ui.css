@@ -360,6 +360,20 @@
   background: #222;
 }
 
+/* OLED Care Mode - Notifications */
+.ytaf-notification-container.oled-care .message {
+  background: #000000;
+  border: 1px solid #00d4ff;
+  border-left: 4px solid #00d4ff;
+  box-shadow: none;
+  color: #cccccc;
+}
+
+.ytaf-notification-container.oled-care.theme-classic-red .message {
+  border: 1px solid #ff4444;
+  border-left: 4px solid #ff4444;
+}
+
 /* Navigation Hints */
 .ytaf-nav-hint {
   display: flex;
