@@ -3,9 +3,9 @@
 An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 ## Added Features
-- Full support for webOS 3, 4, 5, 6, 22, 23, 24, and 25 (older versions are untested)
+- Full support for webOS 3, 4, 5, 6, 22, 23, 24, and 25 (2016 and newer LG TVs) (webOS 1 and 2 currently not supported)
 - Enhanced AdBlock Engine: New schema-based filtering system (cleaner Home, Search, and Shorts)
-- Enhanced Menu UI
+- Enhanced Menu UI + Themes
 - Auto Login - bypasses account selection screen
 - Force Max Quality
 - Hide Endcards
