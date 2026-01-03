@@ -167,7 +167,7 @@ const configOptions = new Map([
     'showWatch',
     {
       default: false,
-      desc: 'Display time in UI'
+      desc: 'Display Time in UI'
     }
   ],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],

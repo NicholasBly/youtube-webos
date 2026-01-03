@@ -114,9 +114,11 @@ class ReturnYouTubeDislike {
     
     // Abort any previous request
     if (HAS_ABORT_CONTROLLER) {
-        if (this.abortController) {
-            this.abortController.abort();
-        }
+		try {
+			if (this.abortController) {
+				this.abortController.abort();
+			}
+		} catch (e) { }
         this.abortController = new AbortController();
     }
     
@@ -418,8 +420,12 @@ class ReturnYouTubeDislike {
     this.active = false;
     
     // Abort any in-flight requests (if AbortController is available)
-    if (HAS_ABORT_CONTROLLER && this.abortController) {
-        this.abortController.abort();
+    if (HAS_ABORT_CONTROLLER) {
+        try {
+            if (this.abortController) {
+                this.abortController.abort();
+            }
+        } catch (e) { }
         this.abortController = null;
     }
     
@@ -462,52 +468,48 @@ if (typeof window !== 'undefined') {
         return; 
     }
 
-    const url = new URL(urlStr, 'http://dummy.com');
-    const isWatch = url.pathname === '/watch';
-    const videoID = url.searchParams.get('v');
+    try {
+        const url = new URL(urlStr, 'http://dummy.com');
+        const isWatch = url.pathname === '/watch';
+        const videoID = url.searchParams.get('v');
 
-    if (!isWatch || !videoID) {
-        cleanup();
-        return;
-    }
+        if (!isWatch || !videoID) {
+            cleanup();
+            return;
+        }
 
-    // Only create new instance if video changed
-    if (!window.returnYouTubeDislike || window.returnYouTubeDislike.videoID !== videoID) {
-        cleanup();
-        
-        let enabled = true;
-        if (typeof configRead === 'function') {
-            try { 
-                enabled = configRead('enableReturnYouTubeDislike'); 
-            } catch(e) {
-                console.warn('Config read failed:', e);
+        if (!window.returnYouTubeDislike || window.returnYouTubeDislike.videoID !== videoID) {
+            cleanup();
+            
+            let enabled = true;
+            if (typeof configRead === 'function') {
+                 enabled = configRead('enableReturnYouTubeDislike'); 
+            }
+
+            if (enabled) {
+                window.returnYouTubeDislike = new ReturnYouTubeDislike(videoID);
+                window.returnYouTubeDislike.init();
             }
         }
-
-        if (enabled) {
-            window.returnYouTubeDislike = new ReturnYouTubeDislike(videoID);
-            window.returnYouTubeDislike.init();
-        }
+    } catch(e) {
+        cleanup();
     }
   };
 
   // Event listeners
   window.addEventListener('hashchange', handleHashChange, { passive: true });
-  
   // Delayed init for SPA load
   if (document.readyState === 'loading') {
       window.addEventListener('DOMContentLoaded', () => setTimeout(handleHashChange, 500));
   } else {
       setTimeout(handleHashChange, 500);
   }
-
   // Config change listener
   if (typeof configAddChangeListener === 'function') {
       configAddChangeListener('enableReturnYouTubeDislike', (evt) => {
           evt.detail.newValue ? handleHashChange() : cleanup();
       });
   }
-  
   // Cleanup on unload
   window.addEventListener('beforeunload', cleanup, { passive: true });
 }

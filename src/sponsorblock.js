@@ -858,10 +858,13 @@ if (typeof window !== 'undefined') {
     let initTimeout = null;
 
     const initSB = () => {
+		if (window.sponsorblock) {
+            window.sponsorblock.destroy();
+            window.sponsorblock = null;
+        }
         if (initTimeout) clearTimeout(initTimeout);
         
         const run = () => {
-            if (window.sponsorblock) window.sponsorblock.destroy();
             let videoID = null;
             
             try {

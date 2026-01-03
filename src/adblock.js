@@ -1,9 +1,6 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
 
-// ============================================================================
-// DEBUG CONFIGURATION
-// ============================================================================
-const DEBUG = true;
+const DEBUG = false;
 
 function debugLog(msg, ...args) {
   if (DEBUG) console.log(`[AdBlock] ${msg}`, ...args);

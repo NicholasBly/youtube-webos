@@ -81,7 +81,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
 }
 
 .ytaf-ui-container.theme-classic-red h1 {
@@ -95,6 +94,7 @@
   height: 60px;
   object-fit: contain;
   transition: transform 0.2s ease;
+  margin-left: 12px;
 }
 
 .ytaf-ui-container .ytaf-logo:hover {
@@ -219,9 +219,16 @@
 .ytaf-ui-container label .color-picker-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
   margin-left: auto;
   flex-shrink: 0;
+}
+
+.ytaf-ui-container label .color-picker-controls > * {
+  margin-left: 8px;
+}
+
+.ytaf-ui-container label .color-picker-controls > *:first-child {
+  margin-left: 0;
 }
 
 .ytaf-ui-container label:hover {
@@ -484,8 +491,15 @@
 .shortcut-value-container {
   display: flex;
   align-items: center;
-  gap: 12px;
   color: #ffffff;
+}
+
+.shortcut-value-container > * {
+  margin-left: 12px;
+}
+
+.shortcut-value-container > *:first-child {
+  margin-left: 0;
 }
 
 .shortcut-value-container .arrow-btn {

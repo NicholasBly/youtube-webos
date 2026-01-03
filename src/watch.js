@@ -1,4 +1,4 @@
-import { configRead, configAddChangeListener } from './config';
+import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
 import './watch.css';
 import { requireElement } from './screensaver-fix.ts';
 
@@ -12,11 +12,27 @@ class Watch {
     this.createElement();
     this.startClock();
     this.playerEvents();
+    
+    this.onOledChange = this.onOledChange.bind(this);
+    this.applyOledMode(configRead('enableOledCareMode'));
+    configAddChangeListener('enableOledCareMode', this.onOledChange);
+  }
+
+  onOledChange(evt) {
+    this.applyOledMode(evt.detail.newValue);
+  }
+
+  applyOledMode(enabled) {
+    if (this.#watch) {
+      if (enabled) this.#watch.classList.add('oled-mode');
+      else this.#watch.classList.remove('oled-mode');
+    }
   }
 
   createElement() {
     this.#watch = document.createElement('div');
     this.#watch.className = 'webOs-watch';
+    if (configRead('enableOledCareMode')) this.#watch.classList.add('oled-mode');
     document.body.appendChild(this.#watch);
   }
 
@@ -67,6 +83,7 @@ class Watch {
 
   destroy() {
     clearInterval(this.#timer);
+    configRemoveChangeListener('enableOledCareMode', this.onOledChange);
     this.#watch?.remove();
     this.#attrChanges?.disconnect();
   }
