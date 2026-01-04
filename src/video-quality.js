@@ -7,6 +7,7 @@ let stateHandler = null;
 let initTimer = null;
 let configCleanup = null;
 let isDestroyed = false;
+let lastWriteTime = 0;
 
 // Player States
 // const STATE_UNSTARTED = -1;
@@ -20,6 +21,10 @@ function shouldForce() {
 
 function setLocalStorageQuality() {
   if (!shouldForce()) return;
+  
+  const now = Date.now();
+  // Debounce/Throttle writing if done recently (e.g. 5s)
+  if (now - lastWriteTime < 5000) return;
   
   try {
     const QUALITY_KEY = 'yt-player-quality';
@@ -67,6 +72,7 @@ function setLocalStorageQuality() {
     }
     
     window.localStorage.setItem(QUALITY_KEY, JSON.stringify(qualityObj));
+	lastWriteTime = now; // Update timestamp
     console.info('[VideoQuality] Set localStorage quality to 4320');
     
   } catch (e) {

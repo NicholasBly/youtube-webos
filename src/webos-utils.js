@@ -1,4 +1,3 @@
-/* src/webos-utils.js */
 let cachedWebOSVersion = null;
 let cachedNewLayout = null;
 

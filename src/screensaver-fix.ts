@@ -96,7 +96,6 @@ const bodyAttrObs = new MutationObserver(async () => {
     // Youtube TV re-uses the same video element for everything.
     const video = await requireElement('video', HTMLVideoElement);
     
-    // FIX: Only attach if it's a different video element
     if (video !== currentVideoElement) {
       // Clean up old observer
       if (currentVideoElement) {

@@ -575,7 +575,7 @@ function applyOledMode(enabled) {
   if (enabled) {
     optionsPanel?.classList.add(oledClass);
     notificationContainer?.classList.add(oledClass);
-    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: '#container { background-color: black !important; } .ytLrGuideResponseMask { background-color: black !important; } .ytLrGuideResponseGradient { display: none; } .ytLrAnimatedOverlayContainer { background-color: black !important; }' });
+    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: '#container { background-color: black !important; } .ytLrGuideResponseMask { background-color: black !important; } .geClSe { background-color: black !important; } .hsdF6b { background-color: black !important; } .ytLrGuideResponseGradient { display: none; } .ytLrAnimatedOverlayContainer { background-color: black !important; }' });
     document.head.appendChild(style);
   } else {
     optionsPanel?.classList.remove(oledClass);

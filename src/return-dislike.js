@@ -192,13 +192,38 @@ class ReturnYouTubeDislike {
   handleBodyMutation(mutations) {
     if (!this.active) return;
 
-    // Optimized check using .some()
-    if (!mutations.some(m => m.addedNodes.length > 0)) return;
+    // If we already have a valid panel, stop processing
+    if (this.panelElement && this.panelElement.isConnected) {
+        // Optional: Check if we need to re-inject dislike count, usually handled by panelContentObserver
+        return;
+    }
 
-    const panel = document.querySelector(this.selectors.panel);
-    if (!panel) return;
+    let panelFound = false;
     
-    this.setupPanel(panel);
+    // Look inside addedNodes first
+    for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+            if (node.nodeType === 1) { // Element node
+                // Check if the node itself is the panel
+                if (node.matches && node.matches(this.selectors.panel)) {
+                    panelFound = true;
+                    break; // Break inner
+                }
+                // Check if the panel is inside the node (if a large container was added)
+                if (node.querySelector(this.selectors.panel)) {
+                    panelFound = true;
+                    break; // Break inner
+                }
+            }
+        }
+        if (panelFound) break; // Break outer
+    }
+
+    // Only query the document if we found a potential candidate or force check needed
+    if (panelFound) {
+        const panel = document.querySelector(this.selectors.panel);
+        if (panel) this.setupPanel(panel);
+    }
   }
 
   setupPanel(panel) {

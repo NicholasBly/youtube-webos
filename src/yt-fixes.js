@@ -49,8 +49,13 @@ function initSearchHistoryFix() {
         originalDisconnect();
     };
 
-    searchHistoryObserver.observe(document.body, { childList: true, subtree: true });
-}
+    const searchArea = document.querySelector('ytlr-search-container') || document.body;
+
+	searchHistoryObserver.observe(searchArea, { 
+	  childList: true, 
+	  subtree: searchArea !== document.body // Only use subtree if must observe body
+	});
+	}
 
 function attemptSearchHistoryFix() {
     if (historyCache) return true;
