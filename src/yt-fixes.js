@@ -16,6 +16,10 @@ export function cleanupYouTubeFixes() {
     historyCache = false;
 }
 
+// function isSearchPage() {
+  // return document.body.classList.contains('WEB_PAGE_TYPE_SEARCH');
+// }
+
 function initSearchHistoryFix() {
     if (searchHistoryObserver) {
         searchHistoryObserver.disconnect();
@@ -49,7 +53,7 @@ function initSearchHistoryFix() {
         originalDisconnect();
     };
 
-    const searchArea = document.querySelector('ytlr-search-container') || document.body;
+    const searchArea = document.querySelector('ytlr-search-suggestions') || document.body;
 
 	searchHistoryObserver.observe(searchArea, { 
 	  childList: true, 

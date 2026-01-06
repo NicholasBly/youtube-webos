@@ -70,7 +70,7 @@ function createConfigCheckbox(key) {
 
 function createSection(title, elements) {
   const legend = createElement('div', { text: title, style: { color: '#aaa', fontSize: '22px', marginBottom: '5px', fontWeight: 'bold', textTransform: 'uppercase' }});
-  const fieldset = createElement('div', { class: 'ytaf-settings-section', style: { marginTop: '15px', marginBottom: '5px', padding: '2px', border: '2px solid #444', borderRadius: '5px' }}, legend, ...elements);
+  const fieldset = createElement('div', { class: 'ytaf-settings-section', style: { marginBottom: '5px', padding: '2px', border: '2px solid #444', borderRadius: '5px' }}, legend, ...elements);
   return fieldset;
 }
 

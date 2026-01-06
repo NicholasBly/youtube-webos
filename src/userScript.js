@@ -18,7 +18,7 @@ document.addEventListener(
 import './adblock.js';
 import './sponsorblock.js';
 import './font-fix.css';
-import './thumbnail-quality';
+import './thumbnail-quality.js';
 import './screensaver-fix';
 import './yt-fixes.css';
 import './watch.js';

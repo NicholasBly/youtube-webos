@@ -11,7 +11,7 @@ let lastWriteTime = 0;
 
 // Player States
 // const STATE_UNSTARTED = -1;
-const STATE_BUFFERING = 3;
+// const STATE_BUFFERING = 3;
 const STATE_PLAYING = 1;
 
 function shouldForce() {
@@ -125,17 +125,13 @@ function onStateChange(state) {
   if (isDestroyed || !player) return;
   
   try {
-    if (state === STATE_BUFFERING) {
-      console.info('[VideoQuality] Buffering detected, forcing quality');
-      setQuality();
-    }
-
-    if (state === STATE_PLAYING) {
+    if (state === STATE_PLAYING) { // only set on state_playing to fix black screen issue on video load
       const videoData = player.getVideoData?.();
       const videoId = videoData?.video_id;
       
       if (videoId && videoId !== lastVideoId) {
         lastVideoId = videoId;
+		console.log("[Video Quality] Setting quality");
         setQuality();
         clearTimer();
         qualityTimer = setTimeout(checkQuality, 1000);
@@ -191,10 +187,12 @@ export function initVideoQuality() {
   const attach = () => {
     if (isDestroyed) return true; // Return true to stop polling
     
-    // Direct query - fastest on webOS
+    // Direct query
     const p = document.querySelector('.html5-video-player');
     
-    if (!p || !p.setPlaybackQualityRange || !p.isConnected) {
+    const isConnected = p && (p.isConnected !== undefined ? p.isConnected : document.contains(p));
+    
+    if (!p || !p.setPlaybackQualityRange || !isConnected) {
       return false;
     }
     
@@ -209,6 +207,7 @@ export function initVideoQuality() {
       setLocalStorageQuality();
       
       if (player.getPlayerState?.() === STATE_PLAYING) {
+		console.log("[Video Quality] Setting quality");
         setQuality();
       }
       
@@ -238,7 +237,7 @@ export function initVideoQuality() {
 
   if (attach()) return;
 
-  // Lightweight polling for webOS - more efficient than MutationObserver on older TVs
+  // Wait for YouTube app to initialize to attach
   let attempts = 0;
   const poll = () => {
     if (isDestroyed) {
