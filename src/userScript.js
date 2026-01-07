@@ -2,7 +2,7 @@ import 'whatwg-fetch';
 import './domrect-polyfill';
 
 import { handleLaunch } from './utils';
-import { WebOSVersion, initializeWebOSVersion } from './webos-utils.js';
+import { WebOSVersion } from './webos-utils.js';
 
 import { initBlockWebOSCast } from './block-webos-cast'; 
 

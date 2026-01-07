@@ -84,8 +84,12 @@ function getThumbnailUrl(originalUrl, targetQuality) {
 
 function parseCSSUrl(value) {
   try {
-    const urlString = value.slice(4, -1).replace(/["']/g, "")
-    return new URL(urlString)
+    const match = value.match(/url\(['"]?([^'"]+?)['"]?\)/)
+    
+    if (match && match[1]) {
+      return new URL(match[1])
+    }
+    return undefined
   } catch (e) {
     return undefined
   }
@@ -103,10 +107,16 @@ async function upgradeBgImg(element) {
   if (!element.isConnected) return
 
   const style = element.style
-  if (!style.backgroundImage) return
+  // 1. Capture the existing (low-res) background string exactly as is
+  const oldBackgroundStyle = style.backgroundImage
+  if (!oldBackgroundStyle) return
 
-  const currentUrl = parseCSSUrl(style.backgroundImage)
+  const currentUrl = parseCSSUrl(oldBackgroundStyle)
   if (!currentUrl) return
+
+  // If the parser fails (likely because we already stacked images), stop.
+  // This prevents the script from trying to double-stack or break existing upgrades.
+  if (!currentUrl) return 
 
   const videoIdMatch = currentUrl.pathname.match(/\/vi(?:_webp)?\/([^\/]+)\//)
   if (!videoIdMatch) return
@@ -125,8 +135,8 @@ async function upgradeBgImg(element) {
 
   const candidateQualities = ["maxresdefault", "sddefault", "hqdefault"]
 
-  const tryNextQuality = index => {
-    if (index >= candidateQualities.length) return // Exhausted options
+  const tryNextQuality = async (index) => {
+    if (index >= candidateQualities.length) return 
 
     const quality = candidateQualities[index]
     const targetUrl = getThumbnailUrl(currentUrl, quality)
@@ -137,34 +147,32 @@ async function upgradeBgImg(element) {
     }
 
     const img = new Image()
+    img.src = targetUrl.href
 
-    img.onload = () => {
-      // 1. Check for Soft 404 (Placeholder)
+    try {
+      // Decode ensures the image is ready for the GPU
+      await img.decode()
+      
       if (isPlaceholderImage(img)) {
         tryNextQuality(index + 1)
         return
       }
 
-      // 2. Safety Check: Did the element change while we were loading?
-      const curr = parseCSSUrl(style.backgroundImage)
-      if (!curr || !curr.pathname.includes(videoId)) {
-        return // Element recycled, abort
+      // Safety: Check if the background changed while we were loading
+      // (YouTube might have recycled the element for a different video)
+      if (element.style.backgroundImage !== oldBackgroundStyle) {
+        return 
       }
 
-      // 3. Apply Upgrade
-      style.backgroundImage = `url(${targetUrl.href})`
+      // This keeps the old image visible underneath until the new one paints.
+      style.backgroundImage = `url("${targetUrl.href}"), ${oldBackgroundStyle}`
 
-      // 4. Mark as processed
       element.dataset.thumbVideoId = videoId
       element.dataset.thumbBestQuality = quality
-    }
 
-    img.onerror = () => {
-      // Hard 404 (Network Error), try next quality
+    } catch (err) {
       tryNextQuality(index + 1)
     }
-
-    img.src = targetUrl.href
   }
 
   tryNextQuality(0)
@@ -174,19 +182,20 @@ async function upgradeBgImg(element) {
 
 const dummy = document.createElement("div")
 const upgradeQueue = new Set()
-let upgradeTimer = null
+let upgradeRafId = null
+
+function processQueue() {
+  upgradeQueue.forEach(upgradeBgImg)
+  upgradeQueue.clear()
+  upgradeRafId = null
+}
 
 function queueUpgrade(element) {
   upgradeQueue.add(element)
 
-  if (upgradeTimer !== null) clearTimeout(upgradeTimer)
-
-  // Process batch after 50ms of silence
-  upgradeTimer = window.setTimeout(() => {
-    upgradeQueue.forEach(upgradeBgImg)
-    upgradeQueue.clear()
-    upgradeTimer = null
-  }, 50)
+  if (upgradeRafId === null) {
+    upgradeRafId = requestAnimationFrame(processQueue)
+  }
 }
 
 const obs = new MutationObserver(mutations => {
@@ -266,9 +275,9 @@ export function cleanup() {
   obs.disconnect()
   isObserving = false
   upgradeQueue.clear()
-  if (upgradeTimer !== null) {
-    clearTimeout(upgradeTimer)
-    upgradeTimer = null
+  if (upgradeRafId !== null) {
+    cancelAnimationFrame(upgradeRafId)
+    upgradeRafId = null
   }
 }
 

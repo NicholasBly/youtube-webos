@@ -4,7 +4,7 @@ import { configAddChangeListener, configRead, configWrite, configGetDesc, segmen
 import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
-import { initYouTubeFixes } from './yt-fixes.js';
+// import { initYouTubeFixes } from './yt-fixes.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
@@ -70,7 +70,7 @@ function createConfigCheckbox(key) {
 
 function createSection(title, elements) {
   const legend = createElement('div', { text: title, style: { color: '#aaa', fontSize: '22px', marginBottom: '5px', fontWeight: 'bold', textTransform: 'uppercase' }});
-  const fieldset = createElement('div', { class: 'ytaf-settings-section', style: { marginBottom: '5px', padding: '2px', border: '2px solid #444', borderRadius: '5px' }}, legend, ...elements);
+  const fieldset = createElement('div', { class: 'ytaf-settings-section', style: { marginTop: '15px', marginBottom: '5px', padding: '2px', border: '2px solid #444', borderRadius: '5px' }}, legend, ...elements);
   return fieldset;
 }
 
@@ -595,13 +595,8 @@ function applyTheme(theme) {
 
 initHideLogo();
 initHideEndcards();
-initYouTubeFixes();
+//initYouTubeFixes();
 initVideoQuality();
-
-configAddChangeListener('hideGuestSignInPrompts', (evt) => {
-  if (evt.detail.newValue) initYouTubeFixes();
-  else showNotification('Reload required to disable fix');
-});
 
 applyOledMode(configRead('enableOledCareMode'));
 configAddChangeListener('enableOledCareMode', (evt) => applyOledMode(evt.detail.newValue));
