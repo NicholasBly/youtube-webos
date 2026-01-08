@@ -6,10 +6,12 @@ let qualityTimer = null;
 let stateHandler = null;
 let initTimer = null;
 let configCleanup = null;
+let isDestroyed = false;
+let lastWriteTime = 0;
 
 // Player States
 // const STATE_UNSTARTED = -1;
-const STATE_BUFFERING = 3;
+// const STATE_BUFFERING = 3;
 const STATE_PLAYING = 1;
 
 function shouldForce() {
@@ -19,6 +21,10 @@ function shouldForce() {
 
 function setLocalStorageQuality() {
   if (!shouldForce()) return;
+  
+  const now = Date.now();
+  // Debounce/Throttle writing if done recently (e.g. 5s)
+  if (now - lastWriteTime < 5000) return;
   
   try {
     const QUALITY_KEY = 'yt-player-quality';
@@ -66,6 +72,7 @@ function setLocalStorageQuality() {
     }
     
     window.localStorage.setItem(QUALITY_KEY, JSON.stringify(qualityObj));
+	lastWriteTime = now; // Update timestamp
     console.info('[VideoQuality] Set localStorage quality to 4320');
     
   } catch (e) {
@@ -74,13 +81,21 @@ function setLocalStorageQuality() {
 }
 
 function setQuality() {
-  if (!player || !shouldForce()) return;
+  if (!player || !shouldForce() || isDestroyed) return;
   
   try {
+    if (!player.setPlaybackQualityRange) {
+      console.warn('[VideoQuality] Player no longer valid, cleaning up');
+      destroyVideoQuality();
+      return;
+    }
+    
     player.setPlaybackQualityRange('highres', 'highres');
     player.setPlaybackQuality?.('highres');
     setLocalStorageQuality();
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[VideoQuality] Error setting quality:', e);
+  }
 }
 
 function clearTimer() {
@@ -92,32 +107,46 @@ function clearTimer() {
 
 function checkQuality(tries = 1) {
   clearTimer();
-  if (!shouldForce() || !player || tries > 3) return;
   
-  const label = player.getPlaybackQualityLabel?.() || '';
-  if (!label || label === 'auto') {
-    qualityTimer = setTimeout(() => checkQuality(tries + 1), 1000);
+  if (!shouldForce() || !player || tries > 3 || isDestroyed) return;
+  
+  try {
+    const label = player.getPlaybackQualityLabel?.() || '';
+    if (!label || label === 'auto') {
+      qualityTimer = setTimeout(() => checkQuality(tries + 1), 1000);
+    }
+  } catch (e) {
+    console.warn('[VideoQuality] Error checking quality:', e);
+    clearTimer();
   }
 }
 
 function onStateChange(state) {
-  if (state === STATE_BUFFERING) {
-	console.info('[VideoQuality] Buffering detected, forcing quality');
-    setQuality();
-  }
-
-  if (state === STATE_PLAYING) {
-    const videoId = player.getVideoData?.().video_id;
-    if (videoId && videoId !== lastVideoId) {
-      lastVideoId = videoId;
-      setQuality();
-      clearTimer();
-      qualityTimer = setTimeout(checkQuality, 1000);
+  if (isDestroyed || !player) return;
+  
+  try {
+    if (state === STATE_PLAYING) { // only set on state_playing to fix black screen issue on video load
+      const videoData = player.getVideoData?.();
+      const videoId = videoData?.video_id;
+      
+      if (videoId && videoId !== lastVideoId) {
+        lastVideoId = videoId;
+		console.log("[Video Quality] Setting quality");
+        setQuality();
+        clearTimer();
+        qualityTimer = setTimeout(checkQuality, 1000);
+      }
     }
+  } catch (e) {
+    console.warn('[VideoQuality] Error in state change handler:', e);
   }
 }
 
 export function destroyVideoQuality() {
+  console.info('[VideoQuality] Destroying video quality manager');
+  
+  isDestroyed = true;
+  
   if (initTimer) {
     clearTimeout(initTimer);
     initTimer = null;
@@ -126,10 +155,20 @@ export function destroyVideoQuality() {
   clearTimer();
   
   if (player && stateHandler) {
-    player.removeEventListener?.('onStateChange', stateHandler);
+    try {
+      player.removeEventListener?.('onStateChange', stateHandler);
+    } catch (e) {
+      console.warn('[VideoQuality] Error removing event listener:', e);
+    }
   }
   
-  configCleanup?.();
+  if (configCleanup) {
+    try {
+      configCleanup();
+    } catch (e) {
+      console.warn('[VideoQuality] Error in config cleanup:', e);
+    }
+  }
   
   player = null;
   stateHandler = null;
@@ -138,12 +177,28 @@ export function destroyVideoQuality() {
 }
 
 export function initVideoQuality() {
-  if (player) return;
+  if (initTimer || player) {
+    console.info('[VideoQuality] Already initialized or initializing, skipping');
+    return;
+  }
+  
+  isDestroyed = false;
   
   const attach = () => {
-    // Direct query - fastest on webOS
-    const p = document.querySelector('.html5-video-player');
-    if (p?.setPlaybackQualityRange) {
+    if (isDestroyed) return true; 
+    
+    const playerContainer = document.getElementById('ytlr-player__player-container');
+    const root = playerContainer || document;
+    
+    const p = root.querySelector('.html5-video-player');
+    
+    const isConnected = p && (p.isConnected !== undefined ? p.isConnected : document.contains(p));
+    
+    if (!p || !p.setPlaybackQualityRange || !isConnected) {
+      return false;
+    }
+    
+    try {
       player = p;
       stateHandler = onStateChange;
       
@@ -154,12 +209,15 @@ export function initVideoQuality() {
       setLocalStorageQuality();
       
       if (player.getPlayerState?.() === STATE_PLAYING) {
+		console.log("[Video Quality] Setting quality");
         setQuality();
       }
       
       // Set up config listener AFTER player is attached
       if (configAddChangeListener && !configCleanup) {
         const onChange = (evt) => {
+          if (isDestroyed) return;
+          
           if (evt.detail.newValue) {
             setLocalStorageQuality();
             setQuality();
@@ -170,19 +228,33 @@ export function initVideoQuality() {
           (() => configRemoveChangeListener?.('forceHighResVideo', onChange));
       }
       
+      console.info('[VideoQuality] Successfully attached to player');
       return true;
+    } catch (e) {
+      console.warn('[VideoQuality] Error attaching to player:', e);
+      player = null;
+      return false;
     }
-    return false;
   };
 
   if (attach()) return;
 
-  // Lightweight polling for webOS - more efficient than MutationObserver on older TVs
+  // Wait for YouTube app to initialize to attach
   let attempts = 0;
   const poll = () => {
+    if (isDestroyed) {
+      clearTimeout(initTimer);
+      initTimer = null;
+      return;
+    }
+    
     if (attach() || attempts++ >= 50) {
       clearTimeout(initTimer);
       initTimer = null;
+      
+      if (attempts >= 50 && !player) {
+        console.warn('[VideoQuality] Failed to attach after 50 attempts');
+      }
     } else {
       initTimer = setTimeout(poll, 200);
     }
@@ -190,3 +262,13 @@ export function initVideoQuality() {
   
   poll();
 }
+
+window.addEventListener('hashchange', () => {
+  const isWatchPage = window.location.hash.includes('/watch');
+  if (!isWatchPage && player) {
+    console.info('[VideoQuality] Leaving watch page, cleaning up');
+    destroyVideoQuality();
+  }
+});
+
+window.addEventListener('beforeunload', destroyVideoQuality);

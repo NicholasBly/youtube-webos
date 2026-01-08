@@ -1,9 +1,5 @@
 import { configRead, configAddChangeListener } from './config.js';
 
-let autoLoginChecked = false;
-let pageObserver = null;
-let currentPageType = null;
-
 function disableWhosWatching(enableWhoIsWatchingMenu) { // Credit to reisxd || https://github.com/reisxd/TizenTube/
   try {
     const recurringActionsKey = 'yt.leanback.default::recurring_actions';

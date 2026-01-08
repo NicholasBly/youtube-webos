@@ -5,13 +5,13 @@ const STYLES = `
     .sb-segments-popup {
         position: fixed;
         top: 5%;
-        right: 2%;
+        right: 5%;
         bottom: auto;
         left: auto;
         transform: none;
         
         background-color: #000000;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid red;
         border-radius: 16px;
         padding: 20px;
         
@@ -28,7 +28,6 @@ const STYLES = `
     
     .sb-segments-popup.visible {
         display: block;
-        animation: sbFadeIn 0.2s ease-out;
     }
 
     .sb-popup-header {
@@ -45,7 +44,6 @@ const STYLES = `
     .sb-header-title-row {
         display: flex;
         align-items: center;
-        gap: 10px;
         margin-bottom: 5px;
     }
 
@@ -53,6 +51,7 @@ const STYLES = `
         width: 32px;
         height: 32px;
         fill: #ff0000;
+        margin-right: 10px;
     }
 
     .sb-header-text {
@@ -80,7 +79,6 @@ const STYLES = `
     .sb-row-left {
         display: flex;
         align-items: center;
-        gap: 12px;
     }
 
     .sb-segment-dot {
@@ -88,6 +86,7 @@ const STYLES = `
         height: 10px;
         border-radius: 50%;
         flex-shrink: 0;
+        margin-right: 12px;
     }
 
     .sb-segment-category {

@@ -1,12 +1,8 @@
-/* Optimized for LG webOS 3.0+ Performance */
-
 /* Optional animation - can be disabled for better performance */
-@keyframes blueprintPulse {
+/* @keyframes blueprintPulse {
   0%, 100% { opacity: 0.12; }
   50% { opacity: 0.25; }
-}
-
-/* Removed unused forceFieldGlow animation */
+} */
 
 .ytaf-ui-container {
   position: fixed;
@@ -32,7 +28,7 @@
 
 .ytaf-ui-container.theme-classic-red {
   background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-  border: 1px solid #3f3f3f;
+  border-color: #3f3f3f;
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
 }
 
@@ -86,7 +82,7 @@
 .ytaf-ui-container.theme-classic-red h1 {
   color: #ff4444;
   text-shadow: none;
-  border-bottom: 1px solid #3f3f3f;
+  border-bottom-color: #3f3f3f;
 }
 
 .ytaf-ui-container .ytaf-logo {
@@ -160,7 +156,7 @@
 
 .ytaf-ui-container.theme-classic-red input[type='checkbox'] {
   background: #2a2a2a;
-  border: 2px solid #4a4a4a;
+  border-color: #4a4a4a;
 }
 
 .ytaf-ui-container.theme-classic-red input[type='checkbox']:hover {
@@ -192,6 +188,7 @@
 
 .ytaf-ui-container.theme-classic-red input[type='checkbox']:focus {
   outline: 2px solid #ff0000;
+  border-color: #ff0000;
 }
 
 .ytaf-ui-container label {
@@ -208,6 +205,10 @@
   padding-left: 8px;
   padding-right: 8px;
   transition: all 0.2s ease;
+}
+
+.ytaf-settings-section label {
+  margin: 0 0 4px;
 }
 
 .ytaf-ui-container label .label-content {
@@ -255,6 +256,10 @@
   box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.5);
 }
 
+.ytaf-ui-container label .color-picker-controls {
+  margin-right: 8px;
+}
+
 .ytaf-ui-container blockquote {
   margin: 16px 0 16px 24px;
   padding-left: 24px;
@@ -264,7 +269,7 @@
 }
 
 .ytaf-ui-container.theme-classic-red blockquote {
-  border-left: 3px solid #ff0000;
+  border-left-color: #ff0000;
   background: rgba(255, 0, 0, 0.05);
 }
 
@@ -285,7 +290,7 @@
 }
 
 .ytaf-ui-container.theme-classic-red small {
-  border-top: 1px solid #3f3f3f;
+  border-top-color: #3f3f3f;
 }
 
 .ytaf-notification-container {
@@ -315,8 +320,8 @@
 
 .ytaf-notification-container.theme-classic-red .message {
   background: #1a1a1a;
-  border: 1px solid #3f3f3f;
-  border-left: 4px solid #ff0000;
+  border-color: #3f3f3f;
+  border-left-color: #ff0000;
 }
 
 .ytaf-notification-container .message-hidden {
@@ -345,8 +350,12 @@
 /* OLED Care Mode - Optimized for OLED displays */
 .ytaf-ui-container.oled-care {
   background: #000000;
-  border-color: #333;
+  border: 1px solid rgba(0, 212, 255, 0.4);
   box-shadow: none;
+}
+
+.ytaf-ui-container.oled-care.theme-classic-red {
+  border-color: rgba(255, 0, 0, 0.4);
 }
 
 .ytaf-ui-container.oled-care::before {
@@ -377,8 +386,8 @@
 }
 
 .ytaf-notification-container.oled-care.theme-classic-red .message {
-  border: 1px solid #ff4444;
-  border-left: 4px solid #ff4444;
+  border-color: #ff4444;
+  border-left-color: #ff4444;
 }
 
 /* Navigation Hints */
@@ -396,7 +405,7 @@
 
 .ytaf-ui-container.theme-classic-red .ytaf-nav-hint {
   color: #cccccc;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top-color: rgba(255, 255, 255, 0.1);
 }
 
 .ytaf-nav-hint:hover {
@@ -436,7 +445,7 @@
 }
 
 .ytaf-ui-container.theme-classic-red .ytaf-nav-hint.left {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
 .ytaf-nav-hint span.arrow {
@@ -536,7 +545,7 @@
 
 .ytaf-ui-container.theme-classic-red .reset-color-btn {
   background: #4f4f4f;
-  border: 1px solid #666666;
+  border-color: #666666;
   box-shadow: none;
 }
 
@@ -572,7 +581,7 @@
 }
 
 .ytaf-ui-container.theme-classic-red input[type='color'] {
-  border: 1px solid #4a4a4a;
+  border-color: #4a4a4a;
   box-shadow: none;
 }
 

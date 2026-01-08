@@ -1,6 +1,6 @@
 {
   "name": "youtube-webos",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "description": "Ad-free YouTube app for webOS",
   "type": "module",
   "main": "index.js",
@@ -45,6 +45,7 @@
     "babel-loader": "^10.0.0",
     "babel-plugin-polyfill-corejs3": "^0.13.0",
     "babel-plugin-polyfill-regenerator": "^0.6.5",
+    "baseline-browser-mapping": "^2.9.11",
     "copy-webpack-plugin": "^13.0.0",
     "css-loader": "^7.1.2",
     "cssnano": "^7.1.2",

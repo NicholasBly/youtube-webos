@@ -100,6 +100,8 @@ function hookedParse(text, reviver) {
   } catch (e) {
     return origParse.call(this, text, reviver);
   }
+  
+   if (!text || text.length < 500) return data;
 
   // 2. Early exit for non-objects
   if (!data || typeof data !== 'object') {

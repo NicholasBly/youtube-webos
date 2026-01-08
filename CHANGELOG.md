@@ -4,6 +4,54 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.8] - 2026/01/07
+
+## Optimizations
+
+### Observer Logic Optimizations
+
+SponsorBlock: Observe ytlr-progress-bar from ytlr-app
+Screensaver Fix: Observe ytlr-player__player-container from querying document.body to find the video element
+Force Max Quality: Observe ytlr-player__player-container from querying document.body to find .html5-video-player
+
+### AdBlock.js
++ Added additional early exit optimization
+
+### General
++ Added additional code safety checks
++ Code cleanup/removal of unused functions and objects
+
+### Force Max Quality
++ Cache last time value when modifying local storage to not spam multiple times during video playback state
+
+## Fixes
+
+### Show Time in UI
++ Fixed overlay sometimes not hiding on video fullscreen
+
+### General
++ OLED Care Mode: Added additional YouTube UI elements to pure black theme
++ Config UI visual adjustments/fixes
+
+### Force Max Quality
++ Change video state to STATE_PLAYING from STATE_BUFFERING to further improve black screen issue on first video load
+++ On first video load, it might take up to 15 seconds for max quality to kick in
+
+### Upgrade Thumbnail Quality
++ Fix max thumbnail quality - webosbrew's original code
++ Waterfall detection: Picks the highest quality thumbnail available for each thumbnail (maxres → sd → hq)
++ Optimize body observer - observe ytlr-app by default, document.body as fallback
++ Many improvements for race conditions, memory leaks, error handling, object creation, type safety, mutation observer, early returns, and cleanup function
++ Overlays higher resolution thumbnail on top of existing to prevent pop-in effect for seamless visuals
++ Converted from TypeScript to JavaScript
+
+### webOS 3
++ Fix Force Max Quality
++ Fix additional incompatible css rules on SponsorBlock UI panel
+
+## Removed
++ Removed search history injection for the time being due to bugs
+
 ## [0.6.7] - 2026/01/02
 
 ## Added

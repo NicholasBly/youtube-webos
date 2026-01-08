@@ -6,12 +6,14 @@ class Watch {
   #watch;
   #timer;
   #attrChanges;
+  #videoListener;
   #PLAYER_SELECTOR = 'ytlr-watch-default';
 
   constructor() {
     this.createElement();
     this.startClock();
     this.playerEvents();
+    this.videoEvents();
     
     this.onOledChange = this.onOledChange.bind(this);
     this.applyOledMode(configRead('enableOledCareMode'));
@@ -81,9 +83,27 @@ class Watch {
     });
   }
 
+  videoEvents() {
+    this.#videoListener = async () => {
+      const player = document.querySelector(this.#PLAYER_SELECTOR);
+      if (player) {
+        this.changeVisibility(player);
+      }
+    };
+
+    document.addEventListener('play', this.#videoListener, true);
+    document.addEventListener('loadeddata', this.#videoListener, true);
+  }
+
   destroy() {
     clearInterval(this.#timer);
     configRemoveChangeListener('enableOledCareMode', this.onOledChange);
+    
+    if (this.#videoListener) {
+      document.removeEventListener('play', this.#videoListener, true);
+      document.removeEventListener('loadeddata', this.#videoListener, true);
+    }
+    
     this.#watch?.remove();
     this.#attrChanges?.disconnect();
   }

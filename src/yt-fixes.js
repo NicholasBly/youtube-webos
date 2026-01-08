@@ -1,34 +1,76 @@
-/* src/yt-fixes.js */
 import { configRead } from './config.js';
 
 let historyCache = false;
+let searchHistoryObserver = null;
 
 export function initYouTubeFixes() {
     console.log('[YT-Fixes] Initializing...');
-    // initSignInPromptFix(); // Disabled: Handled via JSON block in adblock.js to prevent nav bugs
     initSearchHistoryFix();
 }
 
+export function cleanupYouTubeFixes() {
+    if (searchHistoryObserver) {
+        searchHistoryObserver.disconnect();
+        searchHistoryObserver = null;
+    }
+    historyCache = false;
+}
+
+// function isSearchPage() {
+  // return document.body.classList.contains('WEB_PAGE_TYPE_SEARCH');
+// }
+
 function initSearchHistoryFix() {
+    if (searchHistoryObserver) {
+        searchHistoryObserver.disconnect();
+    }
+    
     if (attemptSearchHistoryFix()) return; 
 
-    const observer = new MutationObserver((mutations, obs) => {
+    searchHistoryObserver = new MutationObserver((mutations, obs) => {
         if (historyCache) {
             obs.disconnect();
+            searchHistoryObserver = null;
             return;
         }
         if (attemptSearchHistoryFix()) {
             obs.disconnect();
+            searchHistoryObserver = null;
         }
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
-}
+    const observerTimeout = setTimeout(() => {
+        if (searchHistoryObserver) {
+            console.warn('[YT-Fixes] Search history observer timed out after 30s');
+            searchHistoryObserver.disconnect();
+            searchHistoryObserver = null;
+        }
+    }, 30000); // 30 second timeout
+
+    const originalDisconnect = searchHistoryObserver.disconnect.bind(searchHistoryObserver);
+    searchHistoryObserver.disconnect = function() {
+        clearTimeout(observerTimeout);
+        originalDisconnect();
+    };
+
+    const searchArea = document.querySelector('ytlr-search-suggestions') || document.body;
+
+	searchHistoryObserver.observe(searchArea, { 
+	  childList: true, 
+	  subtree: searchArea !== document.body // Only use subtree if must observe body
+	});
+	}
 
 function attemptSearchHistoryFix() {
     if (historyCache) return true;
+    
     const suggestionsBox = document.querySelector('ytlr-search-suggestions');
     if (!suggestionsBox) return false;
+
+    if (!suggestionsBox.isConnected) {
+        console.warn('[YT-Fixes] Suggestions box disconnected');
+        return false;
+    }
 
     if (suggestionsBox.childElementCount > 0) {
         historyCache = true;
@@ -40,13 +82,19 @@ function attemptSearchHistoryFix() {
         
         // Give the app 500ms to populate the list naturally
         setTimeout(() => {
-            // Ensure the box still exists in the DOM
-            if (!suggestionsBox.isConnected) return;
+            if (!suggestionsBox.isConnected) {
+                console.warn('[YT-Fixes] Suggestions box removed during check');
+                return;
+            }
 
             if (suggestionsBox.childElementCount === 0 && !suggestionsBox.dataset.historyFixed) {
-                const injected = populateSearchHistory(suggestionsBox);
-                if (injected) {
-                    historyCache = true;
+                try {
+                    const injected = populateSearchHistory(suggestionsBox);
+                    if (injected) {
+                        historyCache = true;
+                    }
+                } catch (e) {
+                    console.error('[YT-Fixes] Error populating search history:', e);
                 }
             } else {
                 historyCache = true;
@@ -61,13 +109,19 @@ function attemptSearchHistoryFix() {
 
 function populateSearchHistory(container) {
     const storageKey = 'yt.leanback.default.search-history::recent-searches';
-    const rawData = window.localStorage.getItem(storageKey);
-    if (!rawData) return false;
-
+    
     try {
+        const rawData = window.localStorage.getItem(storageKey);
+        if (!rawData) return false;
+
         const parsed = JSON.parse(rawData);
         const historyData = parsed.data;
         if (!historyData || !Array.isArray(historyData) || historyData.length === 0) return false;
+
+        if (!container.isConnected) {
+            console.warn('[YT-Fixes] Container disconnected during population');
+            return false;
+        }
 
         container.dataset.historyFixed = 'true';
         container.style.cssText = `display: flex; flex-direction: column; width: 30rem; position: absolute; left: 6.5rem; top: 7.25rem; height: auto; padding: 1rem; box-sizing: border-box; background-color: transparent; z-index: 999;`;
@@ -90,8 +144,12 @@ function populateSearchHistory(container) {
 
             container.appendChild(row);
         });
+        
         return true;
     } catch (e) {
+        console.error('[YT-Fixes] Error in populateSearchHistory:', e);
         return false;
     }
 }
+
+window.addEventListener('beforeunload', cleanupYouTubeFixes);

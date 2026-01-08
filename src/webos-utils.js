@@ -1,25 +1,25 @@
-/* src/webos-utils.js */
 let cachedWebOSVersion = null;
-let cachedNewLayout = null;
+//let cachedNewLayout = null;
 
 /**
  * Detects if the user is using the "New" YouTube UI
+ * As of 1/7/2026 the code is no longer needed as YouTube is only using one UI
  * @returns {boolean}
  */
-export function isNewYouTubeLayout() {
-  if (cachedNewLayout !== null) {
-    return cachedNewLayout;
-  }
+// export function isNewYouTubeLayout() {
+  // if (cachedNewLayout !== null) {
+    // return cachedNewLayout;
+  // }
 
-  // WebOS 24 / 25 typically uses this tag for the app host
-  cachedNewLayout = !!document.querySelector('gJiGL'); // ytLrAppHost previously
+  // // WebOS 24 / 25 typically uses this tag for the app host
+  // cachedNewLayout = !!document.querySelector('gJiGL'); // ytLrAppHost previously
   
-  if (cachedNewLayout) {
-    console.info('[WebOSUtils] New YouTube UI detected');
-  }
+  // if (cachedNewLayout) {
+    // console.info('[WebOSUtils] New YouTube UI detected');
+  // }
   
-  return cachedNewLayout;
-}
+  // return cachedNewLayout;
+// }
 
 /**
  * Detects the webOS version using the User Agent string.

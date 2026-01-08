@@ -15,9 +15,6 @@ export async function requireElement<E extends typeof Element>(
   const alreadyPresent = document.querySelector(cssSelectors);
   if (alreadyPresent) {
     if (!(alreadyPresent instanceof expected)) throw new Error();
-
-    // Cast required due to narrowing limitations.
-    // https://github.com/microsoft/TypeScript/issues/55241
     return alreadyPresent as InstanceType<E>;
   }
 
@@ -33,7 +30,6 @@ export async function requireElement<E extends typeof Element>(
 }
 
 function isPlayerHidden(video: HTMLVideoElement) {
-  // Youtube uses display none sometimes along with a negative top to hide the HTMLVideoElement.
   return video.style.display == 'none' || video.style.top.startsWith('-');
 }
 
@@ -49,7 +45,19 @@ const playerCtrlObs = new MutationObserver((mutations, obs) => {
   }
 
   const video = mutations[0]?.target;
-  if (!(video instanceof HTMLVideoElement)) throw new Error();
+  
+  if (!video || !(video instanceof HTMLVideoElement)) {
+    console.warn('[ScreensaverFix] Invalid video element in mutation, disconnecting observer');
+    obs.disconnect();
+    return;
+  }
+  
+  if (!video.isConnected) {
+    console.warn('[ScreensaverFix] Video element disconnected, stopping observer');
+    obs.disconnect();
+    return;
+  }
+  
   const style = video.style;
 
   // Not sure if there will be a race condition so just in case.
@@ -60,28 +68,77 @@ const playerCtrlObs = new MutationObserver((mutations, obs) => {
   const targetLeft = '0px';
   const targetTop = '0px';
 
-  /**
-   * Check to see if identical before assignment as some webOS versions will trigger a mutation
-   * event even if the assignment effectively does nothing, leading to an infinite loop.
-   */
-  style.width !== targetWidth && (style.width = targetWidth);
-  style.height !== targetHeight && (style.height = targetHeight);
-  style.left !== targetLeft && (style.left = targetLeft);
-  style.top !== targetTop && (style.top = targetTop);
+  try {
+    /**
+     * Check to see if identical before assignment as some webOS versions will trigger a mutation
+     * event even if the assignment effectively does nothing, leading to an infinite loop.
+     */
+    style.width !== targetWidth && (style.width = targetWidth);
+    style.height !== targetHeight && (style.height = targetHeight);
+    style.left !== targetLeft && (style.left = targetLeft);
+    style.top !== targetTop && (style.top = targetTop);
+  } catch (e) {
+    console.warn('[ScreensaverFix] Error updating video styles:', e);
+    obs.disconnect();
+  }
 });
 
-const bodyAttrObs = new MutationObserver(async () => {
-  if (!isWatchPage()) return;
+let currentVideoElement: HTMLVideoElement | null = null;
 
-  // Youtube TV re-uses the same video element for everything.
-  const video = await requireElement('video', HTMLVideoElement);
-  playerCtrlObs.observe(video, {
-    attributes: true,
-    attributeFilter: ['style']
-  });
+const bodyAttrObs = new MutationObserver(async () => {
+  if (!isWatchPage()) {
+    playerCtrlObs.disconnect();
+    currentVideoElement = null;
+    return;
+  }
+
+  try {
+    const playerContainer = document.getElementById('ytlr-player__player-container');
+    
+    // If container exists, search inside it. If not, fallback to body.
+    const searchRoot = playerContainer || document.body;
+    
+    // Note: We manually query inside the root instead of using requireElement's default body scan
+    let video = searchRoot.querySelector('video') as HTMLVideoElement;
+    
+    // If not found immediately, use the waiter (scoped to root)
+    if (!video) {
+        // We temporarily cast to any to access the internal logic if you can't modify requireElement
+        // Or simply wait on the root:
+         video = await waitForChildAdd(
+            searchRoot,
+            (node): node is HTMLVideoElement =>
+                node instanceof HTMLVideoElement,
+            true
+        ) as HTMLVideoElement;
+    }
+    
+    if (video && video !== currentVideoElement) {
+      if (currentVideoElement) {
+        playerCtrlObs.disconnect();
+      }
+      
+      currentVideoElement = video;
+      
+      if (video.isConnected) {
+        playerCtrlObs.observe(video, {
+          attributes: true,
+          attributeFilter: ['style']
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[ScreensaverFix] Error attaching to video element:', e);
+  }
 });
 
 bodyAttrObs.observe(document.body, {
   attributes: true,
   attributeFilter: ['class']
+});
+
+window.addEventListener('beforeunload', () => {
+  playerCtrlObs.disconnect();
+  bodyAttrObs.disconnect();
+  currentVideoElement = null;
 });

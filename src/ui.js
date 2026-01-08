@@ -4,7 +4,7 @@ import { configAddChangeListener, configRead, configWrite, configGetDesc, segmen
 import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
-import { initYouTubeFixes } from './yt-fixes.js';
+// import { initYouTubeFixes } from './yt-fixes.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
@@ -575,7 +575,7 @@ function applyOledMode(enabled) {
   if (enabled) {
     optionsPanel?.classList.add(oledClass);
     notificationContainer?.classList.add(oledClass);
-    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: '#container { background-color: black !important; } .ytLrGuideResponseMask { background-color: black !important; } .ytLrGuideResponseGradient { display: none; } .ytLrAnimatedOverlayContainer { background-color: black !important; }' });
+    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: '#container { background-color: black !important; } .ytLrGuideResponseMask { background-color: black !important; } .geClSe { background-color: black !important; } .hsdF6b { background-color: black !important; } .ytLrGuideResponseGradient { display: none; } .ytLrAnimatedOverlayContainer { background-color: black !important; }' });
     document.head.appendChild(style);
   } else {
     optionsPanel?.classList.remove(oledClass);
@@ -595,13 +595,8 @@ function applyTheme(theme) {
 
 initHideLogo();
 initHideEndcards();
-initYouTubeFixes();
+//initYouTubeFixes();
 initVideoQuality();
-
-configAddChangeListener('hideGuestSignInPrompts', (evt) => {
-  if (evt.detail.newValue) initYouTubeFixes();
-  else showNotification('Reload required to disable fix');
-});
 
 applyOledMode(configRead('enableOledCareMode'));
 configAddChangeListener('enableOledCareMode', (evt) => applyOledMode(evt.detail.newValue));
