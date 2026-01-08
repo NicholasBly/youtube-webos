@@ -114,11 +114,9 @@ class ReturnYouTubeDislike {
     
     // Abort any previous request
     if (HAS_ABORT_CONTROLLER) {
-		try {
-			if (this.abortController) {
-				this.abortController.abort();
-			}
-		} catch (e) { }
+        if (this.abortController) {
+            this.abortController.abort();
+        }
         this.abortController = new AbortController();
     }
     
@@ -192,38 +190,13 @@ class ReturnYouTubeDislike {
   handleBodyMutation(mutations) {
     if (!this.active) return;
 
-    // If we already have a valid panel, stop processing
-    if (this.panelElement && this.panelElement.isConnected) {
-        // Optional: Check if we need to re-inject dislike count, usually handled by panelContentObserver
-        return;
-    }
+    // Optimized check using .some()
+    if (!mutations.some(m => m.addedNodes.length > 0)) return;
 
-    let panelFound = false;
+    const panel = document.querySelector(this.selectors.panel);
+    if (!panel) return;
     
-    // Look inside addedNodes first
-    for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-            if (node.nodeType === 1) { // Element node
-                // Check if the node itself is the panel
-                if (node.matches && node.matches(this.selectors.panel)) {
-                    panelFound = true;
-                    break; // Break inner
-                }
-                // Check if the panel is inside the node (if a large container was added)
-                if (node.querySelector(this.selectors.panel)) {
-                    panelFound = true;
-                    break; // Break inner
-                }
-            }
-        }
-        if (panelFound) break; // Break outer
-    }
-
-    // Only query the document if we found a potential candidate or force check needed
-    if (panelFound) {
-        const panel = document.querySelector(this.selectors.panel);
-        if (panel) this.setupPanel(panel);
-    }
+    this.setupPanel(panel);
   }
 
   setupPanel(panel) {
@@ -445,12 +418,8 @@ class ReturnYouTubeDislike {
     this.active = false;
     
     // Abort any in-flight requests (if AbortController is available)
-    if (HAS_ABORT_CONTROLLER) {
-        try {
-            if (this.abortController) {
-                this.abortController.abort();
-            }
-        } catch (e) { }
+    if (HAS_ABORT_CONTROLLER && this.abortController) {
+        this.abortController.abort();
         this.abortController = null;
     }
     
@@ -493,48 +462,52 @@ if (typeof window !== 'undefined') {
         return; 
     }
 
-    try {
-        const url = new URL(urlStr, 'http://dummy.com');
-        const isWatch = url.pathname === '/watch';
-        const videoID = url.searchParams.get('v');
+    const url = new URL(urlStr, 'http://dummy.com');
+    const isWatch = url.pathname === '/watch';
+    const videoID = url.searchParams.get('v');
 
-        if (!isWatch || !videoID) {
-            cleanup();
-            return;
-        }
-
-        if (!window.returnYouTubeDislike || window.returnYouTubeDislike.videoID !== videoID) {
-            cleanup();
-            
-            let enabled = true;
-            if (typeof configRead === 'function') {
-                 enabled = configRead('enableReturnYouTubeDislike'); 
-            }
-
-            if (enabled) {
-                window.returnYouTubeDislike = new ReturnYouTubeDislike(videoID);
-                window.returnYouTubeDislike.init();
-            }
-        }
-    } catch(e) {
+    if (!isWatch || !videoID) {
         cleanup();
+        return;
+    }
+
+    // Only create new instance if video changed
+    if (!window.returnYouTubeDislike || window.returnYouTubeDislike.videoID !== videoID) {
+        cleanup();
+        
+        let enabled = true;
+        if (typeof configRead === 'function') {
+            try { 
+                enabled = configRead('enableReturnYouTubeDislike'); 
+            } catch(e) {
+                console.warn('Config read failed:', e);
+            }
+        }
+
+        if (enabled) {
+            window.returnYouTubeDislike = new ReturnYouTubeDislike(videoID);
+            window.returnYouTubeDislike.init();
+        }
     }
   };
 
   // Event listeners
   window.addEventListener('hashchange', handleHashChange, { passive: true });
+  
   // Delayed init for SPA load
   if (document.readyState === 'loading') {
       window.addEventListener('DOMContentLoaded', () => setTimeout(handleHashChange, 500));
   } else {
       setTimeout(handleHashChange, 500);
   }
+
   // Config change listener
   if (typeof configAddChangeListener === 'function') {
       configAddChangeListener('enableReturnYouTubeDislike', (evt) => {
           evt.detail.newValue ? handleHashChange() : cleanup();
       });
   }
+  
   // Cleanup on unload
   window.addEventListener('beforeunload', cleanup, { passive: true });
 }

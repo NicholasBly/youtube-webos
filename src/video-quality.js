@@ -185,10 +185,12 @@ export function initVideoQuality() {
   isDestroyed = false;
   
   const attach = () => {
-    if (isDestroyed) return true; // Return true to stop polling
+    if (isDestroyed) return true; 
     
-    // Direct query
-    const p = document.querySelector('.html5-video-player');
+    const playerContainer = document.getElementById('ytlr-player__player-container');
+    const root = playerContainer || document;
+    
+    const p = root.querySelector('.html5-video-player');
     
     const isConnected = p && (p.isConnected !== undefined ? p.isConnected : document.contains(p));
     

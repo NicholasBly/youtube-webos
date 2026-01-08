@@ -70,7 +70,7 @@ function getThumbnailUrl(originalUrl, targetQuality) {
       const extension = webpSupported ? "webp" : "jpg"
       const pathPrefix = webpSupported ? "vi_webp" : "vi"
 
-      return `${pathPrefix}${newPath}${targetQuality}${p3 ?? ""}.${extension}`
+      return `${pathPrefix}${newPath}${targetQuality}.${extension}`
     }
   )
 

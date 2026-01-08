@@ -411,59 +411,72 @@ class SponsorBlockHandler {
     }
 
     observePlayerUI() {
-        const domObserver = new MutationObserver((mutations) => {
-            if (this.isProcessing || this.isDestroyed) return;
-            
-            let shouldCheck = false;
-            
-            for (const m of mutations) {
-                if (m.type === 'attributes' && m.target !== this.progressBar) continue;
+        if (this.domObserver) {
+            this.domObserver.disconnect();
+            this.observers.delete(this.domObserver);
+        }
 
-                if (m.type === 'childList') {
-                    if (this.overlay && Array.from(m.removedNodes).includes(this.overlay)) {
+        const OPTIMAL_SELECTOR = 'ytlr-progress-bar';
+
+        const startOptimizedObserver = (targetNode) => {
+            this.log('info', 'Attaching optimized observer to:', targetNode.tagName);
+
+            this.domObserver = new MutationObserver((mutations) => {
+                if (this.isProcessing || this.isDestroyed) return;
+                
+                let shouldCheck = false;
+                for (const m of mutations) {
+                    if (m.type === 'attributes') {
+                        if (m.target === this.progressBar) shouldCheck = true;
+                    } else {
                         shouldCheck = true;
-                        break;
                     }
-                    if (this.progressBar && Array.from(m.removedNodes).some(n => n === this.progressBar || n.contains(this.progressBar))) {
-                         shouldCheck = true;
-                         break;
-                    }
-                    
-                    for (const node of m.addedNodes) {
-                        if (node.nodeType === 1 && (
-                            node.nodeName.includes('PLAYER-BAR') || 
-                            node.classList?.contains('ytLrProgressBarSliderBase') ||
-                            node.getAttribute?.('idomkey') === 'slider'
-                        )) {
-                            shouldCheck = true;
-                            break;
-                        }
-                    }
+                    if (shouldCheck) break;
                 }
-                if (shouldCheck) break;
-            }
 
-            if (shouldCheck) {
-                this.isProcessing = true;
-                this.requestAF(() => {
-                    this.checkForProgressBar();
-                    this.isProcessing = false;
-                });
-            }
-        });
+                if (shouldCheck) {
+                    this.isProcessing = true;
+                    this.requestAF(() => {
+                        this.checkForProgressBar();
+                        this.isProcessing = false;
+                    });
+                }
+            });
 
-        const playerRoot = document.querySelector('ytlr-app') || 
-                           document.getElementById('container') ||
-                           document.body;
+            this.domObserver.observe(targetNode, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['class', 'style', 'hidden'] 
+            });
+            this.observers.add(this.domObserver);
+            
+            // Run an initial check immediately
+            this.checkForProgressBar();
+        };
 
-        domObserver.observe(playerRoot, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class', 'style', 'hidden']
-        });
-        
-        this.observers.add(domObserver);
+        // 1. Try to find the optimized container immediately
+        const candidate = document.querySelector(OPTIMAL_SELECTOR);
+
+        if (candidate) {
+            startOptimizedObserver(candidate);
+        } else {
+            // 2. Fallback: Watch the root ONLY until the progress bar appears
+            const root = document.querySelector('ytlr-app') || document.body;
+            this.log('info', 'Waiting for optimized container:', OPTIMAL_SELECTOR);
+
+            const finderObserver = new MutationObserver((mutations, obs) => {
+                const found = document.querySelector(OPTIMAL_SELECTOR);
+                if (found) {
+                    obs.disconnect(); // Stop watching the whole app
+                    this.observers.delete(obs);
+                    startOptimizedObserver(found);
+                }
+            });
+
+            finderObserver.observe(root, { childList: true, subtree: true });
+            this.observers.add(finderObserver);
+        }
     }
 
     checkForProgressBar() {

@@ -93,11 +93,27 @@ const bodyAttrObs = new MutationObserver(async () => {
   }
 
   try {
-    // Youtube TV re-uses the same video element for everything.
-    const video = await requireElement('video', HTMLVideoElement);
+    const playerContainer = document.getElementById('ytlr-player__player-container');
     
-    if (video !== currentVideoElement) {
-      // Clean up old observer
+    // If container exists, search inside it. If not, fallback to body.
+    const searchRoot = playerContainer || document.body;
+    
+    // Note: We manually query inside the root instead of using requireElement's default body scan
+    let video = searchRoot.querySelector('video') as HTMLVideoElement;
+    
+    // If not found immediately, use the waiter (scoped to root)
+    if (!video) {
+        // We temporarily cast to any to access the internal logic if you can't modify requireElement
+        // Or simply wait on the root:
+         video = await waitForChildAdd(
+            searchRoot,
+            (node): node is HTMLVideoElement =>
+                node instanceof HTMLVideoElement,
+            true
+        ) as HTMLVideoElement;
+    }
+    
+    if (video && video !== currentVideoElement) {
       if (currentVideoElement) {
         playerCtrlObs.disconnect();
       }
