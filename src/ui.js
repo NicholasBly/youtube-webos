@@ -379,7 +379,7 @@ function triggerInternal(element, name) {
 
 function handleShortcutAction(action) {
   const video = document.querySelector('video');
-  const player = document.querySelector('.html5-video-player') || document.getElementById('movie_player');
+  const player = document.getElementById('ytlr-player__player-container-player') || document.querySelector('.html5-video-player');
   if (!video) return;
 
   const actions = {

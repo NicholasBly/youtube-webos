@@ -34,7 +34,6 @@ class Watch {
   createElement() {
     this.#watch = document.createElement('div');
     this.#watch.className = 'webOs-watch';
-    if (configRead('enableOledCareMode')) this.#watch.classList.add('oled-mode');
     document.body.appendChild(this.#watch);
   }
 

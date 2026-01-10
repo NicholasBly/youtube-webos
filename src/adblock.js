@@ -101,9 +101,17 @@ function hookedParse(text, reviver) {
     return origParse.call(this, text, reviver);
   }
   
-   if (!text || text.length < 500) return data;
+  if (!text || text.length < 500) return data;
+   
+  // 2. Get Config
+  const config = getCachedConfig();
+  const { enableAdBlock, removeGlobalShorts, removeTopLiveGames, hideGuestPrompts } = config;
 
-  // 2. Early exit for non-objects
+  if (!enableAdBlock && !removeGlobalShorts && !removeTopLiveGames && !hideGuestPrompts) {
+    return data;
+  }
+
+  // 3. Early exit for non-objects
   if (!data || typeof data !== 'object') {
     return data;
   }
@@ -117,14 +125,6 @@ function hookedParse(text, reviver) {
   );
 
   if (!isAPIResponse) {
-    return data;
-  }
-
-  // 3. Get Config
-  const config = getCachedConfig();
-  const { enableAdBlock, removeGlobalShorts, removeTopLiveGames, hideGuestPrompts } = config;
-
-  if (!enableAdBlock && !removeGlobalShorts && !removeTopLiveGames && !hideGuestPrompts) {
     return data;
   }
 

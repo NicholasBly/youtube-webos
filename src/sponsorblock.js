@@ -45,6 +45,7 @@ class SponsorBlockHandler {
         this.progressBar = null;
         this.overlay = null;
         this.debugMode = false;
+		this.isLegacyWebOS = WebOSVersion() === 5;
         
         // Tracking state
         this.lastSkipTime = -1;
@@ -568,7 +569,7 @@ class SponsorBlockHandler {
     }
 
     sanitizeSegments() {
-        if (WebOSVersion() !== 5) return;
+        if (!this.isLegacyWebOS) return;
         if (!this.video?.duration || isNaN(this.video.duration)) return;
         
         const duration = this.video.duration;
@@ -627,6 +628,7 @@ class SponsorBlockHandler {
     }
 
     handleTimeUpdate() {
+		if (this.skipSegments.length === 0) return;
         if (this.isDestroyed || !this.video || this.video.seeking || this.video.readyState === 0) return;
         
         const currentTime = this.video.currentTime;
@@ -653,8 +655,8 @@ class SponsorBlockHandler {
             return;
         }
 
-        // Guard against spam loop on WebOS 5/Legacy at the end of video
-        if (WebOSVersion() === 5 && 
+        // Guard against spam loop on WebOS 3/4/5 at the end of video
+        if (this.isLegacyWebOS && 
             segmentIdx === this.lastSkippedSegmentIndex && 
             this.video.duration - currentTime < 1.0) {
             return;
@@ -680,7 +682,7 @@ class SponsorBlockHandler {
         this.lastSkipTime = currentTime;
         this.lastSkippedSegmentIndex = segmentIdx;
         
-        if (WebOSVersion() === 5) {
+        if (this.isLegacyWebOS) {
             const duration = this.video.duration;
             if (jumpTarget >= duration - 0.5) {
                 jumpTarget = Math.max(0, duration - 0.25);
@@ -697,7 +699,7 @@ class SponsorBlockHandler {
         
         this.video.currentTime = jumpTarget;
         
-        if (WebOSVersion() !== 5) {
+        if (!this.isLegacyWebOS) {
             const timeRemaining = this.video.duration - this.video.currentTime;
             if (timeRemaining > 0.5 && this.video.paused) { 
                 this.video.play();
