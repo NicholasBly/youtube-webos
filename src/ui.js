@@ -407,8 +407,8 @@ function handleShortcutAction(action) {
 		setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
 
         setTimeout(() => {
-        if (hideStyle.isConnected) {
-            hideStyle.remove();
+        if (hideStyle.parentNode) {
+              hideStyle.parentNode.removeChild(hideStyle);
         }
 		if (watchOverlay) {
         watchOverlay.style.opacity = '';
@@ -478,6 +478,8 @@ function handleShortcutAction(action) {
   if (actions[action]) actions[action]();
 }
 
+let lastShortcutTime = 0;
+
 const eventHandler = (evt) => {
   if (evt.repeat) return;
   console.info('Key event:', evt.type, evt.charCode, evt.keyCode, evt.defaultPrevented);
@@ -524,6 +526,13 @@ const eventHandler = (evt) => {
     }
     return false;
   } else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
+	const now = Date.now();
+    if (now - lastShortcutTime < 400) { // Ignore presses within 400ms
+        evt.preventDefault();
+        evt.stopPropagation();
+        return false;
+    }
+    lastShortcutTime = now;
     const keyIndex = evt.keyCode - 48;
     if (optionsPanelVisible) { evt.preventDefault(); evt.stopPropagation(); return false; }
     if (!isWatchPage()) return true;
