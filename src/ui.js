@@ -389,7 +389,33 @@ function handleShortcutAction(action) {
     seek_15_back: () => { video.currentTime = Math.max(0, video.currentTime - 15); showNotification('Skipped -15s'); },
     play_pause: () => {
       if (video.paused) { video.play(); showNotification('Playing'); }
-      else { video.pause(); showNotification('Paused'); }
+      else {
+		const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
+		const hideStyle = document.createElement('style');
+        hideStyle.textContent = '.GLc3cc { opacity: 0 !important; }';
+        document.head.appendChild(hideStyle);
+		
+		const watchOverlay = document.querySelector('.webOs-watch');
+        if (watchOverlay) {
+          watchOverlay.style.opacity = '0';
+        }
+		
+		video.pause();
+
+        sendKey(REMOTE_KEYS.UP);                            
+        setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
+		setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
+
+        setTimeout(() => {
+        if (hideStyle.isConnected) {
+            hideStyle.remove();
+        }
+		if (watchOverlay) {
+        watchOverlay.style.opacity = '';
+		}
+	}, 750);
+		showNotification('Paused');
+	}
     },
     toggle_subs: () => {
       let toggledViaApi = false;
