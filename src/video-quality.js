@@ -58,9 +58,7 @@ function shouldForce() {
 }
 
 async function ensurePlaybackStarts() {
-  // Only run this logic on webOS 25
   if (WebOSVersion() !== 25) return;
-  
   if (hasKickstarted) return;
 
   if (DEBUG) console.info('[VideoQuality] 🚀 Starting playback enforcer...');
@@ -78,10 +76,29 @@ async function ensurePlaybackStarts() {
         hasKickstarted = true;
         if (DEBUG) console.info('[VideoQuality] ✅ Playback verified! Kickstart complete.');
         
-        // Send UP key twice to dismiss UI
-        sendKey(REMOTE_KEYS.UP);
-        setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
-		setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
+        const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
+        
+        const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
+
+        if (isControlsVisible) {
+            if (DEBUG) console.info('[VideoQuality] 🎮 Controls are focused. Hiding and dismissing...');
+
+            const hideStyle = document.createElement('style');
+            hideStyle.textContent = '.GLc3cc { opacity: 0 !important; transition: opacity 0.1s; }';
+            document.head.appendChild(hideStyle);
+
+            sendKey(REMOTE_KEYS.UP);                            
+            setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);     
+            setTimeout(() => sendKey(REMOTE_KEYS.UP), 500);     
+
+            setTimeout(() => {
+                if (hideStyle.isConnected) {
+                    hideStyle.remove();
+                }
+            }, 750);
+        } else {
+            if (DEBUG) console.info('[VideoQuality] Controls not focused (no MFDzfe--focused class). Skipping dismissal.');
+        }
         
         return;
       }
