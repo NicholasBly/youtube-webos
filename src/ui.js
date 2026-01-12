@@ -13,7 +13,9 @@ import { initAdblock, destroyAdblock } from './adblock.js';
 let lastSafeFocus = null;
 let oledKeepAliveTimer = null;
 
-// Polyfill for Element.closest
+// --- Polyfills & Helpers ---
+
+// Polyfill for Element.closest (Required for older WebOS versions)
 if (!Element.prototype.closest) {
   Element.prototype.closest = function(s) {
     var el = this;
@@ -26,11 +28,14 @@ if (!Element.prototype.closest) {
 }
 
 const isWatchPage = () => document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
+const simulateBack = () => { console.log('[Shortcut] Simulating Back/Escape...'); sendKey(REMOTE_KEYS.BACK); };
 
 window.__spatialNavigation__.keyMode = 'NONE';
 const ARROW_KEY_CODE = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' };
 const colorCodeMap = new Map([[403, 'red'], [166, 'red'], [404, 'green'], [172, 'green'], [405, 'yellow'], [170, 'yellow'], [406, 'blue'], [167, 'blue'], [191, 'blue']]);
 const getKeyColor = (charCode) => colorCodeMap.get(charCode) || null;
+
+// --- DOM Utility Functions ---
 
 // Helper: Create DOM element with properties
 const createElement = (tag, props = {}, ...children) => {
@@ -46,6 +51,8 @@ const createElement = (tag, props = {}, ...children) => {
   children.forEach(child => el.appendChild(typeof child === 'string' ? document.createTextNode(child) : child));
   return el;
 };
+
+// --- UI Construction Functions ---
 
 function createConfigCheckbox(key) {
   const elmInput = createElement('input', { type: 'checkbox', checked: configRead(key), events: { change: (evt) => configWrite(key, evt.target.checked) }});
@@ -112,6 +119,8 @@ function createShortcutControl(keyIndex) {
   return container;
 }
 
+// --- Main Options Panel Logic ---
+
 function createOptionsPanel() {
   const elmContainer = createElement('div', { 
     class: isGuestMode() ? 'ytaf-ui-container guest-mode' : 'ytaf-ui-container',
@@ -144,19 +153,26 @@ function createOptionsPanel() {
     }
   };
 
+  // Keyboard Navigation for the Options Panel
   elmContainer.addEventListener('keydown', (evt) => {
-    if (getKeyColor(evt.charCode) === 'green') return;
+    if (getKeyColor(evt.charCode) === 'green') return; // Let global handler handle close
+
     if (evt.keyCode in ARROW_KEY_CODE) {
       const dir = ARROW_KEY_CODE[evt.keyCode];
       if (dir === 'left' || dir === 'right') {
         const preFocus = document.activeElement;
+        
+        // Prevent accidental page switch when modifying controls
         if (preFocus.classList.contains('shortcut-control-row')) return;
         if (activePage === 1) {
           const sponsorMainToggle = pageSponsor.querySelector('input');
           if (dir === 'right' && preFocus === sponsorMainToggle) { evt.preventDefault(); evt.stopPropagation(); return; }
           if (dir === 'left' && preFocus.matches('blockquote input[type="checkbox"]')) { setActivePage(0); evt.preventDefault(); evt.stopPropagation(); return; }
         }
+
         navigate(dir);
+        
+        // If focus didn't move (hit edge), try changing pages
         if (preFocus === document.activeElement) {
           if (dir === 'right' && activePage < 2) setActivePage(activePage + 1);
           else if (dir === 'left' && activePage > 0) setActivePage(activePage - 1);
@@ -167,7 +183,9 @@ function createOptionsPanel() {
       navigate(ARROW_KEY_CODE[evt.keyCode]);
     } else if (evt.keyCode === 13) {
       if (evt instanceof KeyboardEvent) document.activeElement.click();
-    } else if (evt.keyCode === 27) showOptionsPanel(false);
+    } else if (evt.keyCode === 27) { // Escape
+      showOptionsPanel(false);
+    }
     evt.preventDefault(); evt.stopPropagation();
   }, true);
 
@@ -183,7 +201,7 @@ function createOptionsPanel() {
   );
   elmContainer.appendChild(elmHeading);
 
-  // Page 1: Main
+  // --- Page 1: Main ---
   pageMain = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-main' });
   
   const elAdBlock = createConfigCheckbox('enableAdBlock');
@@ -197,7 +215,7 @@ function createOptionsPanel() {
 
   pageMain.appendChild(createSection('Cosmetic Filtering', cosmeticGroup));
 
-  // Dependency management
+  // Dependency Management
   const setState = (el, enabled) => { if (!el) return; const input = el.querySelector('input'); if (input) { input.disabled = !enabled; el.style.opacity = enabled ? '1' : '0.5'; }};
   const updateDependencyState = () => {
     const isAdBlockOn = configRead('enableAdBlock');
@@ -220,7 +238,7 @@ function createOptionsPanel() {
   pageMain.appendChild(navHintNextMain);
   elmContainer.appendChild(pageMain);
 
-  // Page 2: SponsorBlock
+  // --- Page 2: SponsorBlock ---
   pageSponsor = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-sponsor', style: { display: 'none' }});
   pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> Main Settings', events: { click: () => setActivePage(0) }}));
   pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
@@ -235,7 +253,7 @@ function createOptionsPanel() {
   pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'Shortcuts <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(2) }}));
   elmContainer.appendChild(pageSponsor);
 
-  // Page 3: Shortcuts
+  // --- Page 3: Shortcuts ---
   pageShortcuts = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-shortcuts', style: { display: 'none' }});
   pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> SponsorBlock Settings', events: { click: () => setActivePage(1) }}));
   for (let i = 0; i <= 9; i++) pageShortcuts.appendChild(createShortcutControl(i));
@@ -257,6 +275,7 @@ function showOptionsPanel(visible) {
     if (optionsPanel.activePage === 1 && isWatchPage()) sponsorBlockUI.togglePopup(true);
     else sponsorBlockUI.togglePopup(false);
     
+    // Find best initial focus
     const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(el => el.offsetParent !== null && !el.disabled);
     if (firstVisibleInput) { firstVisibleInput.focus(); lastSafeFocus = firstVisibleInput; }
     else { optionsPanel.focus(); lastSafeFocus = optionsPanel; }
@@ -271,6 +290,7 @@ function showOptionsPanel(visible) {
   }
 }
 
+// Trap focus inside options panel when visible
 document.addEventListener('focus', (e) => {
   if (!optionsPanelVisible) return;
   const target = e.target;
@@ -289,6 +309,8 @@ document.addEventListener('focus', (e) => {
 }, true);
 
 window.ytaf_showOptionsPanel = showOptionsPanel;
+
+// --- Video Control Logic ---
 
 async function skipChapter(direction = 'next') {
   const video = document.querySelector('video');
@@ -310,6 +332,7 @@ async function skipChapter(direction = 'next') {
 
   let chapterEls = getChapterEls();
 
+  // Hack: Force UI to load chapters if they aren't in DOM
   if (chapterEls.length === 0 && !skipChapter.hasForced) {
     console.log('[Chapters] No chapters found. Forcing UI...');
     skipChapter.hasForced = true;
@@ -337,10 +360,13 @@ async function skipChapter(direction = 'next') {
   if (direction === 'next') {
     targetTime = timestamps.find(t => t > currentTime + 1);
   } else {
+    // Find the chapter we are currently in
     let currentIdx = -1;
     for (let i = 0; i < timestamps.length; i++) { if (currentTime >= timestamps[i]) currentIdx = i; else break; }
+    
     if (currentIdx !== -1) {
       const chapterStart = timestamps[currentIdx];
+      // If we are deep into the chapter (>3s), restart chapter. Else go to previous.
       if (currentTime - chapterStart > 3) targetTime = chapterStart;
       else if (currentIdx > 0) targetTime = timestamps[currentIdx - 1];
       else targetTime = 0;
@@ -357,14 +383,13 @@ async function skipChapter(direction = 'next') {
   }
 }
 
-const simulateBack = () => { console.log('[Shortcut] Simulating Back/Escape...'); sendKey(REMOTE_KEYS.BACK); };
-
 function triggerInternal(element, name) {
   if (!element) return false;
   let success = false;
   try { element.click(); console.log(`[Shortcut] Standard click triggered for ${name}`); success = true; } 
   catch (e) { console.warn(`[Shortcut] Standard click failed for ${name}:`, e); }
   
+  // Try to access internal React/Polymer instance for robust clicking
   const instance = element.__instance;
   if (instance && typeof instance.onSelect === 'function') {
     console.log(`[Shortcut] Also calling internal onSelect() for ${name}`);
@@ -388,38 +413,40 @@ function handleShortcutAction(action) {
     seek_15_fwd: () => { video.currentTime = Math.min(video.duration, video.currentTime + 15); showNotification('Skipped +15s'); },
     seek_15_back: () => { video.currentTime = Math.max(0, video.currentTime - 15); showNotification('Skipped -15s'); },
     play_pause: () => {
-      if (video.paused) { video.play(); showNotification('Playing'); }
-      else {
+      if (video.paused) { 
+        video.play(); 
+        showNotification('Playing');
+      } else {
 		const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
-		const hideStyle = document.createElement('style');
-        hideStyle.textContent = '.GLc3cc { opacity: 0 !important; }';
-        document.head.appendChild(hideStyle);
-		
+        const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
 		const watchOverlay = document.querySelector('.webOs-watch');
-        if (watchOverlay) {
-          watchOverlay.style.opacity = '0';
-        }
-		
-		video.pause();
+		let needsHide = false;
+		if(!isControlsVisible) {
+		needsHide = true;
+        document.body.classList.add('ytaf-hide-controls');
+        if (watchOverlay) watchOverlay.style.opacity = '0';
+		}
+        
+        video.pause();	
 
+        // Dismiss controls sequence
+		if(needsHide) {
         sendKey(REMOTE_KEYS.UP);                            
         setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
-		setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
+        setTimeout(() => sendKey(REMOTE_KEYS.UP), 500);
 
         setTimeout(() => {
-        if (hideStyle.parentNode) {
-              hideStyle.parentNode.removeChild(hideStyle);
-        }
-		if (watchOverlay) {
-        watchOverlay.style.opacity = '';
+          document.body.classList.remove('ytaf-hide-controls');
+          if (watchOverlay) watchOverlay.style.opacity = '';
+        }, 750);
 		}
-	}, 750);
-		showNotification('Paused');
-	}
+        showNotification('Paused');
+      }
     },
     toggle_subs: () => {
       let toggledViaApi = false;
       if (player) {
+        // Try API first
         if (typeof player.loadModule === 'function') player.loadModule('captions');
         if (typeof player.getOption === 'function' && typeof player.setOption === 'function') {
           try {
@@ -435,6 +462,7 @@ function handleShortcutAction(action) {
           } catch (e) { console.warn('[Shortcut] Subtitle API Error:', e); }
         }
       }
+      // Fallback to UI clicking
       if (!toggledViaApi) {
         const capsBtn = document.querySelector('ytlr-captions-button yt-button-container') || document.querySelector('ytlr-captions-button ytlr-button') || document.querySelector('ytlr-toggle-button-renderer ytlr-button');
         if (capsBtn) {
@@ -457,8 +485,6 @@ function handleShortcutAction(action) {
       }
       if (!commBtn) commBtn = document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') || document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
       
-      if(commBtn) console.log(`[UI] Comments toggle button found:`, commBtn);
-      
       const isCommentsActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
       const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
       const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
@@ -480,63 +506,73 @@ function handleShortcutAction(action) {
 
 let lastShortcutTime = 0;
 
+// --- Global Input Handler ---
+
 const eventHandler = (evt) => {
   if (evt.repeat) return;
-  console.info('Key event:', evt.type, evt.charCode, evt.keyCode, evt.defaultPrevented);
+  // console.info('Key event:', evt.type, evt.charCode, evt.keyCode);
 
   const keyColor = getKeyColor(evt.charCode);
   
+  // 1. Handle Menu Toggle (Green)
   if (keyColor === 'green') {
-    console.info('Taking over!');
     evt.preventDefault();
     evt.stopPropagation();
     if (evt.type === 'keydown') showOptionsPanel(!optionsPanelVisible);
     return false;
-  } else if (keyColor === 'blue' && evt.type === 'keydown') {
+  } 
+  // 2. Handle Highlight Jump (Blue)
+  else if (keyColor === 'blue' && evt.type === 'keydown') {
     if (!isWatchPage()) return true;
-    console.info('Blue button pressed - attempting highlight jump');
     if (!configRead('enableHighlightJump')) return true;
+    
     evt.preventDefault();
     evt.stopPropagation();
     try {
       if (window.sponsorblock) {
         const jumped = window.sponsorblock.jumpToNextHighlight();
-        if (!jumped) showNotification('No highlights found in this video');
+        if (!jumped) showNotification('No highlights found');
       } else showNotification('SponsorBlock not loaded');
-    } catch (e) { console.warn('Error jumping to highlight:', e); showNotification('Error: Unable to jump to highlight'); }
+    } catch (e) { showNotification('Error jumping'); }
     return false;
-  } else if (keyColor === 'red' && evt.type === 'keydown') {
-    console.info('OLED mode activated');
+  } 
+  // 3. Handle OLED Mode (Red)
+  else if (keyColor === 'red' && evt.type === 'keydown') {
     evt.preventDefault();
     evt.stopPropagation();
     let overlay = document.getElementById('oled-black-overlay');
     if (overlay) {
       overlay.remove();
-      console.info('OLED mode deactivated');
       if (oledKeepAliveTimer) { clearInterval(oledKeepAliveTimer); oledKeepAliveTimer = null; }
+      showNotification('OLED Mode Deactivated');
     } else {
       if (optionsPanelVisible) showOptionsPanel(false);
       overlay = createElement('div', { id: 'oled-black-overlay', style: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#000', zIndex: 9999 }});
       document.body.appendChild(overlay);
+      
+      // Keep TV awake by simulating input
       oledKeepAliveTimer = setInterval(() => {
-        console.info('OLED Keep-alive: Sending UP x2');
         sendKey(REMOTE_KEYS.UP);
         setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
       }, 30 * 60 * 1000);
+      showNotification('OLED Mode Activated');
     }
     return false;
-  } else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
-	const now = Date.now();
-    if (now - lastShortcutTime < 400) { // Ignore presses within 400ms
-        evt.preventDefault();
-        evt.stopPropagation();
-        return false;
+  } 
+  // 4. Handle Number Shortcuts (0-9)
+  else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
+    const now = Date.now();
+    if (now - lastShortcutTime < 400) { // Debounce
+        evt.preventDefault(); evt.stopPropagation(); return false;
     }
     lastShortcutTime = now;
-    const keyIndex = evt.keyCode - 48;
+    
     if (optionsPanelVisible) { evt.preventDefault(); evt.stopPropagation(); return false; }
     if (!isWatchPage()) return true;
+    
+    const keyIndex = evt.keyCode - 48;
     const action = configRead(`shortcut_key_${keyIndex}`);
+    
     evt.preventDefault();
     evt.stopPropagation();
     if (action && action !== 'none') handleShortcutAction(action);
@@ -552,7 +588,6 @@ export function showNotification(text, time = 3000) {
   if (configRead('disableNotifications')) return;
   
   if (!notificationContainer) {
-    console.info('Adding notification container');
     notificationContainer = createElement('div', { class: 'ytaf-notification-container' });
     if (configRead('enableOledCareMode')) notificationContainer.classList.add('oled-care');
     if (configRead('uiTheme') === 'classic-red') notificationContainer.classList.add('theme-classic-red');
@@ -571,23 +606,37 @@ export function showNotification(text, time = 3000) {
   }, time);
 }
 
-function initHideLogo() {
-  const style = createElement('style');
-  document.head.appendChild(style);
-  const setHidden = (hide) => style.textContent = `ytlr-redux-connect-ytlr-logo-entity { visibility: ${hide ? 'hidden' : 'visible'}; }`;
-  setHidden(configRead('hideLogo'));
-  configAddChangeListener('hideLogo', (evt) => setHidden(evt.detail.newValue));
-}
+// --- Initialization & CSS Injection ---
 
-function initHideEndcards() {
-  const style = createElement('style');
-  document.head.appendChild(style);
-  const setHidden = (hide) => {
-    const display = hide ? 'none' : 'block';
-    style.textContent = `ytlr-endscreen-renderer { display: ${display} !important; } .ytLrEndscreenElementRendererElementContainer { display: ${display} !important; } .ytLrEndscreenElementRendererVideo { display: ${display} !important; } .ytLrEndscreenElementRendererHost { display: ${display} !important; }`;
-  };
-  setHidden(configRead('hideEndcards'));
-  configAddChangeListener('hideEndcards', (evt) => setHidden(evt.detail.newValue));
+function initGlobalStyles() {
+    const style = createElement('style');
+    document.head.appendChild(style);
+    
+    // Configurable styles updater
+    const updateStyles = () => {
+        const hideLogo = configRead('hideLogo');
+        const hideEnd = configRead('hideEndcards');
+        const endDisplay = hideEnd ? 'none' : 'block';
+        
+        style.textContent = `
+            /* Hide Logo */
+            ytlr-redux-connect-ytlr-logo-entity { visibility: ${hideLogo ? 'hidden' : 'visible'}; }
+            
+            /* Hide Endcards */
+            ytlr-endscreen-renderer, 
+            .ytLrEndscreenElementRendererElementContainer, 
+            .ytLrEndscreenElementRendererVideo, 
+            .ytLrEndscreenElementRendererHost { display: ${endDisplay} !important; }
+            
+            /* UI Controls Hiding Class */
+            body.ytaf-hide-controls .GLc3cc { opacity: 0 !important; }
+            body.ytaf-hide-controls .webOs-watch { opacity: 0 !important; }
+        `;
+    };
+
+    updateStyles();
+    configAddChangeListener('hideLogo', updateStyles);
+    configAddChangeListener('hideEndcards', updateStyles);
 }
 
 function updateLogoState() {
@@ -628,9 +677,8 @@ function applyTheme(theme) {
   updateLogoState();
 }
 
-initHideLogo();
-initHideEndcards();
-//initYouTubeFixes();
+// --- Start-up ---
+initGlobalStyles();
 initVideoQuality();
 
 applyOledMode(configRead('enableOledCareMode'));

@@ -52,9 +52,6 @@ const SCHEMA_REGISTRY = {
     SHORTS_OVERLAY: {
       textPattern: '"shortsAdsRenderer"'
     },
-    SHORTS_PLAYER: {
-      textPattern: '"ytlr-shorts-ads-renderer"'
-    },
     REEL_WATCH_SEQUENCE: {
       textPattern: '"reelWatchSequenceResponse"'
     },
