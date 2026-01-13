@@ -505,6 +505,7 @@ function handleShortcutAction(action) {
 }
 
 let lastShortcutTime = 0;
+let lastShortcutKey = -1;
 
 // --- Global Input Handler ---
 
@@ -562,15 +563,20 @@ const eventHandler = (evt) => {
   // 4. Handle Number Shortcuts (0-9)
   else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
     const now = Date.now();
-    if (now - lastShortcutTime < 400) { // Debounce
-        evt.preventDefault(); evt.stopPropagation(); return false;
+	const keyIndex = evt.keyCode - 48;
+    if (now - lastShortcutTime < 400 && lastShortcutKey === keyIndex) {
+        console.log(`[Shortcut] Debounced duplicate key ${keyIndex}`);
+        evt.preventDefault(); 
+        evt.stopPropagation(); 
+        return false;
     }
+    
     lastShortcutTime = now;
+    lastShortcutKey = keyIndex;
     
     if (optionsPanelVisible) { evt.preventDefault(); evt.stopPropagation(); return false; }
     if (!isWatchPage()) return true;
     
-    const keyIndex = evt.keyCode - 48;
     const action = configRead(`shortcut_key_${keyIndex}`);
     
     evt.preventDefault();
