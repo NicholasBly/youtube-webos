@@ -1,6 +1,6 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
 
-const DEBUG = false;
+const DEBUG = true;
 
 function debugLog(msg, ...args) {
   if (DEBUG) console.log(`[AdBlock] ${msg}`, ...args);
@@ -49,16 +49,6 @@ const SCHEMA_REGISTRY = {
     ACTION: { 
       textPattern: '"onResponseReceivedActions"' 
     },
-    SHORTS_OVERLAY: {
-      textPattern: '"shortsAdsRenderer"'
-    },
-    REEL_WATCH_SEQUENCE: {
-      textPattern: '"reelWatchSequenceResponse"'
-    },
-    REEL_ITEM_WATCH: {
-      textPattern: '"overlay"',
-      excludePattern: '"tvSurfaceContentRenderer"'
-    },
     // Explicitly ignore common logging/heartbeat packets to silence debug noise
     IGNORED: {
       textPattern: '"logEntry"'
@@ -81,15 +71,6 @@ const SCHEMA_REGISTRY = {
     CONTINUATION: {
       sectionPath: 'continuationContents.sectionListContinuation.contents',
       gridPath: 'continuationContents.gridContinuation.items'
-    },
-    SHORTS_OVERLAY: {
-      overlayPath: 'overlay.shortsAdsRenderer.adSlots'
-    },
-    REEL_WATCH_SEQUENCE: {
-      entriesPath: 'reelWatchSequenceResponse.entries'
-    },
-    REEL_ITEM_WATCH: {
-      overlayPath: 'overlay.shortsAdsRenderer'
     }
   }
 };
@@ -143,7 +124,7 @@ function hookedParse(text, reviver) {
     data.reloadContinuationItemsCommand
   );
 
-  if (!isAPIResponse) {
+  if (!isAPIResponse || data.botguardData) {
     return data;
   }
 
@@ -151,21 +132,25 @@ function hookedParse(text, reviver) {
   const startTime = DEBUG ? performance.now() : 0;
   
   try {
-    // Early catch-all: Recursively remove ALL adSlots arrays (sponsored shorts feed)
-    if (enableAdBlock) {
-      const removedCount = removeAllAdSlotsRecursive(data);
-      if (DEBUG && removedCount > 0) debugLog(`Early Filter: Removed ${removedCount} sponsored shorts from adSlots arrays`);
-      
-      // Also filter any arrays for entries with isAd flag
-      const filteredAds = filterEntriesWithIsAd(data);
-      if (DEBUG && filteredAds > 0) debugLog(`Early Filter: Removed ${filteredAds} entries with isAd flag`);
-    }
-    
-    const responseType = detectResponseTypeFromText(text);
+	const responseType = detectResponseTypeFromText(text);
     const needsContentFiltering = enableAdBlock || hideGuestPrompts;
 
+    // Check if we are currently in the Shorts UI
+    const isShortsPage = document.body?.classList?.contains('WEB_PAGE_TYPE_SHORTS');
+
+    if (isShortsPage) {
+        if (enableAdBlock) {
+             const filteredAds = filterEntriesWithIsAd(data);
+             if (DEBUG && filteredAds > 0) debugLog(`Early Filter: Removed ${filteredAds} entries with isAd flag`);
+        }
+
+        const IGNORE_ON_SHORTS = ['SEARCH', 'PLAYER', 'ACTION'];
+        if (responseType && IGNORE_ON_SHORTS.includes(responseType)) {
+             return data;
+        }
+    }
+
     if (responseType === 'IGNORED') {
-       // Do nothing, just skip
        return data;
     }
     else if (responseType && SCHEMA_REGISTRY.paths[responseType]) {
@@ -178,7 +163,7 @@ function hookedParse(text, reviver) {
     } 
     else {
       // Fallback & Miss Analysis
-	  if(text.length > 10000) { // indicates real page refresh
+	  if(text.length > 10000) { 
 		if (DEBUG) logSchemaMiss(data, text.length);
 		if (!Array.isArray(data)) {
             applyFallbackFilters(data, config, needsContentFiltering);
@@ -247,7 +232,6 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
 	  if (config.hideGuestPrompts) {
           let pivotContents = schema && schema.pivotPath ? getByPath(data, schema.pivotPath) : null;
           
-          // Fallback to deep search if path not found
           if (!pivotContents) {
               const sectionList = findFirstObject(data, 'sectionListRenderer', 15);
               if (sectionList && sectionList.contents) {
@@ -356,96 +340,6 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
                        (action.reloadContinuationItemsCommand && action.reloadContinuationItemsCommand.continuationItems);
           if (items) processSectionListOptimized(items, config, needsContentFiltering, 'ACTION');
         }
-      }
-      break;
-      
-    case 'SHORTS_OVERLAY':
-      if (config.enableAdBlock) {
-        // Handle overlay ad slots (the badge/overlay)
-        const overlayAdSlots = schema && schema.overlayPath ? getByPath(data, schema.overlayPath) : null;
-        
-        if (overlayAdSlots && Array.isArray(overlayAdSlots)) {
-          overlayAdSlots.length = 0;
-          if (DEBUG) debugLog('SHORTS_OVERLAY: Removed overlay ad slots');
-        }
-        
-        // Handle data.adSlots (the actual sponsored shorts in the feed)
-        if (data.adSlots && Array.isArray(data.adSlots)) {
-          const removedCount = data.adSlots.length;
-          data.adSlots.length = 0;
-          if (DEBUG) debugLog(`SHORTS_OVERLAY: Removed ${removedCount} sponsored shorts from data.adSlots`);
-        }
-        
-        // Fallback: search for adSlots anywhere in the data structure
-        const foundAdSlots = findFirstObject(data, 'adSlots', 10);
-        if (foundAdSlots && Array.isArray(foundAdSlots)) {
-          const removedCount = foundAdSlots.length;
-          foundAdSlots.length = 0;
-          if (DEBUG) debugLog(`SHORTS_OVERLAY: Removed ${removedCount} sponsored shorts (fallback)`);
-        }
-        
-        // Also handle shortsAdsRenderer
-        const shortsAds = findFirstObject(data, 'shortsAdsRenderer', 10);
-        if (shortsAds && shortsAds.adSlots && Array.isArray(shortsAds.adSlots)) {
-          shortsAds.adSlots.length = 0;
-          if (DEBUG) debugLog('SHORTS_OVERLAY: Removed shortsAdsRenderer ad slots');
-        }
-      }
-      break;
-      
-    case 'REEL_WATCH_SEQUENCE':
-      if (config.enableAdBlock) {
-        // Filter entries that have isAd flag
-        let entries = schema && schema.entriesPath ? getByPath(data, schema.entriesPath) : null;
-        
-        // Fallback search
-        if (!entries) {
-          const reelResponse = findFirstObject(data, 'reelWatchSequenceResponse', 15);
-          if (reelResponse && reelResponse.entries) {
-            entries = reelResponse.entries;
-            if (DEBUG) debugLog('REEL_WATCH_SEQUENCE: Using fallback search');
-          }
-        }
-        
-        if (entries && Array.isArray(entries)) {
-          const initialLength = entries.length;
-          let writeIdx = 0;
-          
-          for (let i = 0; i < entries.length; i++) {
-            const entry = entries[i];
-            
-            // Check if this entry is an ad
-            const isAd = entry?.command?.reelWatchEndpoint?.adClientParams?.isAd;
-            
-            if (isAd === true || isAd === 'true') {
-              // Skip this entry (it's an ad)
-              if (DEBUG) debugLog(`REEL_WATCH_SEQUENCE: Filtered ad entry at index ${i}`);
-              continue;
-            }
-            
-            // Keep this entry
-            if (writeIdx !== i) entries[writeIdx] = entry;
-            writeIdx++;
-          }
-          
-          entries.length = writeIdx;
-          const removed = initialLength - writeIdx;
-          if (DEBUG && removed > 0) debugLog(`REEL_WATCH_SEQUENCE: Removed ${removed} sponsored shorts from entries`);
-        }
-      }
-      break;
-      
-    case 'REEL_ITEM_WATCH':
-      if (config.enableAdBlock) {
-        // Remove overlay.shortsAdsRenderer
-        if (data.overlay && data.overlay.shortsAdsRenderer) {
-          delete data.overlay.shortsAdsRenderer;
-          if (DEBUG) debugLog('REEL_ITEM_WATCH: Removed overlay.shortsAdsRenderer');
-        }
-        
-        // Also remove any adSlots
-        const removedCount = removeAllAdSlotsRecursive(data);
-        if (DEBUG && removedCount > 0) debugLog(`REEL_ITEM_WATCH: Removed ${removedCount} ad slots`);
       }
       break;
   }
@@ -671,28 +565,6 @@ function findFirstObject(haystack, needle, maxDepth = 10) {
     }
   }
   return null;
-}
-
-function removeAllAdSlotsRecursive(obj, depth = 0, maxDepth = 15) {
-  if (!obj || typeof obj !== 'object' || depth > maxDepth) return 0;
-  
-  let removed = 0;
-  
-  // If this object has adSlots array, clear it
-  if (obj.adSlots && Array.isArray(obj.adSlots) && obj.adSlots.length > 0) {
-    const count = obj.adSlots.length;
-    obj.adSlots.length = 0;
-    removed += count;
-  }
-  
-  // Recurse into all properties
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key) && typeof obj[key] === 'object') {
-      removed += removeAllAdSlotsRecursive(obj[key], depth + 1, maxDepth);
-    }
-  }
-  
-  return removed;
 }
 
 function filterEntriesWithIsAd(obj, depth = 0, maxDepth = 15) {
