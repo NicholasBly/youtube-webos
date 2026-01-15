@@ -89,10 +89,8 @@ class Watch {
   updateVisibility() {
     if (!this._watch) return;
 
-    // Direct query is safer than MutationObserver on old hardware
     const player = document.querySelector(this._PLAYER_SELECTOR);
     
-    // If player doesn't exist (Home Screen), Clock is Visible
     if (!player) {
       if (this._watch.style.display !== 'block') {
          this._watch.style.display = 'block';
@@ -100,11 +98,13 @@ class Watch {
       return;
     }
 
-    const isPlayerFocused = document.activeElement === player;
-    const shouldShow = !isPlayerFocused;
+	const isHybridFocused = player.getAttribute('hybridnavfocusable') === 'true';
+    const isPlayerElementActive = document.activeElement === player || document.activeElement === document.body;
+    const isOverlayActive = document.querySelector('.AmQJbe');
+
+    const shouldHide = isHybridFocused || isPlayerElementActive || isOverlayActive;
     
-    // Conditional Reflow: Only touch DOM if value changed (Optimization Kept)
-    const newDisplay = shouldShow ? 'block' : 'none';
+    const newDisplay = shouldHide ? 'none' : 'block';
     
     if (this._watch.style.display !== newDisplay) {
       this._watch.style.display = newDisplay;
@@ -112,9 +112,6 @@ class Watch {
   }
 
   setupGlobalListeners() {
-    // webOS 3 (Chrome 38) does not support passive options object.
-    // We use boolean 'true' for capture.
-    
     const addListener = (type, handler) => {
       document.addEventListener(type, handler, true);
       this._globalListeners.push({ type, fn: handler });

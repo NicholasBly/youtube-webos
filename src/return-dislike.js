@@ -201,14 +201,18 @@ class ReturnYouTubeDislike {
 
   setupPanel(panel) {
       if (!this.active) return;
+	  if (this.panelElement === panel) {
+          this.checkAndInjectDislike(panel);
+          return;
+      }
+	  
       this.panelElement = panel; // Cache reference
-      
-      this.checkAndInjectDislike(panel);
       this.attachContentObserver(panel);
       
-      // Only setup IntersectionObserver if available
       if (HAS_INTERSECTION_OBSERVER) {
           this.setupIntersectionObserver(panel);
+      } else {
+          this.checkAndInjectDislike(panel);
       }
   }
 

@@ -1,6 +1,6 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
 
-const DEBUG = true;
+const DEBUG = false;
 
 function debugLog(msg, ...args) {
   if (DEBUG) console.log(`[AdBlock] ${msg}`, ...args);
@@ -8,6 +8,30 @@ function debugLog(msg, ...args) {
 
 let origParse = JSON.parse;
 let isHooked = false;
+
+let isShortsContext = false;
+let bodyObserver = null;
+
+function updateShortsContext() {
+  if (document.body) {
+    isShortsContext = document.body.classList.contains('WEB_PAGE_TYPE_SHORTS');
+  }
+}
+
+function initBodyObserver() {
+  if (!document.body) {
+    window.addEventListener('DOMContentLoaded', initBodyObserver);
+    return;
+  }
+  
+  updateShortsContext();
+
+  bodyObserver = new MutationObserver((mutations) => {
+    updateShortsContext();
+  });
+
+  bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+}
 
 let configCache = {
   enableAdBlock: true,
@@ -26,12 +50,16 @@ const SCHEMA_REGISTRY = {
   enabled: true, 
   
   typeSignatures: {
+    SHORTS_SEQUENCE: {
+      textPattern: '"reelWatchEndpoint"',
+      matchFn: (data) => Array.isArray(data.entries) 
+    },
     PLAYER: { 
       textPattern: '"streamingData"' 
     },
-	GUEST: {
-	  textPattern: '"currentVideoThumbnail"' 
-	},
+    GUEST: {
+      textPattern: '"currentVideoThumbnail"' 
+    },
     HOME_BROWSE: { 
       textPattern: '"tvSurfaceContentRenderer"',
       excludePattern: '"tvSecondaryNavRenderer"' 
@@ -49,14 +77,16 @@ const SCHEMA_REGISTRY = {
     ACTION: { 
       textPattern: '"onResponseReceivedActions"' 
     },
-    // Explicitly ignore common logging/heartbeat packets to silence debug noise
     IGNORED: {
       textPattern: '"logEntry"'
     }
   },
   
   paths: {
-	GUEST: {
+    SHORTS_SEQUENCE: {
+        listPath: 'entries'
+    },
+    GUEST: {
       pivotPath: 'contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents'
     },
     HOME_BROWSE: {
@@ -93,7 +123,6 @@ function getCachedConfig() {
  * Main JSON.parse hook
  */
 function hookedParse(text, reviver) {
-  // 1. Native Parse
   let data;
   try {
     data = origParse.call(this, text, reviver);
@@ -103,7 +132,6 @@ function hookedParse(text, reviver) {
   
   if (!text || text.length < 500) return data;
    
-  // 2. Get Config
   const config = getCachedConfig();
   const { enableAdBlock, removeGlobalShorts, removeTopLiveGames, hideGuestPrompts } = config;
 
@@ -111,7 +139,6 @@ function hookedParse(text, reviver) {
     return data;
   }
 
-  // 3. Early exit for non-objects
   if (!data || typeof data !== 'object') {
     return data;
   }
@@ -121,29 +148,21 @@ function hookedParse(text, reviver) {
     data.playerResponse ||
     data.onResponseReceivedActions ||
     data.sectionListRenderer ||
-    data.reloadContinuationItemsCommand
+    data.reloadContinuationItemsCommand ||
+    data.entries 
   );
 
   if (!isAPIResponse || data.botguardData) {
     return data;
   }
 
-  // 4. Apply Filters with Debug Timing
-  const startTime = DEBUG ? performance.now() : 0;
+  // const startTime = DEBUG ? performance.now() : 0;
   
   try {
-	const responseType = detectResponseTypeFromText(text);
+    const responseType = detectResponseType(text, data);
     const needsContentFiltering = enableAdBlock || hideGuestPrompts;
 
-    // Check if we are currently in the Shorts UI
-    const isShortsPage = document.body?.classList?.contains('WEB_PAGE_TYPE_SHORTS');
-
-    if (isShortsPage) {
-        if (enableAdBlock) {
-             const filteredAds = filterEntriesWithIsAd(data);
-             if (DEBUG && filteredAds > 0) debugLog(`Early Filter: Removed ${filteredAds} entries with isAd flag`);
-        }
-
+    if (isShortsContext) {
         const IGNORE_ON_SHORTS = ['SEARCH', 'PLAYER', 'ACTION'];
         if (responseType && IGNORE_ON_SHORTS.includes(responseType)) {
              return data;
@@ -162,49 +181,41 @@ function hookedParse(text, reviver) {
       applySchemaFilters(data, responseType, config, needsContentFiltering);
     } 
     else {
-      // Fallback & Miss Analysis
-	  if(text.length > 10000) { 
-		if (DEBUG) logSchemaMiss(data, text.length);
-		if (!Array.isArray(data)) {
+      if(text.length > 10000) { 
+        if (DEBUG) logSchemaMiss(data, text.length);
+        if (!Array.isArray(data)) {
             applyFallbackFilters(data, config, needsContentFiltering);
         }
-	  }
+      }
     }
   } catch (e) {
     console.error('[AdBlock] Error during filtering:', e);
   }
 
-  if (DEBUG) {
-    const duration = (performance.now() - startTime).toFixed(2);
-    if (duration > 1.0) debugLog(`Filtering completed in ${duration}ms`);
-  }
+  // if (DEBUG) {
+    // const duration = (performance.now() - startTime).toFixed(2);
+    // if (duration > 1.0) debugLog(`Filtering completed in ${duration}ms`);
+  // }
 
   return data;
 }
 
-/**
- * Analyzes missed payloads to help the user identify new schemas
- */
 function logSchemaMiss(data, textLength) {
   try {
     let info = '';
     const keys = Array.isArray(data) ? '[Array]' : Object.keys(data);
-    
-    // If it's small, show the whole thing so we can see what it is
     if (textLength < 1000) {
       info = `Content: ${JSON.stringify(data)}`;
     } else {
-      // If it's big, show the keys so we can find a signature
       info = `Top-Level Keys: [${Array.isArray(keys) ? keys.join(', ') : 'Array'}]`;
     }
-
     debugLog(`MISS (Fallback used) | Size: ${textLength} | ${info}`);
   } catch (e) {
     debugLog(`MISS (Fallback used) | Size: ${textLength} | Error analyzing structure`);
   }
 }
 
-function detectResponseTypeFromText(text) {
+function detectResponseType(text, data) {
   if (typeof text !== 'string') return null;
   const types = SCHEMA_REGISTRY.typeSignatures;
   
@@ -213,6 +224,9 @@ function detectResponseTypeFromText(text) {
     if (text.indexOf(config.textPattern) !== -1) {
       if (config.excludePattern && text.indexOf(config.excludePattern) !== -1) {
         continue;
+      }
+      if (config.matchFn && !config.matchFn(data)) {
+          continue;
       }
       return type;
     }
@@ -224,162 +238,179 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
   const schema = SCHEMA_REGISTRY.paths[responseType];
   
   switch (responseType) {
-    case 'PLAYER':
-      if (config.enableAdBlock) removePlayerAdsOptimized(data);
-	  break;
-	  
-	  case 'GUEST':
-	  if (config.hideGuestPrompts) {
-          let pivotContents = schema && schema.pivotPath ? getByPath(data, schema.pivotPath) : null;
-          
-          if (!pivotContents) {
-              const sectionList = findFirstObject(data, 'sectionListRenderer', 15);
-              if (sectionList && sectionList.contents) {
-                  pivotContents = sectionList.contents;
-                  if (DEBUG) debugLog('GUEST: Using fallback search (schema path failed)');
-              }
-          }
-          
-          if (pivotContents && Array.isArray(pivotContents)) {
-              let writeIdx = 0;
-              for (let i = 0; i < pivotContents.length; i++) {
-                  if (pivotContents[i].alertWithActionsRenderer) {
-                      if (DEBUG) debugLog('GUEST: Removed alertWithActionsRenderer');
-                      continue;
-                  }
-                  if (writeIdx !== i) pivotContents[writeIdx] = pivotContents[i];
-                  writeIdx++;
-              }
-              pivotContents.length = writeIdx;
-          }
-      }
-      break;
-      
-    case 'HOME_BROWSE':
-      let contents = getByPath(data, schema.mainContent);
-      if (!contents) {
-          const sectionList = findFirstObject(data, 'sectionListRenderer', 15);
-          if (sectionList && sectionList.contents) {
-              contents = sectionList.contents;
-              if (DEBUG) debugLog('HOME_BROWSE: Using fallback search');
-          }
-      }
-      if (contents) processSectionListOptimized(contents, config, needsContentFiltering, 'HOME_BROWSE');
-      break;
+    case 'SHORTS_SEQUENCE':
+        if (config.enableAdBlock && schema && schema.listPath) {
+            const entries = data[schema.listPath];
+            if (Array.isArray(entries)) {
+                const oldLen = entries.length;
+                data[schema.listPath] = filterItemsOptimized(entries, config, needsContentFiltering);
+                if (DEBUG && data[schema.listPath].length !== oldLen) {
+                    debugLog(`SHORTS_SEQUENCE: Removed ${oldLen - data[schema.listPath].length} items`);
+                }
+            }
+        }
+        break;
 
-    case 'SEARCH':
-      let searchContents = getByPath(data, schema.mainContent);
-      if (!searchContents) {
-          const sectionList = findFirstObject(data, 'sectionListRenderer', 15);
-          if (sectionList && sectionList.contents) {
-              searchContents = sectionList.contents;
-              if (DEBUG) debugLog('SEARCH: Using fallback search');
-          }
+    case 'GUEST':
+        if (config.hideGuestPrompts && schema && schema.pivotPath) {
+            const pivot = getByPath(data, schema.pivotPath);
+            if (Array.isArray(pivot)) {
+                processSectionListOptimized(pivot, config, needsContentFiltering, 'GUEST');
+            }
+        }
+        break;
+
+    case 'HOME_BROWSE':
+      if (schema && schema.mainContent) {
+        let contents = getByPath(data, schema.mainContent);
+        
+        if (!contents) {
+            const sectionList = findFirstObject(data, 'sectionListRenderer', 15);
+            if (sectionList && sectionList.contents) {
+                contents = sectionList.contents;
+                if (DEBUG) debugLog('HOME_BROWSE: Using fallback search');
+            }
+        }
+
+        if (Array.isArray(contents)) {
+          processSectionListOptimized(contents, config, needsContentFiltering, 'HOME_BROWSE');
+        }
       }
-      if (searchContents) processSectionListOptimized(searchContents, config, needsContentFiltering, 'SEARCH');
       break;
 
     case 'BROWSE_TABS':
-      const tabs = getByPath(data, schema.tabsPath);
-      if (Array.isArray(tabs)) {
-        for (let i = 0; i < tabs.length; i++) {
-          const tabContent = tabs[i].tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
-          if (tabContent) processSectionListOptimized(tabContent, config, needsContentFiltering, 'BROWSE_TAB');
+      if (schema && schema.tabsPath) {
+        const tabs = getByPath(data, schema.tabsPath);
+        if (Array.isArray(tabs)) {
+          for (let i = 0; i < tabs.length; i++) {
+            const tab = tabs[i];
+            const gridContents = tab.tabRenderer?.content?.sectionListRenderer?.contents;
+            if (Array.isArray(gridContents)) {
+              processSectionListOptimized(gridContents, config, needsContentFiltering, 'BROWSE_TAB_GENERIC');
+            }
+          }
         }
       }
       break;
-      
+
+    case 'SEARCH':
+      if (schema && schema.mainContent) {
+        let contents = getByPath(data, schema.mainContent);
+        
+        if (!contents) {
+             const sectionList = findFirstObject(data, 'sectionListRenderer', 15);
+             if (sectionList && sectionList.contents) {
+                 contents = sectionList.contents;
+                 if (DEBUG) debugLog('SEARCH: Using fallback search');
+             }
+        }
+
+        if (Array.isArray(contents)) {
+          processSectionListOptimized(contents, config, needsContentFiltering, 'SEARCH');
+        }
+      }
+      break;
+
     case 'CONTINUATION':
-      let foundContent = false;
-      
-      if (schema && schema.sectionPath) {
-        const sectionCont = getByPath(data, schema.sectionPath);
-        if (sectionCont) {
-            processSectionListOptimized(sectionCont, config, needsContentFiltering, 'CONT_SECTION');
-            foundContent = true;
-        }
-      }
-      
-      if (schema && schema.gridPath) {
-        const gridCont = getByPath(data, schema.gridPath);
-        if (gridCont && Array.isArray(gridCont)) {
-          const filtered = filterItemsOptimized(gridCont, config, needsContentFiltering);
-          if (DEBUG && filtered.length !== gridCont.length) {
-             debugLog(`Grid Continuation: Removed ${gridCont.length - filtered.length} items`);
+      if (schema) {
+        if (schema.sectionPath) {
+          const secList = getByPath(data, schema.sectionPath);
+          if (Array.isArray(secList)) {
+            processSectionListOptimized(secList, config, needsContentFiltering, 'CONTINUATION (Section)');
           }
-          setByPath(data, schema.gridPath, filtered);
-          foundContent = true;
         }
-      }
-      
-      // Fallback if both paths failed
-      if (!foundContent) {
-          const sectionList = findFirstObject(data, 'sectionListRenderer', 10);
-          if (sectionList && sectionList.contents) {
-              processSectionListOptimized(sectionList.contents, config, needsContentFiltering, 'CONT_FALLBACK');
-              if (DEBUG) debugLog('CONTINUATION: Using fallback search');
-          } else {
-              const gridCont = findFirstObject(data, 'gridContinuation', 10);
-              if (gridCont && gridCont.items) {
-                  const filtered = filterItemsOptimized(gridCont.items, config, needsContentFiltering);
-                  if (DEBUG && filtered.length !== gridCont.items.length) {
-                      debugLog(`CONTINUATION Fallback: Removed ${gridCont.items.length - filtered.length} items`);
-                  }
-                  gridCont.items = filtered;
-              }
+        if (schema.gridPath) {
+          const gridItems = getByPath(data, schema.gridPath);
+          if (Array.isArray(gridItems)) {
+            const oldLen = gridItems.length;
+            const filtered = filterItemsOptimized(gridItems, config, needsContentFiltering);
+            setByPath(data, schema.gridPath, filtered);
+            if (DEBUG && oldLen !== filtered.length) {
+              debugLog(`CONTINUATION (Grid): Removed ${oldLen - filtered.length} items`);
+            }
           }
+        }
       }
       break;
-      
+
     case 'ACTION':
-      const actions = data.onResponseReceivedActions;
-      if (actions && actions.length) {
-        for (let i = 0; i < actions.length; i++) {
-          const action = actions[i];
-          const items = (action.appendContinuationItemsAction && action.appendContinuationItemsAction.continuationItems) ||
-                       (action.reloadContinuationItemsCommand && action.reloadContinuationItemsCommand.continuationItems);
-          if (items) processSectionListOptimized(items, config, needsContentFiltering, 'ACTION');
+      if (Array.isArray(data.onResponseReceivedActions)) {
+        for (let i = 0; i < data.onResponseReceivedActions.length; i++) {
+          const action = data.onResponseReceivedActions[i];
+          
+          if (action.reloadContinuationItemsCommand?.continuationItems) {
+            action.reloadContinuationItemsCommand.continuationItems = filterItemsOptimized(
+              action.reloadContinuationItemsCommand.continuationItems,
+              config,
+              needsContentFiltering
+            );
+          }
+          
+          if (action.appendContinuationItemsAction?.continuationItems) {
+            action.appendContinuationItemsAction.continuationItems = filterItemsOptimized(
+              action.appendContinuationItemsAction.continuationItems,
+              config,
+              needsContentFiltering
+            );
+          }
         }
       }
+      break;
+
+    case 'PLAYER':
+      if (config.enableAdBlock) {
+        removePlayerAdsOptimized(data);
+      }
+      break;
+
+    default:
       break;
   }
 }
 
 function applyFallbackFilters(data, config, needsContentFiltering) {
-  let fallbackHits = 0;
+  if (config.enableAdBlock) {
+    removePlayerAdsOptimized(data);
+  }
 
-  const sectionList = findFirstObject(data, 'sectionListRenderer', 10);
-  if (sectionList?.contents) {
-    processSectionListOptimized(sectionList.contents, config, needsContentFiltering, 'FALLBACK_SECTION');
-    fallbackHits++;
+  const foundRenderer = findFirstObject(data, 'sectionListRenderer', 10);
+  if (foundRenderer?.contents) {
+    if (Array.isArray(foundRenderer.contents)) {
+      processSectionListOptimized(foundRenderer.contents, config, needsContentFiltering, 'Fallback sectionListRenderer');
+    }
   }
 
   const gridRenderer = findFirstObject(data, 'gridRenderer', 10);
   if (gridRenderer?.items) {
-    const oldLen = gridRenderer.items.length;
     gridRenderer.items = filterItemsOptimized(gridRenderer.items, config, needsContentFiltering);
-    if (DEBUG && oldLen !== gridRenderer.items.length) {
-       debugLog(`Fallback Grid: Removed ${oldLen - gridRenderer.items.length} items`);
-    }
-    fallbackHits++;
   }
 
   const gridContinuation = findFirstObject(data, 'gridContinuation', 10);
   if (gridContinuation?.items) {
-    const oldLen = gridContinuation.items.length;
     gridContinuation.items = filterItemsOptimized(gridContinuation.items, config, needsContentFiltering);
-     if (DEBUG && oldLen !== gridContinuation.items.length) {
-       debugLog(`Fallback GridContinuation: Removed ${oldLen - gridContinuation.items.length} items`);
-    }
-    fallbackHits++;
   }
 
-  if (config.enableAdBlock && (data.playerResponse || data.videoDetails)) {
-    removePlayerAdsOptimized(data);
-    fallbackHits++;
+  if (Array.isArray(data.onResponseReceivedActions)) {
+    for (let i = 0; i < data.onResponseReceivedActions.length; i++) {
+      const action = data.onResponseReceivedActions[i];
+      
+      if (action.reloadContinuationItemsCommand?.continuationItems) {
+        action.reloadContinuationItemsCommand.continuationItems = filterItemsOptimized(
+          action.reloadContinuationItemsCommand.continuationItems,
+          config,
+          needsContentFiltering
+        );
+      }
+      
+      if (action.appendContinuationItemsAction?.continuationItems) {
+        action.appendContinuationItemsAction.continuationItems = filterItemsOptimized(
+          action.appendContinuationItemsAction.continuationItems,
+          config,
+          needsContentFiltering
+        );
+      }
+    }
   }
-  
-  if (DEBUG && fallbackHits > 0) debugLog(`Fallback found targets in ${fallbackHits} locations`);
 }
 
 // ============================================================================
@@ -392,6 +423,24 @@ function getShelfTitleOptimized(shelf) {
   if (text) return text.toLowerCase();
   text = shelf.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title?.runs?.[0]?.text;
   return text ? text.toLowerCase() : '';
+}
+
+function isReelAd(item, enableAdBlock) {
+  if (!enableAdBlock) return false;
+  const endpoint = item.command?.reelWatchEndpoint;
+  if (!endpoint) return false;
+  
+  return endpoint.adClientParams?.isAd === true || 
+         endpoint.adClientParams?.isAd === 'true' ||
+         endpoint.videoType === 'REEL_VIDEO_TYPE_AD';
+}
+
+function hasAdRenderer(item, enableAdBlock) {
+  return enableAdBlock && (item.adSlotRenderer || item.tvMastheadRenderer);
+}
+
+function hasGuestPromptRenderer(item, hideGuestPrompts) {
+  return hideGuestPrompts && (item.feedNudgeRenderer || item.alertWithActionsRenderer);
 }
 
 function processSectionListOptimized(contents, config, needsContentFiltering, contextName = '') {
@@ -419,11 +468,7 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
       if (keepItem && shelf.content) {
         const hList = shelf.content.horizontalListRenderer;
         if (hList?.items) {
-          const oldLen = hList.items.length;
           hList.items = filterItemsOptimized(hList.items, config, needsContentFiltering);
-          if (DEBUG && oldLen !== hList.items.length) {
-             debugLog(`  -> Shelf [${getShelfTitleOptimized(shelf) || 'unknown'}]: Removed ${oldLen - hList.items.length} items`);
-          }
         }
         
         const gList = shelf.content.gridRenderer;
@@ -432,10 +477,14 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
         }
       }
     } 
-    else if (enableAdBlock && (item.tvMastheadRenderer || item.adSlotRenderer)) {
+    else if (hasAdRenderer(item, enableAdBlock)) {
       keepItem = false;
     } 
-    else if (hideGuestPrompts && (item.feedNudgeRenderer || item.alertWithActionsRenderer)) {
+    else if (hasGuestPromptRenderer(item, hideGuestPrompts)) {
+      keepItem = false;
+    }
+    
+    if (keepItem && isReelAd(item, enableAdBlock)) {
       keepItem = false;
     }
 
@@ -450,7 +499,7 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
   if (DEBUG) {
     const removed = initialCount - writeIdx;
     if (removed > 0) {
-      debugLog(`${contextName}: Filtered ${removed} top-level items (Ads/Masts/Shelves) from ${initialCount}`);
+      debugLog(`${contextName}: Filtered ${removed} top-level items from ${initialCount}`);
     }
   }
 }
@@ -469,12 +518,10 @@ function filterItemsOptimized(items, config, needsContentFiltering) {
     let keep = true;
 
     if (needsContentFiltering) {
-      if (enableAdBlock && item.adSlotRenderer) {
-        keep = false;
+      if (hasAdRenderer(item, enableAdBlock) || isReelAd(item, enableAdBlock)) {
         continue;
       }
-      if (hideGuestPrompts && (item.feedNudgeRenderer || item.alertWithActionsRenderer)) {
-        keep = false;
+      if (hasGuestPromptRenderer(item, hideGuestPrompts)) {
         continue;
       }
     }
@@ -510,13 +557,18 @@ function filterItemsOptimized(items, config, needsContentFiltering) {
 const pathCache = new Map();
 const PATH_CACHE_LIMIT = 20;
 
-function getByPath(obj, path) {
-  if (!path) return undefined;
+function parsePath(path) {
   let parts = pathCache.get(path);
   if (!parts) {
     parts = path.split('.');
     if (pathCache.size < PATH_CACHE_LIMIT) pathCache.set(path, parts);
   }
+  return parts;
+}
+
+function getByPath(obj, path) {
+  if (!path) return undefined;
+  const parts = parsePath(path);
   let current = obj;
   for (let i = 0; i < parts.length; i++) {
     if (current == null) return undefined;
@@ -527,11 +579,7 @@ function getByPath(obj, path) {
 
 function setByPath(obj, path, value) {
   if (!path) return;
-  let parts = pathCache.get(path);
-  if (!parts) {
-    parts = path.split('.');
-    if (pathCache.size < PATH_CACHE_LIMIT) pathCache.set(path, parts);
-  }
+  const parts = parsePath(path);
   let current = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     if (current[parts[i]] === undefined) return;
@@ -540,17 +588,25 @@ function setByPath(obj, path, value) {
   current[parts[parts.length - 1]] = value;
 }
 
+function clearArrayIfExists(obj, key) {
+  if (obj[key]?.length) {
+    obj[key].length = 0;
+    return 1;
+  }
+  return 0;
+}
+
 function removePlayerAdsOptimized(data) {
   let cleared = 0;
-  if (data.adPlacements?.length) { data.adPlacements.length = 0; cleared++; }
-  if (data.playerAds?.length) { data.playerAds.length = 0; cleared++; }
-  if (data.adSlots?.length) { data.adSlots.length = 0; cleared++; }
+  cleared += clearArrayIfExists(data, 'adPlacements');
+  cleared += clearArrayIfExists(data, 'playerAds');
+  cleared += clearArrayIfExists(data, 'adSlots');
   
   const pr = data.playerResponse;
   if (pr) {
-    if (pr.adPlacements?.length) { pr.adPlacements.length = 0; cleared++; }
-    if (pr.playerAds?.length) { pr.playerAds.length = 0; cleared++; }
-    if (pr.adSlots?.length) { pr.adSlots.length = 0; cleared++; }
+    cleared += clearArrayIfExists(pr, 'adPlacements');
+    cleared += clearArrayIfExists(pr, 'playerAds');
+    cleared += clearArrayIfExists(pr, 'adSlots');
   }
   if (DEBUG && cleared > 0) debugLog('Cleaned Player Ads/Placements');
 }
@@ -567,67 +623,6 @@ function findFirstObject(haystack, needle, maxDepth = 10) {
   return null;
 }
 
-function filterEntriesWithIsAd(obj, depth = 0, maxDepth = 15) {
-  if (!obj || typeof obj !== 'object' || depth > maxDepth) return 0;
-  
-  let removed = 0;
-  
-  // If this is an array, filter out items with isAd flag
-  if (Array.isArray(obj)) {
-    let writeIdx = 0;
-    for (let i = 0; i < obj.length; i++) {
-      const item = obj[i];
-      
-      // Check if this item has isAd flag anywhere in its structure
-      const hasIsAd = item && typeof item === 'object' && checkForIsAd(item);
-      
-      if (hasIsAd) {
-        // Skip this item (it's an ad)
-        removed++;
-        continue;
-      }
-      
-      // Keep this item
-      if (writeIdx !== i) obj[writeIdx] = item;
-      writeIdx++;
-    }
-    
-    if (obj.length !== writeIdx) {
-      obj.length = writeIdx;
-    }
-  }
-  
-  // Recurse into object properties
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key) && typeof obj[key] === 'object') {
-      removed += filterEntriesWithIsAd(obj[key], depth + 1, maxDepth);
-    }
-  }
-  
-  return removed;
-}
-
-function checkForIsAd(obj, depth = 0, maxDepth = 5) {
-  if (!obj || typeof obj !== 'object' || depth > maxDepth) return false;
-  
-  // Check common isAd paths
-  if (obj.isAd === true || obj.isAd === 'true') return true;
-  if (obj.adClientParams && (obj.adClientParams.isAd === true || obj.adClientParams.isAd === 'true')) return true;
-  if (obj.reelWatchEndpoint && obj.reelWatchEndpoint.adClientParams) {
-    const isAd = obj.reelWatchEndpoint.adClientParams.isAd;
-    if (isAd === true || isAd === 'true') return true;
-  }
-  
-  // Recurse into properties
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key) && typeof obj[key] === 'object') {
-      if (checkForIsAd(obj[key], depth + 1, maxDepth)) return true;
-    }
-  }
-  
-  return false;
-}
-
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -637,6 +632,7 @@ export function initAdblock() {
   console.info('[AdBlock] Initializing hybrid hook (Debug Mode: ' + DEBUG + ')');
   
   updateConfigCache();
+  initBodyObserver();
   
   origParse = JSON.parse;
   JSON.parse = function (text, reviver) {
@@ -657,6 +653,11 @@ export function destroyAdblock() {
   
   JSON.parse = origParse;
   isHooked = false;
+
+  if (bodyObserver) {
+    bodyObserver.disconnect();
+    bodyObserver = null;
+  }
 
   configRemoveChangeListener('enableAdBlock', updateConfigCache);
   configRemoveChangeListener('removeGlobalShorts', updateConfigCache);

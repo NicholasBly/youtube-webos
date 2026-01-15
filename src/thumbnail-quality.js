@@ -471,6 +471,6 @@ export function cleanup() {
 
 if (configRead("upgradeThumbnails")) enableObserver()
 
-configAddChangeListener("upgradeThumbnails", value => {
-  value ? enableObserver() : cleanup()
+configAddChangeListener("upgradeThumbnails", evt => {
+  evt.detail.newValue ? enableObserver() : cleanup()
 })

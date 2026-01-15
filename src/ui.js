@@ -13,6 +13,10 @@ import { initAdblock, destroyAdblock } from './adblock.js';
 let lastSafeFocus = null;
 let oledKeepAliveTimer = null;
 
+let lastShortcutTime = 0;
+let lastShortcutKey = -1;
+let shortcutDebounceTime = 400;
+
 // --- Polyfills & Helpers ---
 
 // Polyfill for Element.closest (Required for older WebOS versions)
@@ -121,6 +125,53 @@ function createShortcutControl(keyIndex) {
 
 // --- Main Options Panel Logic ---
 
+function createOpacityControl(key) {
+  const step = 5;
+  const min = 0;
+  const max = 100;
+  
+  const valueText = createElement('span', { class: 'current-value' });
+  const updateDisplay = () => valueText.textContent = `${configRead(key)}%`;
+  
+  const changeValue = (delta) => {
+    let val = configRead(key);
+    val = Math.min(max, Math.max(min, val + delta));
+    configWrite(key, val);
+    updateDisplay();
+  };
+
+  const container = createElement('div', { 
+    class: 'shortcut-control-row', 
+    tabIndex: 0,
+    events: {
+      keydown: (e) => {
+        if (e.keyCode === 37) { // Left
+          changeValue(-step); 
+          e.stopPropagation(); 
+          e.preventDefault(); 
+        }
+        else if (e.keyCode === 39 || e.keyCode === 13) { // Right or Enter
+          changeValue(step); 
+          e.stopPropagation(); 
+          e.preventDefault(); 
+        }
+      },
+      click: () => changeValue(step)
+    }
+  }, 
+    createElement('span', { text: configGetDesc(key), class: 'shortcut-label' }),
+    createElement('div', { class: 'shortcut-value-container' },
+      createElement('span', { text: '<', class: 'arrow-btn', events: { click: (e) => { e.stopPropagation(); changeValue(-step); } } }),
+      valueText,
+      createElement('span', { text: '>', class: 'arrow-btn', events: { click: (e) => { e.stopPropagation(); changeValue(step); } } })
+    )
+  );
+  
+  configAddChangeListener(key, updateDisplay);
+  updateDisplay();
+  return container;
+}
+
 function createOptionsPanel() {
   const elmContainer = createElement('div', { 
     class: isGuestMode() ? 'ytaf-ui-container guest-mode' : 'ytaf-ui-container',
@@ -134,21 +185,23 @@ function createOptionsPanel() {
 
   let activePage = 0;
   elmContainer.activePage = 0;
-  let pageMain, pageSponsor, pageShortcuts;
+  let pageMain, pageSponsor, pageShortcuts, pageUITweaks;
 
   const setActivePage = (pageIndex) => {
     activePage = elmContainer.activePage = pageIndex;
-    [pageMain, pageSponsor, pageShortcuts].forEach(p => p.style.display = 'none');
+    [pageMain, pageSponsor, pageShortcuts, pageUITweaks].forEach(p => { if(p) p.style.display = 'none'; });
     
     const pages = [
       { page: pageMain, selector: 'input', popup: false },
       { page: pageSponsor, selector: 'input', popup: isWatchPage() },
-      { page: pageShortcuts, selector: '.shortcut-control-row', popup: false }
+      { page: pageShortcuts, selector: '.shortcut-control-row', popup: false },
+      { page: pageUITweaks, selector: '.shortcut-control-row', popup: false }
     ];
     
     if (pages[pageIndex]) {
       pages[pageIndex].page.style.display = 'block';
-      pages[pageIndex].page.querySelector(pages[pageIndex].selector)?.focus();
+      const focusTarget = pages[pageIndex].page.querySelector(pages[pageIndex].selector);
+      if(focusTarget) focusTarget.focus();
       sponsorBlockUI.togglePopup(pages[pageIndex].popup);
     }
   };
@@ -174,7 +227,7 @@ function createOptionsPanel() {
         
         // If focus didn't move (hit edge), try changing pages
         if (preFocus === document.activeElement) {
-          if (dir === 'right' && activePage < 2) setActivePage(activePage + 1);
+          if (dir === 'right' && activePage < 3) setActivePage(activePage + 1);
           else if (dir === 'left' && activePage > 0) setActivePage(activePage - 1);
           evt.preventDefault(); evt.stopPropagation(); return;
         }
@@ -257,7 +310,19 @@ function createOptionsPanel() {
   pageShortcuts = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-shortcuts', style: { display: 'none' }});
   pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> SponsorBlock Settings', events: { click: () => setActivePage(1) }}));
   for (let i = 0; i <= 9; i++) pageShortcuts.appendChild(createShortcutControl(i));
+  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'UI Tweaks <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(3) }}));
   elmContainer.appendChild(pageShortcuts);
+  
+  // --- Page 4: UI Tweaks ---
+  pageUITweaks = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-ui-tweaks', style: { display: 'none' }});
+  pageUITweaks.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> Shortcuts', events: { click: () => setActivePage(2) }}));
+  
+  pageUITweaks.appendChild(createSection('UI Tweaks', [
+      createOpacityControl('videoShelfOpacity'),
+      createElement('div', { text: 'Adjust opacity of black background underneath videos (Requires OLED-care mode)', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } })
+  ]));
+  
+  elmContainer.appendChild(pageUITweaks);
 
   return elmContainer;
 }
@@ -429,8 +494,10 @@ function handleShortcutAction(action) {
         
         video.pause();	
 
-        // Dismiss controls sequence
+        // Dismiss controls
 		if(needsHide) {
+        shortcutDebounceTime = 650; 
+
         sendKey(REMOTE_KEYS.UP);                            
         setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
         setTimeout(() => sendKey(REMOTE_KEYS.UP), 500);
@@ -504,9 +571,6 @@ function handleShortcutAction(action) {
   if (actions[action]) actions[action]();
 }
 
-let lastShortcutTime = 0;
-let lastShortcutKey = -1;
-
 // --- Global Input Handler ---
 
 const eventHandler = (evt) => {
@@ -564,13 +628,13 @@ const eventHandler = (evt) => {
   else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
     const now = Date.now();
 	const keyIndex = evt.keyCode - 48;
-    if (now - lastShortcutTime < 400 && lastShortcutKey === keyIndex) {
+    if (now - lastShortcutTime < shortcutDebounceTime && lastShortcutKey === keyIndex) {
         console.log(`[Shortcut] Debounced duplicate key ${keyIndex}`);
         evt.preventDefault(); 
         evt.stopPropagation(); 
         return false;
     }
-    
+    shortcutDebounceTime = 400;
     lastShortcutTime = now;
     lastShortcutKey = keyIndex;
     
@@ -661,16 +725,22 @@ function updateLogoState() {
 
 function applyOledMode(enabled) {
   const optionsPanel = document.querySelector('.ytaf-ui-container');
+  const notificationContainer = document.querySelector('.ytaf-notification-container');
   const oledClass = 'oled-care';
+
+  document.getElementById('style-gray-ui-oled-care')?.remove();
+
   if (enabled) {
     optionsPanel?.classList.add(oledClass);
-    notificationContainer?.classList.add(oledClass);
-    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: '#container { background-color: black !important; } .ytLrGuideResponseMask { background-color: black !important; } .geClSe { background-color: black !important; } .hsdF6b { background-color: black !important; } .ytLrGuideResponseGradient { display: none; } .ytLrAnimatedOverlayContainer { background-color: black !important; }' });
+    if(notificationContainer) notificationContainer.classList.add(oledClass);
+    
+    const opacity = configRead('videoShelfOpacity') / 100;
+    
+    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: `#container { background-color: black !important; } .ytLrGuideResponseMask { background-color: black !important; } .geClSe { background-color: black !important; } .hsdF6b { background-color: black !important; } .ytLrGuideResponseGradient { display: none; } .ytLrAnimatedOverlayContainer { background-color: black !important; } .iha0pc { color: #000 !important; } .ZghAqf { background-color: #000 !important; } .k82tDb { background-color: #000 !important; } .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } .app-quality-root .UGcxnc .dxLAmd { background-color: rgba(0, 0, 0, 0) !important; } .app-quality-root .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }` });
     document.head.appendChild(style);
   } else {
     optionsPanel?.classList.remove(oledClass);
-    notificationContainer?.classList.remove(oledClass);
-    document.getElementById('style-gray-ui-oled-care')?.remove();
+    if(notificationContainer) notificationContainer.classList.remove(oledClass);
   }
   updateLogoState();
 }
@@ -696,6 +766,12 @@ configAddChangeListener('uiTheme', (evt) => applyTheme(evt.detail.newValue));
 configAddChangeListener('enableAdBlock', (evt) => {
   if (evt.detail.newValue) { initAdblock(); showNotification('AdBlock Enabled'); }
   else { destroyAdblock(); showNotification('AdBlock Disabled'); }
+});
+
+configAddChangeListener('videoShelfOpacity', () => {
+  if (configRead('enableOledCareMode')) {
+    applyOledMode(true);
+  }
 });
 
 if (!configRead('enableAdBlock')) destroyAdblock();
