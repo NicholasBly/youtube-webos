@@ -8,7 +8,7 @@ export function initBlockWebOSCast() {
   console.info('[Block WebOS Cast] Initialized');
 
   FetchRegistry.getInstance().addEventListener('request', (evt) => {
-    const { url, resource, init } = evt.detail;
+    const { url } = evt.detail;
     if (url.pathname === '/wake_cast_core') evt.preventDefault();
   });
 }

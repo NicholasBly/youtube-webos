@@ -109,7 +109,7 @@ const bodyAttrObs = new MutationObserver(async () => {
             searchRoot,
             (node): node is HTMLVideoElement =>
                 node instanceof HTMLVideoElement,
-            true
+            false
         ) as HTMLVideoElement;
     }
     

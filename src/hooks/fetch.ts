@@ -42,7 +42,7 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
 
     const fr = new FileReader();
 
-    const res = new Promise((resolve) => {
+    const res = new Promise<string | ArrayBuffer | null>((resolve) => {
       fr.addEventListener('load', () => {
         resolve(fr.result);
       });
@@ -53,7 +53,10 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
     return res;
   }
 
-  #customFetch = async (resource: FetchTarget, init?: RequestInit) => {
+  #customFetch = async (
+    resource: FetchTarget,
+    init?: RequestInit
+  ): Promise<Response> => {
     if (window.__ytaf_debug__) {
       console.debug(`Request ${this.#fetchCount}:`, resource);
       init && console.debug(`Options  ${this.#fetchCount}:`, init);
@@ -64,16 +67,18 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
       }
     }
 
-    const url = new URL(
-      resource instanceof Request ? resource.url : resource.toString(),
-      document.location.href
-    );
+    const url =
+      resource instanceof Request
+        ? new URL(resource.url)
+        : new URL(resource.toString(), document.location.href);
+
     const reqAllowed = this.dispatchEvent(
       new TypedCustomEvent('request', {
         detail: { url, resource, init },
         cancelable: true
       })
     );
+
     if (!reqAllowed) {
       console.info(
         `Fetch request ${this.#fetchCount} was cancelled by listener.`,
@@ -83,7 +88,6 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
       throw new TypeError('Failed to fetch');
     }
 
-    // @ts-expect-error
     const res = await this.#originalFetch(resource, init);
 
     if (window.__ytaf_debug__) {

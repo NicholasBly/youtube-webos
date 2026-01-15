@@ -4,15 +4,88 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.9] - 2026/01/15
+
+## Fixes
+
+### Force Max Quality
+Implemented black screen/infinite loading mitigation for webOS 25 TVs only
+On webOS 25 TVs, the first video loaded while using Force Max Quality usually gets stuck on a black buffering loading screen
+
++ Fix: Detect webOS 25 TV -> force video to play
++ When it starts to play successfully, the player UI (controls) will be hidden and appear to load like a normal video
++ Subsequent videos for the remainder of the session are unaffected and will load normally
+
+Additional improvements to redundant quality checks and race conditions
+
+### Show Time in UI
++ Fix clock not appearing properly during video playback
++ Fix clock not appearing at all on webOS 3 - 5 (css style issue)
++ Hide clock when description panel is open on video
++ Code redundancy fixes + general optimizations
+
+### Thumbnail Quality
++ Complete rewrite fixing memory leaks, performance issues, and race conditions - https://github.com/NicholasBly/youtube-webos/issues/36
++ webOS 3 legacy code fallback added for full functionality
++ Thumbnail Quality now stops upgrading thumbnails when the setting is disabled
+
+### Shortcuts
++ Added 400ms cooldown on shortcuts to prevent accidental duplicate key presses / key spam
+
+### Return Dislike
++ Fix race condition causing console log spam / multiple injection attempts when opening description panel
+
+## Updates
+
+### AdBlock
++ Filter sponsored videos/ads from Shorts
+
+### Force Max Quality
++ When quality is upgraded, a notification will appear showing the updated quality
++ Optimized Lookups: Replaced array checks with a static Set (TARGET_QUALITIES) for O(1) quality level validation
++ Storage Caching: Implemented in-memory caching (cachedQualitySettings) for localStorage to reduce read/write frequency and overhead
++ Smart Quality Check: Added logic to skip processing if isQualityAlreadyMax() returns true
+
+### Shortcuts
+Play / Pause shortcut no longer shows YouTube player UI
++ When running shortcut in fullscreen, the player UI (controls) and clock UI (if enabled) is hidden temporarily and dismissed automatically
++ When running shortcut with player UI visible, the player UI will not be affected
++ Perfect functionality after pause -> controls and clock will be visible as normal
+
+### OLED-care mode
++ "Up next" screen now has a black background
++ Black background re-applied to the video selector underneath videos at 100% opacity by default
++ + 4th page added called "UI Tweaks" to allow you to adjust the opacity to your liking
++ Black background on text removed
+
+## Changes
++ Moved multi-line video title fix to 4th page "UI Tweaks" section as a toggleable option
+
+## Optimizations
+
+### AdBlock
++ Reduced code complexity and improved code reuse
+
+### SponsorBlock
++ Cache legacy webOS version check
++ General optimizations and improvements 
+
+### Show Time in UI
++ Code redundancy fixes
+
+### ui.js
+Performance: Replaced expensive <style> tag injections with efficient CSS class toggling for the Play/Pause shortcut
+Refactor: Consolidated scattered CSS injections (Logo, Endcards, UI hacks) into a single initGlobalStyles() function
+
 ## [0.6.8] - 2026/01/07
 
 ## Optimizations
 
 ### Observer Logic Optimizations
 
-SponsorBlock: Observe ytlr-progress-bar from ytlr-app
-Screensaver Fix: Observe ytlr-player__player-container from querying document.body to find the video element
-Force Max Quality: Observe ytlr-player__player-container from querying document.body to find .html5-video-player
++ SponsorBlock: Observe ytlr-progress-bar from ytlr-app
++ Screensaver Fix: Observe ytlr-player__player-container from querying document.body to find the video element
++ Force Max Quality: Observe ytlr-player__player-container from querying document.body to find .html5-video-player
 
 ### AdBlock.js
 + Added additional early exit optimization

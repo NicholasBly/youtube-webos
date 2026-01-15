@@ -1,23 +1,33 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
 import './watch.css';
-import { requireElement } from './screensaver-fix.ts';
 
 class Watch {
-  #watch;
-  #timer;
-  #attrChanges;
-  #videoListener;
-  #PLAYER_SELECTOR = 'ytlr-watch-default';
-
   constructor() {
+    // Standard properties (No '#' private fields for webOS 3 compatibility)
+    this._watch = null;
+    this._timer = null;
+    this._debounceTimer = null;
+    this._globalListeners = [];
+    
+    // Constants
+    this._PLAYER_SELECTOR = 'ytlr-watch-default';
+    this._DEBOUNCE_DELAY = 50;
+
+    // Bind methods
+    this.onOledChange = this.onOledChange.bind(this);
+    this.updateVisibility = this.updateVisibility.bind(this);
+    this.debouncedUpdate = this.debouncedUpdate.bind(this);
+
+    // Initialize
     this.createElement();
     this.startClock();
-    this.playerEvents();
-    this.videoEvents();
+    this.setupGlobalListeners();
     
-    this.onOledChange = this.onOledChange.bind(this);
     this.applyOledMode(configRead('enableOledCareMode'));
     configAddChangeListener('enableOledCareMode', this.onOledChange);
+
+    // Initial check
+    this.updateVisibility();
   }
 
   onOledChange(evt) {
@@ -25,87 +35,118 @@ class Watch {
   }
 
   applyOledMode(enabled) {
-    if (this.#watch) {
-      if (enabled) this.#watch.classList.add('oled-mode');
-      else this.#watch.classList.remove('oled-mode');
+    if (this._watch) {
+      // Chrome 38 supports classList.toggle with second argument
+      this._watch.classList.toggle('oled-mode', enabled);
     }
   }
 
   createElement() {
-    this.#watch = document.createElement('div');
-    this.#watch.className = 'webOs-watch';
-    if (configRead('enableOledCareMode')) this.#watch.classList.add('oled-mode');
-    document.body.appendChild(this.#watch);
+    this._watch = document.createElement('div');
+    this._watch.className = 'webOs-watch';
+    // Accessibility helper
+    this._watch.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(this._watch);
   }
 
   startClock() {
     const nextSeg = (60 - new Date().getSeconds()) * 1000;
 
+    // Intl is supported in Chrome 24+, safe for webOS 3
     const formatter = new Intl.DateTimeFormat(navigator.language, {
       hour: 'numeric',
       minute: 'numeric'
     });
 
     const setTime = () => {
-      this.#watch.innerText = formatter.format(new Date());
+      if (this._watch) {
+        // textContent is faster than innerText (Optimization Kept)
+        this._watch.textContent = formatter.format(new Date());
+        
+        // Safety check on the minute mark
+        this.updateVisibility();
+      }
     };
 
     setTime();
     setTimeout(() => {
       setTime();
-      this.#timer = setInterval(setTime, 60000);
+      this._timer = setInterval(setTime, 60000);
     }, nextSeg);
   }
 
-  playerAppear(video) {
-    this.changeVisibility(video);
-    this.playerObserver(video);
+  debouncedUpdate() {
+    // Debounce rapid visibility updates (Optimization Kept)
+    if (this._debounceTimer) {
+      clearTimeout(this._debounceTimer);
+    }
+    this._debounceTimer = setTimeout(() => {
+      this.updateVisibility();
+      this._debounceTimer = null;
+    }, this._DEBOUNCE_DELAY);
   }
 
-  changeVisibility(video) {
-    const focused = video.getAttribute('hybridnavfocusable') === 'true';
-    this.#watch.style.display = focused ? 'none' : 'block';
-  }
+  updateVisibility() {
+    if (!this._watch) return;
 
-  async playerEvents() {
-    const player = await requireElement(this.#PLAYER_SELECTOR, HTMLElement);
-    this.playerAppear(player);
-  }
-
-  playerObserver(node) {
-    this.#attrChanges = new MutationObserver(() => {
-      this.changeVisibility(node);
-    });
-
-    this.#attrChanges.observe(node, {
-      attributes: true,
-      attributeFilter: ['hybridnavfocusable']
-    });
-  }
-
-  videoEvents() {
-    this.#videoListener = async () => {
-      const player = document.querySelector(this.#PLAYER_SELECTOR);
-      if (player) {
-        this.changeVisibility(player);
+    const player = document.querySelector(this._PLAYER_SELECTOR);
+    
+    if (!player) {
+      if (this._watch.style.display !== 'block') {
+         this._watch.style.display = 'block';
       }
+      return;
+    }
+
+	const isHybridFocused = player.getAttribute('hybridnavfocusable') === 'true';
+    const isPlayerElementActive = document.activeElement === player || document.activeElement === document.body;
+    const isOverlayActive = document.querySelector('.AmQJbe');
+
+    const shouldHide = isHybridFocused || isPlayerElementActive || isOverlayActive;
+    
+    const newDisplay = shouldHide ? 'none' : 'block';
+    
+    if (this._watch.style.display !== newDisplay) {
+      this._watch.style.display = newDisplay;
+    }
+  }
+
+  setupGlobalListeners() {
+    const addListener = (type, handler) => {
+      document.addEventListener(type, handler, true);
+      this._globalListeners.push({ type, fn: handler });
     };
 
-    document.addEventListener('play', this.#videoListener, true);
-    document.addEventListener('loadeddata', this.#videoListener, true);
+    addListener('focusin', this.debouncedUpdate);
+    addListener('play', this.debouncedUpdate);
+    addListener('pause', this.debouncedUpdate);
+    addListener('loadeddata', this.debouncedUpdate);
+    // Added focusout to catch blur events just in case
+    addListener('focusout', this.debouncedUpdate); 
   }
 
   destroy() {
-    clearInterval(this.#timer);
-    configRemoveChangeListener('enableOledCareMode', this.onOledChange);
-    
-    if (this.#videoListener) {
-      document.removeEventListener('play', this.#videoListener, true);
-      document.removeEventListener('loadeddata', this.#videoListener, true);
+    if (this._timer) {
+      clearInterval(this._timer);
+      this._timer = null;
     }
     
-    this.#watch?.remove();
-    this.#attrChanges?.disconnect();
+    if (this._debounceTimer) {
+      clearTimeout(this._debounceTimer);
+      this._debounceTimer = null;
+    }
+
+    configRemoveChangeListener('enableOledCareMode', this.onOledChange);
+    
+    this._globalListeners.forEach(l => {
+      document.removeEventListener(l.type, l.fn, true);
+    });
+    this._globalListeners = [];
+    
+    if (this._watch) {
+      this._watch.remove();
+      this._watch = null;
+    }
   }
 }
 
@@ -113,10 +154,14 @@ let watchInstance = null;
 
 function toggleWatch(show) {
   if (show) {
-    watchInstance = watchInstance ? watchInstance : new Watch();
+    if (!watchInstance) {
+      watchInstance = new Watch();
+    }
   } else {
-    watchInstance?.destroy();
-    watchInstance = null;
+    if (watchInstance) {
+      watchInstance.destroy();
+      watchInstance = null;
+    }
   }
 }
 

@@ -1,42 +1,13 @@
 import { waitForChildAdd } from "./utils"
 import { configRead, configAddChangeListener } from "./config"
 
-const webpTestImgs = {
-  lossy: "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA",
-  lossless: "UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==",
-  alpha:
-    "UklGRkoAAABXRUJQVlA4WAoAAAAQAAAAAAAAAAAAQUxQSAwAAAARBxAR/Q9ERP8DAABWUDggGAAAABQBAJ0BKgEAAQAAAP4AAA3AAP7mtQAAAA==",
-  animation:
-    "UklGRlIAAABXRUJQVlA4WAoAAAASAAAAAAAAAAAAQU5JTQYAAAD/////AABBTk1GJgAAAAAAAAAAAAAAAAAAAGQAAABWUDhMDQAAAC8AAAAQBxAREYiI/gcA"
-}
+// --- Configuration & Constants ---
+const MAX_CONCURRENT_REQUESTS = 3
+const IMAGE_LOAD_TIMEOUT = 5000
+const CACHE_SIZE_LIMIT = 200
+// REMOVED: MAX_CHECK_PER_RUN (Causes starvation of new elements)
+// REMOVED: MAX_OBSERVED_ELEMENTS (Causes elements to be lost on large grids)
 
-// --- WebP Detection Optimization (Singleton) ---
-let webpDetectionPromise = null
-let webpSupported = false
-
-function detectWebP() {
-  return new Promise(resolve => {
-    const img = new Image()
-    img.onload = () => {
-      webpSupported = img.width > 0 && img.height > 0
-      resolve()
-    }
-    img.onerror = () => {
-      webpSupported = false
-      resolve()
-    }
-    img.src = "data:image/webp;base64," + webpTestImgs.lossy
-  })
-}
-
-function ensureWebpDetection() {
-  if (!webpDetectionPromise) {
-    webpDetectionPromise = detectWebP()
-  }
-  return webpDetectionPromise
-}
-
-// --- Constants & Regex ---
 const YT_TARGET_THUMBNAIL_NAMES = [
   "maxresdefault",
   "sddefault",
@@ -45,54 +16,104 @@ const YT_TARGET_THUMBNAIL_NAMES = [
   "default"
 ]
 
-// Placeholder dimensions that YouTube uses for unavailable thumbnails (Soft 404)
 const PLACEHOLDER_DIMENSIONS = [
   { width: 120, height: 90 },
   { width: 0, height: 0 }
 ]
 
-function isThumbnailName(value) {
-  return YT_TARGET_THUMBNAIL_NAMES.includes(value)
+const webpTestImgs = {
+  lossy: "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
 }
 
-function getThumbnailUrl(originalUrl, targetQuality) {
-  const YT_THUMBNAIL_PATHNAME_REGEX = /vi(?:_webp)?(\/.*?\/)([a-z0-9]+?)(_\w*?)?\.[a-z]+$/g
+// --- State Management ---
+let elementState = new WeakMap()
+const urlCache = new Map()
+const requestQueue = new Set()
+let activeRequests = 0
 
-  // Ignore A/B test hostnames (e.g. i1.ytimg.com) as they handle redirects differently
+// --- WebP Detection ---
+let webpDetectionPromise = null
+let webpSupported = false
+
+function detectWebP() {
+  return new Promise(resolve => {
+    let img = new Image()
+    const done = (supported) => {
+      webpSupported = supported
+      img.onload = null
+      img.onerror = null
+      img = null 
+      resolve()
+    }
+    img.onload = () => done(img.width > 0 && img.height > 0)
+    img.onerror = () => done(false)
+    img.src = "data:image/webp;base64," + webpTestImgs.lossy
+  })
+}
+
+function ensureWebpDetection() {
+  if (!webpDetectionPromise) webpDetectionPromise = detectWebP()
+  return webpDetectionPromise
+}
+
+// --- Helpers ---
+
+function getThumbnailUrl(originalUrl, targetQuality) {
+  const YT_THUMBNAIL_PATHNAME_REGEX = /vi(?:_webp)?(\/.*?\/)([a-z0-9]+?)(_\w*?)?\.[a-z]+$/
+
   if (originalUrl.hostname.match(/^i\d/) !== null) return null
 
-  const replacementPathname = originalUrl.pathname.replace(
+  const match = originalUrl.pathname.match(YT_THUMBNAIL_PATHNAME_REGEX)
+  if (!match) return null
+
+  const [, pathPrefix, videoId] = match
+  
+  if (YT_TARGET_THUMBNAIL_NAMES.indexOf(videoId) === -1) return null
+
+  const extension = webpSupported ? "webp" : "jpg"
+  const newPathPrefix = webpSupported ? "vi_webp" : "vi"
+
+  const newPathname = originalUrl.pathname.replace(
     YT_THUMBNAIL_PATHNAME_REGEX,
-    (match, p1, p2, p3) => {
-      if (!isThumbnailName(p2)) return match
-
-      const newPath = p1 // Video ID part
-      const extension = webpSupported ? "webp" : "jpg"
-      const pathPrefix = webpSupported ? "vi_webp" : "vi"
-
-      return `${pathPrefix}${newPath}${targetQuality}.${extension}`
-    }
+    `${newPathPrefix}${pathPrefix}${targetQuality}.${extension}`
   )
 
-  if (originalUrl.pathname === replacementPathname) return null
+  if (originalUrl.pathname === newPathname) return null
 
   const newUrl = new URL(originalUrl)
-  newUrl.pathname = replacementPathname
+  newUrl.pathname = newPathname
   newUrl.search = ""
   return newUrl
 }
 
 function parseCSSUrl(value) {
-  try {
-    const match = value.match(/url\(['"]?([^'"]+?)['"]?\)/)
-    
-    if (match && match[1]) {
-      return new URL(match[1])
-    }
-    return undefined
-  } catch (e) {
-    return undefined
+  if (!value) return undefined
+  
+  if (value.indexOf("&amp;") !== -1) {
+    value = value.replace(/&amp;/g, "&")
   }
+
+  if (urlCache.has(value)) return urlCache.get(value)
+
+  try {
+    if (value.indexOf("url(") === -1) return undefined
+
+    const match = value.match(/url\(['"]?([^'"]+?)['"]?\)/)
+    if (match && match[1]) {
+      const url = new URL(match[1])
+      
+      if (urlCache.size >= CACHE_SIZE_LIMIT) {
+        const firstKey = urlCache.keys().next().value
+        urlCache.delete(firstKey)
+      }
+      
+      urlCache.set(value, url)
+      return url
+    }
+  } catch (e) {
+    // Invalid URL
+  }
+  return undefined
 }
 
 function isPlaceholderImage(img) {
@@ -101,32 +122,90 @@ function isPlaceholderImage(img) {
   )
 }
 
-// --- Main Logic ---
+// --- Image Loading ---
 
-async function upgradeBgImg(element) {
-  if (!element.isConnected) return
+function probeImage(url) {
+  return new Promise((resolve) => {
+    let img = new Image()
+    let completed = false
+    let timer = null
+
+    const cleanup = () => {
+      completed = true
+      if (timer) clearTimeout(timer)
+      if (img) {
+        img.onload = null
+        img.onerror = null
+        img.src = ""
+        img = null
+      }
+    }
+
+    timer = setTimeout(() => {
+      if (!completed) {
+        cleanup()
+        resolve(null)
+      }
+    }, IMAGE_LOAD_TIMEOUT)
+
+    img.onload = () => {
+      if (!completed) {
+        const isPlaceholder = isPlaceholderImage(img)
+        const success = !isPlaceholder
+        cleanup()
+        resolve({ success })
+      }
+    }
+
+    img.onerror = () => {
+      if (!completed) {
+        cleanup()
+        resolve(null)
+      }
+    }
+
+    img.src = url
+  })
+}
+
+// --- Request Queue & Processor ---
+
+function processRequestQueue() {
+  if (document.hidden || requestQueue.size === 0 || activeRequests >= MAX_CONCURRENT_REQUESTS) {
+    return
+  }
+
+  const job = requestQueue.values().next().value
+  requestQueue.delete(job)
+  activeRequests++
+
+  job()
+    .finally(() => {
+      activeRequests--
+      processRequestQueue()
+    })
+}
+
+async function processUpgrade(element, generationId) {
+  if (!document.contains(element)) return
+
+  const state = elementState.get(element)
+  if (!state || state.generationId !== generationId) return
 
   const style = element.style
-  // 1. Capture the existing (low-res) background string exactly as is
   const oldBackgroundStyle = style.backgroundImage
-  if (!oldBackgroundStyle) return
-
   const currentUrl = parseCSSUrl(oldBackgroundStyle)
+  
   if (!currentUrl) return
-
-  // If the parser fails (likely because we already stacked images), stop.
-  // This prevents the script from trying to double-stack or break existing upgrades.
-  if (!currentUrl) return 
 
   const videoIdMatch = currentUrl.pathname.match(/\/vi(?:_webp)?\/([^\/]+)\//)
   if (!videoIdMatch) return
   const videoId = videoIdMatch[1]
 
-  // Skip if we already found the best quality for THIS specific video ID
   if (
     element.dataset.thumbVideoId === videoId &&
     element.dataset.thumbBestQuality &&
-    currentUrl.href.includes(element.dataset.thumbBestQuality)
+    currentUrl.href.indexOf(element.dataset.thumbBestQuality) !== -1
   ) {
     return
   }
@@ -135,102 +214,194 @@ async function upgradeBgImg(element) {
 
   const candidateQualities = ["maxresdefault", "sddefault", "hqdefault"]
 
-  const tryNextQuality = async (index) => {
-    if (index >= candidateQualities.length) return 
+  for (const quality of candidateQualities) {
+    const currentState = elementState.get(element)
+    if (!currentState || currentState.generationId !== generationId) return
+    if (document.hidden) return
 
-    const quality = candidateQualities[index]
     const targetUrl = getThumbnailUrl(currentUrl, quality)
+    if (!targetUrl) continue
 
-    if (!targetUrl) {
-      tryNextQuality(index + 1)
-      return
-    }
+    const result = await probeImage(targetUrl.href)
 
-    const img = new Image()
-    img.src = targetUrl.href
-
-    try {
-      // Decode ensures the image is ready for the GPU
-      await img.decode()
-      
-      if (isPlaceholderImage(img)) {
-        tryNextQuality(index + 1)
-        return
+    if (result && result.success) {
+      const freshState = elementState.get(element)
+      if (
+        document.contains(element) && 
+        freshState && freshState.generationId === generationId &&
+        element.style.backgroundImage === oldBackgroundStyle
+      ) {
+        style.backgroundImage = `url("${targetUrl.href}"), ${oldBackgroundStyle}`
+        element.dataset.thumbVideoId = videoId
+        element.dataset.thumbBestQuality = quality
       }
-
-      // Safety: Check if the background changed while we were loading
-      // (YouTube might have recycled the element for a different video)
-      if (element.style.backgroundImage !== oldBackgroundStyle) {
-        return 
-      }
-
-      // This keeps the old image visible underneath until the new one paints.
-      style.backgroundImage = `url("${targetUrl.href}"), ${oldBackgroundStyle}`
-
-      element.dataset.thumbVideoId = videoId
-      element.dataset.thumbBestQuality = quality
-
-    } catch (err) {
-      tryNextQuality(index + 1)
+      return 
     }
   }
-
-  tryNextQuality(0)
 }
 
-// --- Batching & Observer ---
+// --- Fallback Visibility Detection (webOS 3) ---
+
+const observedElements = new Set()
+let scrollCheckTimeout = null
+
+function runFallbackCheck() {
+  if (observedElements.size === 0) return
+
+  const rootMargin = 200
+  const winHeight = window.innerHeight
+  const winWidth = window.innerWidth
+
+  // Safely iterate by converting to array
+  const elements = Array.from(observedElements)
+
+  for (let i = 0; i < elements.length; i++) {
+    const element = elements[i]
+
+    // 1. Strict Garbage Collection:
+    // Only remove if the node is physically gone from the DOM.
+    // We do NOT remove "off-screen" elements, because if the user scrolls
+    // back to them, they need to be checked again.
+    if (!document.contains(element)) {
+      observedElements.delete(element)
+      continue
+    }
+
+    // 2. Check Visibility
+    const rect = element.getBoundingClientRect()
+    const isVisible = (
+      rect.top < winHeight + rootMargin &&
+      rect.bottom > -rootMargin &&
+      rect.left < winWidth &&
+      rect.right > 0
+    )
+
+    if (isVisible) {
+      const state = elementState.get(element)
+      if (state) {
+        const job = () => processUpgrade(element, state.generationId)
+        requestQueue.add(job)
+        processRequestQueue()
+      }
+    }
+  }
+}
+
+function handleScrollForFallback() {
+  // Clear existing timeout
+  if (scrollCheckTimeout) clearTimeout(scrollCheckTimeout)
+  
+  // Debounce - run 500ms after scroll stops
+  // This delay makes it safe to check the entire Set without lagging
+  scrollCheckTimeout = setTimeout(() => {
+    runFallbackCheck()
+    scrollCheckTimeout = null
+  }, 500)
+}
+
+// --- IntersectionObserver with Fallback ---
+
+const intersectionObserver = typeof IntersectionObserver !== "undefined"
+  ? new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const element = entry.target
+          const state = elementState.get(element)
+          if (state) {
+            const job = () => processUpgrade(element, state.generationId)
+            requestQueue.add(job)
+            processRequestQueue()
+          }
+        }
+      }
+    }, { rootMargin: "200px" })
+  : null
+
+function observeNode(node) {
+  if (intersectionObserver) {
+    intersectionObserver.observe(node)
+  } else {
+    observedElements.add(node)
+  }
+}
+
+// --- MutationObserver ---
 
 const dummy = document.createElement("div")
-const upgradeQueue = new Set()
-let upgradeRafId = null
 
-function processQueue() {
-  upgradeQueue.forEach(upgradeBgImg)
-  upgradeQueue.clear()
-  upgradeRafId = null
-}
-
-function queueUpgrade(element) {
-  upgradeQueue.add(element)
-
-  if (upgradeRafId === null) {
-    upgradeRafId = requestAnimationFrame(processQueue)
-  }
-}
-
-const obs = new MutationObserver(mutations => {
+const mutationObserver = new MutationObserver(mutations => {
   const YT_THUMBNAIL_ELEMENT_TAG = "ytlr-thumbnail-details"
-  const elementsToUpdate = new Set()
 
   for (const mut of mutations) {
     if (mut.type === "attributes") {
       const node = mut.target
-      if (node.matches(YT_THUMBNAIL_ELEMENT_TAG)) {
-        dummy.style.cssText = mut.oldValue ?? ""
-        // Only trigger if image URL actually changed
+      
+      // Safety check for matches support
+      if (node.matches && node.matches(YT_THUMBNAIL_ELEMENT_TAG)) {
+        dummy.style.cssText = mut.oldValue || ""
+        
         if (
           node.style.backgroundImage !== "" &&
           node.style.backgroundImage !== dummy.style.backgroundImage
         ) {
-          elementsToUpdate.add(node)
+          const s = elementState.get(node)
+          const currentGen = s ? s.generationId : 0
+          elementState.set(node, { generationId: currentGen + 1 })
+          
+          // Check visibility immediately for new items (fixes initial load)
+          const rect = node.getBoundingClientRect()
+          const rootMargin = 200
+          const isVisible = (
+            rect.top < window.innerHeight + rootMargin &&
+            rect.bottom > -rootMargin &&
+            rect.left < window.innerWidth &&
+            rect.right > 0
+          )
+
+          if (isVisible) {
+            const state = elementState.get(node)
+            if (state) {
+              const job = () => processUpgrade(node, state.generationId)
+              requestQueue.add(job)
+              processRequestQueue()
+            }
+          }
+
+          observeNode(node)
         }
       }
     } else if (mut.type === "childList") {
       for (const node of mut.addedNodes) {
         if (node instanceof HTMLElement) {
-          if (node.matches(YT_THUMBNAIL_ELEMENT_TAG)) {
-            elementsToUpdate.add(node)
+          if (node.matches && node.matches(YT_THUMBNAIL_ELEMENT_TAG)) {
+            elementState.set(node, { generationId: 1 })
+            observeNode(node)
           } else if (node.firstElementChild) {
             const nested = node.querySelectorAll(YT_THUMBNAIL_ELEMENT_TAG)
-            nested.forEach(el => elementsToUpdate.add(el))
+            for(let i=0; i<nested.length; i++) {
+               elementState.set(nested[i], { generationId: 1 })
+               observeNode(nested[i])
+            }
           }
         }
       }
     }
   }
-
-  elementsToUpdate.forEach(queueUpgrade)
 })
+
+// --- Visibility Handling ---
+
+function handleVisibilityChange() {
+  if (!document.hidden) {
+    processRequestQueue()
+    // Trigger check when tab becomes visible again
+    if (!intersectionObserver) {
+      runFallbackCheck()
+    }
+  }
+}
+
+// --- Lifecycle ---
 
 let isObserving = false
 
@@ -241,7 +412,6 @@ async function enableObserver() {
 
   if (!appContainer) {
     try {
-      // Wait up to 2 seconds for the optimized container
       appContainer = await waitForChildAdd(
         document.body,
         n => n.nodeName === "YTLR-APP",
@@ -250,17 +420,22 @@ async function enableObserver() {
         2000
       )
     } catch (e) {
-      // Fallback to body if not found
       appContainer = document.body
-      console.warn(
-        "[ThumbnailFix] Optimized container not found, falling back to body"
-      )
+      console.warn("[ThumbnailFix] Container not found, using body")
     }
   }
 
-  console.info(`[ThumbnailFix] Observer attached to: ${appContainer.tagName}`)
+  console.info(`[ThumbnailFix] Active on: ${appContainer.tagName}`)
 
-  obs.observe(appContainer, {
+  document.addEventListener("visibilitychange", handleVisibilityChange)
+
+  if (!intersectionObserver) {
+    console.info("[ThumbnailFix] Using scroll-based fallback for webOS 3 (Chrome 38)")
+    window.addEventListener("scroll", handleScrollForFallback, true)
+    runFallbackCheck()
+  }
+
+  mutationObserver.observe(appContainer, {
     subtree: true,
     childList: true,
     attributes: true,
@@ -272,17 +447,30 @@ async function enableObserver() {
 }
 
 export function cleanup() {
-  obs.disconnect()
-  isObserving = false
-  upgradeQueue.clear()
-  if (upgradeRafId !== null) {
-    cancelAnimationFrame(upgradeRafId)
-    upgradeRafId = null
+  mutationObserver.disconnect()
+  
+  if (intersectionObserver) {
+    intersectionObserver.disconnect()
+  } else {
+    window.removeEventListener("scroll", handleScrollForFallback, true)
+    if (scrollCheckTimeout) {
+      clearTimeout(scrollCheckTimeout)
+      scrollCheckTimeout = null
+    }
   }
+  
+  observedElements.clear()
+  
+  document.removeEventListener("visibilitychange", handleVisibilityChange)
+  
+  isObserving = false
+  requestQueue.clear()
+  urlCache.clear()
+  elementState = new WeakMap()
 }
 
 if (configRead("upgradeThumbnails")) enableObserver()
 
-configAddChangeListener("upgradeThumbnails", value => {
-  value ? enableObserver() : cleanup()
+configAddChangeListener("upgradeThumbnails", evt => {
+  evt.detail.newValue ? enableObserver() : cleanup()
 })

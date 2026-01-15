@@ -171,6 +171,8 @@ const configOptions = new Map([
     }
   ],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
+  ['videoShelfOpacity', { default: 100, desc: 'Video shelf opacity' }],
+  ['fixMultilineTitles', { default: true, desc: 'Fix Multiline Titles' }],
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],
   ['disableNotifications', { default: false, desc: 'Disable Notifications' }]
