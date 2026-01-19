@@ -26,11 +26,11 @@
       }
     },
     {
-      "id": "youtube.leanback.v4",
+      "id": "youtube.leanback.v4.webos22",
       "title": "YouTube AdFree",
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
-        "id": "youtube.leanback.v4",
+        "id": "youtube.leanback.v4.webos22",
         "version": "0.6.9",
         "type": "web",
         "title": "YouTube AdFree",
