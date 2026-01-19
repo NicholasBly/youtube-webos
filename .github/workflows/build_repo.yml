@@ -86,19 +86,20 @@ jobs:
               
               # Default values
               pkg_id = app_info.get('id')
-              description = app_info.get('description', app_info.get('title'))
+              title = app_info.get('title')
+              description = app_info.get('description', title)
               
               # Overrides for modern build
               if is_modern:
-                  # Appending suffix to ID is required so Homebrew Channel sees it as a unique entry
                   pkg_id = f"{pkg_id}.webos22"
+                  title = f"{title} (webOS 22+)"
                   description = "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware."
               
               manifest = {
                   "id": pkg_id,
                   "version": app_info.get('version'),
                   "type": app_info.get('type', 'web'),
-                  "title": app_info.get('title'),
+                  "title": title,
                   "appDescription": description,
                   "iconUri": f"https://raw.githubusercontent.com/{repo_name}/main/{ICON_PATH_IN_REPO}",
                   "sourceUrl": f"https://github.com/{repo_name}",
@@ -111,7 +112,8 @@ jobs:
               
               return {
                   "id": pkg_id,
-                  "title": app_info.get('title'),
+                  "title": title,
+                  "description": description,
                   "iconUri": f"https://raw.githubusercontent.com/{repo_name}/main/{ICON_PATH_IN_REPO}",
                   "manifest": manifest
               }
