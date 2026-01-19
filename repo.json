@@ -9,6 +9,7 @@
     {
       "id": "youtube.leanback.v4",
       "title": "YouTube AdFree",
+      "description": "YouTube AdFree",
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4",
@@ -27,13 +28,14 @@
     },
     {
       "id": "youtube.leanback.v4.webos22",
-      "title": "YouTube AdFree",
+      "title": "YouTube AdFree (webOS 22+)",
+      "description": "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware.",
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4.webos22",
         "version": "0.6.9",
         "type": "web",
-        "title": "YouTube AdFree",
+        "title": "YouTube AdFree (webOS 22+)",
         "appDescription": "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware.",
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
