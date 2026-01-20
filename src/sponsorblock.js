@@ -44,6 +44,7 @@ class SponsorBlockHandler {
         // Tracking state
         this.lastSkipTime = -1;
         this.lastSkippedSegmentIndex = -1;
+		this.lastNotifiedSegmentIndex = -1;
         this.hasPerformedChainSkip = false;
         this.skipSegments = [];
         this.nextSegmentIndex = 0;
@@ -108,6 +109,7 @@ class SponsorBlockHandler {
 
         this.configCache.enableMutedSegments = configRead('enableMutedSegments');
         this.configCache.enableSponsorBlockHighlight = configRead('enableSponsorBlockHighlight');
+		this.configCache.enableSponsorBlockAutoSkip = configRead('enableSponsorBlockAutoSkip');
 
         this.rebuildSkipSegments();
     }
@@ -168,7 +170,7 @@ class SponsorBlockHandler {
 
     setupConfigListeners() {
         this.boundConfigUpdate = this.updateConfigCache.bind(this);
-        const configKeys = [...Object.values(CONFIG_MAPPING), 'enableMutedSegments'];
+        const configKeys = [...Object.values(CONFIG_MAPPING), 'enableMutedSegments', 'enableSponsorBlockAutoSkip'];
 
         for (const key of configKeys) {
             configAddChangeListener(key, this.boundConfigUpdate);
@@ -207,6 +209,7 @@ class SponsorBlockHandler {
 
     executeChainSkip(video) {
         if (!video || this.hasPerformedChainSkip || this.isDestroyed) return false;
+		if (!this.configCache.enableSponsorBlockAutoSkip) return false;
 
         if (video.readyState === 0) {
             const retry = () => {
@@ -368,6 +371,7 @@ class SponsorBlockHandler {
             if (!this.isSkipping) {
                 this.lastSkipTime = -1;
                 this.lastSkippedSegmentIndex = -1;
+				this.lastNotifiedSegmentIndex = -1;
                 this.resetSegmentTracking();
                 this.handleTimeUpdate();
             }
@@ -619,6 +623,16 @@ class SponsorBlockHandler {
             this.nextSegmentStart = Infinity;
             return;
         }
+		
+		if (!this.configCache.enableSponsorBlockAutoSkip) {
+            if (segmentIdx !== this.lastNotifiedSegmentIndex) {
+                this.lastNotifiedSegmentIndex = segmentIdx;
+                const seg = this.skipSegments[segmentIdx];
+                const categoryName = this.getCategoryName(seg.category);
+                showNotification(`${categoryName.charAt(0).toUpperCase() + categoryName.slice(1)} segment`);
+            }
+            return;
+        }
 
         // Guard against spam loop on WebOS 3/4/5 at the end of video
         if (this.isLegacyWebOS &&
@@ -688,7 +702,7 @@ class SponsorBlockHandler {
                 `${uniqueNames[0]} and ${uniqueNames[1]}` :
                 `${uniqueNames.slice(0, -1).join(', ')}, and ${uniqueNames[uniqueNames.length - 1]}`;
 
-            showNotification(`Skipped ${formattedName}`);
+            showNotification(`Skipped ${formattedName} segment`);
         });
 
         this.log('info', `Skipped to ${jumpTarget}`);

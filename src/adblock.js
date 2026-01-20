@@ -284,7 +284,9 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
         if (Array.isArray(tabs)) {
           for (let i = 0; i < tabs.length; i++) {
             const tab = tabs[i];
-            const gridContents = tab.tabRenderer?.content?.sectionListRenderer?.contents;
+            const gridContents = 
+                tab.tabRenderer?.content?.sectionListRenderer?.contents ||
+                tab.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
             if (Array.isArray(gridContents)) {
               processSectionListOptimized(gridContents, config, needsContentFiltering, 'BROWSE_TAB_GENERIC');
             }

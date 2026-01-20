@@ -4,6 +4,162 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.9] - 2026/01/15
+
+## Fixes
+
+### Force Max Quality
+Implemented black screen/infinite loading mitigation for webOS 25 TVs only
+On webOS 25 TVs, the first video loaded while using Force Max Quality usually gets stuck on a black buffering loading screen
+
++ Fix: Detect webOS 25 TV -> force video to play
++ When it starts to play successfully, the player UI (controls) will be hidden and appear to load like a normal video
++ Subsequent videos for the remainder of the session are unaffected and will load normally
+
+Additional improvements to redundant quality checks and race conditions
+
+### Show Time in UI
++ Fix clock not appearing properly during video playback
++ Fix clock not appearing at all on webOS 3 - 5 (css style issue)
++ Hide clock when description panel is open on video
++ Code redundancy fixes + general optimizations
+
+### Thumbnail Quality
++ Complete rewrite fixing memory leaks, performance issues, and race conditions - https://github.com/NicholasBly/youtube-webos/issues/36
++ webOS 3 legacy code fallback added for full functionality
++ Thumbnail Quality now stops upgrading thumbnails when the setting is disabled
+
+### Shortcuts
++ Added 400ms cooldown on shortcuts to prevent accidental duplicate key presses / key spam
+
+### Return Dislike
++ Fix race condition causing console log spam / multiple injection attempts when opening description panel
+
+## Updates
+
+### AdBlock
++ Filter sponsored videos/ads from Shorts
+
+### Force Max Quality
++ When quality is upgraded, a notification will appear showing the updated quality
++ Optimized Lookups: Replaced array checks with a static Set (TARGET_QUALITIES) for O(1) quality level validation
++ Storage Caching: Implemented in-memory caching (cachedQualitySettings) for localStorage to reduce read/write frequency and overhead
++ Smart Quality Check: Added logic to skip processing if isQualityAlreadyMax() returns true
+
+### Shortcuts
+Play / Pause shortcut no longer shows YouTube player UI
++ When running shortcut in fullscreen, the player UI (controls) and clock UI (if enabled) is hidden temporarily and dismissed automatically
++ When running shortcut with player UI visible, the player UI will not be affected
++ Perfect functionality after pause -> controls and clock will be visible as normal
+
+### OLED-care mode
++ "Up next" screen now has a black background
++ Black background re-applied to the video selector underneath videos at 100% opacity by default
++ + 4th page added called "UI Tweaks" to allow you to adjust the opacity to your liking
++ Black background on text removed
+
+## Changes
++ Moved multi-line video title fix to 4th page "UI Tweaks" section as a toggleable option
+
+## Optimizations
+
+### AdBlock
++ Reduced code complexity and improved code reuse
+
+### SponsorBlock
++ Cache legacy webOS version check
++ General optimizations and improvements 
+
+### Show Time in UI
++ Code redundancy fixes
+
+### ui.js
+Performance: Replaced expensive <style> tag injections with efficient CSS class toggling for the Play/Pause shortcut
+Refactor: Consolidated scattered CSS injections (Logo, Endcards, UI hacks) into a single initGlobalStyles() function
+
+## [0.6.8] - 2026/01/07
+
+## Optimizations
+
+### Observer Logic Optimizations
+
++ SponsorBlock: Observe ytlr-progress-bar from ytlr-app
++ Screensaver Fix: Observe ytlr-player__player-container from querying document.body to find the video element
++ Force Max Quality: Observe ytlr-player__player-container from querying document.body to find .html5-video-player
+
+### AdBlock.js
++ Added additional early exit optimization
+
+### General
++ Added additional code safety checks
++ Code cleanup/removal of unused functions and objects
+
+### Force Max Quality
++ Cache last time value when modifying local storage to not spam multiple times during video playback state
+
+## Fixes
+
+### Show Time in UI
++ Fixed overlay sometimes not hiding on video fullscreen
+
+### General
++ OLED Care Mode: Added additional YouTube UI elements to pure black theme
++ Config UI visual adjustments/fixes
+
+### Force Max Quality
++ Change video state to STATE_PLAYING from STATE_BUFFERING to further improve black screen issue on first video load
+++ On first video load, it might take up to 15 seconds for max quality to kick in
+
+### Upgrade Thumbnail Quality
++ Fix max thumbnail quality - webosbrew's original code
++ Waterfall detection: Picks the highest quality thumbnail available for each thumbnail (maxres → sd → hq)
++ Optimize body observer - observe ytlr-app by default, document.body as fallback
++ Many improvements for race conditions, memory leaks, error handling, object creation, type safety, mutation observer, early returns, and cleanup function
++ Overlays higher resolution thumbnail on top of existing to prevent pop-in effect for seamless visuals
++ Converted from TypeScript to JavaScript
+
+### webOS 3
++ Fix Force Max Quality
++ Fix additional incompatible css rules on SponsorBlock UI panel
+
+## Removed
++ Removed search history injection for the time being due to bugs
+
+## [0.6.7] - 2026/01/02
+
+## Added
+
+Added new theme to config UI: Blueprint
+Added logo to config UI header
++ Click the logo to toggle between themes
+
+Force Max Quality now sets the local storage key yt-player-quality to 4320 (max) on load/video changes
+
+Added "Display Time in UI" from https://github.com/webosbrew/youtube-webos - https://github.com/NicholasBly/youtube-webos/issues/32
++ Improvement: Time UI background now matches background color based on OLED mode toggle
+
+## Changes
+
+Added code to ensure config UI is closed when activating OLED mode so the persistent keepalive has access to YouTube's controls
+
+## Fixes
+
+Attempted fix to black screen on first video load using Force Max Quality
++ Only sets max quality on buffering state instead of buffering and unstarted state
+Fixed shortcut keys activating on the search page
+Fixed shortcut keys with no action assigned toggling the player UI when pressed
+Fixed config UI css rules that weren't compatible with webOS 3
+
+### SponsorBlock.js
+
+Clamp segments that are outside the bounds of the video duration
+If segments start after the video's duration, they won't show on the progress bar
++ Sometimes SponsorBlock segments are submitted and the video creator edits something out of the video making it shorter, causing segments to start after the video ends
+
+## YouTube UI Updates - yt-fixes.css
+
+Video player: multiline video titles closes gap between lines, making it easier to read on new UI
+
 ## [0.6.6] - 2025/12/29
 
 ## Added

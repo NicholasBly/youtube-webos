@@ -295,6 +295,7 @@ function createOptionsPanel() {
   pageSponsor = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-sponsor', style: { display: 'none' }});
   pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> Main Settings', events: { click: () => setActivePage(0) }}));
   pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
+  pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlockAutoSkip'));
   
   const elmBlock = createElement('blockquote', {},
     ...['Sponsor', 'Intro', 'Outro', 'Interaction', 'SelfPromo', 'MusicOfftopic', 'Filler', 'Hook', 'Highlight', 'Preview'].map(s => createConfigCheckbox(`enableSponsorBlock${s}`)),
@@ -317,9 +318,10 @@ function createOptionsPanel() {
   pageUITweaks = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-ui-tweaks', style: { display: 'none' }});
   pageUITweaks.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> Shortcuts', events: { click: () => setActivePage(2) }}));
   
-  pageUITweaks.appendChild(createSection('UI Tweaks', [
+  pageUITweaks.appendChild(createSection('Player UI Tweaks', [
       createOpacityControl('videoShelfOpacity'),
-      createElement('div', { text: 'Adjust opacity of black background underneath videos (Requires OLED-care mode)', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } })
+      createElement('div', { text: 'Adjusts opacity of black background underneath videos (Requires OLED-care mode)', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
+	  createConfigCheckbox('fixMultilineTitles')
   ]));
   
   elmContainer.appendChild(pageUITweaks);
@@ -545,13 +547,17 @@ function handleShortcutAction(action) {
       }
     },
     toggle_comments: () => {
-      let commBtn = document.querySelector('yt-button-container[aria-label="Comments"]');
-      if (!commBtn) {
-        const commIcon = document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb');
-        commBtn = commIcon ? commIcon.closest('ytlr-button') : null;
-      }
-      if (!commBtn) commBtn = document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') || document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
-      
+      let target = document.querySelector('yt-button-container[aria-label="Comments"]');
+	  if (!target) {
+		target = document.querySelector('yt-icon.qHxFAf.ieYpu.nGYLgf') || 
+				 document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb');
+	  }
+	  let commBtn = target ? target.closest('yt-button-container') : null;
+	  if (!commBtn) {
+		  commBtn = document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') || 
+					document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || 
+					document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
+	  }      
       const isCommentsActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
       const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
       const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
@@ -560,9 +566,7 @@ function handleShortcutAction(action) {
       else {
         if (triggerInternal(commBtn, 'Comments')) {}
         else {
-          const titleBtn = document.querySelector('.ytlr-video-title') || document.querySelector('h1');
-          if (titleBtn) { titleBtn.click(); showNotification('Opened Desc (Title)'); }
-          else showNotification('Comments Unavailable');
+			showNotification('Comments Unavailable');
         }
       }
     }
@@ -686,6 +690,7 @@ function initGlobalStyles() {
     const updateStyles = () => {
         const hideLogo = configRead('hideLogo');
         const hideEnd = configRead('hideEndcards');
+		const fixTitles = configRead('fixMultilineTitles');
         const endDisplay = hideEnd ? 'none' : 'block';
         
         style.textContent = `
@@ -701,12 +706,16 @@ function initGlobalStyles() {
             /* UI Controls Hiding Class */
             body.ytaf-hide-controls .GLc3cc { opacity: 0 !important; }
             body.ytaf-hide-controls .webOs-watch { opacity: 0 !important; }
+			
+			/* Fix Multiline Titles */
+            ${fixTitles ? `.app-quality-root .SK1srf .WVWtef, .app-quality-root .SK1srf .niS3yd { padding-bottom: 4px !important; padding-top: 4px !important; }` : ''}
         `;
     };
 
     updateStyles();
     configAddChangeListener('hideLogo', updateStyles);
     configAddChangeListener('hideEndcards', updateStyles);
+	configAddChangeListener('fixMultilineTitles', updateStyles);
 }
 
 function updateLogoState() {

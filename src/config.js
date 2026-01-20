@@ -1,11 +1,10 @@
-/* src/config.js */
 const CONFIG_KEY = 'ytaf-configuration';
 
 export const segmentTypes = {
   sponsor: {
     color: '#00d400',
     opacity: '0.7',
-    name: 'sponsored segment'
+    name: 'sponsored'
   },
   intro: {
     color: '#00ffff',
@@ -79,6 +78,7 @@ const configOptions = new Map([
     { default: false, desc: 'Remove Top Live Games' }
   ],
   ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
+  ['enableSponsorBlockAutoSkip', { default: true, desc: 'Auto Skip Segments' }],
   ['enableMutedSegments', { default: false, desc: 'Allow segments that mute audio' }],
   [
     'enableSponsorBlockSponsor',
@@ -172,6 +172,7 @@ const configOptions = new Map([
   ],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
   ['videoShelfOpacity', { default: 100, desc: 'Video shelf opacity' }],
+  ['fixMultilineTitles', { default: true, desc: 'Fix Multiline Titles' }],
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],
   ['disableNotifications', { default: false, desc: 'Disable Notifications' }]
