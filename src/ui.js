@@ -60,6 +60,8 @@ const createElement = (tag, props = {}, ...children) => {
 
 function createConfigCheckbox(key) {
   const elmInput = createElement('input', { type: 'checkbox', checked: configRead(key), events: { change: (evt) => configWrite(key, evt.target.checked) }});
+  elmInput.addEventListener('focus', () => elmLabel.classList.add('focused'));
+  elmInput.addEventListener('blur', () => elmLabel.classList.remove('focused'));
   configAddChangeListener(key, (evt) => elmInput.checked = evt.detail.newValue);
   
   const labelContent = createElement('div', { class: 'label-content' }, elmInput, `\u00A0${configGetDesc(key)}`);
@@ -708,7 +710,7 @@ function initGlobalStyles() {
             body.ytaf-hide-controls .webOs-watch { opacity: 0 !important; }
 			
 			/* Fix Multiline Titles */
-            ${fixTitles ? `.app-quality-root .SK1srf .WVWtef, .app-quality-root .SK1srf .niS3yd { padding-bottom: 4px !important; padding-top: 4px !important; }` : ''}
+            ${fixTitles ? `.app-quality-root .SK1srf .WVWtef, .app-quality-root .SK1srf .niS3yd { padding-bottom: 0.37vh !important; padding-top: 0.37vh !important; }` : ''}
         `;
     };
 
@@ -743,9 +745,14 @@ function applyOledMode(enabled) {
     optionsPanel?.classList.add(oledClass);
     if(notificationContainer) notificationContainer.classList.add(oledClass);
     
-    const opacity = configRead('videoShelfOpacity') / 100;
+    const opacityVal = configRead('videoShelfOpacity');
+    const opacity = opacityVal / 100;
     
-    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: `#container { background-color: black !important; } .ytLrGuideResponseMask { background-color: black !important; } .geClSe { background-color: black !important; } .hsdF6b { background-color: black !important; } .ytLrGuideResponseGradient { display: none; } .ytLrAnimatedOverlayContainer { background-color: black !important; } .iha0pc { color: #000 !important; } .ZghAqf { background-color: #000 !important; } .k82tDb { background-color: #000 !important; } .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } .app-quality-root .UGcxnc .dxLAmd { background-color: rgba(0, 0, 0, 0) !important; } .app-quality-root .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }` });
+    const transparentBgRules = opacityVal > 50 
+      ? '.app-quality-root .UGcxnc .dxLAmd { background-color: rgba(0, 0, 0, 0) !important; } .app-quality-root .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }' 
+      : '';
+    
+    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: `#container { background-color: black !important; } .ytLrGuideResponseMask { background-color: black !important; } .geClSe { background-color: black !important; } .hsdF6b { background-color: black !important; } .ytLrGuideResponseGradient { display: none; } .ytLrAnimatedOverlayContainer { background-color: black !important; } .iha0pc { color: #000 !important; } .ZghAqf { background-color: #000 !important; } .k82tDb { background-color: #000 !important; } .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } ${transparentBgRules}` });
     document.head.appendChild(style);
   } else {
     optionsPanel?.classList.remove(oledClass);

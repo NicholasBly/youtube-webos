@@ -1,62 +1,39 @@
-/* Optional animation - can be disabled for better performance */
-/* @keyframes blueprintPulse {
-  0%, 100% { opacity: 0.12; }
-  50% { opacity: 0.25; }
-} */
-
 .ytaf-ui-container {
   position: fixed;
   top: 5vh;
   left: 30%;
   transform: translateX(-50%);
   width: 95vw;
-  max-width: 41.6vw; /* 800px on 1920px screen = 41.6vw */
+  max-width: 41.6vw;
   max-height: 90vh;
   color: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 4.44vh; /* 48px on 1080p screen = 4.44vh */
+  font-size: 4.44vh;
   z-index: 1000;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: linear-gradient(135deg, #001a2e 0%, #002840 50%, #001a2e 100%);
-  border: 1px solid rgba(0, 212, 255, 0.4);
-  border-radius: 1.5vh; /* approx 16px */
-  /* Simplified box-shadow for better performance */
-  box-shadow: 0 0 4vh rgba(0, 0, 0, 0.8);
-}
-
-.ytaf-ui-container.theme-classic-red {
-  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-  border-color: #3f3f3f;
-  box-shadow: 0 0 4vh rgba(0, 0, 0, 0.7);
-}
-
-/* Optional blueprint effect - disable for maximum performance */
-.ytaf-ui-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  background-color: #001a2e;
   background-image: 
     linear-gradient(rgba(0, 212, 255, 0.15) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0, 212, 255, 0.15) 1px, transparent 1px);
-  background-size: 3.7vh 3.7vh; /* 40px -> 3.7vh */
+  background-size: 3.7vh 3.7vh;
   background-position: -1px -1px;
-  pointer-events: none;
-  /* Animation disabled by default for performance - uncomment to enable */
-  /* animation: blueprintPulse 8s ease-in-out infinite; */
-  z-index: 0;
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  border-radius: 1.5vh;
+  box-shadow: none;
 }
 
-.ytaf-ui-container.theme-classic-red::before {
-  background: linear-gradient(45deg, 
-    rgba(255, 0, 0, 0.05) 0%, 
-    rgba(255, 255, 255, 0.02) 50%, 
-    rgba(255, 0, 0, 0.05) 100%);
-  animation: none;
+/* Red Theme Variant */
+.ytaf-ui-container.theme-classic-red {
+  background-color: #1a1a1a;
+  background-image: none;
+  border-color: #3f3f3f;
+  box-shadow: none;
+}
+
+.ytaf-ui-container::before {
+  display: none !important;
 }
 
 .ytaf-ui-container > * {
@@ -66,40 +43,35 @@
 
 .ytaf-ui-container h1 {
   margin: 0;
-  padding: 1.5vh 3vh 1.1vh; /* 16px 32px 12px -> scaled vh */
+  padding: 1.5vh 3vh 1.1vh;
   text-align: center;
-  font-size: 3.89vh; /* 42px -> 3.89vh */
+  font-size: 3.89vh;
   font-weight: 600;
   border-bottom: 1px solid rgba(0, 212, 255, 0.3);
   margin-bottom: 0;
   color: #00d4ff;
-  text-shadow: 0 0 1vh rgba(0, 212, 255, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  /* Removed text-shadow for performance */
+  text-shadow: none;
 }
 
 .ytaf-ui-container.theme-classic-red h1 {
   color: #ff4444;
-  text-shadow: none;
   border-bottom-color: #3f3f3f;
 }
 
 .ytaf-ui-container .ytaf-logo {
-  width: 5.55vh; /* 60px -> 5.55vh */
+  width: 5.55vh;
   height: 5.55vh;
   object-fit: contain;
-  transition: transform 0.2s ease;
   margin-left: 1.1vh;
 }
 
-.ytaf-ui-container .ytaf-logo:hover {
-  transform: scale(1.1);
-}
-
 .ytaf-ui-container > div.ytaf-settings-page {
-  padding: 0 3vh 2.2vh; /* 32px 24px -> scaled vh */
+  padding: 0 3vh 2.2vh;
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1;
@@ -107,12 +79,11 @@
 }
 
 .ytaf-ui-container > div::-webkit-scrollbar {
-  width: 0.75vh; /* 8px -> 0.75vh */
+  width: 0.75vh;
 }
 
 .ytaf-ui-container > div::-webkit-scrollbar-track {
   background: rgba(0, 212, 255, 0.05);
-  border-radius: 0.4vh;
 }
 
 .ytaf-ui-container > div::-webkit-scrollbar-thumb {
@@ -129,7 +100,7 @@
 }
 
 .ytaf-ui-container input[type='checkbox'] {
-  width: 1.85vh; /* 20px -> 1.85vh */
+  width: 1.85vh;
   height: 1.85vh;
   margin: 0;
   margin-right: 1.1vh;
@@ -141,18 +112,13 @@
   position: relative;
   cursor: pointer;
   flex-shrink: 0;
-  transition: all 0.2s ease;
-}
-
-.ytaf-ui-container input[type='checkbox']:hover {
-  border-color: #00d4ff;
-  transform: scale(1.05);
 }
 
 .ytaf-ui-container input[type='checkbox']:checked {
   background: #00d4ff;
   border-color: #00d4ff;
-  box-shadow: 0 0 0.75vh rgba(0, 212, 255, 0.6);
+  /* Removed box-shadow for performance */
+  box-shadow: none;
 }
 
 .ytaf-ui-container.theme-classic-red input[type='checkbox'] {
@@ -160,15 +126,9 @@
   border-color: #4a4a4a;
 }
 
-.ytaf-ui-container.theme-classic-red input[type='checkbox']:hover {
-  border-color: #ff0000;
-  background: #333333;
-}
-
 .ytaf-ui-container.theme-classic-red input[type='checkbox']:checked {
   background: #cc0000;
   border-color: #ff0000;
-  box-shadow: none;
 }
 
 .ytaf-ui-container input[type='checkbox']:checked::after {
@@ -196,7 +156,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 2.22vh; /* 24px -> 2.22vh */
+  font-size: 2.22vh;
   font-weight: 400;
   line-height: 0.85;
   padding: 1.1vh 0;
@@ -205,7 +165,6 @@
   margin: 0 -0.75vh 0.4vh; 
   padding-left: 0.75vh;
   padding-right: 0.75vh;
-  transition: all 0.2s ease;
 }
 
 .ytaf-settings-section label {
@@ -223,27 +182,13 @@
   align-items: center;
   margin-left: auto;
   flex-shrink: 0;
+  margin-right: 0.75vh;
 }
 
 .ytaf-ui-container label .color-picker-controls > * {
   margin-left: 0.75vh;
 }
 
-.ytaf-ui-container label .color-picker-controls > *:first-child {
-  margin-left: 0;
-}
-
-.ytaf-ui-container label:hover {
-  background: rgba(0, 212, 255, 0.1);
-  transform: translateX(0.4vh);
-}
-
-.ytaf-ui-container.theme-classic-red label:hover {
-  background: rgba(255, 255, 255, 0.05);
-  transform: translateX(0.4vh);
-}
-
-.ytaf-ui-container label:focus-within,
 .ytaf-ui-container .shortcut-control-row:focus {
   background: rgba(0, 212, 255, 0.2);
   border-radius: 0.75vh;
@@ -251,14 +196,24 @@
   outline: none;
 }
 
-.ytaf-ui-container.theme-classic-red label:focus-within,
-.ytaf-ui-container.theme-classic-red .shortcut-control-row:focus {
-  background: rgba(255, 0, 0, 0.1);
-  box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.5);
+.ytaf-ui-container label:focus-within {
+  background: rgba(0, 212, 255, 0.2);
+  border-radius: 0.75vh;
+  box-shadow: 0 0 0 2px #00d4ff;
+  outline: none;
 }
 
-.ytaf-ui-container label .color-picker-controls {
-  margin-right: 0.75vh;
+.ytaf-ui-container label.focused {
+  background: rgba(0, 212, 255, 0.2);
+  border-radius: 0.75vh;
+  box-shadow: 0 0 0 2px #00d4ff;
+}
+
+.ytaf-ui-container.theme-classic-red .shortcut-control-row:focus,
+.ytaf-ui-container.theme-classic-red label:focus-within,
+.ytaf-ui-container.theme-classic-red label.focused {
+  background: rgba(255, 0, 0, 0.1);
+  box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.5);
 }
 
 .ytaf-ui-container blockquote {
@@ -275,7 +230,7 @@
 }
 
 .ytaf-ui-container blockquote label {
-  font-size: 1.85vh; /* 20px -> 1.85vh */
+  font-size: 1.85vh;
   color: #e0e0e0;
   padding: 0.75vh 0;
 }
@@ -284,7 +239,7 @@
   display: block;
   text-align: center;
   color: #888888;
-  font-size: 1.48vh; /* 16px -> 1.48vh */
+  font-size: 1.48vh;
   margin-top: 1.85vh;
   padding-top: 1.5vh;
   border-top: 1px solid rgba(0, 212, 255, 0.2);
@@ -298,7 +253,7 @@
   position: fixed;
   top: 1.85vh;
   right: 1.85vh;
-  font-size: 1.48vh; /* 16px -> 1.48vh */
+  font-size: 1.48vh;
   z-index: 1200;
   max-width: 37vh;
 }
@@ -310,6 +265,7 @@
   padding: 1.5vh 1.85vh;
   margin-bottom: 1.1vh;
   border-radius: 1.1vh;
+  /* Reduced shadow */
   box-shadow: 0 0.5vh 1.4vh rgba(0,0,0,0.5);
   transition: opacity 0.3s ease, transform 0.3s ease;
   opacity: 1;
@@ -333,7 +289,6 @@
 @media (max-width: 768px) {
   .ytaf-ui-container {
     width: 95vw;
-    /* Maintain center positioning even on mobile */
     top: 50%;
     transform: translate(-50%, -50%);
     max-height: 95vh;
@@ -350,7 +305,7 @@
   }
 }
 
-/* OLED Care Mode - Optimized for OLED displays */
+/* OLED Care Mode */
 .ytaf-ui-container.oled-care {
   background: #000000;
   border: 1px solid rgba(0, 212, 255, 0.4);
@@ -359,10 +314,6 @@
 
 .ytaf-ui-container.oled-care.theme-classic-red {
   border-color: rgba(255, 0, 0, 0.4);
-}
-
-.ytaf-ui-container.oled-care::before {
-  background: none;
 }
 
 .ytaf-ui-container.oled-care input[type='checkbox'] {
@@ -374,12 +325,6 @@
   background: #555;
 }
 
-.ytaf-ui-container.oled-care .shortcut-control-row:hover,
-.ytaf-ui-container.oled-care label:hover {
-  background: #222;
-}
-
-/* OLED Care Mode - Notifications */
 .ytaf-notification-container.oled-care .message {
   background: #000000;
   border: 1px solid #00d4ff;
@@ -398,21 +343,16 @@
   display: flex;
   align-items: center;
   padding: 1.5vh 0 0.75vh;
-  font-size: 2.22vh; /* 24px -> 2.22vh */
+  font-size: 2.22vh;
   color: #5599aa;
   cursor: pointer;
   border-top: 1px solid rgba(0, 212, 255, 0.2);
   margin-top: 1.5vh;
-  transition: all 0.2s ease;
 }
 
 .ytaf-ui-container.theme-classic-red .ytaf-nav-hint {
   color: #cccccc;
   border-top-color: rgba(255, 255, 255, 0.1);
-}
-
-.ytaf-nav-hint:hover {
-  color: #ffffff;
 }
 
 .ytaf-nav-hint:focus {
@@ -425,11 +365,6 @@
 .ytaf-ui-container.theme-classic-red .ytaf-nav-hint:focus {
   background: rgba(255, 0, 0, 0.1);
   box-shadow: 0 0 0 2px #ff0000;
-}
-
-.ytaf-ui-container.oled-care .ytaf-nav-hint:focus {
-  background: #222;
-  box-shadow: 0 0 0 2px #555;
 }
 
 .ytaf-nav-hint.right { 
@@ -454,20 +389,15 @@
 .ytaf-nav-hint span.arrow {
   color: #00d4ff;
   font-weight: bold;
-  font-size: 2.6vh; /* 28px -> 2.6vh */
+  font-size: 2.6vh;
   margin: 0 1.1vh;
-  transition: transform 0.2s ease;
-}
-
-.ytaf-nav-hint:hover span.arrow {
-  transform: scale(1.2);
 }
 
 .ytaf-ui-container.theme-classic-red .ytaf-nav-hint span.arrow {
   color: #ff4444;
 }
 
-/* Shortcut Controls - Optimized spacing for spatial navigation */
+/* Shortcut Controls */
 .shortcut-control-row {
   display: flex;
   align-items: center;
@@ -475,20 +405,8 @@
   padding: 1.1vh 0.75vh;
   cursor: pointer;
   border-radius: 0.75vh;
-  font-size: 2.22vh; /* 24px -> 2.22vh */
-  /* Critical: margin prevents spatial navigation from skipping */
+  font-size: 2.22vh;
   margin: 0 -0.75vh 0.4vh;
-  transition: all 0.2s ease;
-}
-
-.shortcut-control-row:hover {
-  background: rgba(0, 212, 255, 0.1);
-  transform: translateX(0.4vh);
-}
-
-.ytaf-ui-container.theme-classic-red .shortcut-control-row:hover {
-  background: rgba(255, 255, 255, 0.05);
-  transform: translateX(0.4vh);
 }
 
 .shortcut-label { 
@@ -531,7 +449,7 @@
   font-weight: 500;
 }
 
-/* Color Picker Controls */
+/* Color Picker */
 .reset-color-btn {
   background: rgba(0, 100, 150, 0.5);
   color: #ffffff;
@@ -540,31 +458,17 @@
   padding: 0.2vh 0.75vh;
   margin-right: 0.75vh;
   cursor: pointer;
-  font-size: 1.2vh; /* 13px -> 1.2vh */
-  transition: background 0.2s ease;
+  font-size: 1.2vh;
   flex-shrink: 0;
-  box-shadow: 0 0 0.75vh rgba(0, 212, 255, 0.2);
 }
 
 .ytaf-ui-container.theme-classic-red .reset-color-btn {
   background: #4f4f4f;
   border-color: #666666;
-  box-shadow: none;
-}
-
-.reset-color-btn:hover {
-  background: rgba(0, 150, 200, 0.7);
-  box-shadow: 0 0 1.1vh rgba(0, 212, 255, 0.4);
-}
-
-.ytaf-ui-container.theme-classic-red .reset-color-btn:hover {
-  background: #6a6a6a;
-  box-shadow: none;
 }
 
 .reset-color-btn:focus {
   outline: 2px solid #00d4ff;
-  outline-offset: 1px;
 }
 
 .ytaf-ui-container.theme-classic-red .reset-color-btn:focus {
@@ -574,25 +478,14 @@
 .ytaf-ui-container input[type='color'] {
   -webkit-appearance: none;
   appearance: none;
-  width: 3.7vh; /* 40px -> 3.7vh */
-  height: 2.22vh; /* 24px -> 2.22vh */
+  width: 3.7vh;
+  height: 2.22vh;
   border: 1px solid rgba(0, 150, 200, 0.5);
   border-radius: 0.4vh;
   background-color: transparent;
   cursor: pointer;
-  box-shadow: 0 0 0.75vh rgba(0, 212, 255, 0.2);
 }
 
 .ytaf-ui-container.theme-classic-red input[type='color'] {
   border-color: #4a4a4a;
-  box-shadow: none;
-}
-
-.ytaf-ui-container input[type='color']::-webkit-color-swatch-wrapper {
-  padding: 0;
-}
-
-.ytaf-ui-container input[type='color']::-webkit-color-swatch {
-  border: none;
-  border-radius: 0.4vh;
 }
