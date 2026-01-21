@@ -1,6 +1,6 @@
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
-import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions } from './config.js';
+import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight } from './config.js';
 import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
@@ -64,26 +64,80 @@ function createConfigCheckbox(key) {
   elmInput.addEventListener('blur', () => elmLabel.classList.remove('focused'));
   configAddChangeListener(key, (evt) => elmInput.checked = evt.detail.newValue);
   
-  const labelContent = createElement('div', { class: 'label-content' }, elmInput, `\u00A0${configGetDesc(key)}`);
+  const labelContent = createElement('div', { class: 'label-content', style: { fontSize: '2.1vh' } }, elmInput, `\u00A0${configGetDesc(key)}`);
   const elmLabel = createElement('label', {}, labelContent);
-
-  const segmentKey = key.replace('enableSponsorBlock', '').toLowerCase();
-  const hasColorPicker = segmentTypes[segmentKey] || (segmentKey === 'highlight' && segmentTypes['poi_highlight']);
-  
-  if (hasColorPicker) {
-    const colorKey = segmentKey === 'highlight' ? 'poi_highlightColor' : `${segmentKey}Color`;
-    const resetButton = createElement('button', { text: 'Reset', class: 'reset-color-btn', events: { 
-      click: (evt) => { evt.preventDefault(); evt.stopPropagation(); configWrite(colorKey, configGetDefault(colorKey)); }}});
-    const colorInput = createElement('input', { type: 'color', value: configRead(colorKey), events: { input: (evt) => configWrite(colorKey, evt.target.value) }});
-    configAddChangeListener(colorKey, (evt) => { colorInput.value = evt.detail.newValue; window.sponsorblock?.buildOverlay(); });
-    elmLabel.appendChild(createElement('div', { class: 'color-picker-controls' }, resetButton, colorInput));
-  }
   return elmLabel;
 }
 
+function createSegmentControl(key) {
+  const isHighlight = key === 'sbMode_highlight';
+  const modesMap = isHighlight ? sbModesHighlight : sbModes;
+  const modes = Object.keys(modesMap);
+  const colorKey = isHighlight ? 'poi_highlightColor' : key.replace('sbMode_', '') + 'Color';
+  
+  const valueText = createElement('span', { class: 'current-value' });
+  const updateDisplay = () => valueText.textContent = modesMap[configRead(key)] || configRead(key);
+  
+  const cycle = (dir) => {
+    let idx = modes.indexOf(configRead(key));
+    if (idx === -1) idx = 0;
+    idx = dir === 'next' ? (idx + 1) % modes.length : (idx - 1 + modes.length) % modes.length;
+    configWrite(key, modes[idx]);
+    updateDisplay();
+  };
+
+  const container = createElement('div', { 
+    class: 'shortcut-control-row',
+    style: { padding: '0.6vh 0', margin: '0.2vh 0' }, 
+    tabIndex: 0,
+    events: {
+      keydown: (e) => {
+        if (e.keyCode === 37) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
+        else if (e.keyCode === 39 || e.keyCode === 13) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
+      },
+      click: () => cycle('next')
+    }
+  },
+    createElement('span', { text: configGetDesc(key), class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
+    createElement('div', { class: 'shortcut-value-container' },
+      createElement('span', { text: '<', class: 'arrow-btn' }),
+      valueText,
+      createElement('span', { text: '>', class: 'arrow-btn' })
+    )
+  );
+
+  const hasColorPicker = segmentTypes[key.replace('sbMode_', '')] || (isHighlight && segmentTypes['poi_highlight']);
+  if (hasColorPicker) {
+      const resetButton = createElement('button', { 
+          text: 'R', 
+          class: 'reset-color-btn', 
+          tabIndex: -1,
+          events: { 
+            click: (evt) => { evt.preventDefault(); evt.stopPropagation(); configWrite(colorKey, configGetDefault(colorKey)); }
+          }
+      });
+      const colorInput = createElement('input', { 
+          type: 'color', 
+          value: configRead(colorKey), 
+          tabIndex: -1,
+          events: { 
+              click: (evt) => { evt.stopPropagation(); },
+              input: (evt) => configWrite(colorKey, evt.target.value) 
+          }
+      });
+      
+      configAddChangeListener(colorKey, (evt) => { colorInput.value = evt.detail.newValue; window.sponsorblock?.buildOverlay(); });
+      container.querySelector('.shortcut-value-container').appendChild(createElement('div', { style: { display: 'flex', marginLeft: '10px' } }, resetButton, colorInput));
+  }
+  
+  configAddChangeListener(key, updateDisplay);
+  updateDisplay();
+  return container;
+}
+
 function createSection(title, elements) {
-  const legend = createElement('div', { text: title, style: { color: '#aaa', fontSize: '22px', marginBottom: '5px', fontWeight: 'bold', textTransform: 'uppercase' }});
-  const fieldset = createElement('div', { class: 'ytaf-settings-section', style: { marginTop: '15px', marginBottom: '5px', padding: '2px', border: '2px solid #444', borderRadius: '5px' }}, legend, ...elements);
+  const legend = createElement('div', { text: title, style: { color: '#aaa', fontSize: '2.4vh', marginBottom: '0.4vh', fontWeight: 'bold', textTransform: 'uppercase' }});
+  const fieldset = createElement('div', { class: 'ytaf-settings-section', style: { marginTop: '1vh', marginBottom: '0.5vh', padding: '0vh', border: '2px solid #444', borderRadius: '5px' }}, legend, ...elements);
   return fieldset;
 }
 
@@ -103,6 +157,7 @@ function createShortcutControl(keyIndex) {
 
   const container = createElement('div', { 
     class: 'shortcut-control-row', 
+    style: { padding: '0.6vh 0', margin: '0.2vh 0' },
     tabIndex: 0,
     events: {
       keydown: (e) => {
@@ -112,7 +167,7 @@ function createShortcutControl(keyIndex) {
       click: () => cycle('next')
     }
   }, 
-    createElement('span', { text: `Key ${keyIndex}`, class: 'shortcut-label' }),
+    createElement('span', { text: `Key ${keyIndex}`, class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
     createElement('div', { class: 'shortcut-value-container' },
       createElement('span', { text: '<', class: 'arrow-btn' }),
       valueText,
@@ -143,7 +198,8 @@ function createOpacityControl(key) {
   };
 
   const container = createElement('div', { 
-    class: 'shortcut-control-row', 
+    class: 'shortcut-control-row',
+    style: { padding: '0.6vh 0', margin: '0.2vh 0' },
     tabIndex: 0,
     events: {
       keydown: (e) => {
@@ -161,7 +217,7 @@ function createOpacityControl(key) {
       click: () => changeValue(step)
     }
   }, 
-    createElement('span', { text: configGetDesc(key), class: 'shortcut-label' }),
+    createElement('span', { text: configGetDesc(key), class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
     createElement('div', { class: 'shortcut-value-container' },
       createElement('span', { text: '<', class: 'arrow-btn', events: { click: (e) => { e.stopPropagation(); changeValue(-step); } } }),
       valueText,
@@ -195,7 +251,7 @@ function createOptionsPanel() {
     
     const pages = [
       { page: pageMain, selector: 'input', popup: false },
-      { page: pageSponsor, selector: 'input', popup: isWatchPage() },
+      { page: pageSponsor, selector: '.shortcut-control-row', popup: isWatchPage() },
       { page: pageShortcuts, selector: '.shortcut-control-row', popup: false },
       { page: pageUITweaks, selector: '.shortcut-control-row', popup: false }
     ];
@@ -220,9 +276,8 @@ function createOptionsPanel() {
         // Prevent accidental page switch when modifying controls
         if (preFocus.classList.contains('shortcut-control-row')) return;
         if (activePage === 1) {
-          const sponsorMainToggle = pageSponsor.querySelector('input');
-          if (dir === 'right' && preFocus === sponsorMainToggle) { evt.preventDefault(); evt.stopPropagation(); return; }
-          if (dir === 'left' && preFocus.matches('blockquote input[type="checkbox"]')) { setActivePage(0); evt.preventDefault(); evt.stopPropagation(); return; }
+          // Sponsor page now uses shortcut-control-row so this check is redundant but safe
+          if (preFocus.matches('blockquote input[type="checkbox"]')) { setActivePage(0); evt.preventDefault(); evt.stopPropagation(); return; }
         }
 
         navigate(dir);
@@ -297,11 +352,11 @@ function createOptionsPanel() {
   pageSponsor = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-sponsor', style: { display: 'none' }});
   pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> Main Settings', events: { click: () => setActivePage(0) }}));
   pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
-  pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlockAutoSkip'));
+  // Removed enableSponsorBlockAutoSkip checkbox
   
   const elmBlock = createElement('blockquote', {},
-    ...['Sponsor', 'Intro', 'Outro', 'Interaction', 'SelfPromo', 'MusicOfftopic', 'Filler', 'Hook', 'Highlight', 'Preview'].map(s => createConfigCheckbox(`enableSponsorBlock${s}`)),
-    createConfigCheckbox('enableHighlightJump'),
+    ...['Sponsor', 'Intro', 'Outro', 'Interaction', 'SelfPromo', 'MusicOfftopic', 'Filler', 'Hook', 'Preview'].map(s => createSegmentControl(`sbMode_${s.toLowerCase()}`)),
+    createSegmentControl('sbMode_highlight'),
     createConfigCheckbox('enableMutedSegments')
   );
   pageSponsor.appendChild(elmBlock);
@@ -552,14 +607,12 @@ function handleShortcutAction(action) {
       let target = document.querySelector('yt-button-container[aria-label="Comments"]');
 	  if (!target) {
 		target = document.querySelector('yt-icon.qHxFAf.ieYpu.nGYLgf') || 
-				 document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb');
+				 document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb') ||
+				 document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') || 
+				 document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || 
+				 document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
 	  }
-	  let commBtn = target ? target.closest('yt-button-container') : null;
-	  if (!commBtn) {
-		  commBtn = document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') || 
-					document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || 
-					document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
-	  }      
+	  let commBtn = target ? target.closest('yt-button-container') : null;   
       const isCommentsActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
       const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
       const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
@@ -592,19 +645,18 @@ const eventHandler = (evt) => {
     if (evt.type === 'keydown') showOptionsPanel(!optionsPanelVisible);
     return false;
   } 
-  // 2. Handle Highlight Jump (Blue)
+  // 2. Handle Manual Skip / Highlight Jump (Blue)
   else if (keyColor === 'blue' && evt.type === 'keydown') {
     if (!isWatchPage()) return true;
-    if (!configRead('enableHighlightJump')) return true;
     
     evt.preventDefault();
     evt.stopPropagation();
     try {
       if (window.sponsorblock) {
-        const jumped = window.sponsorblock.jumpToNextHighlight();
-        if (!jumped) showNotification('No highlights found');
+        const handled = window.sponsorblock.handleBlueButton();
+        if (!handled) showNotification('No action available');
       } else showNotification('SponsorBlock not loaded');
-    } catch (e) { showNotification('Error jumping'); }
+    } catch (e) { showNotification('Error: ' + e.message); }
     return false;
   } 
   // 3. Handle OLED Mode (Red)
@@ -661,7 +713,7 @@ document.addEventListener('keydown', eventHandler, true);
 let notificationContainer = null;
 
 export function showNotification(text, time = 3000) {
-  if (configRead('disableNotifications')) return;
+  if (configRead('disableNotifications')) return { remove: () => {} };
   
   if (!notificationContainer) {
     notificationContainer = createElement('div', { class: 'ytaf-notification-container' });
@@ -676,10 +728,16 @@ export function showNotification(text, time = 3000) {
 
   requestAnimationFrame(() => requestAnimationFrame(() => elmInner.classList.remove('message-hidden')));
 
-  setTimeout(() => {
-    elmInner.classList.add('message-hidden');
-    setTimeout(() => elm.remove(), 1000);
-  }, time);
+  const remove = () => {
+      elmInner.classList.add('message-hidden');
+      setTimeout(() => elm.remove(), 1000);
+  };
+
+  if (time > 0) {
+    setTimeout(remove, time);
+  }
+
+  return { remove };
 }
 
 // --- Initialization & CSS Injection ---

@@ -64,6 +64,20 @@ export const shortcutActions = {
   toggle_comments: 'Toggle Comments/Desc'
 };
 
+export const sbModes = {
+  auto_skip: 'Auto Skip',
+  manual_skip: 'Manual Skip',
+  seek_bar: 'Show in Seek Bar',
+  disable: 'Disable'
+};
+
+export const sbModesHighlight = {
+  auto_skip: 'Auto Skip to Start',
+  ask: 'Ask when video loads',
+  seek_bar: 'Show in Seek Bar',
+  disable: 'Disable'
+};
+
 const configOptions = new Map([
   ['uiTheme', { default: 'blue-force-field', desc: 'UI Theme' }],
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
@@ -78,35 +92,19 @@ const configOptions = new Map([
     { default: false, desc: 'Remove Top Live Games' }
   ],
   ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
-  ['enableSponsorBlockAutoSkip', { default: true, desc: 'Auto Skip Segments' }],
   ['enableMutedSegments', { default: false, desc: 'Allow segments that mute audio' }],
-  [
-    'enableSponsorBlockSponsor',
-    { default: true, desc: 'Skip sponsor segments' }
-  ],
-  ['enableSponsorBlockIntro', { default: true, desc: 'Skip intro segments' }],
-  ['enableSponsorBlockOutro', { default: true, desc: 'Skip outro segments' }],
-  [
-    'enableSponsorBlockInteraction',
-    {
-      default: true,
-      desc: 'Skip interaction reminder segments'
-    }
-  ],
-  [
-    'enableSponsorBlockSelfPromo',
-    {
-      default: true,
-      desc: 'Skip self promotion segments'
-    }
-  ],
-  [
-    'enableSponsorBlockMusicOfftopic',
-    {
-      default: true,
-      desc: 'Skip non-music segments in music videos'
-    }
-  ],
+  
+  ['sbMode_sponsor', { default: 'auto_skip', desc: 'Sponsor' }],
+  ['sbMode_intro', { default: 'auto_skip', desc: 'Intermission/Intro' }],
+  ['sbMode_outro', { default: 'auto_skip', desc: 'Endcards/Credits' }],
+  ['sbMode_interaction', { default: 'auto_skip', desc: 'Interaction Reminder' }],
+  ['sbMode_selfpromo', { default: 'auto_skip', desc: 'Self Promotion' }],
+  ['sbMode_musicofftopic', { default: 'auto_skip', desc: 'Non-Music Section' }],
+  ['sbMode_preview', { default: 'seek_bar', desc: 'Preview/Recap' }],
+  ['sbMode_filler', { default: 'seek_bar', desc: 'Filler/Tangents' }],
+  ['sbMode_hook', { default: 'seek_bar', desc: 'Hook/Greetings' }],
+  ['sbMode_highlight', { default: 'seek_bar', desc: 'Highlight' }],
+
   [
   'hideEndcards',
   {
@@ -115,46 +113,11 @@ const configOptions = new Map([
   }
   ],
   [
-    'enableSponsorBlockHighlight',
-    {
-      default: true,
-      desc: 'Show highlight segments'
-    }
-  ],
-  [
-    'enableSponsorBlockFiller',
-    {
-      default: false,
-      desc: 'Skip tangents/jokes'
-    }
-  ],
-  [
-    'enableSponsorBlockHook',
-    {
-      default: false,
-      desc: 'Skip hook/greetings'
-    }
-  ],
-  [
-    'enableHighlightJump',
-    {
-      default: true,
-      desc: 'Jump to highlight with blue button'
-    }
-  ],
-  [
   'enableAutoLogin',
   {
     default: true,
     desc: 'Auto Login'
   }
-  ],
-  [
-    'enableSponsorBlockPreview',
-    {
-      default: false,
-      desc: 'Skip recaps and previews'
-    }
   ],
   [
     'hideLogo',
