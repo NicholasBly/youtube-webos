@@ -357,7 +357,8 @@ function createOptionsPanel() {
   const elmBlock = createElement('blockquote', {},
     ...['Sponsor', 'Intro', 'Outro', 'Interaction', 'SelfPromo', 'MusicOfftopic', 'Filler', 'Hook', 'Preview'].map(s => createSegmentControl(`sbMode_${s.toLowerCase()}`)),
     createSegmentControl('sbMode_highlight'),
-    createConfigCheckbox('enableMutedSegments')
+    createConfigCheckbox('enableMutedSegments'),
+	createConfigCheckbox('skipSegmentsOnce')
   );
   pageSponsor.appendChild(elmBlock);
   pageSponsor.appendChild(createElement('div', { html: '<small>Sponsor segments skipping - https://sponsor.ajay.app</small>' }));
@@ -624,6 +625,49 @@ function handleShortcutAction(action) {
 			showNotification('Comments Unavailable');
         }
       }
+    },
+    toggle_description: () => {
+      // 1. Try English text finding
+      let descText = Array.from(document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe'))
+        .find(el => el.textContent.trim() === 'Description');
+      let target = descText ? descText.closest('yt-button-container') : null;
+
+      // 2. Fallback: Structural finding for non-English (look for text-button in generic renderer, excluding subscribe/join which are usually different or have icons)
+      if (!target) {
+        const genericTextBtn = document.querySelector('ytlr-button-renderer yt-formatted-string.XGffTd.OqGroe');
+        if (genericTextBtn) target = genericTextBtn.closest('yt-button-container');
+      }
+
+      const isDescActive = target && (target.getAttribute('aria-pressed') === 'true' || target.getAttribute('aria-selected') === 'true');
+      // Re-use panel detection from comments as they share the side panel space
+      const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
+      const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
+
+      if (isDescActive || isPanelVisible) simulateBack();
+      else {
+        if (triggerInternal(target, 'Description')) {}
+        else showNotification('Description Unavailable');
+      }
+    },
+    save_to_playlist: () => {
+      // 1. Try English Aria Label
+      let target = document.querySelector('yt-button-container[aria-label="Save"]');
+
+      // 2. Fallback: Specific icon class (p9sZp) found in Save button
+      if (!target) {
+        const icon = document.querySelector('yt-icon.p9sZp');
+        if (icon) target = icon.closest('yt-button-container');
+      }
+	  
+	  const panel = document.querySelector('.AmQJbe');
+	  
+	  if (panel) simulateBack();
+	  else {
+      if (triggerInternal(target, 'Save/Watch Later')) {
+      } else {
+        showNotification('Save Button Unavailable');
+      }
+	  }
     }
   };
 

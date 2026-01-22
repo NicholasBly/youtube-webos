@@ -61,7 +61,9 @@ export const shortcutActions = {
   seek_15_back: 'Rewind 15s',
   play_pause: 'Play/Pause',
   toggle_subs: 'Toggle Subtitles',
-  toggle_comments: 'Toggle Comments/Desc'
+  toggle_comments: 'Toggle Comments',
+  toggle_description: 'Toggle Description',
+  save_to_playlist: 'Save / Watch Later'
 };
 
 export const sbModes = {
@@ -93,6 +95,7 @@ const configOptions = new Map([
   ],
   ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
   ['enableMutedSegments', { default: false, desc: 'Allow segments that mute audio' }],
+  ['skipSegmentsOnce', { default: false, desc: 'Skip Segments Once' }],
   
   ['sbMode_sponsor', { default: 'auto_skip', desc: 'Sponsor' }],
   ['sbMode_intro', { default: 'auto_skip', desc: 'Intermission/Intro' }],

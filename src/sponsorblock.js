@@ -56,6 +56,7 @@ class SponsorBlockHandler {
         this.isSkipping = false;
         this.wasMutedBySB = false;
         this.isDestroyed = false;
+		this.skippedSegmentIndices = new Set();
         
         // Manual skip tracking
         this.activeManualNotification = null;
@@ -113,6 +114,7 @@ class SponsorBlockHandler {
 
         this.configCache.enableMutedSegments = configRead('enableMutedSegments');
         this.configCache.sbMode_highlight = configRead('sbMode_highlight');
+		this.configCache.skipSegmentsOnce = configRead('skipSegmentsOnce');
 
         this.rebuildSkipSegments();
     }
@@ -185,7 +187,7 @@ class SponsorBlockHandler {
 
     setupConfigListeners() {
         this.boundConfigUpdate = this.updateConfigCache.bind(this);
-        const configKeys = [...Object.values(CONFIG_MAPPING), 'enableMutedSegments', 'sbMode_highlight'];
+        const configKeys = [...Object.values(CONFIG_MAPPING), 'enableMutedSegments', 'sbMode_highlight', 'skipSegmentsOnce'];
 
         for (const key of configKeys) {
             configAddChangeListener(key, this.boundConfigUpdate);
@@ -226,11 +228,15 @@ class SponsorBlockHandler {
         if (!video || this.hasPerformedChainSkip || this.isDestroyed) return false;
 
         if (video.readyState === 0) {
-            const retry = () => {
-                video.removeEventListener('loadedmetadata', retry);
+            // Save reference to video and handler for cleanup
+            this.chainSkipVideo = video;
+            this.boundChainSkipRetry = () => {
+                video.removeEventListener('loadedmetadata', this.boundChainSkipRetry);
+                this.boundChainSkipRetry = null;
+                this.chainSkipVideo = null;
                 if (!this.isDestroyed) this.executeChainSkip(video);
             };
-            video.addEventListener('loadedmetadata', retry);
+            video.addEventListener('loadedmetadata', this.boundChainSkipRetry);
             return false;
         }
 
@@ -253,8 +259,13 @@ class SponsorBlockHandler {
         this.wasMutedBySB = true;
         video.muted = true;
 
-        const onSeeked = () => {
-            video.removeEventListener('seeked', onSeeked);
+        // Save reference to video and handler for cleanup
+        this.chainSkipVideo = video;
+        this.boundChainSkipSeeked = () => {
+            video.removeEventListener('seeked', this.boundChainSkipSeeked);
+            this.boundChainSkipSeeked = null;
+            this.chainSkipVideo = null;
+
             if (this.isDestroyed) return;
 
             const checkReady = () => {
@@ -274,11 +285,18 @@ class SponsorBlockHandler {
             checkReady();
         };
 
-        video.addEventListener('seeked', onSeeked);
+        video.addEventListener('seeked', this.boundChainSkipSeeked);
 
         this.unmuteTimeoutId = setTimeout(() => {
             if (this.isDestroyed) return;
-            video.removeEventListener('seeked', onSeeked);
+            
+            // Clean up the listener if timeout hits first
+            if (this.boundChainSkipSeeked) {
+                video.removeEventListener('seeked', this.boundChainSkipSeeked);
+                this.boundChainSkipSeeked = null;
+                this.chainSkipVideo = null;
+            }
+
             if (video.readyState >= 2) {
                 video.muted = originalMuteState;
                 window.__sb_pending_unmute = false;
@@ -683,6 +701,10 @@ class SponsorBlockHandler {
             }
             return;
         }
+		
+		if (this.configCache.skipSegmentsOnce && this.skippedSegmentIndices.has(seg.originalIndex)) {
+            return;
+        }
 
         // Guard against spam loop on WebOS 3/4/5 at the end of video
         if (this.isLegacyWebOS &&
@@ -693,6 +715,7 @@ class SponsorBlockHandler {
 
         let jumpTarget = seg.end;
         const skippedCategories = [this.getCategoryName(seg.category)];
+		const segmentsToMark = [seg.originalIndex];
 
         // Chain multiple segments if they are adjacent
         for (let i = segmentIdx + 1; i < this.skipSegments.length; i++) {
@@ -705,6 +728,7 @@ class SponsorBlockHandler {
 
             jumpTarget = Math.max(jumpTarget, next.end);
             skippedCategories.push(this.getCategoryName(next.category));
+			segmentsToMark.push(next.originalIndex);
         }
 
         if (segmentIdx === this.lastSkippedSegmentIndex && Math.abs(currentTime - this.lastSkipTime) < 0.1) {
@@ -714,6 +738,10 @@ class SponsorBlockHandler {
         this.isSkipping = true;
         this.lastSkipTime = currentTime;
         this.lastSkippedSegmentIndex = segmentIdx;
+		
+		if (this.configCache.skipSegmentsOnce) {
+            segmentsToMark.forEach(idx => this.skippedSegmentIndices.add(idx));
+        }
 
         // Legacy mute logic
         if (this.isLegacyWebOS) {
@@ -879,6 +907,19 @@ class SponsorBlockHandler {
             clearTimeout(this.unmuteTimeoutId);
             this.unmuteTimeoutId = null;
         }
+        
+        // Clean up pending chain skip listeners
+        if (this.chainSkipVideo) {
+            if (this.boundChainSkipRetry) {
+                this.chainSkipVideo.removeEventListener('loadedmetadata', this.boundChainSkipRetry);
+            }
+            if (this.boundChainSkipSeeked) {
+                this.chainSkipVideo.removeEventListener('seeked', this.boundChainSkipSeeked);
+            }
+        }
+        this.boundChainSkipRetry = null;
+        this.boundChainSkipSeeked = null;
+        this.chainSkipVideo = null;
 
         if (this.wasMutedBySB && this.video) {
             this.video.muted = false;
@@ -919,6 +960,12 @@ class SponsorBlockHandler {
         this.skipSegments = [];
         this.video = null;
         this.progressBar = null;
+        
+        // Clean up Skip Once Set
+        if (this.skippedSegmentIndices) {
+            this.skippedSegmentIndices.clear();
+            this.skippedSegmentIndices = null;
+        }
 
         this.configCache = {};
     }
