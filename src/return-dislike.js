@@ -57,9 +57,11 @@ class ReturnYouTubeDislike {
     this.handlePanelMutation = this.handlePanelMutation.bind(this);
   }
 
-  log(level, message, ...args) {
-    console.log(`[RYD:${this.videoID}] [${level.toUpperCase()}]`, message, ...args);
-  }
+  log(level, message) {
+    var args = [].slice.call(arguments, 2); 
+    var prefix = '[RYD:' + this.videoID + '] [' + level.toUpperCase() + ']';
+    console.log.apply(console, [prefix, message].concat(args));
+}
 
   // --- Timer Management ---
   setTimeout(callback, delay, name) {
@@ -182,7 +184,7 @@ class ReturnYouTubeDislike {
 	console.log('[RYD] Observing player root:', mainContainer);
     
     this.bodyObserver = new MutationObserver(this.handleBodyMutation);
-    this.bodyObserver.observe(mainContainer, { childList: true, subtree: true });
+    this.bodyObserver.observe(mainContainer, { childList: true, subtree: true, attributes: true });
     this.observers.add(this.bodyObserver);
 
     const existingPanel = document.querySelector(this.selectors.panel);
@@ -193,8 +195,6 @@ class ReturnYouTubeDislike {
 
   handleBodyMutation(mutations) {
     if (!this.active) return;
-    if (!mutations.some(m => m.addedNodes.length > 0)) return;
-
     const panel = document.querySelector(this.selectors.panel);
     if (!panel) return;
     
@@ -315,7 +315,7 @@ class ReturnYouTubeDislike {
 
   getMenuItems() {
       if (!this.panelElement) return [];
-      const rawItems = Array.from(this.panelElement.querySelectorAll('[role="menuitem"]'));
+	  const rawItems = [].slice.call(this.panelElement.querySelectorAll('[role="menuitem"]'));
       return rawItems.filter(item => !item.querySelector('[role="menuitem"]'));
   }
 
@@ -383,7 +383,9 @@ class ReturnYouTubeDislike {
       if (e.isTrusted === false) return;
 
       if (!this.active || !this.panelElement) return;
-      if (!this.panelElement.closest('.AmQJbe')) return;
+      if (!this.panelElement.contains(document.activeElement)) {
+        return;
+	  }
 
       const isUp = e.key === 'ArrowUp' || e.keyCode === 38;
       const isDown = e.key === 'ArrowDown' || e.keyCode === 40;
@@ -447,28 +449,34 @@ class ReturnYouTubeDislike {
       }
   }
 
-  // --- Synthetic Event Dispatcher ---
-  triggerEnter(element) {
-      if (!element) return;
-      element.focus();
+triggerEnter(element) {
+    if (!element) return;
+    
+    // 1. Dispatch legacy key events (for global listeners)
+    const dispatchKey = (type) => {
+        const evt = document.createEvent('Event');
+        evt.initEvent(type, true, true);
+        evt.keyCode = 13;
+        evt.which = 13;
+        evt.key = 'Enter';
+        evt.code = 'Enter';
+        element.dispatchEvent(evt);
+    };
 
-      const eventOptions = {
-          key: 'Enter',
-          code: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-          view: window
-      };
+    dispatchKey('keydown');
+    dispatchKey('keypress');
+    
+    try {
+        element.click();
+    } catch (err) {
+        // Fallback for elements that might not support .click() directly
+        const clickEvt = document.createEvent('MouseEvents');
+        clickEvt.initMouseEvent('click', true, true, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+        element.dispatchEvent(clickEvt);
+    }
 
-      const keyDownEvent = new KeyboardEvent('keydown', eventOptions);
-      element.dispatchEvent(keyDownEvent);
-
-      const keyUpEvent = new KeyboardEvent('keyup', eventOptions);
-      element.dispatchEvent(keyUpEvent);
-  }
+    dispatchKey('keyup');
+}
 
   // --- Core Logic ---
   checkAndInjectDislike(panelElement) {

@@ -19,7 +19,13 @@ let shortcutDebounceTime = 400;
 
 // --- Polyfills & Helpers ---
 
-// Polyfill for Element.closest (Required for older WebOS versions)
+if (!Element.prototype.matches) {
+    Element.prototype.matches = 
+        Element.prototype.webkitMatchesSelector || 
+        Element.prototype.mozMatchesSelector || 
+        Element.prototype.msMatchesSelector || 
+        Element.prototype.oMatchesSelector;
+}
 if (!Element.prototype.closest) {
   Element.prototype.closest = function(s) {
     var el = this;
