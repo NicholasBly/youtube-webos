@@ -9,8 +9,9 @@ const HAS_ABORT_CONTROLLER = typeof AbortController !== 'undefined';
 const HAS_INTERSECTION_OBSERVER = typeof IntersectionObserver !== 'undefined';
 
 class ReturnYouTubeDislike {
-  constructor(videoID) {
+  constructor(videoID, enableDislikes = true) {
     this.videoID = videoID;
+    this.enableDislikes = enableDislikes;
     this.active = true;
     this.dislikesCount = 0;
     this.initialInjectionDone = false;
@@ -19,10 +20,19 @@ class ReturnYouTubeDislike {
     this.observers = new Set();
     this.abortController = null;
     this.panelElement = null;
+    
+    // Navigation state
+    this.navigationActive = false;
+    this.isProgrammaticFocus = false; 
+    this.dispatching = false; // Recursion guard
+    
+    this.handleNavigation = this.handleNavigation.bind(this);
+    this.handleGlobalFocusIn = this.handleGlobalFocusIn.bind(this);
+    this.handleGlobalFocusOut = this.handleGlobalFocusOut.bind(this);
 
     this.selectors = {
         panel: 'ytlr-structured-description-content-renderer',
-        mainContainer: 'zylon-provider-3',
+        mainContainer: 'zylon-provider-6',
         standardContainer: '.ytLrVideoDescriptionHeaderRendererFactoidContainer',
         compactContainer: '.rznqCe'
     };
@@ -71,7 +81,6 @@ class ReturnYouTubeDislike {
   }
   
   clearAllTimers() {
-    // Use Object.keys for compatibility
     Object.keys(this.timers).forEach(key => clearTimeout(this.timers[key]));
     this.timers = {};
   }
@@ -80,20 +89,21 @@ class ReturnYouTubeDislike {
   async init() {
     this.log('info', 'Initializing...');
     
-    // Log feature availability for debugging
     if (!HAS_ABORT_CONTROLLER) {
       this.log('info', 'AbortController not available - request cancellation disabled');
     }
-    if (!HAS_INTERSECTION_OBSERVER) {
-      this.log('info', 'IntersectionObserver not available - visibility detection disabled');
-    }
     
     try {
+      this.injectPersistentStyles();
+
+      if (!this.enableDislikes) {
+        this.log('info', 'Dislikes disabled by config, applied layout fixes only.');
+        return;
+      }
+
       await this.fetchVideoData();
 
       if (!this.active) return;
-
-	  this.injectPersistentStyles();
 
       this.observeBodyForPanel();
     } catch (error) {
@@ -104,7 +114,6 @@ class ReturnYouTubeDislike {
   async fetchVideoData() {
     if (!this.videoID) return;
     
-    // Check cache first
     const cached = dislikeCache.get(this.videoID);
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
         this.dislikesCount = cached.dislikes;
@@ -112,7 +121,6 @@ class ReturnYouTubeDislike {
         return;
     }
     
-    // Abort any previous request
     if (HAS_ABORT_CONTROLLER) {
         if (this.abortController) {
             this.abortController.abort();
@@ -140,13 +148,11 @@ class ReturnYouTubeDislike {
       const data = await response.json();
       this.dislikesCount = data?.dislikes || 0;
       
-      // Cache the result
       dislikeCache.set(this.videoID, {
         dislikes: this.dislikesCount,
         timestamp: Date.now()
       });
       
-      // Limit cache size
       if (dislikeCache.size > 50) {
         const firstKey = dislikeCache.keys().next().value;
         dislikeCache.delete(firstKey);
@@ -154,9 +160,8 @@ class ReturnYouTubeDislike {
       
       this.log('info', 'Dislikes loaded:', this.dislikesCount);
     } catch (error) {
-      // Only check for AbortError if AbortController is available
       if (HAS_ABORT_CONTROLLER && error.name === 'AbortError') {
-        // Silently ignore abort errors
+        // Silently ignore
       } else {
         this.log('error', 'Fetch error:', error);
       }
@@ -179,7 +184,6 @@ class ReturnYouTubeDislike {
     this.bodyObserver = new MutationObserver(this.handleBodyMutation);
     this.bodyObserver.observe(mainContainer, { childList: true, subtree: true });
     this.observers.add(this.bodyObserver);
-    this.log('info', 'Watching container for panel...');
 
     const existingPanel = document.querySelector(this.selectors.panel);
     if (existingPanel) {
@@ -189,8 +193,6 @@ class ReturnYouTubeDislike {
 
   handleBodyMutation(mutations) {
     if (!this.active) return;
-
-    // Optimized check using .some()
     if (!mutations.some(m => m.addedNodes.length > 0)) return;
 
     const panel = document.querySelector(this.selectors.panel);
@@ -206,8 +208,9 @@ class ReturnYouTubeDislike {
           return;
       }
 	  
-      this.panelElement = panel; // Cache reference
+      this.panelElement = panel;
       this.attachContentObserver(panel);
+      this.setupNavigation(); // Ensures global listeners are active
       
       if (HAS_INTERSECTION_OBSERVER) {
           this.setupIntersectionObserver(panel);
@@ -228,14 +231,10 @@ class ReturnYouTubeDislike {
         subtree: true 
     });
     this.observers.add(this.panelContentObserver);
-    this.log('info', 'Attached panel observer.');
   }
 
   setupIntersectionObserver(panelElement) {
-    if (!HAS_INTERSECTION_OBSERVER) {
-        this.log('info', 'IntersectionObserver not available, skipping visibility detection');
-        return;
-    }
+    if (!HAS_INTERSECTION_OBSERVER) return;
     
     if (this.intersectionObserver) {
         this.intersectionObserver.disconnect();
@@ -244,14 +243,22 @@ class ReturnYouTubeDislike {
 
     this.intersectionObserver = new IntersectionObserver((entries) => {
         if (!this.active) return;
-        if (entries[0].isIntersecting) {
+        const entry = entries[0];
+        
+        if (entry.isIntersecting) {
             this.checkAndInjectDislike(this.panelElement);
+            // Sync with current focus immediately if already there
+            if (this.panelElement.contains(document.activeElement)) {
+                this.updateVisualState(document.activeElement);
+            }
+        } else {
+            // clean up ALL highlights to prevent ghosts
+            this.clearAllHighlights();
         }
     }, { threshold: 0.1 });
     
     this.intersectionObserver.observe(panelElement);
     this.observers.add(this.intersectionObserver);
-    this.log('info', 'Intersection observer active');
   }
 
   handlePanelMutation() {
@@ -263,15 +270,212 @@ class ReturnYouTubeDislike {
       }, 200, 'injectDebounce');
   }
 
+  // --- Navigation Logic ---
+  setupNavigation() {
+      if (!this.navigationActive) {
+          window.addEventListener('keydown', this.handleNavigation, { capture: true });
+          document.addEventListener('focusin', this.handleGlobalFocusIn, { capture: true });
+          document.addEventListener('focusout', this.handleGlobalFocusOut, { capture: true });
+          
+          this.navigationActive = true;
+          this.log('info', 'Global navigation listeners attached');
+      }
+  }
+
+  handleGlobalFocusIn(e) {
+      if (!this.active || !this.panelElement || this.isProgrammaticFocus) return;
+      
+      // Check if the focused element is inside our panel
+      if (this.panelElement.contains(e.target)) {
+          const targetItem = e.target.closest('[role="menuitem"]');
+          
+          // Filter out container menuitems to avoid selecting the whole list
+          if (targetItem && !targetItem.querySelector('[role="menuitem"]')) {
+              // this.log('info', 'Native focus detected in panel, syncing state');
+              this.updateVisualState(targetItem);
+          }
+      }
+  }
+  
+  handleGlobalFocusOut(e) {
+      // Small delay to check where focus went
+      setTimeout(() => {
+         // If we don't have a panel, or focus left the panel entirely...
+         if (!this.panelElement) return;
+         
+         const active = document.activeElement;
+         const isFocusInside = this.panelElement.contains(active);
+         
+         // If focus is not inside the panel anymore, clean up
+         if (!isFocusInside) {
+             this.clearAllHighlights();
+         }
+      }, 50);
+  }
+
+  getMenuItems() {
+      if (!this.panelElement) return [];
+      const rawItems = Array.from(this.panelElement.querySelectorAll('[role="menuitem"]'));
+      return rawItems.filter(item => !item.querySelector('[role="menuitem"]'));
+  }
+
+  updateVisualState(targetItem) {
+      const items = this.getMenuItems();
+      let foundTarget = false;
+      
+      items.forEach(item => {
+          if (item === targetItem) {
+              item.classList.add('bNqvrc', 'zylon-focus');
+              this.toggleParentFocus(item, true);
+              foundTarget = true;
+          } else {
+              item.classList.remove('bNqvrc', 'zylon-focus');
+              this.toggleParentFocus(item, false);
+          }
+      });
+
+      // Handle the dynamic list container focus
+      const dynList = this.panelElement.querySelector('yt-dynamic-virtual-list');
+      if (dynList) {
+          if (foundTarget) {
+              dynList.classList.add('zylon-focus');
+          } else {
+              dynList.classList.remove('zylon-focus');
+          }
+      }
+  }
+
+  clearAllHighlights() {
+      if (!this.panelElement) return;
+      
+      // Query specifically for elements that might have our classes
+      const dirtyItems = this.panelElement.querySelectorAll('.zylon-focus, .bNqvrc');
+      dirtyItems.forEach(el => {
+          el.classList.remove('zylon-focus', 'bNqvrc');
+          this.toggleParentFocus(el, false);
+      });
+      
+      // Cleanup parents specifically
+      const parents = this.panelElement.querySelectorAll('[class*="--focused"]');
+      parents.forEach(p => {
+           // Remove any class ending in --focused
+           p.classList.forEach(cls => {
+               if (cls.endsWith('--focused')) p.classList.remove(cls);
+           });
+      });
+  }
+
+  toggleParentFocus(element, shouldFocus) {
+      const parentContainer = element.closest('ytlr-video-owner-renderer, ytlr-expandable-video-description-body-renderer, ytlr-comments-entry-point-renderer, ytlr-chapter-renderer');
+      
+      if (parentContainer) {
+          const baseClass = parentContainer.classList[0]; 
+          if (shouldFocus) {
+              parentContainer.classList.add(`${baseClass}--focused`, 'zylon-focus', 'zylon-ve');
+          } else {
+              parentContainer.classList.remove(`${baseClass}--focused`, 'zylon-focus');
+          }
+      }
+  }
+
+  handleNavigation(e) {
+      if (this.dispatching) return;
+      if (e.isTrusted === false) return;
+
+      if (!this.active || !this.panelElement) return;
+      if (!this.panelElement.closest('.AmQJbe')) return;
+
+      const isUp = e.key === 'ArrowUp' || e.keyCode === 38;
+      const isDown = e.key === 'ArrowDown' || e.keyCode === 40;
+      const isEnter = e.key === 'Enter' || e.keyCode === 13;
+
+      // --- HANDLE ENTER/OK ---
+      if (isEnter) {
+          const current = this.panelElement.querySelector('.zylon-focus[role="menuitem"]');
+          if (current) {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              // this.log('info', 'Intercepted Enter, dispatching synthetic keys to:', current);
+              this.dispatching = true;
+              try {
+                  this.triggerEnter(current);
+              } finally {
+                  this.dispatching = false;
+              }
+          }
+          return;
+      }
+
+      if (!isUp && !isDown) return;
+
+      const dynList = this.panelElement.querySelector('yt-dynamic-virtual-list');
+      if (dynList && !dynList.classList.contains('zylon-focus')) {
+          return;
+      }
+
+      // --- HANDLE ARROWS ---
+      const items = this.getMenuItems();
+      if (items.length === 0) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      let currentIndex = items.findIndex(el => el.classList.contains('zylon-focus'));
+      if (currentIndex === -1) {
+          currentIndex = items.findIndex(el => el === document.activeElement);
+      }
+
+      let nextIndex = 0;
+      if (currentIndex !== -1) {
+          if (isDown) {
+              nextIndex = (currentIndex + 1) % items.length;
+          } else {
+              nextIndex = (currentIndex - 1 + items.length) % items.length;
+          }
+      }
+
+      const nextItem = items[nextIndex];
+      if (nextItem) {
+          this.updateVisualState(nextItem);
+          
+          this.isProgrammaticFocus = true;
+          nextItem.focus();
+          this.isProgrammaticFocus = false;
+
+          nextItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+  }
+
+  // --- Synthetic Event Dispatcher ---
+  triggerEnter(element) {
+      if (!element) return;
+      element.focus();
+
+      const eventOptions = {
+          key: 'Enter',
+          code: 'Enter',
+          keyCode: 13,
+          which: 13,
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          view: window
+      };
+
+      const keyDownEvent = new KeyboardEvent('keydown', eventOptions);
+      element.dispatchEvent(keyDownEvent);
+
+      const keyUpEvent = new KeyboardEvent('keyup', eventOptions);
+      element.dispatchEvent(keyUpEvent);
+  }
+
   // --- Core Logic ---
   checkAndInjectDislike(panelElement) {
     if (!this.active) return;
-
-    // Early exit if already exists
     if (document.getElementById('ryd-dislike-factoid')) return;
 
     try {
-      // Determine UI mode
       const standardContainer = panelElement.querySelector(this.modeConfigs.standard.containerSelector);
       const compactContainer = panelElement.querySelector(this.modeConfigs.compact.containerSelector);
       
@@ -282,7 +486,6 @@ class ReturnYouTubeDislike {
 
       const container = standardContainer || compactContainer;
 
-      // Optimized single query with case-insensitive search
       const likesElement = container.querySelector(
           `div[idomkey="factoid-0"]${mode.factoidClass}, ` +
           `div[aria-label*="like"]${mode.factoidClass}, ` +
@@ -291,9 +494,6 @@ class ReturnYouTubeDislike {
 
       if (!likesElement) return;
 
-      this.log('info', 'Injecting dislike count...');
-      
-      // Shallow clone and rebuild (more efficient)
       const dislikeElement = likesElement.cloneNode(false);
       dislikeElement.id = 'ryd-dislike-factoid';
       dislikeElement.setAttribute('idomkey', 'factoid-ryd');
@@ -308,14 +508,11 @@ class ReturnYouTubeDislike {
         labelElement.textContent = 'Dislikes';
         dislikeElement.setAttribute('aria-label', `${dislikeText} Dislikes`);
         dislikeElement.setAttribute('role', 'text');
-        dislikeElement.setAttribute('tabindex', '-1'); // TV accessibility
+        dislikeElement.setAttribute('tabindex', '-1');
       }
 
       likesElement.insertAdjacentElement('afterend', dislikeElement);
-	  
 	  container.classList.add('ryd-ready');
-      
-      // Mark initial injection as complete
       this.initialInjectionDone = true;
 
     } catch (error) {
@@ -330,7 +527,6 @@ class ReturnYouTubeDislike {
   }
   
   injectPersistentStyles() {
-    // Only inject once globally (not per instance)
     if (document.getElementById('ryd-persistent-styles')) return;
     
     const styleElement = document.createElement('style');
@@ -341,7 +537,7 @@ class ReturnYouTubeDislike {
         display: flex !important;
         flex-wrap: wrap !important;
         justify-content: center !important;
-        gap: 1.5rem !important;
+        gap: 1.0rem !important;
         height: auto !important;
         overflow: visible !important;
       }
@@ -352,52 +548,28 @@ class ReturnYouTubeDislike {
       ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .ytLrVideoDescriptionHeaderRendererValue,
       ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .axf6h {
         display: inline-block !important;
-        margin-right: 0.4rem !important;
+        margin-right: 0.2rem !important;
       }
       ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .ytLrVideoDescriptionHeaderRendererLabel,
       ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .Ph2lNb {
         display: inline-block !important;
       }
-      
-      /* Virtual list natural flow fixes (Keep global as these are structural fixes) */
-      ytlr-structured-description-content-renderer yt-virtual-list {
-        height: auto !important;
-        overflow: visible !important;
-        display: block !important;
-      }
-      ytlr-structured-description-content-renderer .NUDen {
-        position: relative !important;
-        height: auto !important;
-        width: 100% !important;
-      }
+
       ytlr-structured-description-content-renderer .TXB27d,
-      ytlr-structured-description-content-renderer .ytVirtualListItem {
+      ytlr-structured-description-content-renderer .ytVirtualListItem,
+      yt-rich-text-list-view-model .TXB27d,
+      yt-rich-text-list-view-model .ytVirtualListItem {
         position: relative !important;
-        transform: none !important;
         height: auto !important;
         margin-bottom: 1rem !important;
-        width: 100% !important;
-        pointer-events: auto !important;
       }
       
-      /* Description body fixes */
-      ytlr-structured-description-content-renderer ytlr-expandable-video-description-body-renderer {
-        height: auto !important;
-        display: block !important;
-      }
-      ytlr-structured-description-content-renderer ytlr-expandable-video-description-body-renderer ytlr-sidesheet-item {
-        height: auto !important;
-        display: block !important;
-      }
-      
-      /* RYD dislike element styling */
       #ryd-dislike-factoid {
         flex: 0 0 auto !important;
       }
     `;
     
     document.head.appendChild(styleElement);
-    this.log('info', 'Persistent styles injected');
   }
 
   cleanupBodyObserver() {
@@ -421,29 +593,30 @@ class ReturnYouTubeDislike {
     this.log('info', 'Destroying...');
     this.active = false;
     
-    // Abort any in-flight requests (if AbortController is available)
     if (HAS_ABORT_CONTROLLER && this.abortController) {
         this.abortController.abort();
         this.abortController = null;
     }
     
-    // Clear all timers
     this.clearAllTimers();
-    
-    // Disconnect all observers
     this.cleanupObservers();
     
-    // Remove injected elements
+    if (this.navigationActive) {
+        window.removeEventListener('keydown', this.handleNavigation, { capture: true });
+        // REMOVE GLOBAL LISTENERS
+        document.removeEventListener('focusin', this.handleGlobalFocusIn, { capture: true });
+        document.removeEventListener('focusout', this.handleGlobalFocusOut, { capture: true });
+        this.navigationActive = false;
+    }
+
     const el = document.getElementById('ryd-dislike-factoid');
     if (el) el.remove();
     
-    // Only remove styles if this is the last/only instance
     if (window.returnYouTubeDislike === this) {
         const styles = document.getElementById('ryd-persistent-styles');
         if (styles) styles.remove();
     }
     
-    // Clear references for garbage collection
     this.panelElement = null;
   }
 }
@@ -475,7 +648,6 @@ if (typeof window !== 'undefined') {
         return;
     }
 
-    // Only create new instance if video changed
     if (!window.returnYouTubeDislike || window.returnYouTubeDislike.videoID !== videoID) {
         cleanup();
         
@@ -488,31 +660,26 @@ if (typeof window !== 'undefined') {
             }
         }
 
-        if (enabled) {
-            window.returnYouTubeDislike = new ReturnYouTubeDislike(videoID);
-            window.returnYouTubeDislike.init();
-        }
+        window.returnYouTubeDislike = new ReturnYouTubeDislike(videoID, enabled);
+        window.returnYouTubeDislike.init();
     }
   };
 
-  // Event listeners
   window.addEventListener('hashchange', handleHashChange, { passive: true });
   
-  // Delayed init for SPA load
   if (document.readyState === 'loading') {
       window.addEventListener('DOMContentLoaded', () => setTimeout(handleHashChange, 500));
   } else {
       setTimeout(handleHashChange, 500);
   }
 
-  // Config change listener
   if (typeof configAddChangeListener === 'function') {
       configAddChangeListener('enableReturnYouTubeDislike', (evt) => {
-          evt.detail.newValue ? handleHashChange() : cleanup();
+          cleanup();
+          handleHashChange();
       });
   }
   
-  // Cleanup on unload
   window.addEventListener('beforeunload', cleanup, { passive: true });
 }
 
