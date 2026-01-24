@@ -645,7 +645,14 @@ function handleShortcutAction(action) {
 
       if (isDescActive || isPanelVisible) simulateBack();
       else {
-        if (triggerInternal(target, 'Description')) {}
+        if (triggerInternal(target, 'Description')) {
+            setTimeout(() => {
+                if (window.returnYouTubeDislike) {
+                    console.log('[Shortcut] Manually triggering RYD check for description panel...');
+                    window.returnYouTubeDislike.observeBodyForPanel();
+                }
+            }, 350);
+        }
         else showNotification('Description Unavailable');
       }
     },

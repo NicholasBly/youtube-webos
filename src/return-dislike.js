@@ -472,7 +472,7 @@ class ReturnYouTubeDislike {
 
   // --- Core Logic ---
   checkAndInjectDislike(panelElement) {
-    if (!this.active) return;
+    if (!this.active || !this.enableDislikes) return;
     if (document.getElementById('ryd-dislike-factoid')) return;
 
     try {
