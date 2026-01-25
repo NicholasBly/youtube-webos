@@ -4,9 +4,42 @@ import { configRead, configAddChangeListener } from './config.js';
 const dislikeCache = new Map();
 const CACHE_DURATION = 300000; // 5 minutes
 
-// Feature detection for compatibility
+// Feature detection
 const HAS_ABORT_CONTROLLER = typeof AbortController !== 'undefined';
 const HAS_INTERSECTION_OBSERVER = typeof IntersectionObserver !== 'undefined';
+
+// --- Centralized Selector Configuration ---
+const SELECTORS = {
+    // Main Containers
+    panel: 'ytlr-structured-description-content-renderer',
+    mainContainer: 'zylon-provider-6',
+    
+    // Factoid Containers
+    standardContainer: '.ytLrVideoDescriptionHeaderRendererFactoidContainer',
+    compactContainer: '.rznqCe',
+
+    // Standard Mode Classes
+    stdFactoid: '.ytLrVideoDescriptionHeaderRendererFactoid',
+    stdValue: '.ytLrVideoDescriptionHeaderRendererValue',
+    stdLabel: '.ytLrVideoDescriptionHeaderRendererLabel',
+
+    // Compact Mode Classes
+    cptFactoid: '.nOJlw',
+    cptValue: '.axf6h',
+    cptLabel: '.Ph2lNb',
+
+    // Navigation & Interaction
+    menuItem: '[role="menuitem"]',
+    dynamicList: 'yt-dynamic-virtual-list',
+    
+    // State Classes
+    focusState: 'zylon-focus',
+    legacyHighlight: 'bNqvrc',
+    focusedModifier: '--focused',
+    
+    // Parent Containers (for focus toggling)
+    parentWrappers: 'ytlr-video-owner-renderer, ytlr-expandable-video-description-body-renderer, ytlr-comments-entry-point-renderer, ytlr-chapter-renderer'
+};
 
 class ReturnYouTubeDislike {
   constructor(videoID, enableDislikes = true) {
@@ -22,34 +55,26 @@ class ReturnYouTubeDislike {
     this.panelElement = null;
     
     // Navigation state
-    this.navigationActive = false;
     this.isProgrammaticFocus = false; 
     this.dispatching = false; // Recursion guard
     
     this.handleNavigation = this.handleNavigation.bind(this);
-    this.handleGlobalFocusIn = this.handleGlobalFocusIn.bind(this);
-    this.handleGlobalFocusOut = this.handleGlobalFocusOut.bind(this);
+    this.handleFocusIn = this.handleFocusIn.bind(this);
+    this.handleFocusOut = this.handleFocusOut.bind(this);
 
-    this.selectors = {
-        panel: 'ytlr-structured-description-content-renderer',
-        mainContainer: 'zylon-provider-6',
-        standardContainer: '.ytLrVideoDescriptionHeaderRendererFactoidContainer',
-        compactContainer: '.rznqCe'
-    };
-
-    // UI mode configurations
+    // UI mode configurations using cached selectors
     this.modeConfigs = {
         standard: {
-            containerSelector: this.selectors.standardContainer,
-            factoidClass: '.ytLrVideoDescriptionHeaderRendererFactoid',
-            valueSelector: '.ytLrVideoDescriptionHeaderRendererValue',
-            labelSelector: '.ytLrVideoDescriptionHeaderRendererLabel'
+            containerSelector: SELECTORS.standardContainer,
+            factoidClass: SELECTORS.stdFactoid,
+            valueSelector: SELECTORS.stdValue,
+            labelSelector: SELECTORS.stdLabel
         },
         compact: {
-            containerSelector: this.selectors.compactContainer,
-            factoidClass: '.nOJlw',
-            valueSelector: '.axf6h',
-            labelSelector: '.Ph2lNb'
+            containerSelector: SELECTORS.compactContainer,
+            factoidClass: SELECTORS.cptFactoid,
+            valueSelector: SELECTORS.cptValue,
+            labelSelector: SELECTORS.cptLabel
         }
     };
 
@@ -179,7 +204,7 @@ class ReturnYouTubeDislike {
   observeBodyForPanel() {
     this.cleanupBodyObserver();
     
-    const mainContainer = document.querySelector(this.selectors.mainContainer) || document.body;
+    const mainContainer = document.querySelector(SELECTORS.mainContainer) || document.body;
 	
 	console.log('[RYD] Observing player root:', mainContainer);
     
@@ -187,7 +212,7 @@ class ReturnYouTubeDislike {
     this.bodyObserver.observe(mainContainer, { childList: true, subtree: true, attributes: true });
     this.observers.add(this.bodyObserver);
 
-    const existingPanel = document.querySelector(this.selectors.panel);
+    const existingPanel = document.querySelector(SELECTORS.panel);
     if (existingPanel) {
       this.setupPanel(existingPanel);
     }
@@ -195,7 +220,7 @@ class ReturnYouTubeDislike {
 
   handleBodyMutation(mutations) {
     if (!this.active) return;
-    const panel = document.querySelector(this.selectors.panel);
+    const panel = document.querySelector(SELECTORS.panel);
     if (!panel) return;
     
     this.setupPanel(panel);
@@ -203,6 +228,12 @@ class ReturnYouTubeDislike {
 
   setupPanel(panel) {
       if (!this.active) return;
+      
+      // If we are switching panels, ensure listeners are moved
+      if (this.panelElement && this.panelElement !== panel) {
+          this.unbindPanelEvents(this.panelElement);
+      }
+      
 	  if (this.panelElement === panel) {
           this.checkAndInjectDislike(panel);
           return;
@@ -210,7 +241,9 @@ class ReturnYouTubeDislike {
 	  
       this.panelElement = panel;
       this.attachContentObserver(panel);
-      this.setupNavigation(); // Ensures global listeners are active
+      
+      // Bind scoped events directly to the new panel
+      this.bindPanelEvents(panel);
       
       if (HAS_INTERSECTION_OBSERVER) {
           this.setupIntersectionObserver(panel);
@@ -270,34 +303,38 @@ class ReturnYouTubeDislike {
       }, 200, 'injectDebounce');
   }
 
-  // --- Navigation Logic ---
-  setupNavigation() {
-      if (!this.navigationActive) {
-          window.addEventListener('keydown', this.handleNavigation, { capture: true });
-          document.addEventListener('focusin', this.handleGlobalFocusIn, { capture: true });
-          document.addEventListener('focusout', this.handleGlobalFocusOut, { capture: true });
-          
-          this.navigationActive = true;
-          this.log('info', 'Global navigation listeners attached');
-      }
+  // --- Navigation Logic (Event Delegation) ---
+  
+  bindPanelEvents(panel) {
+      // Attach listeners directly to the panel container.
+      // Events bubble up from children, so we catch them here (Delegation).
+      panel.addEventListener('keydown', this.handleNavigation);
+      panel.addEventListener('focusin', this.handleFocusIn);
+      panel.addEventListener('focusout', this.handleFocusOut);
+      this.log('info', 'Scoped navigation listeners attached to panel');
   }
 
-  handleGlobalFocusIn(e) {
+  unbindPanelEvents(panel) {
+      if (!panel) return;
+      panel.removeEventListener('keydown', this.handleNavigation);
+      panel.removeEventListener('focusin', this.handleFocusIn);
+      panel.removeEventListener('focusout', this.handleFocusOut);
+  }
+
+  handleFocusIn(e) {
       if (!this.active || !this.panelElement || this.isProgrammaticFocus) return;
       
-      // Check if the focused element is inside our panel
-      if (this.panelElement.contains(e.target)) {
-          const targetItem = e.target.closest('[role="menuitem"]');
+      // Since this listener is on the panel, e.target is guaranteed to be inside 
+      // (or the panel itself) due to bubbling.
+      const targetItem = e.target.closest(SELECTORS.menuItem);
           
-          // Filter out container menuitems to avoid selecting the whole list
-          if (targetItem && !targetItem.querySelector('[role="menuitem"]')) {
-              // this.log('info', 'Native focus detected in panel, syncing state');
-              this.updateVisualState(targetItem);
-          }
+      // Filter out container menuitems to avoid selecting the whole list
+      if (targetItem && !targetItem.querySelector(SELECTORS.menuItem)) {
+          this.updateVisualState(targetItem);
       }
   }
   
-  handleGlobalFocusOut(e) {
+  handleFocusOut(e) {
       // Small delay to check where focus went
       setTimeout(() => {
          // If we don't have a panel, or focus left the panel entirely...
@@ -315,8 +352,8 @@ class ReturnYouTubeDislike {
 
   getMenuItems() {
       if (!this.panelElement) return [];
-	  const rawItems = [].slice.call(this.panelElement.querySelectorAll('[role="menuitem"]'));
-      return rawItems.filter(item => !item.querySelector('[role="menuitem"]'));
+	  const rawItems = [].slice.call(this.panelElement.querySelectorAll(SELECTORS.menuItem));
+      return rawItems.filter(item => !item.querySelector(SELECTORS.menuItem));
   }
 
   updateVisualState(targetItem) {
@@ -325,22 +362,22 @@ class ReturnYouTubeDislike {
       
       items.forEach(item => {
           if (item === targetItem) {
-              item.classList.add('bNqvrc', 'zylon-focus');
+              item.classList.add(SELECTORS.legacyHighlight, SELECTORS.focusState);
               this.toggleParentFocus(item, true);
               foundTarget = true;
           } else {
-              item.classList.remove('bNqvrc', 'zylon-focus');
+              item.classList.remove(SELECTORS.legacyHighlight, SELECTORS.focusState);
               this.toggleParentFocus(item, false);
           }
       });
 
       // Handle the dynamic list container focus
-      const dynList = this.panelElement.querySelector('yt-dynamic-virtual-list');
+      const dynList = this.panelElement.querySelector(SELECTORS.dynamicList);
       if (dynList) {
           if (foundTarget) {
-              dynList.classList.add('zylon-focus');
+              dynList.classList.add(SELECTORS.focusState);
           } else {
-              dynList.classList.remove('zylon-focus');
+              dynList.classList.remove(SELECTORS.focusState);
           }
       }
   }
@@ -349,31 +386,31 @@ class ReturnYouTubeDislike {
       if (!this.panelElement) return;
       
       // Query specifically for elements that might have our classes
-      const dirtyItems = this.panelElement.querySelectorAll('.zylon-focus, .bNqvrc');
+      const dirtyItems = this.panelElement.querySelectorAll(`.${SELECTORS.focusState}, .${SELECTORS.legacyHighlight}`);
       dirtyItems.forEach(el => {
-          el.classList.remove('zylon-focus', 'bNqvrc');
+          el.classList.remove(SELECTORS.focusState, SELECTORS.legacyHighlight);
           this.toggleParentFocus(el, false);
       });
       
       // Cleanup parents specifically
-      const parents = this.panelElement.querySelectorAll('[class*="--focused"]');
+      const parents = this.panelElement.querySelectorAll(`[class*="${SELECTORS.focusedModifier}"]`);
       parents.forEach(p => {
            // Remove any class ending in --focused
            p.classList.forEach(cls => {
-               if (cls.endsWith('--focused')) p.classList.remove(cls);
+               if (cls.endsWith(SELECTORS.focusedModifier)) p.classList.remove(cls);
            });
       });
   }
 
   toggleParentFocus(element, shouldFocus) {
-      const parentContainer = element.closest('ytlr-video-owner-renderer, ytlr-expandable-video-description-body-renderer, ytlr-comments-entry-point-renderer, ytlr-chapter-renderer');
+      const parentContainer = element.closest(SELECTORS.parentWrappers);
       
       if (parentContainer) {
           const baseClass = parentContainer.classList[0]; 
           if (shouldFocus) {
-              parentContainer.classList.add(`${baseClass}--focused`, 'zylon-focus', 'zylon-ve');
+              parentContainer.classList.add(`${baseClass}${SELECTORS.focusedModifier}`, SELECTORS.focusState, 'zylon-ve');
           } else {
-              parentContainer.classList.remove(`${baseClass}--focused`, 'zylon-focus');
+              parentContainer.classList.remove(`${baseClass}${SELECTORS.focusedModifier}`, SELECTORS.focusState);
           }
       }
   }
@@ -383,6 +420,8 @@ class ReturnYouTubeDislike {
       if (e.isTrusted === false) return;
 
       if (!this.active || !this.panelElement) return;
+      
+      // Redundant check if listener is scoped, but safe to keep
       if (!this.panelElement.contains(document.activeElement)) {
         return;
 	  }
@@ -393,12 +432,11 @@ class ReturnYouTubeDislike {
 
       // --- HANDLE ENTER/OK ---
       if (isEnter) {
-          const current = this.panelElement.querySelector('.zylon-focus[role="menuitem"]');
+          const current = this.panelElement.querySelector(`.${SELECTORS.focusState}${SELECTORS.menuItem}`);
           if (current) {
               e.preventDefault();
               e.stopPropagation();
               
-              // this.log('info', 'Intercepted Enter, dispatching synthetic keys to:', current);
               this.dispatching = true;
               try {
                   this.triggerEnter(current);
@@ -411,8 +449,8 @@ class ReturnYouTubeDislike {
 
       if (!isUp && !isDown) return;
 
-      const dynList = this.panelElement.querySelector('yt-dynamic-virtual-list');
-      if (dynList && !dynList.classList.contains('zylon-focus')) {
+      const dynList = this.panelElement.querySelector(SELECTORS.dynamicList);
+      if (dynList && !dynList.classList.contains(SELECTORS.focusState)) {
           return;
       }
 
@@ -423,7 +461,7 @@ class ReturnYouTubeDislike {
       e.preventDefault();
       e.stopPropagation();
 
-      let currentIndex = items.findIndex(el => el.classList.contains('zylon-focus'));
+      let currentIndex = items.findIndex(el => el.classList.contains(SELECTORS.focusState));
       if (currentIndex === -1) {
           currentIndex = items.findIndex(el => el === document.activeElement);
       }
@@ -494,6 +532,7 @@ triggerEnter(element) {
 
       const container = standardContainer || compactContainer;
 
+      // Construct selector dynamically from cache + specific logic
       const likesElement = container.querySelector(
           `div[idomkey="factoid-0"]${mode.factoidClass}, ` +
           `div[aria-label*="like"]${mode.factoidClass}, ` +
@@ -540,8 +579,8 @@ triggerEnter(element) {
     const styleElement = document.createElement('style');
     styleElement.id = 'ryd-persistent-styles';
     styleElement.textContent = `
-      ytlr-structured-description-content-renderer .ytLrVideoDescriptionHeaderRendererFactoidContainer.ryd-ready,
-      ytlr-structured-description-content-renderer .rznqCe.ryd-ready {
+      ${SELECTORS.panel} ${SELECTORS.standardContainer}.ryd-ready,
+      ${SELECTORS.panel} ${SELECTORS.compactContainer}.ryd-ready {
         display: flex !important;
         flex-wrap: wrap !important;
         justify-content: center !important;
@@ -550,21 +589,21 @@ triggerEnter(element) {
         overflow: visible !important;
       }
       
-      ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] {
+      ${SELECTORS.panel} .ryd-ready div[idomkey="factoid-2"] {
         margin-top: 0 !important;
       }
-      ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .ytLrVideoDescriptionHeaderRendererValue,
-      ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .axf6h {
+      ${SELECTORS.panel} .ryd-ready div[idomkey="factoid-2"] ${SELECTORS.stdValue},
+      ${SELECTORS.panel} .ryd-ready div[idomkey="factoid-2"] ${SELECTORS.cptValue} {
         display: inline-block !important;
         margin-right: 0.2rem !important;
       }
-      ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .ytLrVideoDescriptionHeaderRendererLabel,
-      ytlr-structured-description-content-renderer .ryd-ready div[idomkey="factoid-2"] .Ph2lNb {
+      ${SELECTORS.panel} .ryd-ready div[idomkey="factoid-2"] ${SELECTORS.stdLabel},
+      ${SELECTORS.panel} .ryd-ready div[idomkey="factoid-2"] ${SELECTORS.cptLabel} {
         display: inline-block !important;
       }
 
-      ytlr-structured-description-content-renderer .TXB27d,
-      ytlr-structured-description-content-renderer .ytVirtualListItem,
+      ${SELECTORS.panel} .TXB27d,
+      ${SELECTORS.panel} .ytVirtualListItem,
       yt-rich-text-list-view-model .TXB27d,
       yt-rich-text-list-view-model .ytVirtualListItem {
         position: relative !important;
@@ -609,12 +648,9 @@ triggerEnter(element) {
     this.clearAllTimers();
     this.cleanupObservers();
     
-    if (this.navigationActive) {
-        window.removeEventListener('keydown', this.handleNavigation, { capture: true });
-        // REMOVE GLOBAL LISTENERS
-        document.removeEventListener('focusin', this.handleGlobalFocusIn, { capture: true });
-        document.removeEventListener('focusout', this.handleGlobalFocusOut, { capture: true });
-        this.navigationActive = false;
+    // Clean up scoped listeners if panel still exists
+    if (this.panelElement) {
+        this.unbindPanelEvents(this.panelElement);
     }
 
     const el = document.getElementById('ryd-dislike-factoid');
