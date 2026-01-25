@@ -308,6 +308,16 @@ class SponsorBlockHandler {
         video.currentTime = chain.endTime;
         this.lastSkipTime = chain.endTime;
         this.hasPerformedChainSkip = true;
+		
+		if (this.configCache.skipSegmentsOnce) {
+            enabledSegs.forEach(seg => {
+                // If a segment ends before or at the chain skip target, it was part of the chain
+                if (seg.segment[1] <= chain.endTime + 0.1) {
+                    const idx = this.segments.indexOf(seg);
+                    if (idx !== -1) this.skippedSegmentIndices.add(idx);
+                }
+            });
+        }
 
         this.requestAF(() => {
             const categories = chain.chainDescription.split(' → ')

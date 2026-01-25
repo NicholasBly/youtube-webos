@@ -38,6 +38,7 @@ if (!Element.prototype.closest) {
 }
 
 const isWatchPage = () => document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
+const isShortsPage = () => document.body.classList.contains('WEB_PAGE_TYPE_SHORTS');
 const simulateBack = () => { console.log('[Shortcut] Simulating Back/Escape...'); sendKey(REMOTE_KEYS.BACK); };
 
 window.__spatialNavigation__.keyMode = 'NONE';
@@ -611,7 +612,13 @@ function handleShortcutAction(action) {
       }
     },
     toggle_comments: () => {
+      // 1. Try finding Comments Button
       let target = document.querySelector('yt-button-container[aria-label="Comments"]');
+      
+      if (!target && isShortsPage()) {
+          target = document.querySelector('ytlr-button-renderer[idomkey="1"] yt-button-container');
+      }
+
 	  if (!target) {
 		target = document.querySelector('yt-icon.qHxFAf.ieYpu.nGYLgf') || 
 				 document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb') ||
@@ -619,16 +626,36 @@ function handleShortcutAction(action) {
 				 document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || 
 				 document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
 	  }
-	  let commBtn = target ? target.closest('yt-button-container') : null;   
-      const isCommentsActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
+	  let commBtn = target ? target.closest('yt-button-container') : null;
+      let isLiveChat = false;
+
+      // 2. Fallback: Live Chat (Only if comments not found)
+      if (!commBtn) {
+          const chatTarget = document.querySelector('ytlr-live-chat-toggle-button yt-button-container') ||
+                             document.querySelector('yt-button-container[aria-label="Live chat"]');
+          if (chatTarget) {
+              commBtn = chatTarget;
+              isLiveChat = true;
+          }
+      }
+
+      // 3. Execution Logic
+      const isBtnActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
       const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
       const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
       
-      if (isCommentsActive || isPanelVisible) simulateBack();
+      if ((isBtnActive || isPanelVisible) && !isLiveChat) simulateBack();
       else {
-        if (triggerInternal(commBtn, 'Comments')) {}
+        if (triggerInternal(commBtn, isLiveChat ? 'Live Chat' : 'Comments')) {
+            if (isLiveChat) {
+                setTimeout(() => {
+                    const pressed = commBtn.getAttribute('aria-pressed') === 'true';
+                    showNotification(pressed ? 'Live Chat: ON' : 'Live Chat: OFF');
+                }, 250);
+            }
+        }
         else {
-			showNotification('Comments Unavailable');
+			showNotification(isLiveChat ? 'Live Chat Unavailable' : 'Comments Unavailable');
         }
       }
     },
@@ -754,7 +781,7 @@ const eventHandler = (evt) => {
     lastShortcutKey = keyIndex;
     
     if (optionsPanelVisible) { evt.preventDefault(); evt.stopPropagation(); return false; }
-    if (!isWatchPage()) return true;
+    if (!isWatchPage() && !isShortsPage()) return true;
     
     const action = configRead(`shortcut_key_${keyIndex}`);
     

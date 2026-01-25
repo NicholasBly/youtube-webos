@@ -293,14 +293,62 @@ class ReturnYouTubeDislike {
     this.intersectionObserver.observe(panelElement);
     this.observers.add(this.intersectionObserver);
   }
+  
+  refreshMenuCache() {
+      if (!this.panelElement) return;
+      
+      // Get all potential items
+      const rawItems = Array.from(this.panelElement.querySelectorAll(SELECTORS.menuItem));
+      
+      // Filter out container items (nested menu logic)
+      // Doing this once during idle time is much better than on every keypress
+      this.menuItemsCache = rawItems.filter(item => !item.querySelector(SELECTORS.menuItem));
+      
+      // Reset index if cache invalidated
+      this.focusedIndex = this.menuItemsCache.findIndex(el => el.classList.contains(SELECTORS.focusState));
+  }
 
-  handlePanelMutation() {
+handlePanelMutation() {
       if (!this.active) return;
+
+      // Update the cache whenever the DOM changes
+      this.refreshMenuCache();
       
       this.setTimeout(() => {
           if (!this.active || !this.panelElement) return;
           this.checkAndInjectDislike(this.panelElement);
       }, 200, 'injectDebounce');
+  }
+  
+  setFocusByIndex(newIndex) {
+      const items = this.menuItemsCache;
+      if (!items[newIndex]) return;
+
+      const oldItem = items[this.focusedIndex];
+      const newItem = items[newIndex];
+
+      // Unfocus Old (if exists)
+      if (oldItem) {
+          oldItem.classList.remove(SELECTORS.legacyHighlight, SELECTORS.focusState);
+          this.toggleParentFocus(oldItem, false);
+      }
+
+      // Focus New
+      newItem.classList.add(SELECTORS.legacyHighlight, SELECTORS.focusState);
+      this.toggleParentFocus(newItem, true);
+
+      // Handle Dynamic List Container
+      const dynList = this.panelElement.querySelector(SELECTORS.dynamicList);
+      if (dynList) {
+           dynList.classList.add(SELECTORS.focusState);
+      }
+
+      // 3. REMOVE SMOOTH SCROLL: Use 'auto' for instant, low-cost movement
+      // 'block: nearest' is also cheaper than 'center' if you don't strictly need centering
+      newItem.scrollIntoView({ behavior: 'auto', block: 'center' });
+      
+      // Update state
+      this.focusedIndex = newIndex;
   }
 
   // --- Navigation Logic (Event Delegation) ---
@@ -418,25 +466,26 @@ class ReturnYouTubeDislike {
   handleNavigation(e) {
       if (this.dispatching) return;
       if (e.isTrusted === false) return;
-
       if (!this.active || !this.panelElement) return;
-      
-      // Redundant check if listener is scoped, but safe to keep
-      if (!this.panelElement.contains(document.activeElement)) {
-        return;
-	  }
 
       const isUp = e.key === 'ArrowUp' || e.keyCode === 38;
       const isDown = e.key === 'ArrowDown' || e.keyCode === 40;
       const isEnter = e.key === 'Enter' || e.keyCode === 13;
 
-      // --- HANDLE ENTER/OK ---
+      if (!isUp && !isDown && !isEnter) return;
+
+      // Fail-safe: ensure cache is populated if empty
+      if (this.menuItemsCache.length === 0) {
+          this.refreshMenuCache();
+          if (this.menuItemsCache.length === 0) return;
+      }
+
+      // --- HANDLE ENTER ---
       if (isEnter) {
-          const current = this.panelElement.querySelector(`.${SELECTORS.focusState}${SELECTORS.menuItem}`);
+          const current = this.menuItemsCache[this.focusedIndex];
           if (current) {
               e.preventDefault();
               e.stopPropagation();
-              
               this.dispatching = true;
               try {
                   this.triggerEnter(current);
@@ -447,44 +496,34 @@ class ReturnYouTubeDislike {
           return;
       }
 
-      if (!isUp && !isDown) return;
-
-      const dynList = this.panelElement.querySelector(SELECTORS.dynamicList);
-      if (dynList && !dynList.classList.contains(SELECTORS.focusState)) {
-          return;
-      }
-
       // --- HANDLE ARROWS ---
-      const items = this.getMenuItems();
-      if (items.length === 0) return;
-
       e.preventDefault();
       e.stopPropagation();
 
-      let currentIndex = items.findIndex(el => el.classList.contains(SELECTORS.focusState));
-      if (currentIndex === -1) {
-          currentIndex = items.findIndex(el => el === document.activeElement);
+      // Recalculate index if it desynced (e.g. mouse interaction)
+      if (this.focusedIndex === -1 || !this.menuItemsCache[this.focusedIndex]?.classList.contains(SELECTORS.focusState)) {
+           this.focusedIndex = this.menuItemsCache.findIndex(el => el.classList.contains(SELECTORS.focusState));
+           if (this.focusedIndex === -1 && document.activeElement) {
+                this.focusedIndex = this.menuItemsCache.indexOf(document.activeElement);
+           }
+           if (this.focusedIndex === -1) this.focusedIndex = 0;
       }
 
-      let nextIndex = 0;
-      if (currentIndex !== -1) {
-          if (isDown) {
-              nextIndex = (currentIndex + 1) % items.length;
-          } else {
-              nextIndex = (currentIndex - 1 + items.length) % items.length;
-          }
+      let nextIndex = this.focusedIndex;
+      if (isDown) {
+          nextIndex = (this.focusedIndex + 1) % this.menuItemsCache.length;
+      } else {
+          nextIndex = (this.focusedIndex - 1 + this.menuItemsCache.length) % this.menuItemsCache.length;
       }
 
-      const nextItem = items[nextIndex];
-      if (nextItem) {
-          this.updateVisualState(nextItem);
-          
-          this.isProgrammaticFocus = true;
-          nextItem.focus();
-          this.isProgrammaticFocus = false;
+      // Programmatic Focus Flag (keep your existing logic)
+      const nextItem = this.menuItemsCache[nextIndex];
+      this.isProgrammaticFocus = true;
+      nextItem.focus({ preventScroll: true }); // optimize native focus
+      this.isProgrammaticFocus = false;
 
-          nextItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      // Perform the optimized visual update
+      this.setFocusByIndex(nextIndex);
   }
 
 triggerEnter(element) {
