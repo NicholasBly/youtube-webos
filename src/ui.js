@@ -37,8 +37,8 @@ if (!Element.prototype.closest) {
   };
 }
 
-const isWatchPage = () => document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
-const isShortsPage = () => document.body.classList.contains('WEB_PAGE_TYPE_SHORTS');
+const isWatchPage = () => document.body.classList.contains('WEB_PAGE_TYPE_WATCH') || document.body.classList.contains('WEB_PAGE_TYPE_SHORTS');
+//const isShortsPage = () => document.body.classList.contains('WEB_PAGE_TYPE_SHORTS');
 const simulateBack = () => { console.log('[Shortcut] Simulating Back/Escape...'); sendKey(REMOTE_KEYS.BACK); };
 
 window.__spatialNavigation__.keyMode = 'NONE';
@@ -598,7 +598,7 @@ function handleShortcutAction(action) {
       }
       // Fallback to UI clicking
       if (!toggledViaApi) {
-        const capsBtn = document.querySelector('ytlr-captions-button yt-button-container') || document.querySelector('ytlr-captions-button ytlr-button') || document.querySelector('ytlr-toggle-button-renderer ytlr-button');
+        const capsBtn = document.querySelector('ytlr-captions-button yt-button-container') || document.querySelector('ytlr-captions-button ytlr-button');
         if (capsBtn) {
           if (triggerInternal(capsBtn, 'Captions')) {
             setTimeout(() => {
@@ -608,16 +608,12 @@ function handleShortcutAction(action) {
             return;
           }
         }
-        showNotification('No subtitles found');
+        showNotification('Subtitles unavailable');
       }
     },
     toggle_comments: () => {
       // 1. Try finding Comments Button
       let target = document.querySelector('yt-button-container[aria-label="Comments"]');
-      
-      if (!target && isShortsPage()) {
-          target = document.querySelector('ytlr-button-renderer[idomkey="1"] yt-button-container');
-      }
 
 	  if (!target) {
 		target = document.querySelector('yt-icon.qHxFAf.ieYpu.nGYLgf') || 
@@ -626,6 +622,9 @@ function handleShortcutAction(action) {
 				 document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || 
 				 document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
 	  }
+	  if (!target) {
+          target = document.querySelector('ytlr-button-renderer[idomkey="1"] yt-button-container'); // Shorts
+      }
 	  let commBtn = target ? target.closest('yt-button-container') : null;
       let isLiveChat = false;
 
@@ -781,7 +780,7 @@ const eventHandler = (evt) => {
     lastShortcutKey = keyIndex;
     
     if (optionsPanelVisible) { evt.preventDefault(); evt.stopPropagation(); return false; }
-    if (!isWatchPage() && !isShortsPage()) return true;
+    if (!isWatchPage()) return true;
     
     const action = configRead(`shortcut_key_${keyIndex}`);
     

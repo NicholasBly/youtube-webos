@@ -223,6 +223,9 @@ class ReturnYouTubeDislike {
 
   handleBodyMutation(mutations) {
     if (!this.active) return;
+	if (this.panelElement && this.panelElement.isConnected) {
+        return;
+    }
     const panel = document.querySelector(SELECTORS.panel);
     if (!panel) return;
     
@@ -314,8 +317,8 @@ class ReturnYouTubeDislike {
 handlePanelMutation() {
       if (!this.active) return;
 
-      // Update the cache whenever the DOM changes
-      this.refreshMenuCache();
+      this.menuItemsCache = []; 
+      this.focusedIndex = -1;
       
       this.setTimeout(() => {
           if (!this.active || !this.panelElement) return;
@@ -482,6 +485,9 @@ handlePanelMutation() {
           this.refreshMenuCache();
           if (this.menuItemsCache.length === 0) return;
       }
+	  if (!this.menuItemsCache.includes(document.activeElement)) {
+          return;
+      }
 
       // --- HANDLE ENTER ---
       if (isEnter) {
@@ -558,18 +564,17 @@ triggerEnter(element) {
     };
 
     dispatchKey('keydown');
-    dispatchKey('keypress');
+	dispatchKey('keyup');
+    //dispatchKey('keypress');
     
-    try {
-        element.click();
-    } catch (err) {
-        // Fallback for elements that might not support .click() directly
-        const clickEvt = document.createEvent('MouseEvents');
-        clickEvt.initMouseEvent('click', true, true, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
-        element.dispatchEvent(clickEvt);
-    }
-
-    dispatchKey('keyup');
+    // try {
+        // element.click();
+    // } catch (err) {
+        // // Fallback for elements that might not support .click() directly
+        // const clickEvt = document.createEvent('MouseEvents');
+        // clickEvt.initMouseEvent('click', true, true, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+        // element.dispatchEvent(clickEvt);
+    // }
 }
 
   // --- Core Logic ---
