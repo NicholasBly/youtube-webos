@@ -53,6 +53,9 @@ class ReturnYouTubeDislike {
     this.observers = new Set();
     this.abortController = null;
     this.panelElement = null;
+	
+	this.menuItemsCache = [];
+	this.focusedIndex = -1;
     
     // Navigation state
     this.isProgrammaticFocus = false; 
@@ -298,7 +301,7 @@ class ReturnYouTubeDislike {
       if (!this.panelElement) return;
       
       // Get all potential items
-      const rawItems = Array.from(this.panelElement.querySelectorAll(SELECTORS.menuItem));
+      var rawItems = [].slice.call(this.panelElement.querySelectorAll(SELECTORS.menuItem));
       
       // Filter out container items (nested menu logic)
       // Doing this once during idle time is much better than on every keypress
@@ -486,12 +489,26 @@ handlePanelMutation() {
           if (current) {
               e.preventDefault();
               e.stopPropagation();
+
               this.dispatching = true;
               try {
+                  // Trigger the click immediately so navigation feels instant
                   this.triggerEnter(current);
               } finally {
                   this.dispatching = false;
               }
+              setTimeout(() => {
+                  current.classList.remove(SELECTORS.legacyHighlight, SELECTORS.focusState);
+                  this.toggleParentFocus(current, false);
+
+                  // Also clean up the container focus state
+                  if (this.panelElement) {
+                      const dynList = this.panelElement.querySelector(SELECTORS.dynamicList);
+                      if (dynList) {
+                          dynList.classList.remove(SELECTORS.focusState);
+                      }
+                  }
+              }, 100);
           }
           return;
       }
