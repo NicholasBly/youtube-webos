@@ -37,8 +37,8 @@ if (!Element.prototype.closest) {
   };
 }
 
-const isWatchPage = () => document.body.classList.contains('WEB_PAGE_TYPE_WATCH') || document.body.classList.contains('WEB_PAGE_TYPE_SHORTS');
-//const isShortsPage = () => document.body.classList.contains('WEB_PAGE_TYPE_SHORTS');
+const isWatchPage = () => document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
+const isShortsPage = () => document.body.classList.contains('WEB_PAGE_TYPE_SHORTS');
 const simulateBack = () => { console.log('[Shortcut] Simulating Back/Escape...'); sendKey(REMOTE_KEYS.BACK); };
 
 window.__spatialNavigation__.keyMode = 'NONE';
@@ -258,7 +258,7 @@ function createOptionsPanel() {
     
     const pages = [
       { page: pageMain, selector: 'input', popup: false },
-      { page: pageSponsor, selector: '.shortcut-control-row', popup: isWatchPage() },
+      { page: pageSponsor, selector: '.shortcut-control-row', popup: (isWatchPage()) },
       { page: pageShortcuts, selector: '.shortcut-control-row', popup: false },
       { page: pageUITweaks, selector: '.shortcut-control-row', popup: false }
     ];
@@ -368,7 +368,7 @@ function createOptionsPanel() {
 	createConfigCheckbox('skipSegmentsOnce')
   );
   pageSponsor.appendChild(elmBlock);
-  pageSponsor.appendChild(createElement('div', { html: '<small>Sponsor segments skipping - https://sponsor.ajay.app</small>' }));
+  pageSponsor.appendChild(createElement('div', { html: '<small>Sponsor segments skipping - https://sponsor.ajay.app<br>Use blue button on remote to skip to highlight or skip segments manually</small>' }));
   pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'Shortcuts <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(2) }}));
   elmContainer.appendChild(pageSponsor);
 
@@ -404,7 +404,7 @@ function showOptionsPanel(visible) {
   if (visible && !optionsPanelVisible) {
     console.info('Showing and focusing options panel!');
     optionsPanel.style.display = 'block';
-    if (optionsPanel.activePage === 1 && isWatchPage()) sponsorBlockUI.togglePopup(true);
+    if (optionsPanel.activePage === 1 && (isWatchPage())) sponsorBlockUI.togglePopup(true);
     else sponsorBlockUI.togglePopup(false);
     
     // Find best initial focus
@@ -445,6 +445,7 @@ window.ytaf_showOptionsPanel = showOptionsPanel;
 // --- Video Control Logic ---
 
 async function skipChapter(direction = 'next') {
+  if(isShortsPage()) return;
   const video = document.querySelector('video');
   if (!video || !video.duration) return;
 
@@ -730,7 +731,7 @@ const eventHandler = (evt) => {
   } 
   // 2. Handle Manual Skip / Highlight Jump (Blue)
   else if (keyColor === 'blue' && evt.type === 'keydown') {
-    if (!isWatchPage()) return true;
+    if (!isWatchPage() && !isShortsPage()) return true;
     
     evt.preventDefault();
     evt.stopPropagation();
@@ -780,7 +781,7 @@ const eventHandler = (evt) => {
     lastShortcutKey = keyIndex;
     
     if (optionsPanelVisible) { evt.preventDefault(); evt.stopPropagation(); return false; }
-    if (!isWatchPage()) return true;
+    if (!isWatchPage() && !isShortsPage()) return true;
     
     const action = configRead(`shortcut_key_${keyIndex}`);
     
