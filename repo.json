@@ -13,16 +13,16 @@
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4",
-        "version": "0.6.9",
+        "version": "0.7.0",
         "type": "web",
         "title": "YouTube AdFree",
         "appDescription": "YouTube AdFree",
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.6.9/youtube.leanback.v4_0.6.9_all.ipk",
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.0/youtube.leanback.v4_0.7.0_all.ipk",
         "ipkHash": {
-          "sha256": "a60e6d4e15b5292d9495db713c1fa8a471875127bd778f30225d229ea5b1fd25"
+          "sha256": "44e2cd5fc243368f2f04b8c225adb4a33deb00ba5b88fbfd348e39a7ddedd29b"
         }
       }
     },
@@ -33,16 +33,16 @@
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4.webos22",
-        "version": "0.6.9",
+        "version": "0.7.0",
         "type": "web",
         "title": "YouTube AdFree (webOS 22+)",
         "appDescription": "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware.",
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.6.9/youtube.leanback.v4_0.6.9_all_webOS22%2B.ipk",
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.0/youtube.leanback.v4_0.7.0_all_webOS22%2B.ipk",
         "ipkHash": {
-          "sha256": "da43723cd03e84fdfb3332529c5c6bfbfd074606b772c5ac7e3799eeb45d7cc2"
+          "sha256": "cbb46343d92b32c4a598b331fee6f69de739926775a9f9c72080b9ad0542a1b8"
         }
       }
     }
