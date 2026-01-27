@@ -55,7 +55,10 @@ const SCHEMA_REGISTRY = {
       matchFn: (data) => Array.isArray(data.entries) 
     },
     PLAYER: { 
-      textPattern: '"streamingData"' 
+      textPattern: '"streamingData"'
+    },
+	NEXT: {
+      textPattern: '"singleColumnWatchNextResults"'
     },
     GUEST: {
       textPattern: '"currentVideoThumbnail"' 
@@ -83,6 +86,12 @@ const SCHEMA_REGISTRY = {
   },
   
   paths: {
+	PLAYER: {
+        overlayPath: 'playerOverlays.playerOverlayRenderer'
+    },
+	NEXT: {
+      overlayPath: 'playerOverlays.playerOverlayRenderer'
+    },
     SHORTS_SEQUENCE: {
         listPath: 'entries'
     },
@@ -360,8 +369,26 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
       break;
 
     case 'PLAYER':
+    case 'NEXT':
       if (config.enableAdBlock) {
-        removePlayerAdsOptimized(data);
+        if (responseType === 'PLAYER') {
+             removePlayerAdsOptimized(data);
+        }
+        
+        let overlay;
+        if (schema && schema.overlayPath) {
+          overlay = getByPath(data, schema.overlayPath);
+        }
+
+        if (!overlay) {
+           overlay = findFirstObject(data, 'playerOverlayRenderer', 8);
+           if (DEBUG && overlay) debugLog(`${responseType}: Path failed, found overlay via fallback`);
+        }
+        
+        if (overlay && overlay.timelyActionRenderers) {
+          delete overlay.timelyActionRenderers;
+          if (DEBUG) debugLog(`${responseType}: Removed timelyActionRenderers (QR Code)`);
+        }
       }
       break;
 
@@ -373,6 +400,13 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
 function applyFallbackFilters(data, config, needsContentFiltering) {
   if (config.enableAdBlock) {
     removePlayerAdsOptimized(data);
+    
+    // Fallback: Search for playerOverlayRenderer directly
+    const overlayRenderer = findFirstObject(data, 'playerOverlayRenderer', 8);
+    if (overlayRenderer && overlayRenderer.timelyActionRenderers) {
+        delete overlayRenderer.timelyActionRenderers;
+        if (DEBUG) debugLog('FALLBACK: Removed timelyActionRenderers');
+    }
   }
 
   const foundRenderer = findFirstObject(data, 'sectionListRenderer', 10);
