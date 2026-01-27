@@ -166,8 +166,19 @@ class ReturnYouTubeDislike {
 
   handleBodyMutation(mutations) {
     if (!this.active) return;
-    // Fast check: if we already have the panel, don't re-query
-    if (this.panelElement && this.panelElement.isConnected) return;
+	if (this.panelElement) {
+        if (!this.panelElement.isConnected) {
+             // Panel removed: Clear references immediately
+             this.panelElement = null;
+             this.isPanelFocused = false;
+             this.menuItemsCache = []; // FIX: Clear stale cache
+             this.menuItemsMap.clear();
+             this.lastFocusedElement = null;
+             this.focusedIndex = -1;
+        } else {
+             return; // Still connected, no need to re-query
+        }
+    }
     
     const panel = document.querySelector(SELECTORS.panel);
     if (panel) this.setupPanel(panel);
@@ -180,11 +191,18 @@ class ReturnYouTubeDislike {
           this.checkAndInjectDislike(panel);
           return;
       }
+	  
+	  this.menuItemsCache = [];
+      this.menuItemsMap.clear();
+      this.focusedIndex = -1;
+      this.lastFocusedElement = null;
       
       this.panelElement = panel;
 	  if (this.panelElement.contains(document.activeElement)) {
         this.isPanelFocused = true;
-	  }
+	  } else {
+        this.isPanelFocused = false;
+      }
       this.attachContentObserver(panel);
       this.setupNavigation(); // Global listeners
       
