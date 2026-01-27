@@ -362,6 +362,7 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
     case 'PLAYER':
       if (config.enableAdBlock) {
         removePlayerAdsOptimized(data);
+        cleanPlayerOverlay(data, config);
       }
       break;
 
@@ -445,6 +446,12 @@ function hasGuestPromptRenderer(item, hideGuestPrompts) {
   return hideGuestPrompts && (item.feedNudgeRenderer || item.alertWithActionsRenderer);
 }
 
+function isTimelyActionPopup(item) {
+  // Check for the specific wrapper that creates the popup/overlay
+  if (item.timelyActionRenderer) return true;
+  return false;
+}
+
 function processSectionListOptimized(contents, config, needsContentFiltering, contextName = '') {
   if (!Array.isArray(contents) || contents.length === 0) return;
 
@@ -489,6 +496,11 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
     if (keepItem && isReelAd(item, enableAdBlock)) {
       keepItem = false;
     }
+    
+    // Only block if it is the popup (timely action)
+    if (keepItem && enableAdBlock && isTimelyActionPopup(item)) {
+      keepItem = false;
+    }
 
     if (keepItem) {
       if (writeIdx !== i) contents[writeIdx] = item;
@@ -524,6 +536,10 @@ function filterItemsOptimized(items, config, needsContentFiltering) {
         continue;
       }
       if (hasGuestPromptRenderer(item, hideGuestPrompts)) {
+        continue;
+      }
+      // Only block if it is the popup (timely action)
+      if (enableAdBlock && isTimelyActionPopup(item)) {
         continue;
       }
     }
@@ -598,19 +614,42 @@ function clearArrayIfExists(obj, key) {
   return 0;
 }
 
+function cleanPlayerOverlay(data, config) {
+   const overlay = data.overlay?.playerOverlayRenderer || data.playerOverlayRenderer;
+   if (!overlay) return;
+
+   // Remove Timely Action from overlay (QR Codes and popups)
+   if (config.enableAdBlock && overlay.timelyActionRenderer) {
+       delete overlay.timelyActionRenderer;
+       if (DEBUG) debugLog('Removed timelyActionRenderer from overlay');
+   }
+}
+
 function removePlayerAdsOptimized(data) {
   let cleared = 0;
   cleared += clearArrayIfExists(data, 'adPlacements');
   cleared += clearArrayIfExists(data, 'playerAds');
   cleared += clearArrayIfExists(data, 'adSlots');
   
+  // Remove Timely Action (QR Code / Shop Popup) from root
+  if (data.timelyActionRenderer) {
+      delete data.timelyActionRenderer;
+      cleared++;
+  }
+
   const pr = data.playerResponse;
   if (pr) {
     cleared += clearArrayIfExists(pr, 'adPlacements');
     cleared += clearArrayIfExists(pr, 'playerAds');
     cleared += clearArrayIfExists(pr, 'adSlots');
+    
+    // Remove Timely Action from playerResponse
+    if (pr.timelyActionRenderer) {
+        delete pr.timelyActionRenderer;
+        cleared++;
+    }
   }
-  if (DEBUG && cleared > 0) debugLog('Cleaned Player Ads/Placements');
+  if (DEBUG && cleared > 0) debugLog('Cleaned Player Ads/Placements/TimelyActions');
 }
 
 function findFirstObject(haystack, needle, maxDepth = 10) {

@@ -42,7 +42,7 @@ class ReturnYouTubeDislike {
     this.menuItemsCache = [];
     this.menuItemsMap = new Map(); // O(1) lookup
     this.focusedIndex = -1;
-    this.lastFocusedElement = null; // Optimization: Track active element
+    this.lastFocusedElement = null; // Track active element
 	this.cachedMode = null;
     
     // PERF: Boolean flag to avoid DOM checks on every keypress
@@ -101,8 +101,10 @@ class ReturnYouTubeDislike {
     this.log('info', 'Initializing...');
     try {
       this.injectPersistentStyles();
-      if (!this.enableDislikes) return;
-      await this.fetchVideoData();
+      if (this.enableDislikes) {
+          await this.fetchVideoData();
+      }
+
       if (!this.active) return;
       this.observeBodyForPanel();
     } catch (error) {
