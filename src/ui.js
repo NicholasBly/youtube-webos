@@ -626,7 +626,7 @@ function handleShortcutAction(action) {
 	  if (!target) {
           target = document.querySelector('ytlr-button-renderer[idomkey="1"] yt-button-container'); // Shorts
       }
-	  let commBtn = target ? target.closest('yt-button-container') : null;
+	  let commBtn = target ? target.closest('yt-button-container, ytlr-button') : null;
       let isLiveChat = false;
 
       // 2. Fallback: Live Chat (Only if comments not found)

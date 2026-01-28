@@ -4,6 +4,81 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.7.0] - 2026/01/27
+
+## New Features
+
+### SponsorBlock
+New settings available per segment type
++ Segment Types: Option of Auto Skip, Manual Skip, Show in Seek Bar, and Disable (Mimicking official SponsorBlock desktop settings)
++ Manual Skip: Shows a notification at the start of and for the duration of the segment. Press the blue button to skip the segment
++ Highlight: New options "Show in Seek Bar", "Auto Skip to Start", "Ask when video loads", and "Disable"
++ Note: You will likely need to re-adjust skip settings to your preferences after updating
+
+Added "Skip Segments Once"
++ Only skips each segment in the video once, so that you can skip back to watch it if you want to
+
+### AdBlock
++ Filter out "Shop" button and QR Code overlay on videos
+
+### Shortcuts
++ Added "Save/Watch Later" and "Description" shortcuts
+
+### Video Description Panel
++ Added full navigation hack to Description panel using LG up/down arrows
++ + Note: on the stock YouTube app, this functionality is and has been broken for a long time
+
+## Fixes
+
+### Return Dislike
++ Update observer from zylon-provider-3 to zylon-provider-6 (YouTube page element change)
++ Updated comments shortcut selector (YouTube page element change) - https://github.com/NicholasBly/youtube-webos/issues/39
++ Fixed selector logic not targeting comment button element on some detection methods
++ Apply description panel layout fix always regardless of Return YouTube Dislike setting
+
+Fixed video description jumbled text if there is a button element inside it
++ Note: some descriptions are cut off at the bottom and can't be scrolled, while some videos have working scroll bars and navigation. Another YouTube bug.
+
++ Updated comments shortcut selector (YouTube page element changed) - https://github.com/NicholasBly/youtube-webos/issues/39
++ Fixed selector logic not targeting comment button element on some detection methods
++ Fixed cleanup of transient event listener from executeChainSkip()
+
+### Shorts
++ Disable shortcuts for chapter skip
++ Fixed comments shortcut not working on Shorts
+
+Fixed Toggle Subtitles shortcut pressing the subscribe button on Shorts
++ Note: This shortcut won't work on Shorts as there's no page element to enable subtitles. You have to press the three dots and then go to subtitles menu
+
+### General
++ Live videos: toggle comments shortcut will now toggle live chat on/off if available
+
+## UI Updates
+
+### Config UI
+
++ Converted fixed pixel sizes to viewport units to resolve scaling issues across different screen sizes
++ Adjusted sizing rules to make it more compact to fix scaling/truncated options
+
+### General
+
++ Video Shelf Opacity: When set at 50% or below, the black borders around text returns for better visibility
++ Multiline video titles: change rules from pixels to viewport units
++ Config UI: css performance/efficiency improvements
++ Added additional line of text on SponsorBlock settings page explaining blue button functionality
+
+### OLED mode - pure black element additions
++ Description panel
++ "Includes Paid Promotion" label
++ Movies & TV tab header
++ "More" tab menu
+
+### Assets
++ Update app icons - https://github.com/NicholasBly/youtube-webos/pull/43
+
+webOS 22 version .ipk now available in Homebrew channel
++ Reminder: app is available via repo link: https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/repo.json
+
 ## [0.6.9] - 2026/01/15
 
 ## Fixes

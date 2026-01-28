@@ -1,6 +1,6 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
 
-const DEBUG = true;
+const DEBUG = false;
 
 function debugLog(msg, ...args) {
   if (DEBUG) console.log(`[AdBlock] ${msg}`, ...args);
@@ -57,7 +57,7 @@ const SCHEMA_REGISTRY = {
     PLAYER: { 
       textPattern: '"streamingData"'
     },
-	NEXT: {
+    NEXT: {
       textPattern: '"singleColumnWatchNextResults"'
     },
     GUEST: {
@@ -86,14 +86,15 @@ const SCHEMA_REGISTRY = {
   },
   
   paths: {
-	PLAYER: {
-        overlayPath: 'playerOverlays.playerOverlayRenderer'
-    },
-	NEXT: {
+    PLAYER: {
       overlayPath: 'playerOverlays.playerOverlayRenderer'
     },
+    NEXT: {
+      overlayPath: 'playerOverlays.playerOverlayRenderer',
+      pivotPath: 'contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents'
+    },
     SHORTS_SEQUENCE: {
-        listPath: 'entries'
+      listPath: 'entries'
     },
     GUEST: {
       pivotPath: 'contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents'
@@ -390,6 +391,27 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
           if (DEBUG) debugLog(`${responseType}: Removed timelyActionRenderers (QR Code)`);
         }
       }
+      
+      // Pivot Filtering (Alerts/Prompts) with Fallback
+      if (config.hideGuestPrompts) {
+         let pivotContents;
+         // 1. Try Schema Path
+         if (schema && schema.pivotPath) {
+             pivotContents = getByPath(data, schema.pivotPath);
+         }
+         // 2. Fallback Search if schema failed or wasn't defined
+         if (!pivotContents) {
+             const pivot = findFirstObject(data, 'pivot', 10);
+             if (pivot?.sectionListRenderer?.contents) {
+                 pivotContents = pivot.sectionListRenderer.contents;
+                 if (DEBUG) debugLog(`${responseType}: Found pivot via fallback search`);
+             }
+         }
+         // 3. Process
+         if (Array.isArray(pivotContents)) {
+             processSectionListOptimized(pivotContents, config, needsContentFiltering, `${responseType} (Pivot)`);
+         }
+      }
       break;
 
     default:
@@ -407,6 +429,14 @@ function applyFallbackFilters(data, config, needsContentFiltering) {
         delete overlayRenderer.timelyActionRenderers;
         if (DEBUG) debugLog('FALLBACK: Removed timelyActionRenderers');
     }
+  }
+
+  // Fallback: Pivot section
+  const pivot = findFirstObject(data, 'pivot', 10);
+  if (pivot?.sectionListRenderer?.contents) {
+      if (Array.isArray(pivot.sectionListRenderer.contents)) {
+          processSectionListOptimized(pivot.sectionListRenderer.contents, config, needsContentFiltering, 'Fallback Pivot');
+      }
   }
 
   const foundRenderer = findFirstObject(data, 'sectionListRenderer', 10);
@@ -519,6 +549,9 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
     else if (hasGuestPromptRenderer(item, hideGuestPrompts)) {
       keepItem = false;
     }
+    else if (hideGuestPrompts && item.alertWithActionsRenderer) {
+        keepItem = false;
+    }
     
     if (keepItem && isReelAd(item, enableAdBlock)) {
       keepItem = false;
@@ -559,6 +592,9 @@ function filterItemsOptimized(items, config, needsContentFiltering) {
       }
       if (hasGuestPromptRenderer(item, hideGuestPrompts)) {
         continue;
+      }
+      if (hideGuestPrompts && item.alertWithActionsRenderer) {
+          continue;
       }
     }
 
