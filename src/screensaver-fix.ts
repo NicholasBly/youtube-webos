@@ -30,17 +30,30 @@ export async function requireElement<E extends typeof Element>(
 }
 
 function isPlayerHidden(video: HTMLVideoElement) {
-  return video.style.display == 'none' || video.style.top.startsWith('-');
+  return video.style.display == 'none' || (video.style.top && video.style.top.indexOf('-') === 0);
 }
 
 // Cached Page State
 type PageType = 'WATCH' | 'SHORTS' | 'OTHER' | null;
 let lastPageType: PageType = null;
 let shortsKeepAliveTimer: number | null = null;
-const REMOTE_KEY_YELLOW_1 = { code: 405, key: 'Yellow' }; 
-const REMOTE_KEY_YELLOW_2 = { code: 170, key: 'Yellow' };
 const MOVIE_PLAYER_ID = 'ytlr-player__player-container-player';
 const STATE_PLAYING = 1;
+
+function dispatchKey(keyCode: number, keyName: string) {
+    try {
+        const ev = document.createEvent('KeyboardEvent');
+        Object.defineProperty(ev, 'keyCode', { get: () => keyCode });
+        Object.defineProperty(ev, 'key', { get: () => keyName });
+        Object.defineProperty(ev, 'which', { get: () => keyCode });
+        
+        ev.initEvent('keydown', true, true);
+        
+        document.dispatchEvent(ev);
+    } catch (e) {
+        console.warn('[ScreensaverFix] Failed to dispatch legacy key:', e);
+    }
+}
 
 function setShortsKeepAlive(enable: boolean) {
   if (enable) {
@@ -54,10 +67,10 @@ function setShortsKeepAlive(enable: boolean) {
         if (isPlaying) {
             // Send Yellow key to reset system screensaver timer
 			// console.log("[Screensaver Fix] Video is playing, sending yellow presses");
-            sendKey(REMOTE_KEY_YELLOW_1);
-            sendKey(REMOTE_KEY_YELLOW_2);
+            dispatchKey(405, 'Yellow');
+            dispatchKey(170, 'Yellow');
         }
-    }, 60000); 
+    }, 30000); 
   } else {
     if (shortsKeepAliveTimer) {
       console.info('[ScreensaverFix] Stopping Shorts keep-alive');
