@@ -37,28 +37,15 @@ function isPlayerHidden(video: HTMLVideoElement) {
 type PageType = 'WATCH' | 'SHORTS' | 'OTHER' | null;
 let lastPageType: PageType = null;
 let shortsKeepAliveTimer: number | null = null;
+const REMOTE_KEY_YELLOW_1 = { code: 405, key: 'Yellow', charCode: 0 }; 
+const REMOTE_KEY_YELLOW_2 = { code: 170, key: 'Yellow', charCode: 170 };
 const MOVIE_PLAYER_ID = 'ytlr-player__player-container-player';
 const STATE_PLAYING = 1;
-
-function dispatchKey(keyCode: number, keyName: string) {
-    try {
-        const ev = document.createEvent('KeyboardEvent');
-        Object.defineProperty(ev, 'keyCode', { get: () => keyCode });
-        Object.defineProperty(ev, 'key', { get: () => keyName });
-        Object.defineProperty(ev, 'which', { get: () => keyCode });
-        
-        ev.initEvent('keydown', true, true);
-        
-        document.dispatchEvent(ev);
-    } catch (e) {
-        console.warn('[ScreensaverFix] Failed to dispatch legacy key:', e);
-    }
-}
 
 function setShortsKeepAlive(enable: boolean) {
   if (enable) {
     if (shortsKeepAliveTimer) return;
-    console.info('[ScreensaverFix] Shorts detected: Starting keep-alive (Yellow Key / 60s)');
+    console.info('[ScreensaverFix] Shorts detected: Starting keep-alive (Yellow Key / 30s)');
     shortsKeepAliveTimer = window.setInterval(() => {
         // Check player state to ensure we only keep awake if actually playing
         const player = document.getElementById(MOVIE_PLAYER_ID) as any;
@@ -66,9 +53,9 @@ function setShortsKeepAlive(enable: boolean) {
 
         if (isPlaying) {
             // Send Yellow key to reset system screensaver timer
-			// console.log("[Screensaver Fix] Video is playing, sending yellow presses");
-            dispatchKey(405, 'Yellow');
-            dispatchKey(170, 'Yellow');
+			console.log("[Screensaver Fix] Video is playing, sending yellow presses");
+            sendKey(REMOTE_KEY_YELLOW_1);
+            sendKey(REMOTE_KEY_YELLOW_2);
         }
     }, 30000); 
   } else {

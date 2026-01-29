@@ -68,19 +68,46 @@ export function sendKey(keyDef, target = document.body) {
     composed: true,
     view: window,
     key: keyDef.key,
-	code: keyDef.key,
+    code: keyDef.key,
     keyCode: keyDef.code,
     which: keyDef.code,
-    charCode: 0
+    charCode: keyDef.charCode || 0
   };
 
-  const keyDownEvt = new KeyboardEvent('keydown', eventOpts);
+  let keyDownEvt, keyUpEvt;
+
+  try {
+    // Modern Browser Approach (webOS 4+)
+    keyDownEvt = new KeyboardEvent('keydown', eventOpts);
+    keyUpEvt = new KeyboardEvent('keyup', eventOpts);
+  } catch (e) {
+    // Legacy Browser Approach (webOS 3 / Chrome 38)
+    keyDownEvt = document.createEvent('KeyboardEvent');
+    // initKeyboardEvent arguments: type, canBubble, cancelable, view, keyIdentifier, keyLocation, modifiersList, repeat
+    if (keyDownEvt.initKeyboardEvent) {
+        keyDownEvt.initKeyboardEvent('keydown', true, true, window, keyDef.key, 0, '', false);
+    } else {
+        // Very old WebKit fallback
+        keyDownEvt.initEvent('keydown', true, true);
+    }
+
+    keyUpEvt = document.createEvent('KeyboardEvent');
+    if (keyUpEvt.initKeyboardEvent) {
+        keyUpEvt.initKeyboardEvent('keyup', true, true, window, keyDef.key, 0, '', false);
+    } else {
+        keyUpEvt.initEvent('keyup', true, true);
+    }
+  }
+
+  // Common Property Overrides
+  // Both Modern and Legacy often require these to ensure the app "sees" the specific keycode
   Object.defineProperty(keyDownEvt, 'keyCode', { get: () => keyDef.code });
   Object.defineProperty(keyDownEvt, 'which', { get: () => keyDef.code });
+  Object.defineProperty(keyDownEvt, 'charCode', { get: () => keyDef.charCode || 0 });
   
-  const keyUpEvt = new KeyboardEvent('keyup', eventOpts);
   Object.defineProperty(keyUpEvt, 'keyCode', { get: () => keyDef.code });
   Object.defineProperty(keyUpEvt, 'which', { get: () => keyDef.code });
+  Object.defineProperty(keyUpEvt, 'charCode', { get: () => keyDef.charCode || 0 });
 
   target.dispatchEvent(keyDownEvt);
   target.dispatchEvent(keyUpEvt);
