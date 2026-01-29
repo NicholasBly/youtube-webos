@@ -1,9 +1,9 @@
 /**
  * On webOS, when a video element doesn't perfectly fill
- * the entire screen, the screensaver can be kick in.
+ * the entire screen, the screensaver can kick in.
  */
 
-import { waitForChildAdd } from './utils';
+import { waitForChildAdd, sendKey } from './utils';
 
 /**
  * document.querySelector but waits for the Element to be added if it doesn't already exist.
@@ -33,13 +33,43 @@ function isPlayerHidden(video: HTMLVideoElement) {
   return video.style.display == 'none' || video.style.top.startsWith('-');
 }
 
-function isWatchPage() {
-  return document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
+// Cached Page State
+type PageType = 'WATCH' | 'SHORTS' | 'OTHER' | null;
+let lastPageType: PageType = null;
+let shortsKeepAliveTimer: number | null = null;
+const REMOTE_KEY_YELLOW_1 = { code: 405, key: 'Yellow' }; 
+const REMOTE_KEY_YELLOW_2 = { code: 170, key: 'Yellow' };
+const MOVIE_PLAYER_ID = 'ytlr-player__player-container-player';
+const STATE_PLAYING = 1;
+
+function setShortsKeepAlive(enable: boolean) {
+  if (enable) {
+    if (shortsKeepAliveTimer) return;
+    console.info('[ScreensaverFix] Shorts detected: Starting keep-alive (Yellow Key / 60s)');
+    shortsKeepAliveTimer = window.setInterval(() => {
+        // Check player state to ensure we only keep awake if actually playing
+        const player = document.getElementById(MOVIE_PLAYER_ID) as any;
+        const isPlaying = player && typeof player.getPlayerState === 'function' && player.getPlayerState() === STATE_PLAYING;
+
+        if (isPlaying) {
+            // Send Yellow key to reset system screensaver timer
+			// console.log("[Screensaver Fix] Video is playing, sending yellow presses");
+            sendKey(REMOTE_KEY_YELLOW_1);
+            sendKey(REMOTE_KEY_YELLOW_2);
+        }
+    }, 60000); 
+  } else {
+    if (shortsKeepAliveTimer) {
+      console.info('[ScreensaverFix] Stopping Shorts keep-alive');
+      clearInterval(shortsKeepAliveTimer);
+      shortsKeepAliveTimer = null;
+    }
+  }
 }
 
 const playerCtrlObs = new MutationObserver((mutations, obs) => {
-  // Only watch page has a full-screen player.
-  if (!isWatchPage()) {
+  // Only watch page has a full-screen player fix logic.
+  if (lastPageType !== 'WATCH') {
     obs.disconnect();
     return;
   }
@@ -86,11 +116,39 @@ const playerCtrlObs = new MutationObserver((mutations, obs) => {
 let currentVideoElement: HTMLVideoElement | null = null;
 
 const bodyAttrObs = new MutationObserver(async () => {
-  if (!isWatchPage()) {
+  const classList = document.body.classList;
+  const isWatch = classList.contains('WEB_PAGE_TYPE_WATCH');
+  const isShorts = classList.contains('WEB_PAGE_TYPE_SHORTS');
+  
+  const newPageType: PageType = isWatch ? 'WATCH' : (isShorts ? 'SHORTS' : 'OTHER');
+
+  // Optimization: If the page type hasn't changed, ignore other class mutations
+  if (newPageType === lastPageType) return;
+  lastPageType = newPageType;
+
+  // 1. Handle Shorts Mode
+  if (newPageType === 'SHORTS') {
+    // Ensure Watch logic is disabled
+    if (currentVideoElement) {
+        playerCtrlObs.disconnect();
+        currentVideoElement = null;
+    }
+    setShortsKeepAlive(true);
+    return;
+  }
+
+  // 2. Handle Other Modes (Disable Shorts KeepAlive)
+  setShortsKeepAlive(false);
+
+  // 3. Handle Watch Mode
+  if (newPageType !== 'WATCH') {
+    // If we are here, it's 'OTHER'. Ensure watchers are off.
     playerCtrlObs.disconnect();
     currentVideoElement = null;
     return;
   }
+
+  // -- Watch Page Logic Below --
 
   try {
     const playerContainer = document.getElementById('ytlr-player__player-container');
@@ -113,6 +171,9 @@ const bodyAttrObs = new MutationObserver(async () => {
         ) as HTMLVideoElement;
     }
     
+    // Double check we are still on Watch page after await
+    if (lastPageType !== 'WATCH') return;
+
     if (video && video !== currentVideoElement) {
       if (currentVideoElement) {
         playerCtrlObs.disconnect();
@@ -141,4 +202,5 @@ window.addEventListener('beforeunload', () => {
   playerCtrlObs.disconnect();
   bodyAttrObs.disconnect();
   currentVideoElement = null;
+  setShortsKeepAlive(false);
 });
