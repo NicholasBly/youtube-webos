@@ -56,7 +56,7 @@ export function isGuestMode() {
   }
 }
 
-export function sendKey(keyDef, target = document.body) {
+export function sendKey(keyDef, target = window) {
   if (!keyDef || !keyDef.code) {
     console.warn('[Utils] Invalid key definition passed to sendKey');
     return;
@@ -64,7 +64,7 @@ export function sendKey(keyDef, target = document.body) {
 
   const eventOpts = {
     bubbles: true,
-    cancelable: true,
+    cancelable: false,
     composed: true,
     view: window,
     key: keyDef.key,
@@ -85,7 +85,7 @@ export function sendKey(keyDef, target = document.body) {
     keyDownEvt = document.createEvent('KeyboardEvent');
     // initKeyboardEvent arguments: type, canBubble, cancelable, view, keyIdentifier, keyLocation, modifiersList, repeat
     if (keyDownEvt.initKeyboardEvent) {
-        keyDownEvt.initKeyboardEvent('keydown', true, true, window, keyDef.key, 0, '', false);
+        keyDownEvt.initKeyboardEvent('keydown', true, false, window, keyDef.key, 0, '', false);
     } else {
         // Very old WebKit fallback
         keyDownEvt.initEvent('keydown', true, true);
@@ -93,7 +93,7 @@ export function sendKey(keyDef, target = document.body) {
 
     keyUpEvt = document.createEvent('KeyboardEvent');
     if (keyUpEvt.initKeyboardEvent) {
-        keyUpEvt.initKeyboardEvent('keyup', true, true, window, keyDef.key, 0, '', false);
+        keyUpEvt.initKeyboardEvent('keyup', true, false, window, keyDef.key, 0, '', false);
     } else {
         keyUpEvt.initEvent('keyup', true, true);
     }

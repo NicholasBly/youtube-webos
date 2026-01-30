@@ -894,7 +894,25 @@ function applyOledMode(enabled) {
       ? '.app-quality-root .UGcxnc .dxLAmd { background-color: rgba(0, 0, 0, 0) !important; } .app-quality-root .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }' 
       : '';
     
-    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: `#container { background-color: black !important; } .ytLrGuideResponseMask { background-color: black !important; } .geClSe { background-color: black !important; } .hsdF6b { background-color: black !important; } .ytLrGuideResponseGradient { display: none; } .ytLrAnimatedOverlayContainer { background-color: black !important; } .iha0pc { color: #000 !important; } .ZghAqf { background-color: #000 !important; } .A0acyf.RAE3Re .AmQJbe { background-color: black !important; } .tVp1L { background-color: black !important; } .app-quality-root .DnwJH { background-color: black !important; } .qRdzpd.stQChb .TYE3Ed { background-color: black !important; } .k82tDb { background-color: #000 !important; } .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } ${transparentBgRules}` });
+    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: `
+        #container { background-color: black !important; } 
+        .ytLrGuideResponseMask { background-color: black !important; } 
+        .geClSe { background-color: black !important; } 
+        .hsdF6b { background-color: black !important; } 
+        .ytLrGuideResponseGradient { display: none; } 
+        .ytLrAnimatedOverlayContainer { background-color: black !important; } 
+        .iha0pc { color: #000 !important; } 
+        .ZghAqf { background-color: #000 !important; } 
+        .A0acyf.RAE3Re .AmQJbe { background-color: black !important; } 
+        .tVp1L { background-color: black !important; } 
+        .app-quality-root .DnwJH { background-color: black !important; } 
+        .qRdzpd.stQChb .TYE3Ed { background-color: black !important; } 
+        .k82tDb { background-color: #000 !important; } 
+        .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } 
+        .p0DeOc { background-color: black !important; background-image: none !important; }
+        ytlr-player-focus-ring { border: 0.375rem solid rgb(200, 200, 200) !important; }
+        ${transparentBgRules}` 
+    });
     document.head.appendChild(style);
   } else {
     optionsPanel?.classList.remove(oledClass);

@@ -53,7 +53,7 @@ function setShortsKeepAlive(enable: boolean) {
 
         if (isPlaying) {
             // Send Yellow key to reset system screensaver timer
-			console.log("[Screensaver Fix] Video is playing, sending yellow presses");
+			console.log("[ScreensaverFix] Video is playing, sending yellow presses");
             sendKey(REMOTE_KEY_YELLOW_1);
             sendKey(REMOTE_KEY_YELLOW_2);
         }
