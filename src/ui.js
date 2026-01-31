@@ -563,13 +563,16 @@ function handleShortcutAction(action) {
         video.pause();	
 
         // Dismiss controls
-		if(needsHide) {
-        shortcutDebounceTime = 650; 
-
-        sendKey(REMOTE_KEYS.UP);                            
-        setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
-        setTimeout(() => sendKey(REMOTE_KEYS.UP), 500);
-
+		if(needsHide && !isShortsPage()) {
+        shortcutDebounceTime = 650;
+		
+		if (document.activeElement && typeof document.activeElement.blur === 'function') {
+				console.log("Blurring active element");
+                document.activeElement.blur();
+            }
+			
+		setTimeout(() => sendKey(REMOTE_KEYS.BACK, document.activeElement), 250); // don't press back button if we're on shorts or we leave the page
+		
         setTimeout(() => {
           document.body.classList.remove('ytaf-hide-controls');
           if (watchOverlay) watchOverlay.style.opacity = '';

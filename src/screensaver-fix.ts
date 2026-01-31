@@ -37,6 +37,7 @@ function isPlayerHidden(video: HTMLVideoElement) {
 type PageType = 'WATCH' | 'SHORTS' | 'OTHER' | null;
 let lastPageType: PageType = null;
 let shortsKeepAliveTimer: number | null = null;
+let shortsBufferTimer: number | null = null;
 const REMOTE_KEY_YELLOW_1 = { code: 405, key: 'Yellow', charCode: 0 }; 
 const REMOTE_KEY_YELLOW_2 = { code: 170, key: 'Yellow', charCode: 170 };
 const MOVIE_PLAYER_ID = 'ytlr-player__player-container-player';
@@ -52,17 +53,42 @@ function setShortsKeepAlive(enable: boolean) {
         const isPlaying = player && typeof player.getPlayerState === 'function' && player.getPlayerState() === STATE_PLAYING;
 
         if (isPlaying) {
-            // Send Yellow key to reset system screensaver timer
-			console.log("[ScreensaverFix] Video is playing, sending yellow presses");
-            sendKey(REMOTE_KEY_YELLOW_1);
-            sendKey(REMOTE_KEY_YELLOW_2);
+            console.log("[ScreensaverFix] Video is playing, preparing to send yellow presses");
+            
+            let target: Element | null = null;
+            let source = '';
+            if (document.activeElement && document.activeElement !== document.body) {
+                target = document.activeElement;
+                source = 'document.activeElement (Focus)';
+            }
+            if (!target) {
+                target = document.body;
+                source = 'document.body (Fallback)';
+            }
+
+            console.log(`[ScreensaverFix] Target picked: ${source}`, target);
+            console.log(`[ScreensaverFix] Sending YELLOW_1 (${REMOTE_KEY_YELLOW_1.code})`);
+
+            sendKey(REMOTE_KEY_YELLOW_1, target as HTMLElement);
+            
+            if (shortsBufferTimer) clearTimeout(shortsBufferTimer);
+
+            shortsBufferTimer = window.setTimeout(() => {
+                console.log(`[ScreensaverFix] Sending YELLOW_2 (${REMOTE_KEY_YELLOW_2.code})`);
+                sendKey(REMOTE_KEY_YELLOW_2, target as HTMLElement);
+                shortsBufferTimer = null;
+            }, 250);
         }
-    }, 30000); 
+    }, 30000);
   } else {
     if (shortsKeepAliveTimer) {
       console.info('[ScreensaverFix] Stopping Shorts keep-alive');
       clearInterval(shortsKeepAliveTimer);
       shortsKeepAliveTimer = null;
+    }
+    if (shortsBufferTimer) {
+        clearTimeout(shortsBufferTimer);
+        shortsBufferTimer = null;
     }
   }
 }
