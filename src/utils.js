@@ -56,7 +56,7 @@ export function isGuestMode() {
   }
 }
 
-export function sendKey(keyDef, target = window) {
+export function sendKey(keyDef, target = document.body) {
   if (!keyDef || !keyDef.code) {
     console.warn('[Utils] Invalid key definition passed to sendKey');
     return;
