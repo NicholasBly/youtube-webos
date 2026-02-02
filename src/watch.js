@@ -1,4 +1,5 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
+import { debounce, SELECTORS } from './utils'; // Shared Debounce
 import './watch.css';
 
 class Watch {
@@ -6,17 +7,18 @@ class Watch {
     // Standard properties (No '#' private fields for webOS 3 compatibility)
     this._watch = null;
     this._timer = null;
-    this._debounceTimer = null;
     this._globalListeners = [];
     
     // Constants
-    this._PLAYER_SELECTOR = 'ytlr-watch-default';
+    this._PLAYER_SELECTOR = 'ytlr-watch-default'; // Kept specific to this clock feature if needed, or could use SELECTORS.PLAYER_CONTAINER if appropriate.
     this._DEBOUNCE_DELAY = 50;
 
     // Bind methods
     this.onOledChange = this.onOledChange.bind(this);
     this.updateVisibility = this.updateVisibility.bind(this);
-    this.debouncedUpdate = this.debouncedUpdate.bind(this);
+    
+    // Use shared debounce
+    this.debouncedUpdate = debounce(this.updateVisibility, this._DEBOUNCE_DELAY);
 
     // Initialize
     this.createElement();
@@ -75,17 +77,6 @@ class Watch {
     }, nextSeg);
   }
 
-  debouncedUpdate() {
-    // Debounce rapid visibility updates (Optimization Kept)
-    if (this._debounceTimer) {
-      clearTimeout(this._debounceTimer);
-    }
-    this._debounceTimer = setTimeout(() => {
-      this.updateVisibility();
-      this._debounceTimer = null;
-    }, this._DEBOUNCE_DELAY);
-  }
-
   updateVisibility() {
     if (!this._watch) return;
 
@@ -131,10 +122,11 @@ class Watch {
       this._timer = null;
     }
     
-    if (this._debounceTimer) {
-      clearTimeout(this._debounceTimer);
-      this._debounceTimer = null;
-    }
+    // Note: Debounce internal timer is managed by closure in shared helper, 
+    // so strictly speaking we can't cancel it externally easily unless debounce returns a cancel method.
+    // For this use case (UI visibility), letting a pending check run once after destroy is harmless, 
+    // but the shared debounce usually doesn't expose cancel.
+    // If strict cleanup is needed, update the shared debounce to return { run, cancel }.
 
     configRemoveChangeListener('enableOledCareMode', this.onOledChange);
     

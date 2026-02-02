@@ -1,5 +1,13 @@
 const CONTENT_INTENT_REGEX = /^.+(?=Content)/g;
 
+// Shared Selectors
+export const SELECTORS = {
+  PLAYER_ID: 'ytlr-player__player-container-player',
+  PLAYER_CONTAINER: 'ytlr-player__player-container',
+  WATCH_PAGE_CLASS: 'WEB_PAGE_TYPE_WATCH',
+  SHORTS_PAGE_CLASS: 'WEB_PAGE_TYPE_SHORTS'
+};
+
 export const REMOTE_KEYS = {
   ENTER:  { code: 13,  key: 'Enter' },
   BACK:   { code: 461, key: 'Back' },
@@ -23,6 +31,56 @@ export const REMOTE_KEYS = {
   8: { code: 56, key: '8' },
   9: { code: 57, key: '9' }
 };
+
+// --- Centralized Page State Logic ---
+// Reduces overhead by using a single MutationObserver for page type detection
+let _isWatchPage = false;
+let _isShortsPage = false;
+
+function updatePageState() {
+    if (!document.body) return;
+    const cl = document.body.classList;
+    const newWatch = cl.contains(SELECTORS.WATCH_PAGE_CLASS);
+    const newShorts = cl.contains(SELECTORS.SHORTS_PAGE_CLASS);
+    
+    if (newWatch !== _isWatchPage || newShorts !== _isShortsPage) {
+        _isWatchPage = newWatch;
+        _isShortsPage = newShorts;
+        // Dispatch event so other modules can react without their own observers
+        window.dispatchEvent(new CustomEvent('ytaf-page-update', { 
+            detail: { isWatch: _isWatchPage, isShorts: _isShortsPage } 
+        }));
+    }
+}
+
+// Auto-initialize the watcher
+if (typeof document !== 'undefined') {
+    if (document.body) {
+        const pageObserver = new MutationObserver(updatePageState);
+        pageObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        updatePageState();
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            const pageObserver = new MutationObserver(updatePageState);
+            pageObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+            updatePageState();
+        });
+    }
+}
+
+// O(1) Accessors
+export const isWatchPage = () => _isWatchPage;
+export const isShortsPage = () => _isShortsPage;
+
+// Generic Utilities
+export function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    const context = this;
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(context, args), wait);
+  };
+}
 
 let cachedGuestMode = null;
 

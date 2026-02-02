@@ -4,12 +4,13 @@
 }
 
 /* Makes black control underneath video player transparent. Set to 0 to remove it */
-.ytLrWatchDefaultControlsBackground { /* webOS 24 */
-  opacity: 0.6;
-}
-.judYce { /* webOS 23 */
-  opacity: 0.6;
-}
+/* Feb 1 2026 Note: older YouTube layout no longer exists so these aren't needed anymore */
+/* .ytLrWatchDefaultControlsBackground { /* webOS 24 */
+  /* opacity: 0.6; */
+/* } */
+/* .judYce { /* webOS 23 */
+  /* opacity: 0.6; */
+/* } */
 
 /* move stats for nerds UI to the left side of the screen so it's not blocked by the settings panel */
 .iLKnN .html5-video-info-panel {

@@ -3,7 +3,7 @@
  * the entire screen, the screensaver can kick in.
  */
 
-import { waitForChildAdd, sendKey } from './utils';
+import { waitForChildAdd, sendKey, SELECTORS, REMOTE_KEYS, isWatchPage, isShortsPage } from './utils';
 
 /**
  * document.querySelector but waits for the Element to be added if it doesn't already exist.
@@ -38,9 +38,8 @@ type PageType = 'WATCH' | 'SHORTS' | 'OTHER' | null;
 let lastPageType: PageType = null;
 let shortsKeepAliveTimer: number | null = null;
 let shortsBufferTimer: number | null = null;
-const REMOTE_KEY_YELLOW_1 = { code: 405, key: 'Yellow', charCode: 0 }; 
-const REMOTE_KEY_YELLOW_2 = { code: 170, key: 'Yellow', charCode: 170 };
-const MOVIE_PLAYER_ID = 'ytlr-player__player-container-player';
+const REMOTE_KEY_YELLOW_1 = { ...REMOTE_KEYS.YELLOW, charCode: 0 }; 
+const REMOTE_KEY_YELLOW_2 = { ...REMOTE_KEYS.YELLOW, charCode: 170 };
 const STATE_PLAYING = 1;
 
 function setShortsKeepAlive(enable: boolean) {
@@ -49,7 +48,7 @@ function setShortsKeepAlive(enable: boolean) {
     console.info('[ScreensaverFix] Shorts detected: Starting keep-alive (Yellow Key / 30s)');
     shortsKeepAliveTimer = window.setInterval(() => {
         // Check player state to ensure we only keep awake if actually playing
-        const player = document.getElementById(MOVIE_PLAYER_ID) as any;
+        const player = document.getElementById(SELECTORS.PLAYER_ID) as any;
         const isPlaying = player && typeof player.getPlayerState === 'function' && player.getPlayerState() === STATE_PLAYING;
 
         if (isPlaying) {
@@ -141,14 +140,13 @@ const playerCtrlObs = new MutationObserver((mutations, obs) => {
 
 let currentVideoElement: HTMLVideoElement | null = null;
 
-const bodyAttrObs = new MutationObserver(async () => {
-  const classList = document.body.classList;
-  const isWatch = classList.contains('WEB_PAGE_TYPE_WATCH');
-  const isShorts = classList.contains('WEB_PAGE_TYPE_SHORTS');
+const updateState = async () => {
+  const isWatch = isWatchPage();
+  const isShorts = isShortsPage();
   
   const newPageType: PageType = isWatch ? 'WATCH' : (isShorts ? 'SHORTS' : 'OTHER');
 
-  // Optimization: If the page type hasn't changed, ignore other class mutations
+  // Optimization: If the page type hasn't changed, ignore
   if (newPageType === lastPageType) return;
   lastPageType = newPageType;
 
@@ -177,7 +175,7 @@ const bodyAttrObs = new MutationObserver(async () => {
   // -- Watch Page Logic Below --
 
   try {
-    const playerContainer = document.getElementById('ytlr-player__player-container');
+    const playerContainer = document.getElementById(SELECTORS.PLAYER_CONTAINER);
     
     // If container exists, search inside it. If not, fallback to body.
     const searchRoot = playerContainer || document.body;
@@ -187,8 +185,6 @@ const bodyAttrObs = new MutationObserver(async () => {
     
     // If not found immediately, use the waiter (scoped to root)
     if (!video) {
-        // We temporarily cast to any to access the internal logic if you can't modify requireElement
-        // Or simply wait on the root:
          video = await waitForChildAdd(
             searchRoot,
             (node): node is HTMLVideoElement =>
@@ -217,16 +213,17 @@ const bodyAttrObs = new MutationObserver(async () => {
   } catch (e) {
     console.warn('[ScreensaverFix] Error attaching to video element:', e);
   }
-});
+};
 
-bodyAttrObs.observe(document.body, {
-  attributes: true,
-  attributeFilter: ['class']
-});
+window.addEventListener('ytaf-page-update', updateState);
+
+// Initial Check
+if(document.body) updateState();
+else document.addEventListener('DOMContentLoaded', updateState);
 
 window.addEventListener('beforeunload', () => {
   playerCtrlObs.disconnect();
-  bodyAttrObs.disconnect();
+  window.removeEventListener('ytaf-page-update', updateState);
   currentVideoElement = null;
   setShortsKeepAlive(false);
 });

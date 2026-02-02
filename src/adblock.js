@@ -1,4 +1,5 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
+import { isShortsPage } from './utils'; // Shared State
 
 const DEBUG = false;
 
@@ -8,30 +9,6 @@ function debugLog(msg, ...args) {
 
 let origParse = JSON.parse;
 let isHooked = false;
-
-let isShortsContext = false;
-let bodyObserver = null;
-
-function updateShortsContext() {
-  if (document.body) {
-    isShortsContext = document.body.classList.contains('WEB_PAGE_TYPE_SHORTS');
-  }
-}
-
-function initBodyObserver() {
-  if (!document.body) {
-    window.addEventListener('DOMContentLoaded', initBodyObserver);
-    return;
-  }
-  
-  updateShortsContext();
-
-  bodyObserver = new MutationObserver((mutations) => {
-    updateShortsContext();
-  });
-
-  bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-}
 
 let configCache = {
   enableAdBlock: true,
@@ -172,7 +149,7 @@ function hookedParse(text, reviver) {
     const responseType = detectResponseType(text, data);
     const needsContentFiltering = enableAdBlock || hideGuestPrompts;
 
-    if (isShortsContext) {
+    if (isShortsPage()) { // Use shared state getter
         const IGNORE_ON_SHORTS = ['SEARCH', 'PLAYER', 'ACTION'];
         if (responseType && IGNORE_ON_SHORTS.includes(responseType)) {
              return data;
@@ -704,7 +681,6 @@ export function initAdblock() {
   console.info('[AdBlock] Initializing hybrid hook (Debug Mode: ' + DEBUG + ')');
   
   updateConfigCache();
-  initBodyObserver();
   
   origParse = JSON.parse;
   JSON.parse = function (text, reviver) {
@@ -725,11 +701,6 @@ export function destroyAdblock() {
   
   JSON.parse = origParse;
   isHooked = false;
-
-  if (bodyObserver) {
-    bodyObserver.disconnect();
-    bodyObserver = null;
-  }
 
   configRemoveChangeListener('enableAdBlock', updateConfigCache);
   configRemoveChangeListener('removeGlobalShorts', updateConfigCache);

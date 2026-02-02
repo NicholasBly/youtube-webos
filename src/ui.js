@@ -7,7 +7,7 @@ import './return-dislike.js';
 // import { initYouTubeFixes } from './yt-fixes.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
+import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, SELECTORS } from './utils.js';
 import { initAdblock, destroyAdblock } from './adblock.js';
 
 let lastSafeFocus = null;
@@ -37,13 +37,22 @@ if (!Element.prototype.closest) {
   };
 }
 
-const isWatchPage = () => document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
-const isShortsPage = () => document.body.classList.contains('WEB_PAGE_TYPE_SHORTS');
 const simulateBack = () => { console.log('[Shortcut] Simulating Back/Escape...'); sendKey(REMOTE_KEYS.BACK); };
 
 window.__spatialNavigation__.keyMode = 'NONE';
-const ARROW_KEY_CODE = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' };
-const colorCodeMap = new Map([[403, 'red'], [166, 'red'], [404, 'green'], [172, 'green'], [405, 'yellow'], [170, 'yellow'], [406, 'blue'], [167, 'blue'], [191, 'blue']]);
+const ARROW_KEY_CODE = { 
+  [REMOTE_KEYS.LEFT.code]: 'left', 
+  [REMOTE_KEYS.UP.code]: 'up', 
+  [REMOTE_KEYS.RIGHT.code]: 'right', 
+  [REMOTE_KEYS.DOWN.code]: 'down' 
+};
+
+const colorCodeMap = new Map([
+    [403, 'red'], [166, 'red'], 
+    [404, 'green'], [172, 'green'], 
+    [405, 'yellow'], [170, 'yellow'], 
+    [406, 'blue'], [167, 'blue'], [191, 'blue']
+]);
 const getKeyColor = (charCode) => colorCodeMap.get(charCode) || null;
 
 // --- DOM Utility Functions ---
@@ -99,8 +108,8 @@ function createSegmentControl(key) {
     tabIndex: 0,
     events: {
       keydown: (e) => {
-        if (e.keyCode === 37) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
-        else if (e.keyCode === 39 || e.keyCode === 13) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
+        if (e.keyCode === REMOTE_KEYS.LEFT.code) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
+        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
       },
       click: () => cycle('next')
     }
@@ -168,8 +177,8 @@ function createShortcutControl(keyIndex) {
     tabIndex: 0,
     events: {
       keydown: (e) => {
-        if (e.keyCode === 37) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
-        else if (e.keyCode === 39 || e.keyCode === 13) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
+        if (e.keyCode === REMOTE_KEYS.LEFT.code) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
+        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
       },
       click: () => cycle('next')
     }
@@ -210,12 +219,12 @@ function createOpacityControl(key) {
     tabIndex: 0,
     events: {
       keydown: (e) => {
-        if (e.keyCode === 37) { // Left
+        if (e.keyCode === REMOTE_KEYS.LEFT.code) { // Left
           changeValue(-step); 
           e.stopPropagation(); 
           e.preventDefault(); 
         }
-        else if (e.keyCode === 39 || e.keyCode === 13) { // Right or Enter
+        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { // Right or Enter
           changeValue(step); 
           e.stopPropagation(); 
           e.preventDefault(); 
@@ -298,7 +307,7 @@ function createOptionsPanel() {
         evt.preventDefault(); evt.stopPropagation(); return;
       }
       navigate(ARROW_KEY_CODE[evt.keyCode]);
-    } else if (evt.keyCode === 13) {
+    } else if (evt.keyCode === REMOTE_KEYS.ENTER.code) {
       if (evt instanceof KeyboardEvent) document.activeElement.click();
     } else if (evt.keyCode === 27) { // Escape
       showOptionsPanel(false);
@@ -359,7 +368,6 @@ function createOptionsPanel() {
   pageSponsor = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-sponsor', style: { display: 'none' }});
   pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> Main Settings', events: { click: () => setActivePage(0) }}));
   pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
-  // Removed enableSponsorBlockAutoSkip checkbox
   
   const elmBlock = createElement('blockquote', {},
     ...['Sponsor', 'Intro', 'Outro', 'Interaction', 'SelfPromo', 'MusicOfftopic', 'Filler', 'Hook', 'Preview'].map(s => createSegmentControl(`sbMode_${s.toLowerCase()}`)),
@@ -537,7 +545,7 @@ function triggerInternal(element, name) {
 
 function handleShortcutAction(action) {
   const video = document.querySelector('video');
-  const player = document.getElementById('ytlr-player__player-container-player') || document.querySelector('.html5-video-player');
+  const player = document.getElementById(SELECTORS.PLAYER_ID) || document.querySelector('.html5-video-player');
   if (!video) return;
 
   const actions = {
@@ -552,6 +560,8 @@ function handleShortcutAction(action) {
       } else {
 		const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
         const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
+		const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
+        const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
 		const watchOverlay = document.querySelector('.webOs-watch');
 		let needsHide = false;
 		if(!isControlsVisible) {
@@ -560,10 +570,11 @@ function handleShortcutAction(action) {
         if (watchOverlay) watchOverlay.style.opacity = '0';
 		}
         
-        video.pause();	
+        video.pause();
+		showNotification('Paused');
 
         // Dismiss controls
-		if(needsHide && !isShortsPage()) {
+		if(needsHide && !isShortsPage() && !isPanelVisible) {
         shortcutDebounceTime = 650;
 		
 		if (document.activeElement && typeof document.activeElement.blur === 'function') {
@@ -578,7 +589,6 @@ function handleShortcutAction(action) {
           if (watchOverlay) watchOverlay.style.opacity = '';
         }, 750);
 		}
-        showNotification('Paused');
       }
     },
     toggle_subs: () => {
@@ -721,7 +731,6 @@ function handleShortcutAction(action) {
 
 const eventHandler = (evt) => {
   if (evt.repeat) return;
-  // console.info('Key event:', evt.type, evt.charCode, evt.keyCode);
 
   const keyColor = getKeyColor(evt.charCode);
   

@@ -44,7 +44,7 @@ class SponsorBlockHandler {
         // Tracking state
         this.lastSkipTime = -1;
         this.lastSkippedSegmentIndex = -1;
-		this.lastNotifiedSegmentIndex = -1;
+        this.lastNotifiedSegmentIndex = -1;
         this.hasPerformedChainSkip = false;
         this.skipSegments = [];
         this.nextSegmentIndex = 0;
@@ -56,7 +56,7 @@ class SponsorBlockHandler {
         this.isSkipping = false;
         this.wasMutedBySB = false;
         this.isDestroyed = false;
-		this.skippedSegmentIndices = new Set();
+        this.skippedSegmentIndices = new Set();
         
         // Manual skip tracking
         this.activeManualNotification = null;
@@ -74,6 +74,10 @@ class SponsorBlockHandler {
         // High Frequency Polling
         this.pollingRafId = null;
         this.boundHighFreqLoop = this.highFreqLoop.bind(this);
+        
+        this.isTimeListenerActive = false;
+        this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
+		this.longDistanceTimer = null;
 
         this.configCache = {};
         this.lastOverlayHash = null;
@@ -114,7 +118,7 @@ class SponsorBlockHandler {
 
         this.configCache.enableMutedSegments = configRead('enableMutedSegments');
         this.configCache.sbMode_highlight = configRead('sbMode_highlight');
-		this.configCache.skipSegmentsOnce = configRead('skipSegmentsOnce');
+        this.configCache.skipSegmentsOnce = configRead('skipSegmentsOnce');
 
         this.rebuildSkipSegments();
     }
@@ -149,11 +153,57 @@ class SponsorBlockHandler {
         }
         this.resetSegmentTracking();
     }
+    
+    toggleTimeListener(enable) {
+        if (!this.video) return;
+        
+        if (enable) {
+            if (!this.isTimeListenerActive) {
+                this.video.addEventListener('timeupdate', this.boundTimeUpdate);
+                this.isTimeListenerActive = true;
+                this.log('debug', 'Time listener attached');
+            }
+        } else {
+            if (this.isTimeListenerActive) {
+                this.video.removeEventListener('timeupdate', this.boundTimeUpdate);
+                this.isTimeListenerActive = false;
+                this.log('debug', 'Time listener detached');
+            }
+        }
+    }
+	
+	clearLongDistanceTimer() {
+        if (this.longDistanceTimer) {
+            clearTimeout(this.longDistanceTimer);
+            this.longDistanceTimer = null;
+        }
+    }
 
     resetSegmentTracking() {
+		this.clearLongDistanceTimer(); // Clear any existing sleep
         this.nextSegmentIndex = 0;
         this.nextSegmentStart = this.skipSegments.length > 0 ? this.skipSegments[0].start : Infinity;
+        
+        // Find correct segment index if we are already deep in the video
+        if (this.video && !isNaN(this.video.currentTime) && this.skipSegments.length > 0) {
+            const time = this.video.currentTime;
+            for (let i = 0; i < this.skipSegments.length; i++) {
+                if (this.skipSegments[i].start > time) {
+                    this.nextSegmentIndex = i;
+                    this.nextSegmentStart = this.skipSegments[i].start;
+                    break;
+                }
+				if (this.skipSegments[i].end > time) {
+                    this.nextSegmentIndex = i;
+                    this.nextSegmentStart = this.skipSegments[i].start;
+                    break;
+                }
+            }
+        }
+
         this.clearManualNotification();
+        
+        this.toggleTimeListener(this.nextSegmentStart !== Infinity);
     }
     
     clearManualNotification() {
@@ -228,7 +278,6 @@ class SponsorBlockHandler {
         if (!video || this.hasPerformedChainSkip || this.isDestroyed) return false;
 
         if (video.readyState === 0) {
-            // Save reference to video and handler for cleanup
             this.chainSkipVideo = video;
             this.boundChainSkipRetry = () => {
                 video.removeEventListener('loadedmetadata', this.boundChainSkipRetry);
@@ -259,7 +308,6 @@ class SponsorBlockHandler {
         this.wasMutedBySB = true;
         video.muted = true;
 
-        // Save reference to video and handler for cleanup
         this.chainSkipVideo = video;
         this.boundChainSkipSeeked = () => {
             video.removeEventListener('seeked', this.boundChainSkipSeeked);
@@ -290,7 +338,6 @@ class SponsorBlockHandler {
         this.unmuteTimeoutId = setTimeout(() => {
             if (this.isDestroyed) return;
             
-            // Clean up the listener if timeout hits first
             if (this.boundChainSkipSeeked) {
                 video.removeEventListener('seeked', this.boundChainSkipSeeked);
                 this.boundChainSkipSeeked = null;
@@ -308,10 +355,9 @@ class SponsorBlockHandler {
         video.currentTime = chain.endTime;
         this.lastSkipTime = chain.endTime;
         this.hasPerformedChainSkip = true;
-		
-		if (this.configCache.skipSegmentsOnce) {
+        
+        if (this.configCache.skipSegmentsOnce) {
             enabledSegs.forEach(seg => {
-                // If a segment ends before or at the chain skip target, it was part of the chain
                 if (seg.segment[1] <= chain.endTime + 0.1) {
                     const idx = this.segments.indexOf(seg);
                     if (idx !== -1) this.skippedSegmentIndices.add(idx);
@@ -375,7 +421,6 @@ class SponsorBlockHandler {
             this.start();
             sponsorBlockUI.updateSegments(this.segments);
             
-            // Highlight Logic: "Ask when video loads" or "Auto Skip to Start"
             if (this.highlightSegment) {
                 const hlMode = this.configCache.sbMode_highlight;
                 if (hlMode === 'auto_skip') {
@@ -397,10 +442,14 @@ class SponsorBlockHandler {
         if (!this.video) return;
 
         this.injectCSS();
-        this.addEvent(this.video, 'timeupdate', this.handleTimeUpdate.bind(this));
+        
+        // Initial attach is handled by resetSegmentTracking called in init -> rebuildSkipSegments
+        // But we double check here in case start() is called late
+        this.toggleTimeListener(this.nextSegmentStart !== Infinity);
 
         this.addEvent(this.video, 'ended', () => {
             this.hasPerformedChainSkip = false;
+			this.clearLongDistanceTimer(); // Clean up timer on end
         });
 
         this.addEvent(this.video, 'play', () => {
@@ -423,8 +472,10 @@ class SponsorBlockHandler {
             if (!this.isSkipping) {
                 this.lastSkipTime = -1;
                 this.lastSkippedSegmentIndex = -1;
-				this.lastNotifiedSegmentIndex = -1;
+                this.lastNotifiedSegmentIndex = -1;
                 this.resetSegmentTracking();
+                
+                // Manually trigger one check to handle immediate skip scenarios on seek
                 this.handleTimeUpdate();
             }
 
@@ -598,18 +649,15 @@ class SponsorBlockHandler {
         this.progressBar.appendChild(this.overlay);
     }
 
-    // Combined loop for clamping duration and WebOS Legacy fix
     processSegments(duration) {
         if (!duration || isNaN(duration)) return;
 
         let changed = false;
         for (const segment of this.segments) {
-            // General Clamp
             if (segment.segment[1] > duration) {
                 segment.segment[1] = duration;
                 changed = true;
             }
-            // WebOS Legacy Fix
             if (this.isLegacyWebOS && segment.segment[1] >= duration - 0.5) {
                 segment.segment[1] = Math.max(0, duration - 0.30);
                 changed = true;
@@ -649,22 +697,35 @@ class SponsorBlockHandler {
     }
 
     handleTimeUpdate() {
-        if (this.skipSegments.length === 0) return;
+        if (this.skipSegments.length === 0) {
+            this.toggleTimeListener(false);
+            return;
+        }
         if (this.isDestroyed || !this.video || this.video.seeking || this.video.readyState === 0) return;
 
         const currentTime = this.video.currentTime;
         
-        // Handle Manual Skip Notification Lifecycle
         if (this.currentManualSegment) {
             if (currentTime < this.currentManualSegment.start || currentTime >= this.currentManualSegment.end) {
-                // Exited the manual segment
                 this.clearManualNotification();
             }
         }
         
         const timeToNext = this.nextSegmentStart - currentTime;
+		
+		if (timeToNext > 5.0 && !this.currentManualSegment) {
+            // Buffer of 2 seconds for safety
+            const sleepTime = timeToNext - 2.0;
+            if (sleepTime > 1.0) {
+                this.toggleTimeListener(false);
+                this.longDistanceTimer = setTimeout(() => {
+                    this.longDistanceTimer = null;
+                    this.toggleTimeListener(true);
+                }, sleepTime * 1000);
+                return;
+            }
+        }
 
-        // If we aren't near the next known start time, don't check
         if (timeToNext > 0 && !this.currentManualSegment) {
             if (timeToNext < 1.0 && !this.pollingRafId) {
                 this.startHighFreqLoop();
@@ -675,28 +736,32 @@ class SponsorBlockHandler {
         const segmentIdx = this.findSegmentAtTime(currentTime);
 
         if (segmentIdx === -1) {
-            // We missed it or sought past it, find the next one linearly from current pos
             for (let i = this.nextSegmentIndex; i < this.skipSegments.length; i++) {
                 if (this.skipSegments[i].start > currentTime) {
                     this.nextSegmentIndex = i;
                     this.nextSegmentStart = this.skipSegments[i].start;
                     return;
                 }
+				if (this.skipSegments[i].end > currentTime) {
+                    this.nextSegmentIndex = i;
+                    this.nextSegmentStart = this.skipSegments[i].start;
+                    break;
+                }
+
             }
             this.nextSegmentStart = Infinity;
+            this.toggleTimeListener(false); // no more segments to skip, stop listening
             return;
         }
-		
-		const seg = this.skipSegments[segmentIdx];
+        
+        const seg = this.skipSegments[segmentIdx];
         
         if (seg.mode === 'manual_skip') {
             if (this.currentManualSegment !== seg) {
-                // Entered new manual segment
                 this.currentManualSegment = seg;
                 const categoryName = this.getCategoryName(seg.category);
                 const title = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
                 
-                // Show persistent notification (0 duration)
                 if (this.activeManualNotification) this.activeManualNotification.remove();
                 this.activeManualNotification = showNotification(`${title}: Press Blue to skip`, 0);
             }
@@ -711,12 +776,11 @@ class SponsorBlockHandler {
             }
             return;
         }
-		
-		if (this.configCache.skipSegmentsOnce && this.skippedSegmentIndices.has(seg.originalIndex)) {
+        
+        if (this.configCache.skipSegmentsOnce && this.skippedSegmentIndices.has(seg.originalIndex)) {
             return;
         }
 
-        // Guard against spam loop on WebOS 3/4/5 at the end of video
         if (this.isLegacyWebOS &&
             segmentIdx === this.lastSkippedSegmentIndex &&
             this.video.duration - currentTime < 1.0) {
@@ -725,20 +789,17 @@ class SponsorBlockHandler {
 
         let jumpTarget = seg.end;
         const skippedCategories = [this.getCategoryName(seg.category)];
-		const segmentsToMark = [seg.originalIndex];
+        const segmentsToMark = [seg.originalIndex];
 
-        // Chain multiple segments if they are adjacent
         for (let i = segmentIdx + 1; i < this.skipSegments.length; i++) {
             const next = this.skipSegments[i];
             
-            // Only chain if next is also auto_skip
             if (next.mode !== 'auto_skip') break;
-            
             if (next.start > jumpTarget + 0.2) break;
 
             jumpTarget = Math.max(jumpTarget, next.end);
             skippedCategories.push(this.getCategoryName(next.category));
-			segmentsToMark.push(next.originalIndex);
+            segmentsToMark.push(next.originalIndex);
         }
 
         if (segmentIdx === this.lastSkippedSegmentIndex && Math.abs(currentTime - this.lastSkipTime) < 0.1) {
@@ -748,12 +809,11 @@ class SponsorBlockHandler {
         this.isSkipping = true;
         this.lastSkipTime = currentTime;
         this.lastSkippedSegmentIndex = segmentIdx;
-		
-		if (this.configCache.skipSegmentsOnce) {
+        
+        if (this.configCache.skipSegmentsOnce) {
             segmentsToMark.forEach(idx => this.skippedSegmentIndices.add(idx));
         }
 
-        // Legacy mute logic
         if (this.isLegacyWebOS) {
             const duration = this.video.duration;
             if (jumpTarget >= duration - 0.5) {
@@ -783,6 +843,7 @@ class SponsorBlockHandler {
             this.nextSegmentStart = this.skipSegments[this.nextSegmentIndex].start;
         } else {
             this.nextSegmentStart = Infinity;
+            this.toggleTimeListener(false);
         }
 
         this.requestAF(() => {
@@ -811,25 +872,21 @@ class SponsorBlockHandler {
     }
     
     handleBlueButton() {
-        // Priority 1: Manual Skip of current segment
         if (this.currentManualSegment) {
             if (this.video) {
                 this.isSkipping = true;
                 this.lastSkipTime = this.video.currentTime;
                 this.video.currentTime = this.currentManualSegment.end;
                 
-                // Reset manual tracking immediately
                 this.clearManualNotification();
                 
                 this.requestAF(() => showNotification('Skipped Segment'));
                 
-                // Allow time update to resume normally
                 setTimeout(() => { this.isSkipping = false; }, 500);
                 return true;
             }
         }
         
-        // Priority 2: Jump to Highlight
         return this.jumpToNextHighlight();
     }
 
@@ -908,6 +965,10 @@ class SponsorBlockHandler {
     destroy() {
         this.isDestroyed = true;
         this.log('info', 'Destroying instance.');
+        
+        // Remove time listener explicitly
+        this.toggleTimeListener(false);
+		this.clearLongDistanceTimer();
 
         this.rafIds.forEach(id => cancelAnimationFrame(id));
         this.rafIds.clear();
@@ -917,8 +978,9 @@ class SponsorBlockHandler {
             clearTimeout(this.unmuteTimeoutId);
             this.unmuteTimeoutId = null;
         }
+		
+		// Clean up pending chain skip listeners
         
-        // Clean up pending chain skip listeners
         if (this.chainSkipVideo) {
             if (this.boundChainSkipRetry) {
                 this.chainSkipVideo.removeEventListener('loadedmetadata', this.boundChainSkipRetry);
@@ -970,8 +1032,9 @@ class SponsorBlockHandler {
         this.skipSegments = [];
         this.video = null;
         this.progressBar = null;
+		
+		// Clean up Skip Once Set
         
-        // Clean up Skip Once Set
         if (this.skippedSegmentIndices) {
             this.skippedSegmentIndices.clear();
             this.skippedSegmentIndices = null;
