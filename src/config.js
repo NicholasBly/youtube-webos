@@ -159,22 +159,15 @@ for (const [key, value] of Object.entries(segmentTypes)) {
   });
 }
 
-const defaultConfig = (() => {
-  let ret = {};
-  for (const [k, v] of configOptions) {
-    ret[k] = v.default;
-  }
-  return ret;
-})();
+// Build defaultConfig once.
+const defaultConfig = {};
+for (const [k, v] of configOptions) {
+  defaultConfig[k] = v.default;
+}
 
-/** @type {Record<string, DocumentFragment>} as const */
-const configFrags = (() => {
-  let ret = {};
-  for (const k of configOptions.keys()) {
-    ret[k] = new DocumentFragment();
-  }
-  return ret;
-})();
+// Use a pure JS Map for listeners instead of DOM Fragments.
+// Key -> Set<Callback>
+const changeListeners = new Map();
 
 function loadStoredConfig() {
   const storage = window.localStorage.getItem(CONFIG_KEY);
@@ -192,8 +185,9 @@ function loadStoredConfig() {
   }
 }
 
-// Use defaultConfig as a prototype so writes to localConfig don't change it.
-let localConfig = loadStoredConfig() || { ...defaultConfig };
+// Merge defaults with storage immediately.
+// This ensures localConfig is always complete, removing need for checks in configRead.
+let localConfig = Object.assign({}, defaultConfig, loadStoredConfig() || {});
 
 function configExists(key) {
   return configOptions.has(key);
@@ -211,18 +205,7 @@ export function configRead(key) {
   if (!configExists(key)) {
     throw new Error('tried to read unknown config key: ' + key);
   }
-
-  if (localConfig[key] === undefined) {
-    console.warn(
-      'Populating key',
-      key,
-      'with default value',
-      defaultConfig[key]
-    );
-
-    localConfig[key] = defaultConfig[key];
-  }
-
+  
   return localConfig[key];
 }
 
@@ -231,34 +214,45 @@ export function configWrite(key, value) {
     throw new Error('tried to write unknown config key: ' + key);
   }
 
-  const oldValue =
-    localConfig[key] !== undefined ? localConfig[key] : defaultConfig[key];
+  const oldValue = localConfig[key];
+
+  if (oldValue === value) {
+    return; 
+  }
 
   console.info('Changing key', key, 'from', oldValue, 'to', value);
   localConfig[key] = value;
+  
   window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
 
-  configFrags[key].dispatchEvent(
-    new CustomEvent('ytafConfigChange', {
-      detail: { key, newValue: value, oldValue }
-    })
-  );
+  const listeners = changeListeners.get(key);
+  if (listeners) {
+    const syntheticEvent = {
+        detail: { key, newValue: value, oldValue }
+    };
+    for (const callback of listeners) {
+        callback(syntheticEvent);
+    }
+  }
 }
 
 /**
  * Add a listener for changes in the value of a specified config option
  * @param {string} key Config option to monitor
- * @param {(evt: Event) => void} callback Function to be called on change
+ * @param {(evt: Object) => void} callback Function to be called on change
  */
 export function configAddChangeListener(key, callback) {
-  const frag = configFrags[key];
+  if (!configExists(key)) return;
 
-  frag.addEventListener('ytafConfigChange', callback);
+  if (!changeListeners.has(key)) {
+      changeListeners.set(key, new Set());
+  }
+  changeListeners.get(key).add(callback);
 }
+
 export function configRemoveChangeListener(key, callback) {
-  if (configFrags[key]) {
-    const frag = configFrags[key];
-    frag.removeEventListener('ytafConfigChange', callback);
+  if (changeListeners.has(key)) {
+    changeListeners.get(key).delete(callback);
   }
 }
 

@@ -57,7 +57,7 @@ class SponsorBlockHandler {
         this.wasMutedBySB = false;
         this.isDestroyed = false;
         this.skippedSegmentIndices = new Set();
-        
+
         // Manual skip tracking
         this.activeManualNotification = null;
         this.currentManualSegment = null;
@@ -74,10 +74,10 @@ class SponsorBlockHandler {
         // High Frequency Polling
         this.pollingRafId = null;
         this.boundHighFreqLoop = this.highFreqLoop.bind(this);
-        
+
         this.isTimeListenerActive = false;
         this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
-		this.longDistanceTimer = null;
+        this.longDistanceTimer = null;
 
         this.configCache = {};
         this.lastOverlayHash = null;
@@ -99,6 +99,7 @@ class SponsorBlockHandler {
     }
 
     log(level, message, ...args) {
+        // Check flag before string allocation
         if ((level === 'debug' || level === 'info') && !this.debugMode) return;
         const prefix = `[SB:${this.videoID}]`;
         console[level === 'warn' ? 'warn' : 'log'](prefix, message, ...args);
@@ -134,45 +135,46 @@ class SponsorBlockHandler {
 
         this.skipSegments = [];
 
-        for (let i = 0; i < this.segments.length; i++) {
+        const len = this.segments.length;
+        for (let i = 0; i < len; i++) {
             const seg = this.segments[i];
 
             if (seg.category === 'poi_highlight') continue;
-            
+
             const mode = this.configCache[seg.category];
-            if (!mode || mode === 'disable' || mode === 'seek_bar') continue; // seek_bar only shows in overlay, doesn't need skip tracking
+            if (!mode || mode === 'disable' || mode === 'seek_bar') continue;
             if (seg.actionType && seg.actionType !== 'skip') continue;
 
             this.skipSegments.push({
                 start: seg.segment[0],
                 end: seg.segment[1],
                 category: seg.category,
-                mode: mode, // 'auto_skip' or 'manual_skip'
+                mode: mode,
                 originalIndex: i
             });
         }
         this.resetSegmentTracking();
     }
-    
+
     toggleTimeListener(enable) {
         if (!this.video) return;
-        
+
         if (enable) {
             if (!this.isTimeListenerActive) {
                 this.video.addEventListener('timeupdate', this.boundTimeUpdate);
                 this.isTimeListenerActive = true;
-                this.log('debug', 'Time listener attached');
+				this.log('debug', 'Time listener attached');
             }
         } else {
             if (this.isTimeListenerActive) {
                 this.video.removeEventListener('timeupdate', this.boundTimeUpdate);
                 this.isTimeListenerActive = false;
-                this.log('debug', 'Time listener detached');
+				this.log('debug', 'Time listener detached');
             }
         }
     }
-	
-	clearLongDistanceTimer() {
+
+    clearLongDistanceTimer() {
         if (this.longDistanceTimer) {
             clearTimeout(this.longDistanceTimer);
             this.longDistanceTimer = null;
@@ -180,32 +182,37 @@ class SponsorBlockHandler {
     }
 
     resetSegmentTracking() {
-		this.clearLongDistanceTimer(); // Clear any existing sleep
+        this.clearLongDistanceTimer();
+        
+        // Default state
         this.nextSegmentIndex = 0;
         this.nextSegmentStart = this.skipSegments.length > 0 ? this.skipSegments[0].start : Infinity;
-        
-        // Find correct segment index if we are already deep in the video
+
+        // Find the first segment that starts AFTER the current time, or contains current time.
         if (this.video && !isNaN(this.video.currentTime) && this.skipSegments.length > 0) {
             const time = this.video.currentTime;
-            for (let i = 0; i < this.skipSegments.length; i++) {
-                if (this.skipSegments[i].start > time) {
-                    this.nextSegmentIndex = i;
-                    this.nextSegmentStart = this.skipSegments[i].start;
-                    break;
-                }
-				if (this.skipSegments[i].end > time) {
-                    this.nextSegmentIndex = i;
-                    this.nextSegmentStart = this.skipSegments[i].start;
-                    break;
+            
+            // Check if we are currently inside a segment
+            const currentIdx = this.findSegmentAtTime(time);
+            
+            if (currentIdx !== -1) {
+                this.nextSegmentIndex = currentIdx;
+                this.nextSegmentStart = this.skipSegments[currentIdx].start;
+            } else {
+                // Not in a segment, find the next one
+                this.nextSegmentIndex = this.findNextSegmentIndex(time);
+                if (this.nextSegmentIndex < this.skipSegments.length) {
+                    this.nextSegmentStart = this.skipSegments[this.nextSegmentIndex].start;
+                } else {
+                    this.nextSegmentStart = Infinity;
                 }
             }
         }
 
         this.clearManualNotification();
-        
         this.toggleTimeListener(this.nextSegmentStart !== Infinity);
     }
-    
+
     clearManualNotification() {
         if (this.activeManualNotification) {
             this.activeManualNotification.remove();
@@ -214,6 +221,7 @@ class SponsorBlockHandler {
         this.currentManualSegment = null;
     }
 
+    // O(log N) - Finds segment containing time
     findSegmentAtTime(time) {
         if (this.skipSegments.length === 0) return -1;
 
@@ -233,6 +241,24 @@ class SponsorBlockHandler {
             }
         }
         return -1;
+    }
+
+    // O(log N) - Finds first segment starting after or at time
+    findNextSegmentIndex(time) {
+        let left = 0;
+        let right = this.skipSegments.length - 1;
+        let res = this.skipSegments.length;
+
+        while (left <= right) {
+            const mid = (left + right) >>> 1;
+            if (this.skipSegments[mid].start > time) {
+                res = mid;
+                right = mid - 1;
+            } else {
+                left = mid + 1;
+            }
+        }
+        return res;
     }
 
     setupConfigListeners() {
@@ -278,6 +304,10 @@ class SponsorBlockHandler {
         if (!video || this.hasPerformedChainSkip || this.isDestroyed) return false;
 
         if (video.readyState === 0) {
+            // Clean up existing listener if exists to prevent dupe
+            if (this.boundChainSkipRetry) {
+                this.chainSkipVideo.removeEventListener('loadedmetadata', this.boundChainSkipRetry);
+            }
             this.chainSkipVideo = video;
             this.boundChainSkipRetry = () => {
                 video.removeEventListener('loadedmetadata', this.boundChainSkipRetry);
@@ -337,7 +367,7 @@ class SponsorBlockHandler {
 
         this.unmuteTimeoutId = setTimeout(() => {
             if (this.isDestroyed) return;
-            
+
             if (this.boundChainSkipSeeked) {
                 video.removeEventListener('seeked', this.boundChainSkipSeeked);
                 this.boundChainSkipSeeked = null;
@@ -355,15 +385,13 @@ class SponsorBlockHandler {
         video.currentTime = chain.endTime;
         this.lastSkipTime = chain.endTime;
         this.hasPerformedChainSkip = true;
-        
-        if (this.configCache.skipSegmentsOnce) {
-            enabledSegs.forEach(seg => {
-                if (seg.segment[1] <= chain.endTime + 0.1) {
-                    const idx = this.segments.indexOf(seg);
-                    if (idx !== -1) this.skippedSegmentIndices.add(idx);
-                }
-            });
-        }
+		
+		enabledSegs.forEach(seg => {
+            if (seg.segment[1] <= chain.endTime + 0.1) {
+                const idx = this.segments.indexOf(seg);
+                if (idx !== -1) this.skippedSegmentIndices.add(idx);
+            }
+        });
 
         this.requestAF(() => {
             const categories = chain.chainDescription.split(' → ')
@@ -404,6 +432,7 @@ class SponsorBlockHandler {
 
             if (!videoData?.segments?.length) return;
 
+            // sort in place is fine
             this.segments = videoData.segments.sort((a, b) => a.segment[0] - b.segment[0]);
             this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
 
@@ -420,7 +449,7 @@ class SponsorBlockHandler {
 
             this.start();
             sponsorBlockUI.updateSegments(this.segments);
-            
+
             if (this.highlightSegment) {
                 const hlMode = this.configCache.sbMode_highlight;
                 if (hlMode === 'auto_skip') {
@@ -442,17 +471,17 @@ class SponsorBlockHandler {
         if (!this.video) return;
 
         this.injectCSS();
-        
-        // Initial attach is handled by resetSegmentTracking called in init -> rebuildSkipSegments
-        // But we double check here in case start() is called late
         this.toggleTimeListener(this.nextSegmentStart !== Infinity);
 
         this.addEvent(this.video, 'ended', () => {
             this.hasPerformedChainSkip = false;
-			this.clearLongDistanceTimer(); // Clean up timer on end
+            this.clearLongDistanceTimer();
         });
 
         this.addEvent(this.video, 'play', () => {
+            // Check for progress bar existence on play in case UI was destroyed (e.g. after side-panel interaction)
+            this.checkForProgressBar();
+
             if (this.video.currentTime < CHAIN_SKIP_CONSTANTS.START_THRESHOLD) {
                 this.hasPerformedChainSkip = false;
                 this.executeChainSkip(this.video);
@@ -474,9 +503,7 @@ class SponsorBlockHandler {
                 this.lastSkippedSegmentIndex = -1;
                 this.lastNotifiedSegmentIndex = -1;
                 this.resetSegmentTracking();
-                
-                // Manually trigger one check to handle immediate skip scenarios on seek
-                this.handleTimeUpdate();
+                this.handleTimeUpdate(); // Handle immediate skip
             }
 
             this.isSkipping = false;
@@ -506,7 +533,10 @@ class SponsorBlockHandler {
         const OPTIMAL_SELECTOR = 'ytlr-progress-bar';
 
         const startOptimizedObserver = (targetNode) => {
-            this.log('info', 'Attaching optimized observer to:', targetNode.tagName);
+            // Observe parent to catch if the bar itself is destroyed/recreated by the framework
+            const observeTarget = targetNode.parentNode || targetNode;
+            this.log('info', 'Attaching optimized observer to:', observeTarget.tagName);
+            
             this.domObserver = new MutationObserver((mutations) => {
                 if (this.isProcessing || this.isDestroyed) return;
 
@@ -514,7 +544,8 @@ class SponsorBlockHandler {
                 for (const m of mutations) {
                     if (m.type === 'attributes') {
                         if (m.target === this.progressBar) shouldCheck = true;
-                    } else {
+                    } else if (m.type === 'childList') {
+                        // If observing parent, childList changes mean the bar might be replaced
                         shouldCheck = true;
                     }
                     if (shouldCheck) break;
@@ -529,7 +560,7 @@ class SponsorBlockHandler {
                 }
             });
 
-            this.domObserver.observe(targetNode, {
+            this.domObserver.observe(observeTarget, {
                 childList: true,
                 subtree: true,
                 attributes: true,
@@ -562,8 +593,8 @@ class SponsorBlockHandler {
 
     checkForProgressBar() {
         if (this.isDestroyed) return;
-        if (this.overlay && document.body.contains(this.overlay) &&
-            this.progressBar && document.body.contains(this.progressBar)) {
+        // Don't re-query if we have a valid progress bar in DOM
+        if (this.overlay && this.overlay.parentNode && document.body.contains(this.overlay.parentNode)) {
             return;
         }
 
@@ -584,6 +615,7 @@ class SponsorBlockHandler {
 
         if (target) {
             this.progressBar = target;
+            // Get computed style only once
             const style = window.getComputedStyle(target);
             if (style.position === 'static') target.style.position = 'relative';
             if (style.overflow !== 'visible') target.style.setProperty('overflow', 'visible', 'important');
@@ -608,14 +640,16 @@ class SponsorBlockHandler {
         const fragment = document.createDocumentFragment();
         const highlightMode = this.configCache.sbMode_highlight;
 
-        this.segments.forEach(segment => {
+        const len = this.segments.length;
+        for (let i = 0; i < len; i++) {
+            const segment = this.segments[i];
             const isHighlight = segment.category === 'poi_highlight';
 
             if (isHighlight) {
-                if (!highlightMode || highlightMode === 'disable') return;
+                if (!highlightMode || highlightMode === 'disable') continue;
             } else {
                 const mode = this.configCache[segment.category];
-                if (!mode || mode === 'disable') return;
+                if (!mode || mode === 'disable') continue;
             }
 
             const [start, end] = segment.segment;
@@ -641,7 +675,7 @@ class SponsorBlockHandler {
             }
 
             fragment.appendChild(div);
-        });
+        }
 
         this.overlay = document.createElement('div');
         this.overlay.id = 'previewbar';
@@ -688,6 +722,7 @@ class SponsorBlockHandler {
             return;
         }
 
+        // Only process time update if we are close to the target
         if (this.video.currentTime >= this.nextSegmentStart) {
             this.handleTimeUpdate();
             this.stopHighFreqLoop();
@@ -704,17 +739,17 @@ class SponsorBlockHandler {
         if (this.isDestroyed || !this.video || this.video.seeking || this.video.readyState === 0) return;
 
         const currentTime = this.video.currentTime;
-        
+
         if (this.currentManualSegment) {
             if (currentTime < this.currentManualSegment.start || currentTime >= this.currentManualSegment.end) {
                 this.clearManualNotification();
             }
         }
-        
+
+        // Trust nextSegmentStart to avoid unnecessary searches
         const timeToNext = this.nextSegmentStart - currentTime;
-		
-		if (timeToNext > 5.0 && !this.currentManualSegment) {
-            // Buffer of 2 seconds for safety
+
+        if (timeToNext > 5.0 && !this.currentManualSegment) {
             const sleepTime = timeToNext - 2.0;
             if (sleepTime > 1.0) {
                 this.toggleTimeListener(false);
@@ -730,53 +765,54 @@ class SponsorBlockHandler {
             if (timeToNext < 1.0 && !this.pollingRafId) {
                 this.startHighFreqLoop();
             }
+            // Early exit if we are not yet at the segment start
             return;
         }
 
+        // Binary Search O(log N)
         const segmentIdx = this.findSegmentAtTime(currentTime);
 
         if (segmentIdx === -1) {
-            for (let i = this.nextSegmentIndex; i < this.skipSegments.length; i++) {
-                if (this.skipSegments[i].start > currentTime) {
-                    this.nextSegmentIndex = i;
-                    this.nextSegmentStart = this.skipSegments[i].start;
-                    return;
-                }
-				if (this.skipSegments[i].end > currentTime) {
-                    this.nextSegmentIndex = i;
-                    this.nextSegmentStart = this.skipSegments[i].start;
-                    break;
-                }
-
+            // We aren't in a segment. Since resetSegmentTracking was correct, 
+            // and we checked timeToNext, we are just between segments or past the last one.
+            
+            // Re-sync next segment just in case (e.g. slight drift)
+            if (currentTime >= this.nextSegmentStart) {
+                 this.nextSegmentIndex = this.findNextSegmentIndex(currentTime);
+                 if (this.nextSegmentIndex < this.skipSegments.length) {
+                     this.nextSegmentStart = this.skipSegments[this.nextSegmentIndex].start;
+                 } else {
+                     this.nextSegmentStart = Infinity;
+                     this.toggleTimeListener(false);
+                 }
             }
-            this.nextSegmentStart = Infinity;
-            this.toggleTimeListener(false); // no more segments to skip, stop listening
             return;
         }
-        
+
+        // We are inside a segment
         const seg = this.skipSegments[segmentIdx];
-        
+
         if (seg.mode === 'manual_skip') {
             if (this.currentManualSegment !== seg) {
                 this.currentManualSegment = seg;
                 const categoryName = this.getCategoryName(seg.category);
                 const title = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
-                
+
                 if (this.activeManualNotification) this.activeManualNotification.remove();
                 this.activeManualNotification = showNotification(`${title}: Press Blue to skip`, 0);
             }
             return;
         }
-        
+
         if (seg.mode !== 'auto_skip') {
-             if (segmentIdx !== this.lastNotifiedSegmentIndex) {
+            if (segmentIdx !== this.lastNotifiedSegmentIndex) {
                 this.lastNotifiedSegmentIndex = segmentIdx;
                 const categoryName = this.getCategoryName(seg.category);
                 showNotification(`${categoryName.charAt(0).toUpperCase() + categoryName.slice(1)} segment`);
             }
             return;
         }
-        
+
         if (this.configCache.skipSegmentsOnce && this.skippedSegmentIndices.has(seg.originalIndex)) {
             return;
         }
@@ -793,7 +829,7 @@ class SponsorBlockHandler {
 
         for (let i = segmentIdx + 1; i < this.skipSegments.length; i++) {
             const next = this.skipSegments[i];
-            
+
             if (next.mode !== 'auto_skip') break;
             if (next.start > jumpTarget + 0.2) break;
 
@@ -809,10 +845,8 @@ class SponsorBlockHandler {
         this.isSkipping = true;
         this.lastSkipTime = currentTime;
         this.lastSkippedSegmentIndex = segmentIdx;
-        
-        if (this.configCache.skipSegmentsOnce) {
-            segmentsToMark.forEach(idx => this.skippedSegmentIndices.add(idx));
-        }
+		
+		segmentsToMark.forEach(idx => this.skippedSegmentIndices.add(idx));
 
         if (this.isLegacyWebOS) {
             const duration = this.video.duration;
@@ -839,6 +873,10 @@ class SponsorBlockHandler {
         }
 
         this.nextSegmentIndex = segmentIdx + 1;
+        // Re-find next index properly via binary search just to be safe after a skip
+        const nextIdx = this.findNextSegmentIndex(jumpTarget);
+        this.nextSegmentIndex = nextIdx;
+        
         if (this.nextSegmentIndex < this.skipSegments.length) {
             this.nextSegmentStart = this.skipSegments[this.nextSegmentIndex].start;
         } else {
@@ -862,31 +900,31 @@ class SponsorBlockHandler {
 
     jumpToNextHighlight() {
         if (!this.video || !this.highlightSegment) return false;
-        
+
         const mode = this.configCache.sbMode_highlight;
         if (!mode || mode === 'disable') return false;
-        
+
         this.video.currentTime = this.highlightSegment.segment[0];
         this.requestAF(() => showNotification('Jumped to Highlight'));
         return true;
     }
-    
+
     handleBlueButton() {
         if (this.currentManualSegment) {
             if (this.video) {
                 this.isSkipping = true;
                 this.lastSkipTime = this.video.currentTime;
                 this.video.currentTime = this.currentManualSegment.end;
-                
+
                 this.clearManualNotification();
-                
+
                 this.requestAF(() => showNotification('Skipped Segment'));
-                
+
                 setTimeout(() => { this.isSkipping = false; }, 500);
                 return true;
             }
         }
-        
+
         return this.jumpToNextHighlight();
     }
 
@@ -910,7 +948,7 @@ class SponsorBlockHandler {
             try {
                 const fetchURL = `${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&actionTypes=${encodeURIComponent(actionTypes)}&videoID=${this.videoID}`;
                 const hasAbortController = typeof AbortController !== 'undefined';
-                
+
                 let res;
                 if (hasAbortController) {
                     this.abortController = new AbortController();
@@ -926,7 +964,7 @@ class SponsorBlockHandler {
                         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), SPONSORBLOCK_CONFIG.timeout))
                     ]);
                 }
-                
+
                 return res.ok ? await res.json() : null;
             } catch (e) {
                 if (!this.isDestroyed && e.name !== 'AbortError') {
@@ -965,10 +1003,9 @@ class SponsorBlockHandler {
     destroy() {
         this.isDestroyed = true;
         this.log('info', 'Destroying instance.');
-        
-        // Remove time listener explicitly
+
         this.toggleTimeListener(false);
-		this.clearLongDistanceTimer();
+        this.clearLongDistanceTimer();
 
         this.rafIds.forEach(id => cancelAnimationFrame(id));
         this.rafIds.clear();
@@ -978,9 +1015,7 @@ class SponsorBlockHandler {
             clearTimeout(this.unmuteTimeoutId);
             this.unmuteTimeoutId = null;
         }
-		
-		// Clean up pending chain skip listeners
-        
+
         if (this.chainSkipVideo) {
             if (this.boundChainSkipRetry) {
                 this.chainSkipVideo.removeEventListener('loadedmetadata', this.boundChainSkipRetry);
@@ -1002,7 +1037,7 @@ class SponsorBlockHandler {
             this.abortController.abort();
             this.abortController = null;
         }
-        
+
         this.clearManualNotification();
 
         sponsorBlockUI.togglePopup(false);
@@ -1032,9 +1067,7 @@ class SponsorBlockHandler {
         this.skipSegments = [];
         this.video = null;
         this.progressBar = null;
-		
-		// Clean up Skip Once Set
-        
+
         if (this.skippedSegmentIndices) {
             this.skippedSegmentIndices.clear();
             this.skippedSegmentIndices = null;

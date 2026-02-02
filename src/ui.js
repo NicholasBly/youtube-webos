@@ -17,6 +17,10 @@ let lastShortcutTime = 0;
 let lastShortcutKey = -1;
 let shortcutDebounceTime = 400;
 
+// Lazy load variable
+let optionsPanel = null;
+let optionsPanelVisible = false;
+
 // --- Polyfills & Helpers ---
 
 if (!Element.prototype.matches) {
@@ -57,18 +61,37 @@ const getKeyColor = (charCode) => colorCodeMap.get(charCode) || null;
 
 // --- DOM Utility Functions ---
 
-// Helper: Create DOM element with properties
 const createElement = (tag, props = {}, ...children) => {
   const el = document.createElement(tag);
-  Object.entries(props).forEach(([key, val]) => {
-    if (key === 'style' && typeof val === 'object') Object.assign(el.style, val);
-    else if (key === 'class') el.className = val;
-    else if (key === 'events' && typeof val === 'object') Object.entries(val).forEach(([evt, fn]) => el.addEventListener(evt, fn));
-    else if (key === 'text') el.textContent = val;
-    else if (key === 'html') el.innerHTML = val;
-    else el[key] = val;
-  });
-  children.forEach(child => el.appendChild(typeof child === 'string' ? document.createTextNode(child) : child));
+  
+  for (const key in props) {
+      if (Object.prototype.hasOwnProperty.call(props, key)) {
+          const val = props[key];
+          if (key === 'style' && typeof val === 'object') {
+              for (const styleKey in val) {
+                  if (Object.prototype.hasOwnProperty.call(val, styleKey)) {
+                      el.style[styleKey] = val[styleKey];
+                  }
+              }
+          }
+          else if (key === 'class') el.className = val;
+          else if (key === 'events' && typeof val === 'object') {
+              for (const evt in val) {
+                  if (Object.prototype.hasOwnProperty.call(val, evt)) {
+                      el.addEventListener(evt, val[evt]);
+                  }
+              }
+          }
+          else if (key === 'text') el.textContent = val;
+          else if (key === 'html') el.innerHTML = val;
+          else el[key] = val;
+      }
+  }
+
+  for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      el.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+  }
   return el;
 };
 
@@ -402,14 +425,25 @@ function createOptionsPanel() {
   return elmContainer;
 }
 
-const optionsPanel = createOptionsPanel();
-document.body.appendChild(optionsPanel);
-let optionsPanelVisible = false;
+// Lazy Load: optionsPanel is not created here.
+// document.body.appendChild(optionsPanel); removed
 
 function showOptionsPanel(visible) {
   if (visible === undefined || visible === null) visible = true;
   
   if (visible && !optionsPanelVisible) {
+    
+    // Lazy Initialization
+    if (!optionsPanel) {
+        console.log('[UI] Initializing Options Panel (Lazy Load)...');
+        optionsPanel = createOptionsPanel();
+        document.body.appendChild(optionsPanel);
+        
+        // Apply startup states that depend on panel existence
+        applyOledMode(configRead('enableOledCareMode'));
+        applyTheme(configRead('uiTheme'));
+    }
+
     console.info('Showing and focusing options panel!');
     optionsPanel.style.display = 'block';
     if (optionsPanel.activePage === 1 && (isWatchPage())) sponsorBlockUI.togglePopup(true);
@@ -420,7 +454,7 @@ function showOptionsPanel(visible) {
     if (firstVisibleInput) { firstVisibleInput.focus(); lastSafeFocus = firstVisibleInput; }
     else { optionsPanel.focus(); lastSafeFocus = optionsPanel; }
     optionsPanelVisible = true;
-  } else if (!visible && optionsPanelVisible) {
+  } else if (!visible && optionsPanelVisible && optionsPanel) {
     console.info('Hiding options panel!');
     optionsPanel.style.display = 'none';
     sponsorBlockUI.togglePopup(false);
@@ -432,7 +466,7 @@ function showOptionsPanel(visible) {
 
 // Trap focus inside options panel when visible
 document.addEventListener('focus', (e) => {
-  if (!optionsPanelVisible) return;
+  if (!optionsPanelVisible || !optionsPanel) return;
   const target = e.target;
   const isSafeFocus = (optionsPanel && optionsPanel.contains(target)) || (target.closest && target.closest('.sb-segments-popup'));
   if (isSafeFocus) lastSafeFocus = target;
@@ -468,7 +502,9 @@ async function skipChapter(direction = 'next') {
   const getChapterEls = () => {
     const bar = document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]');
     if (!bar) return [];
-    return Array.from(bar.children).filter(el => { const key = el.getAttribute('idomkey'); return key && key.startsWith('chapter-'); });
+    // Avoid creating an array copy if possible, but structure might require it. 
+    // Using bar.children directly in loop below.
+    return bar.children;
   };
 
   let chapterEls = getChapterEls();
@@ -490,31 +526,59 @@ async function skipChapter(direction = 'next') {
     return;
   }
 
-  let totalWidth = 0;
-  const chapterData = chapterEls.map(el => { const width = parseFloat(el.style.width || '0'); const data = { width, startIndex: totalWidth }; totalWidth += width; return data; });
-  if (totalWidth === 0) return;
-
-  const timestamps = chapterData.map(c => (c.startIndex / totalWidth) * video.duration);
+  // Single-pass calculation O(N)
+  const totalDuration = video.duration;
   const currentTime = video.currentTime;
-  let targetTime;
+  let accumulatedWidth = 0;
+  let totalWidth = 0;
 
-  if (direction === 'next') {
-    targetTime = timestamps.find(t => t > currentTime + 1);
-  } else {
-    // Find the chapter we are currently in
-    let currentIdx = -1;
-    for (let i = 0; i < timestamps.length; i++) { if (currentTime >= timestamps[i]) currentIdx = i; else break; }
-    
-    if (currentIdx !== -1) {
-      const chapterStart = timestamps[currentIdx];
-      // If we are deep into the chapter (>3s), restart chapter. Else go to previous.
-      if (currentTime - chapterStart > 3) targetTime = chapterStart;
-      else if (currentIdx > 0) targetTime = timestamps[currentIdx - 1];
-      else targetTime = 0;
-    } else targetTime = 0;
+  // 1. Calculate total width first
+  for (let i = 0; i < chapterEls.length; i++) {
+      const el = chapterEls[i];
+      if (el.getAttribute('idomkey')?.startsWith('chapter-')) {
+          totalWidth += parseFloat(el.style.width || '0');
+      }
   }
 
-  if (targetTime !== undefined && targetTime < video.duration) {
+  if (totalWidth === 0) return;
+
+  let targetTime = -1;
+  let currentChapterStart = 0;
+  let prevChapterStart = 0;
+
+  // 2. Find target
+  for (let i = 0; i < chapterEls.length; i++) {
+      const el = chapterEls[i];
+      if (!el.getAttribute('idomkey')?.startsWith('chapter-')) continue;
+
+      const width = parseFloat(el.style.width || '0');
+      const startTimestamp = (accumulatedWidth / totalWidth) * totalDuration;
+      accumulatedWidth += width;
+
+      if (direction === 'next') {
+        if (startTimestamp > currentTime + 1) {
+            targetTime = startTimestamp;
+            break;
+        }
+      } else {
+        // Prev logic
+        if (currentTime >= startTimestamp) {
+            prevChapterStart = currentChapterStart;
+            currentChapterStart = startTimestamp;
+        } else {
+            // Passed current time
+            break;
+        }
+      }
+  }
+  
+  // Finalize Previous Target
+  if (direction !== 'next') {
+      if (currentTime - currentChapterStart > 3) targetTime = currentChapterStart;
+      else targetTime = prevChapterStart;
+  }
+
+  if (targetTime !== -1 && targetTime < video.duration) {
     video.currentTime = targetTime;
     showNotification(direction === 'next' ? 'Next Chapter' : 'Previous Chapter');
     if (wasForcedNow) setTimeout(() => simulateBack(), 250);
@@ -583,11 +647,13 @@ function handleShortcutAction(action) {
             }
 			
 		setTimeout(() => sendKey(REMOTE_KEYS.BACK, document.activeElement), 250); // don't press back button if we're on shorts or we leave the page
+		}
 		
-        setTimeout(() => {
-          document.body.classList.remove('ytaf-hide-controls');
-          if (watchOverlay) watchOverlay.style.opacity = '';
-        }, 750);
+		if(needsHide && !isShortsPage()) {
+			setTimeout(() => {
+			  document.body.classList.remove('ytaf-hide-controls');
+			  if (watchOverlay) watchOverlay.style.opacity = '';
+			}, 750);
 		}
       }
     },
@@ -889,14 +955,18 @@ function updateLogoState() {
 }
 
 function applyOledMode(enabled) {
-  const optionsPanel = document.querySelector('.ytaf-ui-container');
   const notificationContainer = document.querySelector('.ytaf-notification-container');
   const oledClass = 'oled-care';
 
   document.getElementById('style-gray-ui-oled-care')?.remove();
 
+  // Lazy Load Support: optionsPanel might be null
+  if (optionsPanel) {
+      if (enabled) optionsPanel.classList.add(oledClass);
+      else optionsPanel.classList.remove(oledClass);
+  }
+  
   if (enabled) {
-    optionsPanel?.classList.add(oledClass);
     if(notificationContainer) notificationContainer.classList.add(oledClass);
     
     const opacityVal = configRead('videoShelfOpacity');
@@ -927,17 +997,21 @@ function applyOledMode(enabled) {
     });
     document.head.appendChild(style);
   } else {
-    optionsPanel?.classList.remove(oledClass);
     if(notificationContainer) notificationContainer.classList.remove(oledClass);
   }
   updateLogoState();
 }
 
 function applyTheme(theme) {
-  const optionsPanel = document.querySelector('.ytaf-ui-container');
   const notificationContainer = document.querySelector('.ytaf-notification-container');
-  if (theme === 'classic-red') { optionsPanel?.classList.add('theme-classic-red'); notificationContainer?.classList.add('theme-classic-red'); }
-  else { optionsPanel?.classList.remove('theme-classic-red'); notificationContainer?.classList.remove('theme-classic-red'); }
+  // Lazy Load Support: optionsPanel might be null
+  if (optionsPanel) {
+      if (theme === 'classic-red') optionsPanel.classList.add('theme-classic-red');
+      else optionsPanel.classList.remove('theme-classic-red');
+  }
+  
+  if (theme === 'classic-red') { notificationContainer?.classList.add('theme-classic-red'); }
+  else { notificationContainer?.classList.remove('theme-classic-red'); }
   updateLogoState();
 }
 
@@ -945,6 +1019,7 @@ function applyTheme(theme) {
 initGlobalStyles();
 initVideoQuality();
 
+// Initial apply (will skip UI elements if they don't exist yet, but handle global styles)
 applyOledMode(configRead('enableOledCareMode'));
 configAddChangeListener('enableOledCareMode', (evt) => applyOledMode(evt.detail.newValue));
 
