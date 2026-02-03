@@ -26,17 +26,19 @@ let activeSeekNotification = null;
 let optionsPanel = null;
 let optionsPanelVisible = false;
 
-const shortcutCache = new Array(10).fill(null);
+const shortcutCache = {};
+// Define keys including colors
+const shortcutKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'red', 'green', 'blue'];
 
-function updateShortcutCache(keyIndex) {
-    shortcutCache[keyIndex] = configRead(`shortcut_key_${keyIndex}`);
+function updateShortcutCache(key) {
+    shortcutCache[key] = configRead(`shortcut_key_${key}`);
 }
 
 // Initialize cache and listeners
-for (let i = 0; i <= 9; i++) {
-    updateShortcutCache(i);
-    configAddChangeListener(`shortcut_key_${i}`, () => updateShortcutCache(i));
-}
+shortcutKeys.forEach(key => {
+    updateShortcutCache(key);
+    configAddChangeListener(`shortcut_key_${key}`, () => updateShortcutCache(key));
+});
 
 // --- Polyfills & Helpers ---
 
@@ -116,12 +118,14 @@ const createElement = (tag, props = {}, ...children) => {
 
 function createConfigCheckbox(key) {
   const elmInput = createElement('input', { type: 'checkbox', checked: configRead(key), events: { change: (evt) => configWrite(key, evt.target.checked) }});
+  
+  const labelContent = createElement('div', { class: 'label-content', style: { fontSize: '2.1vh' } }, elmInput, `\u00A0${configGetDesc(key)}`);
+  const elmLabel = createElement('label', {}, labelContent);
+  
   elmInput.addEventListener('focus', () => elmLabel.classList.add('focused'));
   elmInput.addEventListener('blur', () => elmLabel.classList.remove('focused'));
   configAddChangeListener(key, (evt) => elmInput.checked = evt.detail.newValue);
   
-  const labelContent = createElement('div', { class: 'label-content', style: { fontSize: '2.1vh' } }, elmInput, `\u00A0${configGetDesc(key)}`);
-  const elmLabel = createElement('label', {}, labelContent);
   return elmLabel;
 }
 
@@ -197,10 +201,15 @@ function createSection(title, elements) {
   return fieldset;
 }
 
-function createShortcutControl(keyIndex) {
-  const configKey = `shortcut_key_${keyIndex}`;
+function createShortcutControl(keyIdentifier) {
+  const configKey = `shortcut_key_${keyIdentifier}`;
   const actions = Object.keys(shortcutActions);
+  const isColor = ['red', 'green', 'blue'].includes(keyIdentifier);
   
+  const labelText = isColor 
+    ? `${keyIdentifier.charAt(0).toUpperCase() + keyIdentifier.slice(1)} Button` 
+    : `Key ${keyIdentifier}`;
+
   const valueText = createElement('span', { class: 'current-value' });
   const updateDisplay = () => valueText.textContent = shortcutActions[configRead(configKey)] || configRead(configKey);
   const cycle = (dir) => {
@@ -223,7 +232,7 @@ function createShortcutControl(keyIndex) {
       click: () => cycle('next')
     }
   }, 
-    createElement('span', { text: `Key ${keyIndex}`, class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
+    createElement('span', { text: labelText, class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
     createElement('div', { class: 'shortcut-value-container' },
       createElement('span', { text: '<', class: 'arrow-btn' }),
       valueText,
@@ -322,7 +331,7 @@ function createOptionsPanel() {
 
   // Keyboard Navigation for the Options Panel
   elmContainer.addEventListener('keydown', (evt) => {
-    if (getKeyColor(evt.charCode) === 'green') return; // Let global handler handle close
+    if (getKeyColor(evt.charCode || evt.keyCode) === 'green') return; // Let global handler handle close if mapped to green (or config_menu logic)
 
     if (evt.keyCode in ARROW_KEY_CODE) {
       const dir = ARROW_KEY_CODE[evt.keyCode];
@@ -416,14 +425,14 @@ function createOptionsPanel() {
 	createConfigCheckbox('skipSegmentsOnce')
   );
   pageSponsor.appendChild(elmBlock);
-  pageSponsor.appendChild(createElement('div', { html: '<small>Sponsor segments skipping - https://sponsor.ajay.app<br>Use blue button on remote to skip to highlight or skip segments manually</small>' }));
+  pageSponsor.appendChild(createElement('div', { html: '<small>Sponsor segments skipping - https://sponsor.ajay.app</small>' }));
   pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'Shortcuts <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(2) }}));
   elmContainer.appendChild(pageSponsor);
 
   // --- Page 3: Shortcuts ---
   pageShortcuts = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-shortcuts', style: { display: 'none' }});
   pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> SponsorBlock Settings', events: { click: () => setActivePage(1) }}));
-  for (let i = 0; i <= 9; i++) pageShortcuts.appendChild(createShortcutControl(i));
+  shortcutKeys.forEach(key => pageShortcuts.appendChild(createShortcutControl(key)));
   pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'UI Tweaks <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(3) }}));
   elmContainer.appendChild(pageShortcuts);
   
@@ -605,9 +614,13 @@ async function skipChapter(direction = 'next') {
   }
 }
 
-function performBurstSeek(seconds) {
-    const video = document.querySelector('video');
+function performBurstSeek(seconds, video) {
+    if (!video) video = document.querySelector('video');
     if (!video) return;
+	
+	if ((seekAccumulator > 0 && seconds < 0) || (seekAccumulator < 0 && seconds > 0)) {
+        seekAccumulator = 0;
+    }
 
     seekAccumulator += seconds;
     video.currentTime += seconds;
@@ -827,6 +840,37 @@ function playPauseLogic(video) {
 }
 
 function handleShortcutAction(action) {
+  // Global Actions - Do not require Video
+  if (action === 'config_menu') {
+      showOptionsPanel(!optionsPanelVisible);
+      return;
+  }
+  
+  if (action === 'oled_toggle') {
+      let overlay = document.getElementById('oled-black-overlay');
+      if (overlay) {
+          overlay.remove();
+          if (oledKeepAliveTimer) { clearInterval(oledKeepAliveTimer); oledKeepAliveTimer = null; }
+          showNotification('OLED Mode Deactivated');
+      } else {
+          if (optionsPanelVisible) showOptionsPanel(false);
+          overlay = createElement('div', { id: 'oled-black-overlay', style: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#000', zIndex: 9999 }});
+          document.body.appendChild(overlay);
+          
+          // Keep TV awake by simulating input
+          oledKeepAliveTimer = setInterval(() => {
+            sendKey(REMOTE_KEYS.UP);
+            setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
+          }, 30 * 60 * 1000);
+          showNotification('OLED Mode Activated');
+      }
+      return;
+  }
+
+  // Player Actions - Require Video/Context
+  // Check context for player actions (same check as used previously for keys 0-9)
+  if (!isWatchPage() && !isShortsPage()) return;
+  
   const video = document.querySelector('video');
   const player = document.getElementById(SELECTORS.PLAYER_ID) || document.querySelector('.html5-video-player');
   if (!video) return;
@@ -839,10 +883,10 @@ function handleShortcutAction(action) {
         skipChapter('prev');
         break;
     case 'seek_15_fwd':
-        performBurstSeek(5);
+        performBurstSeek(5, video);
         break;
     case 'seek_15_back':
-        performBurstSeek(-5);
+        performBurstSeek(-5, video);
         break;
     case 'play_pause':
         playPauseLogic(video);
@@ -867,6 +911,14 @@ function handleShortcutAction(action) {
             showNotification('SponsorBlock not loaded');
         }
         break;
+    case 'sb_manual_skip':
+        try {
+          if (window.sponsorblock) {
+            const handled = window.sponsorblock.handleBlueButton(); // Keep naming convention even if not blue button
+            if (!handled) showNotification('No action available');
+          } else showNotification('SponsorBlock not loaded');
+        } catch (e) { showNotification('Error: ' + e.message); }
+        break;
     default:
         console.warn(`[Shortcut] Unknown action: ${action}`);
   }
@@ -877,84 +929,49 @@ function handleShortcutAction(action) {
 const eventHandler = (evt) => {
   if (evt.repeat) return;
 
-  const keyColor = getKeyColor(evt.charCode);
+  // 1. Identify Key (Name or Color)
+  let keyName = null;
+  const code = evt.keyCode || evt.charCode; 
+  const keyColor = getKeyColor(code);
   
-  // 1. Handle Menu Toggle (Green)
-  if (keyColor === 'green') {
-    evt.preventDefault();
-    evt.stopPropagation();
-    if (evt.type === 'keydown') showOptionsPanel(!optionsPanelVisible);
-    return false;
-  } 
-  // 2. Handle Manual Skip / Highlight Jump (Blue)
-  else if (keyColor === 'blue' && evt.type === 'keydown') {
-    if (!isWatchPage() && !isShortsPage()) return true;
-    
-    evt.preventDefault();
-    evt.stopPropagation();
-    try {
-      if (window.sponsorblock) {
-        const handled = window.sponsorblock.handleBlueButton();
-        if (!handled) showNotification('No action available');
-      } else showNotification('SponsorBlock not loaded');
-    } catch (e) { showNotification('Error: ' + e.message); }
-    return false;
-  } 
-  // 3. Handle OLED Mode (Red)
-  else if (keyColor === 'red' && evt.type === 'keydown') {
-    evt.preventDefault();
-    evt.stopPropagation();
-    let overlay = document.getElementById('oled-black-overlay');
-    if (overlay) {
-      overlay.remove();
-      if (oledKeepAliveTimer) { clearInterval(oledKeepAliveTimer); oledKeepAliveTimer = null; }
-      showNotification('OLED Mode Deactivated');
-    } else {
-      if (optionsPanelVisible) showOptionsPanel(false);
-      overlay = createElement('div', { id: 'oled-black-overlay', style: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#000', zIndex: 9999 }});
-      document.body.appendChild(overlay);
-      
-      // Keep TV awake by simulating input
-      oledKeepAliveTimer = setInterval(() => {
-        sendKey(REMOTE_KEYS.UP);
-        setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
-      }, 30 * 60 * 1000);
-      showNotification('OLED Mode Activated');
-    }
-    return false;
-  } 
-  else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
-    const now = Date.now();
-    const keyIndex = evt.keyCode - 48;
-
-    const action = shortcutCache[keyIndex]; 
-    
-    // Fast boolean check to exit early
-    if (!action || action === 'none') return true;
-
-    // Check action type for Burst Seek logic
-    const isBurstAction = action === 'seek_15_fwd' || action === 'seek_15_back';
-
-    // Only apply debounce if it's not a burst action
-    if (!isBurstAction && now - lastShortcutTime < shortcutDebounceTime && lastShortcutKey === keyIndex) {
-        console.log(`[Shortcut] Debounced duplicate key ${keyIndex}`);
-        evt.preventDefault(); 
-        evt.stopPropagation(); 
-        return false;
-    }
-    
-    shortcutDebounceTime = 400;
-    lastShortcutTime = now;
-    lastShortcutKey = keyIndex;
-    
-    if (optionsPanelVisible) { evt.preventDefault(); evt.stopPropagation(); return false; }
-    if (!isWatchPage() && !isShortsPage()) return true;
-    
-    evt.preventDefault();
-    evt.stopPropagation();
-    handleShortcutAction(action);
+  if (keyColor) {
+      keyName = keyColor;
+  } else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
+      keyName = String(evt.keyCode - 48);
   }
-  return true;
+
+  if (!keyName) return true; // Not a managed key
+
+  // 2. Get Action
+  const action = shortcutCache[keyName];
+  
+  // Fast boolean check to exit early
+  if (!action || action === 'none') return true;
+
+  // 3. Debounce (only for non-burst)
+  // Check action type for Burst Seek logic
+  const isBurstAction = action === 'seek_15_fwd' || action === 'seek_15_back';
+  const now = Date.now();
+
+  // Distinct debounce per key index/name
+  if (!isBurstAction && now - lastShortcutTime < shortcutDebounceTime && lastShortcutKey === keyName) {
+      console.log(`[Shortcut] Debounced duplicate key ${keyName}`);
+      evt.preventDefault(); 
+      evt.stopPropagation(); 
+      return false;
+  }
+  
+  shortcutDebounceTime = 400;
+  lastShortcutTime = now;
+  lastShortcutKey = keyName;
+  
+  if (optionsPanelVisible && action !== 'config_menu') { evt.preventDefault(); evt.stopPropagation(); return false; }
+  
+  evt.preventDefault();
+  evt.stopPropagation();
+  handleShortcutAction(action);
+  
+  return false;
 };
 
 document.addEventListener('keydown', eventHandler, true);
@@ -971,27 +988,52 @@ export function showNotification(text, time = 3000) {
     document.body.appendChild(notificationContainer);
   }
 
+  // Check for existing notification with same text to prevent stacking
+  const existing = Array.from(notificationContainer.querySelectorAll('.message'))
+    .find(el => el.textContent === text && !el.classList.contains('message-hidden'));
+
+  if (existing) {
+      if (existing._removeTimer) clearTimeout(existing._removeTimer);
+      if (time > 0) {
+          existing._removeTimer = setTimeout(() => {
+              existing.classList.add('message-hidden');
+              setTimeout(() => existing.parentElement.remove(), 1000);
+          }, time);
+      }
+      return { remove: () => {}, update: () => {} };
+  }
+
   const elmInner = createElement('div', { text, class: 'message message-hidden' });
   const elm = createElement('div', {}, elmInner);
   notificationContainer.appendChild(elm);
 
   requestAnimationFrame(() => requestAnimationFrame(() => elmInner.classList.remove('message-hidden')));
 
-  let removeTimer = null;
   const remove = () => {
+      if (elmInner._removeTimer) clearTimeout(elmInner._removeTimer);
+      elmInner._removeTimer = null;
+      
       elmInner.classList.add('message-hidden');
       setTimeout(() => elm.remove(), 1000);
   };
 
   if (time > 0) {
-    removeTimer = setTimeout(remove, time);
+    elmInner._removeTimer = setTimeout(remove, time);
   }
   
   const update = (newText, newTime = 3000) => {
+      if (elmInner.textContent === newText) {
+          if (newTime > 0) {
+              if (elmInner._removeTimer) clearTimeout(elmInner._removeTimer);
+              elmInner._removeTimer = setTimeout(remove, newTime);
+          }
+          return;
+      }
+      
       elmInner.textContent = newText;
       elmInner.classList.remove('message-hidden');
-      if (removeTimer) clearTimeout(removeTimer);
-      if (newTime > 0) removeTimer = setTimeout(remove, newTime);
+      if (elmInner._removeTimer) clearTimeout(elmInner._removeTimer);
+      if (newTime > 0) elmInner._removeTimer = setTimeout(remove, newTime);
   };
 
   return { remove, update };

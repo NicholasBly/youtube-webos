@@ -64,7 +64,10 @@ export const shortcutActions = {
   toggle_subs: 'Toggle Subtitles',
   toggle_comments: 'Toggle Comments',
   toggle_description: 'Toggle Description',
-  save_to_playlist: 'Save / Watch Later'
+  save_to_playlist: 'Save / Watch Later',
+  oled_toggle: 'Toggle OLED Care Mode',
+  sb_manual_skip: 'Manual Skip / Jump to Highlight',
+  config_menu: 'Open/Close Settings'
 };
 
 export const sbModes = {
@@ -152,6 +155,19 @@ for (let i = 0; i < 10; i++) {
     desc: `Key ${i} Action`
   });
 }
+
+// Register shortcut keys Red, Green, Blue
+['red', 'green', 'blue'].forEach(color => {
+    let def = 'none';
+    if (color === 'red') def = 'oled_toggle';
+    if (color === 'green') def = 'config_menu';
+    if (color === 'blue') def = 'sb_manual_skip';
+
+    configOptions.set(`shortcut_key_${color}`, {
+        default: def,
+        desc: `${color.charAt(0).toUpperCase() + color.slice(1)} Button Action`
+    });
+});
 
 for (const [key, value] of Object.entries(segmentTypes)) {
   configOptions.set(`${key}Color`, {
