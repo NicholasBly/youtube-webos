@@ -17,9 +17,26 @@ let lastShortcutTime = 0;
 let lastShortcutKey = -1;
 let shortcutDebounceTime = 400;
 
+// Seek Burst Variables
+let seekAccumulator = 0;
+let seekResetTimer = null;
+let activeSeekNotification = null;
+
 // Lazy load variable
 let optionsPanel = null;
 let optionsPanelVisible = false;
+
+const shortcutCache = new Array(10).fill(null);
+
+function updateShortcutCache(keyIndex) {
+    shortcutCache[keyIndex] = configRead(`shortcut_key_${keyIndex}`);
+}
+
+// Initialize cache and listeners
+for (let i = 0; i <= 9; i++) {
+    updateShortcutCache(i);
+    configAddChangeListener(`shortcut_key_${i}`, () => updateShortcutCache(i));
+}
 
 // --- Polyfills & Helpers ---
 
@@ -588,6 +605,31 @@ async function skipChapter(direction = 'next') {
   }
 }
 
+function performBurstSeek(seconds) {
+    const video = document.querySelector('video');
+    if (!video) return;
+
+    seekAccumulator += seconds;
+    video.currentTime += seconds;
+
+    if (seekResetTimer) clearTimeout(seekResetTimer);
+
+    const directionSymbol = seekAccumulator > 0 ? '+' : '';
+    const msg = `Skipped ${directionSymbol}${seekAccumulator}s`;
+
+    if (activeSeekNotification) {
+         activeSeekNotification.update(msg);
+    } else {
+         activeSeekNotification = showNotification(msg);
+    }
+
+    seekResetTimer = setTimeout(() => {
+        seekAccumulator = 0;
+        activeSeekNotification = null;
+        seekResetTimer = null;
+    }, 1200);
+}
+
 function triggerInternal(element, name) {
   if (!element) return false;
   let success = false;
@@ -607,59 +649,12 @@ function triggerInternal(element, name) {
   return success;
 }
 
-function handleShortcutAction(action) {
-  const video = document.querySelector('video');
-  const player = document.getElementById(SELECTORS.PLAYER_ID) || document.querySelector('.html5-video-player');
-  if (!video) return;
+// --- Shortcut Helper Functions (Static Logic) ---
+// Extracted to prevent object allocation inside handlers
 
-  const actions = {
-    chapter_skip: () => skipChapter('next'),
-    chapter_skip_prev: () => skipChapter('prev'),
-    seek_15_fwd: () => { video.currentTime = Math.min(video.duration, video.currentTime + 15); showNotification('Skipped +15s'); },
-    seek_15_back: () => { video.currentTime = Math.max(0, video.currentTime - 15); showNotification('Skipped -15s'); },
-    play_pause: () => {
-      if (video.paused) { 
-        video.play(); 
-        showNotification('Playing');
-      } else {
-		const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
-        const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
-		const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
-        const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
-		const watchOverlay = document.querySelector('.webOs-watch');
-		let needsHide = false;
-		if(!isControlsVisible) {
-		needsHide = true;
-        document.body.classList.add('ytaf-hide-controls');
-        if (watchOverlay) watchOverlay.style.opacity = '0';
-		}
-        
-        video.pause();
-		showNotification('Paused');
-
-        // Dismiss controls
-		if(needsHide && !isShortsPage() && !isPanelVisible) {
-        shortcutDebounceTime = 650;
-		
-		if (document.activeElement && typeof document.activeElement.blur === 'function') {
-				console.log("Blurring active element");
-                document.activeElement.blur();
-            }
-			
-		setTimeout(() => sendKey(REMOTE_KEYS.BACK, document.activeElement), 250); // don't press back button if we're on shorts or we leave the page
-		}
-		
-		if(needsHide && !isShortsPage()) {
-			setTimeout(() => {
-			  document.body.classList.remove('ytaf-hide-controls');
-			  if (watchOverlay) watchOverlay.style.opacity = '';
-			}, 750);
-		}
-      }
-    },
-    toggle_subs: () => {
-      let toggledViaApi = false;
-      if (player) {
+function toggleSubtitlesLogic(player) {
+    let toggledViaApi = false;
+    if (player) {
         // Try API first
         if (typeof player.loadModule === 'function') player.loadModule('captions');
         if (typeof player.getOption === 'function' && typeof player.setOption === 'function') {
@@ -675,9 +670,9 @@ function handleShortcutAction(action) {
             }
           } catch (e) { console.warn('[Shortcut] Subtitle API Error:', e); }
         }
-      }
-      // Fallback to UI clicking
-      if (!toggledViaApi) {
+    }
+    // Fallback to UI clicking
+    if (!toggledViaApi) {
         const capsBtn = document.querySelector('ytlr-captions-button yt-button-container') || document.querySelector('ytlr-captions-button ytlr-button');
         if (capsBtn) {
           if (triggerInternal(capsBtn, 'Captions')) {
@@ -689,42 +684,43 @@ function handleShortcutAction(action) {
           }
         }
         showNotification('Subtitles unavailable');
-      }
-    },
-    toggle_comments: () => {
-      // 1. Try finding Comments Button
-      let target = document.querySelector('yt-button-container[aria-label="Comments"]');
+    }
+}
 
-	  if (!target) {
-		target = document.querySelector('yt-icon.qHxFAf.ieYpu.nGYLgf') || 
-				 document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb') ||
-				 document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') || 
-				 document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || 
-				 document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
-	  }
-	  if (!target) {
+function toggleCommentsLogic() {
+    // 1. Try finding Comments Button
+    let target = document.querySelector('yt-button-container[aria-label="Comments"]');
+
+    if (!target) {
+        target = document.querySelector('yt-icon.qHxFAf.ieYpu.nGYLgf') || 
+                 document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb') ||
+                 document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') || 
+                 document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || 
+                 document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
+    }
+    if (!target) {
           target = document.querySelector('ytlr-button-renderer[idomkey="1"] yt-button-container'); // Shorts
-      }
-	  let commBtn = target ? target.closest('yt-button-container, ytlr-button') : null;
-      let isLiveChat = false;
+    }
+    let commBtn = target ? target.closest('yt-button-container, ytlr-button') : null;
+    let isLiveChat = false;
 
-      // 2. Fallback: Live Chat (Only if comments not found)
-      if (!commBtn) {
+    // 2. Fallback: Live Chat (Only if comments not found)
+    if (!commBtn) {
           const chatTarget = document.querySelector('ytlr-live-chat-toggle-button yt-button-container') ||
                              document.querySelector('yt-button-container[aria-label="Live chat"]');
           if (chatTarget) {
               commBtn = chatTarget;
               isLiveChat = true;
           }
-      }
+    }
 
-      // 3. Execution Logic
-      const isBtnActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
-      const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
-      const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
+    // 3. Execution Logic
+    const isBtnActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
+    const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
+    const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
       
-      if ((isBtnActive || isPanelVisible) && !isLiveChat) simulateBack();
-      else {
+    if ((isBtnActive || isPanelVisible) && !isLiveChat) simulateBack();
+    else {
         if (triggerInternal(commBtn, isLiveChat ? 'Live Chat' : 'Comments')) {
             if (isLiveChat) {
                 setTimeout(() => {
@@ -734,29 +730,30 @@ function handleShortcutAction(action) {
             }
         }
         else {
-			showNotification(isLiveChat ? 'Live Chat Unavailable' : 'Comments Unavailable');
+            showNotification(isLiveChat ? 'Live Chat Unavailable' : 'Comments Unavailable');
         }
-      }
-    },
-    toggle_description: () => {
-      // 1. Try English text finding
-      let descText = Array.from(document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe'))
-        .find(el => el.textContent.trim() === 'Description');
-      let target = descText ? descText.closest('yt-button-container') : null;
+    }
+}
 
-      // 2. Fallback: Structural finding for non-English (look for text-button in generic renderer, excluding subscribe/join which are usually different or have icons)
-      if (!target) {
+function toggleDescriptionLogic() {
+    // 1. Try English text finding
+    let descText = Array.from(document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe'))
+        .find(el => el.textContent.trim() === 'Description');
+    let target = descText ? descText.closest('yt-button-container') : null;
+
+    // 2. Fallback: Structural finding for non-English (look for text-button in generic renderer, excluding subscribe/join which are usually different or have icons)
+    if (!target) {
         const genericTextBtn = document.querySelector('ytlr-button-renderer yt-formatted-string.XGffTd.OqGroe');
         if (genericTextBtn) target = genericTextBtn.closest('yt-button-container');
-      }
+    }
 
-      const isDescActive = target && (target.getAttribute('aria-pressed') === 'true' || target.getAttribute('aria-selected') === 'true');
-      // Re-use panel detection from comments as they share the side panel space
-      const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
-      const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
+    const isDescActive = target && (target.getAttribute('aria-pressed') === 'true' || target.getAttribute('aria-selected') === 'true');
+    // Re-use panel detection from comments as they share the side panel space
+    const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
+    const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
 
-      if (isDescActive || isPanelVisible) simulateBack();
-      else {
+    if (isDescActive || isPanelVisible) simulateBack();
+    else {
         if (triggerInternal(target, 'Description')) {
             setTimeout(() => {
                 if (window.returnYouTubeDislike) {
@@ -766,31 +763,113 @@ function handleShortcutAction(action) {
             }, 350);
         }
         else showNotification('Description Unavailable');
-      }
-    },
-    save_to_playlist: () => {
-      // 1. Try English Aria Label
-      let target = document.querySelector('yt-button-container[aria-label="Save"]');
+    }
+}
 
-      // 2. Fallback: Specific icon class (p9sZp) found in Save button
-      if (!target) {
+function saveToPlaylistLogic() {
+    // 1. Try English Aria Label
+    let target = document.querySelector('yt-button-container[aria-label="Save"]');
+
+    // 2. Fallback: Specific icon class (p9sZp) found in Save button
+    if (!target) {
         const icon = document.querySelector('yt-icon.p9sZp');
         if (icon) target = icon.closest('yt-button-container');
-      }
-	  
-	  const panel = document.querySelector('.AmQJbe');
-	  
-	  if (panel) simulateBack();
-	  else {
-      if (triggerInternal(target, 'Save/Watch Later')) {
-      } else {
-        showNotification('Save Button Unavailable');
-      }
-	  }
     }
-  };
+      
+    const panel = document.querySelector('.AmQJbe');
+      
+    if (panel) simulateBack();
+    else {
+        if (!triggerInternal(target, 'Save/Watch Later')) {
+            showNotification('Save Button Unavailable');
+        }
+    }
+}
 
-  if (actions[action]) actions[action]();
+function playPauseLogic(video) {
+    if (video.paused) { 
+        video.play(); 
+        showNotification('Playing');
+    } else {
+        const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
+        const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
+        const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
+        const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
+        const watchOverlay = document.querySelector('.webOs-watch');
+        let needsHide = false;
+        if(!isControlsVisible) {
+            needsHide = true;
+            document.body.classList.add('ytaf-hide-controls');
+            if (watchOverlay) watchOverlay.style.opacity = '0';
+        }
+        
+        video.pause();
+        showNotification('Paused');
+
+        // Dismiss controls
+        if(needsHide && !isShortsPage() && !isPanelVisible) {
+            shortcutDebounceTime = 650;
+        
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
+            }
+            
+            setTimeout(() => sendKey(REMOTE_KEYS.BACK, document.activeElement), 250); // don't press back button if we're on shorts or we leave the page
+        }
+        
+        if(needsHide && !isShortsPage()) {
+            setTimeout(() => {
+              document.body.classList.remove('ytaf-hide-controls');
+              if (watchOverlay) watchOverlay.style.opacity = '';
+            }, 750);
+        }
+    }
+}
+
+function handleShortcutAction(action) {
+  const video = document.querySelector('video');
+  const player = document.getElementById(SELECTORS.PLAYER_ID) || document.querySelector('.html5-video-player');
+  if (!video) return;
+
+  switch (action) {
+    case 'chapter_skip':
+        skipChapter('next');
+        break;
+    case 'chapter_skip_prev':
+        skipChapter('prev');
+        break;
+    case 'seek_15_fwd':
+        performBurstSeek(5);
+        break;
+    case 'seek_15_back':
+        performBurstSeek(-5);
+        break;
+    case 'play_pause':
+        playPauseLogic(video);
+        break;
+    case 'toggle_subs':
+        toggleSubtitlesLogic(player);
+        break;
+    case 'toggle_comments':
+        toggleCommentsLogic();
+        break;
+    case 'toggle_description':
+        toggleDescriptionLogic();
+        break;
+    case 'save_to_playlist':
+        saveToPlaylistLogic();
+        break;
+    case 'sb_skip_prev':
+        if (window.sponsorblock) {
+            const success = window.sponsorblock.skipToPreviousSegment();
+            if (!success) showNotification('No previous segment found');
+        } else {
+            showNotification('SponsorBlock not loaded');
+        }
+        break;
+    default:
+        console.warn(`[Shortcut] Unknown action: ${action}`);
+  }
 }
 
 // --- Global Input Handler ---
@@ -844,16 +923,26 @@ const eventHandler = (evt) => {
     }
     return false;
   } 
-  // 4. Handle Number Shortcuts (0-9)
   else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
     const now = Date.now();
-	const keyIndex = evt.keyCode - 48;
-    if (now - lastShortcutTime < shortcutDebounceTime && lastShortcutKey === keyIndex) {
+    const keyIndex = evt.keyCode - 48;
+
+    const action = shortcutCache[keyIndex]; 
+    
+    // Fast boolean check to exit early
+    if (!action || action === 'none') return true;
+
+    // Check action type for Burst Seek logic
+    const isBurstAction = action === 'seek_15_fwd' || action === 'seek_15_back';
+
+    // Only apply debounce if it's not a burst action
+    if (!isBurstAction && now - lastShortcutTime < shortcutDebounceTime && lastShortcutKey === keyIndex) {
         console.log(`[Shortcut] Debounced duplicate key ${keyIndex}`);
         evt.preventDefault(); 
         evt.stopPropagation(); 
         return false;
     }
+    
     shortcutDebounceTime = 400;
     lastShortcutTime = now;
     lastShortcutKey = keyIndex;
@@ -861,11 +950,9 @@ const eventHandler = (evt) => {
     if (optionsPanelVisible) { evt.preventDefault(); evt.stopPropagation(); return false; }
     if (!isWatchPage() && !isShortsPage()) return true;
     
-    const action = configRead(`shortcut_key_${keyIndex}`);
-    
     evt.preventDefault();
     evt.stopPropagation();
-    if (action && action !== 'none') handleShortcutAction(action);
+    handleShortcutAction(action);
   }
   return true;
 };
@@ -875,7 +962,7 @@ document.addEventListener('keydown', eventHandler, true);
 let notificationContainer = null;
 
 export function showNotification(text, time = 3000) {
-  if (configRead('disableNotifications')) return { remove: () => {} };
+  if (configRead('disableNotifications')) return { remove: () => {}, update: () => {} };
   
   if (!notificationContainer) {
     notificationContainer = createElement('div', { class: 'ytaf-notification-container' });
@@ -890,16 +977,24 @@ export function showNotification(text, time = 3000) {
 
   requestAnimationFrame(() => requestAnimationFrame(() => elmInner.classList.remove('message-hidden')));
 
+  let removeTimer = null;
   const remove = () => {
       elmInner.classList.add('message-hidden');
       setTimeout(() => elm.remove(), 1000);
   };
 
   if (time > 0) {
-    setTimeout(remove, time);
+    removeTimer = setTimeout(remove, time);
   }
+  
+  const update = (newText, newTime = 3000) => {
+      elmInner.textContent = newText;
+      elmInner.classList.remove('message-hidden');
+      if (removeTimer) clearTimeout(removeTimer);
+      if (newTime > 0) removeTimer = setTimeout(remove, newTime);
+  };
 
-  return { remove };
+  return { remove, update };
 }
 
 // --- Initialization & CSS Injection ---

@@ -908,6 +908,30 @@ class SponsorBlockHandler {
         this.requestAF(() => showNotification('Jumped to Highlight'));
         return true;
     }
+	
+	skipToPreviousSegment() {
+    if (!this.video || !this.skipSegments.length) return false;
+
+    const currentTime = this.video.currentTime;
+    let targetSeg = null;
+
+    for (let i = this.skipSegments.length - 1; i >= 0; i--) {
+        if (this.skipSegments[i].start < currentTime - 2) {
+            targetSeg = this.skipSegments[i];
+            break;
+        }
+    }
+
+    if (!targetSeg) return false;
+
+    this.video.currentTime = targetSeg.start;
+    
+    const categoryName = this.getCategoryName(targetSeg.category);
+    const title = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
+    
+    this.requestAF(() => showNotification(`Seeked to ${title}`));
+    return true;
+	}
 
     handleBlueButton() {
         if (this.currentManualSegment) {
