@@ -15,7 +15,7 @@ let oledKeepAliveTimer = null;
 
 let lastShortcutTime = 0;
 let lastShortcutKey = -1;
-let shortcutDebounceTime = 400;
+let shortcutDebounceTime = 100;
 
 // Seek Burst Variables
 let seekAccumulator = 0;
@@ -945,6 +945,7 @@ function handleShortcutAction(action) {
 
 const eventHandler = (evt) => {
   if (evt.repeat) return;
+  // console.info('Key event:', evt.type, evt.charCode, evt.keyCode);
 
   // 1. Identify Key (Name or Color)
   let keyName = null;
@@ -978,7 +979,7 @@ const eventHandler = (evt) => {
       return false;
   }
   
-  shortcutDebounceTime = 400;
+  shortcutDebounceTime = 100;
   lastShortcutTime = now;
   lastShortcutKey = keyName;
   

@@ -24,70 +24,66 @@ const PATTERN_CACHE = {
 };
 
 const SCHEMA_REGISTRY = {
-  enabled: true, 
-  
-  typeSignatures: {
-    SHORTS_SEQUENCE: {
-      textPattern: '"reelWatchEndpoint"',
-      matchFn: (data) => Array.isArray(data.entries) 
+  typeSignatures: [
+    {
+      type: 'SHORTS_SEQUENCE',
+      detectionPath: ['entries'],
+      matchFn: (data) => Array.isArray(data.entries)
     },
-    PLAYER: { 
-      textPattern: '"streamingData"'
+    {
+      type: 'PLAYER',
+      detectionPath: ['streamingData']
     },
-    NEXT: {
-      textPattern: '"singleColumnWatchNextResults"'
+    {
+      type: 'NEXT',
+      detectionPath: ['contents', 'singleColumnWatchNextResults']
     },
-    GUEST: {
-      textPattern: '"currentVideoThumbnail"' 
+    {
+      type: 'HOME_BROWSE',
+      detectionPath: ['contents', 'tvBrowseRenderer', 'content', 'tvSurfaceContentRenderer']
     },
-    HOME_BROWSE: { 
-      textPattern: '"tvSurfaceContentRenderer"',
-      excludePattern: '"tvSecondaryNavRenderer"' 
+    {
+      type: 'BROWSE_TABS',
+      detectionPath: ['contents', 'tvBrowseRenderer', 'content', 'tvSecondaryNavRenderer']
     },
-    BROWSE_TABS: { 
-      textPattern: '"tvSecondaryNavRenderer"' 
+    {
+      type: 'SEARCH',
+      detectionPath: ['contents', 'sectionListRenderer'],
+      excludePath: ['contents', 'tvBrowseRenderer']
     },
-    SEARCH: {
-      textPattern: '"sectionListRenderer"',
-      excludePattern: '"tvSurfaceContentRenderer"'
+    {
+      type: 'CONTINUATION',
+      detectionPath: ['continuationContents']
     },
-    CONTINUATION: { 
-      textPattern: '"continuationContents"' 
-    },
-    ACTION: { 
-      textPattern: '"onResponseReceivedActions"' 
-    },
-    IGNORED: {
-      textPattern: '"logEntry"'
+    {
+      type: 'ACTION',
+      detectionPath: ['onResponseReceivedActions']
     }
-  },
+  ],
   
   paths: {
     PLAYER: {
-      overlayPath: 'playerOverlays.playerOverlayRenderer'
+      overlayPath: ['playerOverlays', 'playerOverlayRenderer']
     },
     NEXT: {
-      overlayPath: 'playerOverlays.playerOverlayRenderer',
-      pivotPath: 'contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents'
+      overlayPath: ['playerOverlays', 'playerOverlayRenderer'],
+      pivotPath: ['contents', 'singleColumnWatchNextResults', 'pivot', 'sectionListRenderer', 'contents']
     },
     SHORTS_SEQUENCE: {
-      listPath: 'entries'
-    },
-    GUEST: {
-      pivotPath: 'contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents'
+      listPath: ['entries']
     },
     HOME_BROWSE: {
-      mainContent: 'contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents'
+      mainContent: ['contents', 'tvBrowseRenderer', 'content', 'tvSurfaceContentRenderer', 'content', 'sectionListRenderer', 'contents']
     },
     BROWSE_TABS: {
-      tabsPath: 'contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections.0.tvSecondaryNavSectionRenderer.tabs'
+      tabsPath: ['contents', 'tvBrowseRenderer', 'content', 'tvSecondaryNavRenderer', 'sections', '0', 'tvSecondaryNavSectionRenderer', 'tabs']
     },
     SEARCH: {
-      mainContent: 'contents.sectionListRenderer.contents'
+      mainContent: ['contents', 'sectionListRenderer', 'contents']
     },
     CONTINUATION: {
-      sectionPath: 'continuationContents.sectionListContinuation.contents',
-      gridPath: 'continuationContents.gridContinuation.items'
+      sectionPath: ['continuationContents', 'sectionListContinuation', 'contents'],
+      gridPath: ['continuationContents', 'gridContinuation', 'items']
     }
   }
 };
@@ -135,7 +131,6 @@ function hookedParse(text, reviver) {
     data.playerResponse ||
     data.onResponseReceivedActions ||
     data.sectionListRenderer ||
-    data.reloadContinuationItemsCommand ||
     data.entries 
   );
 
@@ -143,28 +138,23 @@ function hookedParse(text, reviver) {
     return data;
   }
 
-  // const startTime = DEBUG ? performance.now() : 0;
-  
   try {
-    const responseType = detectResponseType(text, data);
+    const responseType = detectResponseType(data);
     const needsContentFiltering = enableAdBlock || hideGuestPrompts;
 
-    if (isShortsPage()) { // Use shared state getter
+    if (isShortsPage()) {
         const IGNORE_ON_SHORTS = ['SEARCH', 'PLAYER', 'ACTION'];
         if (responseType && IGNORE_ON_SHORTS.includes(responseType)) {
              return data;
         }
     }
 
-    if (responseType === 'IGNORED') {
-       return data;
-    }
-    else if (responseType && SCHEMA_REGISTRY.paths[responseType]) {
-      if (DEBUG) debugLog(`Schema Match: [${responseType}] - Payload size: ${text.length} chars`);
+    if (responseType && SCHEMA_REGISTRY.paths[responseType]) {
+      if (DEBUG) debugLog(`Schema Match: [${responseType}]`);
       applySchemaFilters(data, responseType, config, needsContentFiltering);
     } 
-    else if (responseType === 'ACTION' || responseType === 'PLAYER' || responseType === 'GUEST') {
-      if (DEBUG) debugLog(`Schema Match: [${responseType}] - Payload size: ${text.length} chars`);
+    else if (responseType === 'ACTION' || responseType === 'PLAYER') {
+      if (DEBUG) debugLog(`Schema Match: [${responseType}]`);
       applySchemaFilters(data, responseType, config, needsContentFiltering);
     } 
     else {
@@ -178,11 +168,6 @@ function hookedParse(text, reviver) {
   } catch (e) {
     console.error('[AdBlock] Error during filtering:', e);
   }
-
-  // if (DEBUG) {
-    // const duration = (performance.now() - startTime).toFixed(2);
-    // if (duration > 1.0) debugLog(`Filtering completed in ${duration}ms`);
-  // }
 
   return data;
 }
@@ -202,20 +187,21 @@ function logSchemaMiss(data, textLength) {
   }
 }
 
-function detectResponseType(text, data) {
-  if (typeof text !== 'string') return null;
-  const types = SCHEMA_REGISTRY.typeSignatures;
+function detectResponseType(data) {
+  const signatures = SCHEMA_REGISTRY.typeSignatures;
   
-  for (const type in types) {
-    const config = types[type];
-    if (text.indexOf(config.textPattern) !== -1) {
-      if (config.excludePattern && text.indexOf(config.excludePattern) !== -1) {
+  for (let i = 0; i < signatures.length; i++) {
+    const sig = signatures[i];
+    
+    if (sig.excludePath && getByPath(data, sig.excludePath) !== undefined) {
+      continue;
+    }
+
+    if (getByPath(data, sig.detectionPath) !== undefined) {
+      if (sig.matchFn && !sig.matchFn(data)) {
         continue;
       }
-      if (config.matchFn && !config.matchFn(data)) {
-          continue;
-      }
-      return type;
+      return sig.type;
     }
   }
   return null;
@@ -227,22 +213,13 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
   switch (responseType) {
     case 'SHORTS_SEQUENCE':
         if (config.enableAdBlock && schema && schema.listPath) {
-            const entries = data[schema.listPath];
+            const entries = getByPath(data, schema.listPath);
             if (Array.isArray(entries)) {
                 const oldLen = entries.length;
-                data[schema.listPath] = filterItemsOptimized(entries, config, needsContentFiltering);
-                if (DEBUG && data[schema.listPath].length !== oldLen) {
-                    debugLog(`SHORTS_SEQUENCE: Removed ${oldLen - data[schema.listPath].length} items`);
+                filterItemsOptimized(entries, config, needsContentFiltering);
+                if (DEBUG && entries.length !== oldLen) {
+                    debugLog(`SHORTS_SEQUENCE: Removed ${oldLen - entries.length} items`);
                 }
-            }
-        }
-        break;
-
-    case 'GUEST':
-        if (config.hideGuestPrompts && schema && schema.pivotPath) {
-            const pivot = getByPath(data, schema.pivotPath);
-            if (Array.isArray(pivot)) {
-                processSectionListOptimized(pivot, config, needsContentFiltering, 'GUEST');
             }
         }
         break;
@@ -312,10 +289,9 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
           const gridItems = getByPath(data, schema.gridPath);
           if (Array.isArray(gridItems)) {
             const oldLen = gridItems.length;
-            const filtered = filterItemsOptimized(gridItems, config, needsContentFiltering);
-            setByPath(data, schema.gridPath, filtered);
-            if (DEBUG && oldLen !== filtered.length) {
-              debugLog(`CONTINUATION (Grid): Removed ${oldLen - filtered.length} items`);
+            filterItemsOptimized(gridItems, config, needsContentFiltering);
+            if (DEBUG && oldLen !== gridItems.length) {
+              debugLog(`CONTINUATION (Grid): Removed ${oldLen - gridItems.length} items`);
             }
           }
         }
@@ -328,7 +304,7 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
           const action = data.onResponseReceivedActions[i];
           
           if (action.reloadContinuationItemsCommand?.continuationItems) {
-            action.reloadContinuationItemsCommand.continuationItems = filterItemsOptimized(
+            filterItemsOptimized(
               action.reloadContinuationItemsCommand.continuationItems,
               config,
               needsContentFiltering
@@ -336,7 +312,7 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
           }
           
           if (action.appendContinuationItemsAction?.continuationItems) {
-            action.appendContinuationItemsAction.continuationItems = filterItemsOptimized(
+            filterItemsOptimized(
               action.appendContinuationItemsAction.continuationItems,
               config,
               needsContentFiltering
@@ -369,14 +345,11 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
         }
       }
       
-      // Pivot Filtering (Alerts/Prompts) with Fallback
       if (config.hideGuestPrompts) {
          let pivotContents;
-         // 1. Try Schema Path
          if (schema && schema.pivotPath) {
              pivotContents = getByPath(data, schema.pivotPath);
          }
-         // 2. Fallback Search if schema failed or wasn't defined
          if (!pivotContents) {
              const pivot = findFirstObject(data, 'pivot', 10);
              if (pivot?.sectionListRenderer?.contents) {
@@ -384,7 +357,6 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
                  if (DEBUG) debugLog(`${responseType}: Found pivot via fallback search`);
              }
          }
-         // 3. Process
          if (Array.isArray(pivotContents)) {
              processSectionListOptimized(pivotContents, config, needsContentFiltering, `${responseType} (Pivot)`);
          }
@@ -400,7 +372,6 @@ function applyFallbackFilters(data, config, needsContentFiltering) {
   if (config.enableAdBlock) {
     removePlayerAdsOptimized(data);
     
-    // Fallback: Search for playerOverlayRenderer directly
     const overlayRenderer = findFirstObject(data, 'playerOverlayRenderer', 8);
     if (overlayRenderer && overlayRenderer.timelyActionRenderers) {
         delete overlayRenderer.timelyActionRenderers;
@@ -408,7 +379,6 @@ function applyFallbackFilters(data, config, needsContentFiltering) {
     }
   }
 
-  // Fallback: Pivot section
   const pivot = findFirstObject(data, 'pivot', 10);
   if (pivot?.sectionListRenderer?.contents) {
       if (Array.isArray(pivot.sectionListRenderer.contents)) {
@@ -425,12 +395,12 @@ function applyFallbackFilters(data, config, needsContentFiltering) {
 
   const gridRenderer = findFirstObject(data, 'gridRenderer', 10);
   if (gridRenderer?.items) {
-    gridRenderer.items = filterItemsOptimized(gridRenderer.items, config, needsContentFiltering);
+    filterItemsOptimized(gridRenderer.items, config, needsContentFiltering);
   }
 
   const gridContinuation = findFirstObject(data, 'gridContinuation', 10);
   if (gridContinuation?.items) {
-    gridContinuation.items = filterItemsOptimized(gridContinuation.items, config, needsContentFiltering);
+    filterItemsOptimized(gridContinuation.items, config, needsContentFiltering);
   }
 
   if (Array.isArray(data.onResponseReceivedActions)) {
@@ -438,7 +408,7 @@ function applyFallbackFilters(data, config, needsContentFiltering) {
       const action = data.onResponseReceivedActions[i];
       
       if (action.reloadContinuationItemsCommand?.continuationItems) {
-        action.reloadContinuationItemsCommand.continuationItems = filterItemsOptimized(
+        filterItemsOptimized(
           action.reloadContinuationItemsCommand.continuationItems,
           config,
           needsContentFiltering
@@ -446,7 +416,7 @@ function applyFallbackFilters(data, config, needsContentFiltering) {
       }
       
       if (action.appendContinuationItemsAction?.continuationItems) {
-        action.appendContinuationItemsAction.continuationItems = filterItemsOptimized(
+        filterItemsOptimized(
           action.appendContinuationItemsAction.continuationItems,
           config,
           needsContentFiltering
@@ -511,12 +481,12 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
       if (keepItem && shelf.content) {
         const hList = shelf.content.horizontalListRenderer;
         if (hList?.items) {
-          hList.items = filterItemsOptimized(hList.items, config, needsContentFiltering);
+          filterItemsOptimized(hList.items, config, needsContentFiltering); // In-place
         }
         
         const gList = shelf.content.gridRenderer;
         if (gList?.items) {
-          gList.items = filterItemsOptimized(gList.items, config, needsContentFiltering);
+          filterItemsOptimized(gList.items, config, needsContentFiltering); // In-place
         }
       }
     } 
@@ -557,7 +527,7 @@ function filterItemsOptimized(items, config, needsContentFiltering) {
   if (needsContentFiltering === undefined) needsContentFiltering = enableAdBlock || hideGuestPrompts;
   if (!removeGlobalShorts && !needsContentFiltering) return items;
 
-  const result = [];
+  let writeIdx = 0;
   
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -565,13 +535,19 @@ function filterItemsOptimized(items, config, needsContentFiltering) {
 
     if (needsContentFiltering) {
       if (hasAdRenderer(item, enableAdBlock) || isReelAd(item, enableAdBlock)) {
-        continue;
+        keep = false;
       }
-      if (hasGuestPromptRenderer(item, hideGuestPrompts)) {
-        continue;
+      else if (hasGuestPromptRenderer(item, hideGuestPrompts)) {
+        keep = false;
       }
-      if (hideGuestPrompts && item.alertWithActionsRenderer) {
-          continue;
+      else if (hideGuestPrompts && item.alertWithActionsRenderer) {
+        keep = false;
+      }
+      else if (hideGuestPrompts && item.gridButtonRenderer) {
+        const text = item.gridButtonRenderer.title?.runs?.[0]?.text;
+        if (text === 'Sign in for better recommendations') {
+            keep = false;
+        }
       }
     }
 
@@ -582,42 +558,31 @@ function filterItemsOptimized(items, config, needsContentFiltering) {
             tile.contentType === 'TILE_CONTENT_TYPE_SHORTS' ||
             tile.onSelectCommand?.reelWatchEndpoint) {
           keep = false;
-          continue;
         }
       } 
       else if (item.reelItemRenderer ||
                  item.contentType === 'TILE_CONTENT_TYPE_SHORTS' ||
                  item.onSelectCommand?.reelWatchEndpoint) {
         keep = false;
-        continue;
       }
     }
 
-    if (keep) result.push(item);
+    if (keep) {
+      if (writeIdx !== i) items[writeIdx] = item;
+      writeIdx++;
+    }
   }
 
-  return result;
+  items.length = writeIdx;
+  return items;
 }
 
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
 
-const pathCache = new Map();
-const PATH_CACHE_LIMIT = 20;
-
-function parsePath(path) {
-  let parts = pathCache.get(path);
-  if (!parts) {
-    parts = path.split('.');
-    if (pathCache.size < PATH_CACHE_LIMIT) pathCache.set(path, parts);
-  }
-  return parts;
-}
-
-function getByPath(obj, path) {
-  if (!path) return undefined;
-  const parts = parsePath(path);
+function getByPath(obj, parts) {
+  if (!parts) return undefined;
   let current = obj;
   for (let i = 0; i < parts.length; i++) {
     if (current == null) return undefined;
@@ -626,9 +591,8 @@ function getByPath(obj, path) {
   return current;
 }
 
-function setByPath(obj, path, value) {
-  if (!path) return;
-  const parts = parsePath(path);
+function setByPath(obj, parts, value) {
+  if (!parts) return;
   let current = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     if (current[parts[i]] === undefined) return;

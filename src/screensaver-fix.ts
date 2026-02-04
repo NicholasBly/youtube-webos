@@ -39,7 +39,7 @@ let lastPageType: PageType = null;
 let shortsKeepAliveTimer: number | null = null;
 let shortsBufferTimer: number | null = null;
 const REMOTE_KEY_YELLOW_1 = { ...REMOTE_KEYS.YELLOW, charCode: 0 }; 
-const REMOTE_KEY_YELLOW_2 = { ...REMOTE_KEYS.YELLOW, charCode: 170 };
+const REMOTE_KEY_YELLOW_2 = { code: 170, key: 'Yellow', charCode: 170 };
 const STATE_PLAYING = 1;
 
 function setShortsKeepAlive(enable: boolean) {

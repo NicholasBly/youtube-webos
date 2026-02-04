@@ -1,6 +1,5 @@
 const CONTENT_INTENT_REGEX = /^.+(?=Content)/g;
 
-// Shared Selectors
 export const SELECTORS = {
   PLAYER_ID: 'ytlr-player__player-container-player',
   PLAYER_CONTAINER: 'ytlr-player__player-container',
@@ -32,51 +31,54 @@ export const REMOTE_KEYS = {
   9: { code: 57, key: '9' }
 };
 
-// --- Centralized Page State Logic ---
-// Reduces overhead by using a single MutationObserver for page type detection
 let _isWatchPage = false;
 let _isShortsPage = false;
 
+// Cache document.body to avoid DOM lookup overhead if used frequently
+let _body = typeof document !== 'undefined' ? document.body : null;
+
 function updatePageState() {
-    if (!document.body) return;
-    const cl = document.body.classList;
+    if (!_body) {
+        _body = document.body;
+        if (!_body) return;
+    }
+    
+    const cl = _body.classList;
     const newWatch = cl.contains(SELECTORS.WATCH_PAGE_CLASS);
     const newShorts = cl.contains(SELECTORS.SHORTS_PAGE_CLASS);
     
-    if (newWatch !== _isWatchPage || newShorts !== _isShortsPage) {
-        _isWatchPage = newWatch;
-        _isShortsPage = newShorts;
-        // Dispatch event so other modules can react without their own observers
-        window.dispatchEvent(new CustomEvent('ytaf-page-update', { 
-            detail: { isWatch: _isWatchPage, isShorts: _isShortsPage } 
-        }));
-    }
+    if (newWatch === _isWatchPage && newShorts === _isShortsPage) return;
+
+    _isWatchPage = newWatch;
+    _isShortsPage = newShorts;
+    
+    window.dispatchEvent(new CustomEvent('ytaf-page-update', { 
+        detail: { isWatch: _isWatchPage, isShorts: _isShortsPage } 
+    }));
 }
 
-// Auto-initialize the watcher
 if (typeof document !== 'undefined') {
-    if (document.body) {
+    const initObserver = () => {
+        _body = document.body;
         const pageObserver = new MutationObserver(updatePageState);
-        pageObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        pageObserver.observe(_body, { attributes: true, attributeFilter: ['class'] });
         updatePageState();
+    };
+
+    if (document.body) {
+        initObserver();
     } else {
-        document.addEventListener('DOMContentLoaded', () => {
-            const pageObserver = new MutationObserver(updatePageState);
-            pageObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-            updatePageState();
-        });
+        document.addEventListener('DOMContentLoaded', initObserver);
     }
 }
 
-// O(1) Accessors
 export const isWatchPage = () => _isWatchPage;
 export const isShortsPage = () => _isShortsPage;
 
-// Generic Utilities
 export function debounce(func, wait) {
   let timeout;
   return function(...args) {
-    const context = this;
+    const context = this; 
     clearTimeout(timeout);
     timeout = setTimeout(() => func.apply(context, args), wait);
   };
@@ -92,107 +94,99 @@ export function isGuestMode() {
     if (lastIdentity) {
       const parsed = JSON.parse(lastIdentity);
       if (parsed?.data?.identityType === 'UNAUTHENTICATED_IDENTITY_TYPE_GUEST') {
-        cachedGuestMode = true;
-        return true;
+        return (cachedGuestMode = true);
       }
-      cachedGuestMode = false;
-      return false; 
+      return (cachedGuestMode = false); 
     }
+    
     const autoNav = window.localStorage.getItem('yt.leanback.default::AUTONAV_FOR_LIVING_ROOM');
     if (autoNav) {
       const parsed = JSON.parse(autoNav);
       if (parsed?.data?.guest === true) {
-        cachedGuestMode = true;
-        return true;
+        return (cachedGuestMode = true);
       }
     }
     
-    cachedGuestMode = false;
-    return false;
+    return (cachedGuestMode = false);
   } catch (e) {
-    return false;
+    return (cachedGuestMode = false);
   }
 }
 
+// Define Property Descriptor factory to reduce object allocation
+const createDescriptor = (val) => ({ get: () => val });
+
+// Feature Detect once at startup
+let createEventStrategy;
+
+try {
+    // Check if modern constructor works
+    new KeyboardEvent('keydown');
+    createEventStrategy = (type, opts) => new KeyboardEvent(type, opts);
+} catch (e) {
+    // Fallback for webOS 3.0 / Legacy
+    createEventStrategy = (type, opts) => {
+        const evt = document.createEvent('KeyboardEvent');
+        if (evt.initKeyboardEvent) {
+             evt.initKeyboardEvent(type, true, false, window, opts.key, 0, '', false);
+        } else {
+             evt.initEvent(type, true, true);
+        }
+        return evt;
+    };
+}
+
 export function sendKey(keyDef, target = document.body) {
-  if (!keyDef || !keyDef.code) {
-    console.warn('[Utils] Invalid key definition passed to sendKey');
-    return;
+  if (!keyDef?.code) { 
+      if (process.env.NODE_ENV !== 'production') console.warn('[Utils] Invalid key definition');
+      return; 
   }
 
   const eventOpts = {
-    bubbles: true,
-    cancelable: false,
-    composed: true,
-    view: window,
-    key: keyDef.key,
-    code: keyDef.key,
-    keyCode: keyDef.code,
-    which: keyDef.code,
-    charCode: keyDef.charCode || 0
+    bubbles: true, cancelable: false, composed: true, view: window,
+    key: keyDef.key, code: keyDef.key, keyCode: keyDef.code, which: keyDef.code, charCode: keyDef.charCode || 0
   };
 
-  let keyDownEvt, keyUpEvt;
+  const keyDownEvt = createEventStrategy('keydown', eventOpts);
+  const keyUpEvt = createEventStrategy('keyup', eventOpts);
 
-  try {
-    // Modern Browser Approach (webOS 4+)
-    keyDownEvt = new KeyboardEvent('keydown', eventOpts);
-    keyUpEvt = new KeyboardEvent('keyup', eventOpts);
-  } catch (e) {
-    // Legacy Browser Approach (webOS 3 / Chrome 38)
-    keyDownEvt = document.createEvent('KeyboardEvent');
-    // initKeyboardEvent arguments: type, canBubble, cancelable, view, keyIdentifier, keyLocation, modifiersList, repeat
-    if (keyDownEvt.initKeyboardEvent) {
-        keyDownEvt.initKeyboardEvent('keydown', true, false, window, keyDef.key, 0, '', false);
-    } else {
-        // Very old WebKit fallback
-        keyDownEvt.initEvent('keydown', true, true);
-    }
+  const codeDesc = createDescriptor(keyDef.code);
+  const charDesc = createDescriptor(keyDef.charCode || 0);
 
-    keyUpEvt = document.createEvent('KeyboardEvent');
-    if (keyUpEvt.initKeyboardEvent) {
-        keyUpEvt.initKeyboardEvent('keyup', true, false, window, keyDef.key, 0, '', false);
-    } else {
-        keyUpEvt.initEvent('keyup', true, true);
-    }
-  }
-
-  // Common Property Overrides
-  // Both Modern and Legacy often require these to ensure the app "sees" the specific keycode
-  Object.defineProperty(keyDownEvt, 'keyCode', { get: () => keyDef.code });
-  Object.defineProperty(keyDownEvt, 'which', { get: () => keyDef.code });
-  Object.defineProperty(keyDownEvt, 'charCode', { get: () => keyDef.charCode || 0 });
-  
-  Object.defineProperty(keyUpEvt, 'keyCode', { get: () => keyDef.code });
-  Object.defineProperty(keyUpEvt, 'which', { get: () => keyDef.code });
-  Object.defineProperty(keyUpEvt, 'charCode', { get: () => keyDef.charCode || 0 });
+  Object.defineProperties(keyDownEvt, { keyCode: codeDesc, which: codeDesc, charCode: charDesc });
+  Object.defineProperties(keyUpEvt,   { keyCode: codeDesc, which: codeDesc, charCode: charDesc });
 
   target.dispatchEvent(keyDownEvt);
   target.dispatchEvent(keyUpEvt);
 }
 
+let cachedLaunchParams = null;
+
 export function extractLaunchParams() {
+  if (cachedLaunchParams) return cachedLaunchParams;
+  
   if (window.launchParams) {
     try {
-      return JSON.parse(window.launchParams);
+      cachedLaunchParams = JSON.parse(window.launchParams);
+      return cachedLaunchParams;
     } catch (e) {
       console.warn('Failed to parse launchParams', e);
-      return {};
     }
   }
-  return {};
+  return (cachedLaunchParams = {});
 }
 
 function getYTURL() {
   const ytURL = new URL('https://www.youtube.com/tv#/');
-  ytURL.searchParams.append('env_forceFullAnimation', '1');
-  ytURL.searchParams.append('env_enableWebSpeech', '1');
-  ytURL.searchParams.append('env_enableVoice', '1');
+  ytURL.searchParams.set('env_forceFullAnimation', '1');
+  ytURL.searchParams.set('env_enableWebSpeech', '1');
+  ytURL.searchParams.set('env_enableVoice', '1');
   return ytURL;
 }
 
 function concatSearchParams(a, b) {
-  return new URLSearchParams([...a.entries(), ...b.entries()]);
+    b.forEach((value, key) => a.append(key, value));
+    return a;
 }
 
 export function handleLaunch(params) {
@@ -200,27 +194,18 @@ export function handleLaunch(params) {
   let ytURL = getYTURL();
   let { target, contentTarget = target } = params;
 
-  switch (typeof contentTarget) {
-    case 'string': {
-      if (contentTarget.indexOf(ytURL.origin) === 0) {
+  if (typeof contentTarget === 'string') {
+      if (contentTarget.startsWith(ytURL.origin)) {
         ytURL = new URL(contentTarget);
       } else {
-        if (contentTarget.indexOf('v=v=') === 0)
-          contentTarget = contentTarget.substring(2);
-
-        ytURL.search = concatSearchParams(
-          ytURL.searchParams,
-          new URLSearchParams(contentTarget)
-        );
+        if (contentTarget.startsWith('v=v=')) contentTarget = contentTarget.substring(2);
+        
+        concatSearchParams(ytURL.searchParams, new URLSearchParams(contentTarget));
       }
-      break;
-    }
-    case 'object': {
+  } else if (typeof contentTarget === 'object') {
       const { intent, intentParam } = contentTarget;
       const search = ytURL.searchParams;
-      const voiceContentIntent = intent
-        .match(CONTENT_INTENT_REGEX)?.[0]
-        ?.toLowerCase();
+      const voiceContentIntent = intent.match(CONTENT_INTENT_REGEX)?.[0]?.toLowerCase();
 
       search.set('inApp', true);
       search.set('vs', 9); 
@@ -228,29 +213,19 @@ export function handleLaunch(params) {
       search.append('launch', 'voice');
       if (voiceContentIntent === 'search') search.append('launch', 'search');
       search.set('vq', intentParam);
-      break;
-    }
   }
 
   window.location.href = ytURL.toString();
 }
 
-/**
- * Wait for a child element to be added.
- * Includes a safety timeout (default 30s) to prevent memory leaks.
- */
-export async function waitForChildAdd(
-  parent,
-  predicate,
-  observeAttributes,
-  abortSignal,
-  timeoutMs = 30000
-) {
+export async function waitForChildAdd(parent, predicate, observeAttributes, abortSignal, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     let timer = null;
     
     const obs = new MutationObserver((mutations) => {
-      for (const mut of mutations) {
+      for (let i = 0; i < mutations.length; i++) {
+        const mut = mutations[i];
+        
         if (mut.type === 'attributes') {
           if (predicate(mut.target)) {
             cleanup();
@@ -258,7 +233,11 @@ export async function waitForChildAdd(
             return;
           }
         } else if (mut.type === 'childList') {
-          for (const node of mut.addedNodes) {
+          const addedNodes = mut.addedNodes;
+          for (let j = 0; j < addedNodes.length; j++) {
+            const node = addedNodes[j];
+            if (node.nodeType !== 1) continue; 
+            
             if (predicate(node)) {
               cleanup();
               resolve(node);
@@ -280,11 +259,8 @@ export async function waitForChildAdd(
         reject(new Error('aborted'));
     };
 
-    if (abortSignal) {
-      abortSignal.addEventListener('abort', onAbort);
-    }
+    if (abortSignal) abortSignal.addEventListener('abort', onAbort);
 
-    // Safety timeout
     if (timeoutMs > 0) {
         timer = setTimeout(() => {
             cleanup();
