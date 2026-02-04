@@ -15,11 +15,11 @@
   overflow: hidden;
   background-color: #001a2e;
   background-image: 
-    linear-gradient(rgba(0, 212, 255, 0.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 212, 255, 0.15) 1px, transparent 1px);
+    linear-gradient(rgba(0, 212, 255, 0.15) 0.09vh, transparent 0.09vh),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.15) 0.09vh, transparent 0.09vh);
   background-size: 3.7vh 3.7vh;
-  background-position: -1px -1px;
-  border: 1px solid rgba(0, 212, 255, 0.4);
+  background-position: -0.09vh -0.09vh;
+  border: 0.09vh solid rgba(0, 212, 255, 0.4);
   border-radius: 1.5vh;
   box-shadow: none;
 }
@@ -47,7 +47,7 @@
   text-align: center;
   font-size: 3.89vh;
   font-weight: 600;
-  border-bottom: 1px solid rgba(0, 212, 255, 0.3);
+  border-bottom: 0.09vh solid rgba(0, 212, 255, 0.3);
   margin-bottom: 0;
   color: #00d4ff;
   display: flex;
@@ -107,7 +107,7 @@
   appearance: none;
   -webkit-appearance: none;
   background: rgba(0, 50, 80, 0.8);
-  border: 2px solid rgba(0, 150, 200, 0.5);
+  border: 0.19vh solid rgba(0, 150, 200, 0.5);
   border-radius: 0.4vh;
   position: relative;
   cursor: pointer;
@@ -143,12 +143,12 @@
 }
 
 .ytaf-ui-container input[type='checkbox']:focus {
-  outline: 2px solid #00d4ff;
-  outline-offset: 2px;
+  outline: 0.19vh solid #00d4ff;
+  outline-offset: 0.19vh;
 }
 
 .ytaf-ui-container.theme-classic-red input[type='checkbox']:focus {
-  outline: 2px solid #ff0000;
+  outline: 0.19vh solid #ff0000;
   border-color: #ff0000;
 }
 
@@ -192,34 +192,34 @@
 .ytaf-ui-container .shortcut-control-row:focus {
   background: rgba(0, 212, 255, 0.2);
   border-radius: 0.75vh;
-  box-shadow: 0 0 0 2px #00d4ff;
+  box-shadow: 0 0 0 0.19vh #00d4ff;
   outline: none;
 }
 
 .ytaf-ui-container label:focus-within {
   background: rgba(0, 212, 255, 0.2);
   border-radius: 0.75vh;
-  box-shadow: 0 0 0 2px #00d4ff;
+  box-shadow: 0 0 0 0.19vh #00d4ff;
   outline: none;
 }
 
 .ytaf-ui-container label.focused {
   background: rgba(0, 212, 255, 0.2);
   border-radius: 0.75vh;
-  box-shadow: 0 0 0 2px #00d4ff;
+  box-shadow: 0 0 0 0.19vh #00d4ff;
 }
 
 .ytaf-ui-container.theme-classic-red .shortcut-control-row:focus,
 .ytaf-ui-container.theme-classic-red label:focus-within,
 .ytaf-ui-container.theme-classic-red label.focused {
   background: rgba(255, 0, 0, 0.1);
-  box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.5);
+  box-shadow: 0 0 0 0.19vh rgba(255, 0, 0, 0.5);
 }
 
 .ytaf-ui-container blockquote {
   margin: 1.5vh 0 1.5vh 2.2vh;
   padding-left: 2.2vh;
-  border-left: 3px solid #00d4ff;
+  border-left: 0.28vh solid #00d4ff;
   background: rgba(0, 212, 255, 0.05);
   border-radius: 0 0.75vh 0.75vh 0;
 }
@@ -242,7 +242,7 @@
   font-size: 1.48vh;
   margin-top: 1.85vh;
   padding-top: 1.5vh;
-  border-top: 1px solid rgba(0, 212, 255, 0.2);
+  border-top: 0.09vh solid rgba(0, 212, 255, 0.2);
 }
 
 .ytaf-ui-container.theme-classic-red small {
@@ -260,7 +260,7 @@
 
 .ytaf-notification-container .message {
   background: #002840;
-  border: 1px solid rgba(0, 212, 255, 0.4);
+  border: 0.09vh solid rgba(0, 212, 255, 0.4);
   color: white;
   padding: 1.5vh 1.85vh;
   margin-bottom: 1.1vh;
@@ -270,7 +270,7 @@
   transition: opacity 0.3s ease, transform 0.3s ease;
   opacity: 1;
   transform: translateX(0);
-  border-left: 4px solid #00d4ff;
+  border-left: 0.37vh solid #00d4ff;
   font-weight: 500;
   line-height: 1.4;
 }
@@ -308,7 +308,7 @@
 /* OLED Care Mode */
 .ytaf-ui-container.oled-care {
   background: #000000;
-  border: 1px solid rgba(0, 212, 255, 0.4);
+  border: 0.09vh solid rgba(0, 212, 255, 0.4);
   box-shadow: none;
 }
 
@@ -327,8 +327,8 @@
 
 .ytaf-notification-container.oled-care .message {
   background: #000000;
-  border: 1px solid #00d4ff;
-  border-left: 4px solid #00d4ff;
+  border: 0.09vh solid #00d4ff;
+  border-left: 0.37vh solid #00d4ff;
   box-shadow: none;
   color: #cccccc;
 }
@@ -346,7 +346,7 @@
   font-size: 2.22vh;
   color: #5599aa;
   cursor: pointer;
-  border-top: 1px solid rgba(0, 212, 255, 0.2);
+  border-top: 0.09vh solid rgba(0, 212, 255, 0.2);
   margin-top: 1.5vh;
 }
 
@@ -359,12 +359,12 @@
   outline: none;
   background: rgba(0, 212, 255, 0.2);
   border-radius: 0.75vh;
-  box-shadow: 0 0 0 2px #00d4ff;
+  box-shadow: 0 0 0 0.19vh #00d4ff;
 }
 
 .ytaf-ui-container.theme-classic-red .ytaf-nav-hint:focus {
   background: rgba(255, 0, 0, 0.1);
-  box-shadow: 0 0 0 2px #ff0000;
+  box-shadow: 0 0 0 0.19vh #ff0000;
 }
 
 .ytaf-nav-hint.right { 
@@ -376,7 +376,7 @@
   justify-content: flex-start; 
   text-align: left; 
   border-top: none; 
-  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  border-bottom: 0.09vh solid rgba(0, 212, 255, 0.2);
   margin-top: 0.5vh; 
   margin-bottom: 1.5vh; 
   padding: 0.75vh 0 1.5vh;
@@ -453,7 +453,7 @@
 .reset-color-btn {
   background: rgba(0, 100, 150, 0.5);
   color: #ffffff;
-  border: 1px solid rgba(0, 150, 200, 0.5);
+  border: 0.09vh solid rgba(0, 150, 200, 0.5);
   border-radius: 0.4vh;
   padding: 0.2vh 0.75vh;
   margin-right: 0.75vh;
@@ -468,11 +468,11 @@
 }
 
 .reset-color-btn:focus {
-  outline: 2px solid #00d4ff;
+  outline: 0.19vh solid #00d4ff;
 }
 
 .ytaf-ui-container.theme-classic-red .reset-color-btn:focus {
-  outline: 2px solid #ff0000;
+  outline: 0.19vh solid #ff0000;
 }
 
 .ytaf-ui-container input[type='color'] {
@@ -480,7 +480,7 @@
   appearance: none;
   width: 3.7vh;
   height: 2.22vh;
-  border: 1px solid rgba(0, 150, 200, 0.5);
+  border: 0.09vh solid rgba(0, 150, 200, 0.5);
   border-radius: 0.4vh;
   background-color: transparent;
   cursor: pointer;

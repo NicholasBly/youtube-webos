@@ -22,6 +22,9 @@ let seekAccumulator = 0;
 let seekResetTimer = null;
 let activeSeekNotification = null;
 
+let activePlayPauseNotification = null;
+let playPauseNotificationTimer = null;
+
 // Lazy load variable
 let optionsPanel = null;
 let optionsPanelVisible = false;
@@ -800,9 +803,23 @@ function saveToPlaylistLogic() {
 }
 
 function playPauseLogic(video) {
+    const notify = (msg) => {
+        if (activePlayPauseNotification) {
+            activePlayPauseNotification.update(msg);
+        } else {
+            activePlayPauseNotification = showNotification(msg);
+        }
+        
+        if (playPauseNotificationTimer) clearTimeout(playPauseNotificationTimer);
+        playPauseNotificationTimer = setTimeout(() => {
+            activePlayPauseNotification = null;
+            playPauseNotificationTimer = null;
+        }, 3000);
+    };
+
     if (video.paused) { 
         video.play(); 
-        showNotification('Playing');
+        notify('Playing');
     } else {
         const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
         const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
@@ -817,7 +834,7 @@ function playPauseLogic(video) {
         }
         
         video.pause();
-        showNotification('Paused');
+        notify('Paused');
 
         // Dismiss controls
         if(needsHide && !isShortsPage() && !isPanelVisible) {
@@ -1150,6 +1167,13 @@ function applyTheme(theme) {
   if (theme === 'classic-red') { notificationContainer?.classList.add('theme-classic-red'); }
   else { notificationContainer?.classList.remove('theme-classic-red'); }
   updateLogoState();
+}
+
+const menuKeyExists = shortcutKeys.some(key => shortcutCache[key] === 'config_menu');
+
+if (!menuKeyExists) {
+    console.warn('[UI] No menu keybind found. Forcing Green button to Open Settings.');
+    configWrite('shortcut_key_green', 'config_menu');
 }
 
 // --- Start-up ---
