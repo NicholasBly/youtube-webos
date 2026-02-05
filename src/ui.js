@@ -7,7 +7,7 @@ import './return-dislike.js';
 // import { initYouTubeFixes } from './yt-fixes.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { sendKey, REMOTE_KEYS, isGuestMode } from './utils.js';
+import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, SELECTORS } from './utils.js';
 import { initAdblock, destroyAdblock } from './adblock.js';
 
 let lastSafeFocus = null;
@@ -15,7 +15,33 @@ let oledKeepAliveTimer = null;
 
 let lastShortcutTime = 0;
 let lastShortcutKey = -1;
-let shortcutDebounceTime = 400;
+let shortcutDebounceTime = 100;
+
+// Seek Burst Variables
+let seekAccumulator = 0;
+let seekResetTimer = null;
+let activeSeekNotification = null;
+
+let activePlayPauseNotification = null;
+let playPauseNotificationTimer = null;
+
+// Lazy load variable
+let optionsPanel = null;
+let optionsPanelVisible = false;
+
+const shortcutCache = {};
+// Define keys including colors
+const shortcutKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'red', 'green', 'blue'];
+
+function updateShortcutCache(key) {
+    shortcutCache[key] = configRead(`shortcut_key_${key}`);
+}
+
+// Initialize cache and listeners
+shortcutKeys.forEach(key => {
+    updateShortcutCache(key);
+    configAddChangeListener(`shortcut_key_${key}`, () => updateShortcutCache(key));
+});
 
 // --- Polyfills & Helpers ---
 
@@ -37,29 +63,57 @@ if (!Element.prototype.closest) {
   };
 }
 
-const isWatchPage = () => document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
-const isShortsPage = () => document.body.classList.contains('WEB_PAGE_TYPE_SHORTS');
 const simulateBack = () => { console.log('[Shortcut] Simulating Back/Escape...'); sendKey(REMOTE_KEYS.BACK); };
 
 window.__spatialNavigation__.keyMode = 'NONE';
-const ARROW_KEY_CODE = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' };
-const colorCodeMap = new Map([[403, 'red'], [166, 'red'], [404, 'green'], [172, 'green'], [405, 'yellow'], [170, 'yellow'], [406, 'blue'], [167, 'blue'], [191, 'blue']]);
+const ARROW_KEY_CODE = { 
+  [REMOTE_KEYS.LEFT.code]: 'left', 
+  [REMOTE_KEYS.UP.code]: 'up', 
+  [REMOTE_KEYS.RIGHT.code]: 'right', 
+  [REMOTE_KEYS.DOWN.code]: 'down' 
+};
+
+const colorCodeMap = new Map([
+    [403, 'red'], [166, 'red'], 
+    [404, 'green'], [172, 'green'], 
+    [405, 'yellow'], [170, 'yellow'], 
+    [406, 'blue'], [167, 'blue'], [191, 'blue']
+]);
 const getKeyColor = (charCode) => colorCodeMap.get(charCode) || null;
 
 // --- DOM Utility Functions ---
 
-// Helper: Create DOM element with properties
 const createElement = (tag, props = {}, ...children) => {
   const el = document.createElement(tag);
-  Object.entries(props).forEach(([key, val]) => {
-    if (key === 'style' && typeof val === 'object') Object.assign(el.style, val);
-    else if (key === 'class') el.className = val;
-    else if (key === 'events' && typeof val === 'object') Object.entries(val).forEach(([evt, fn]) => el.addEventListener(evt, fn));
-    else if (key === 'text') el.textContent = val;
-    else if (key === 'html') el.innerHTML = val;
-    else el[key] = val;
-  });
-  children.forEach(child => el.appendChild(typeof child === 'string' ? document.createTextNode(child) : child));
+  
+  for (const key in props) {
+      if (Object.prototype.hasOwnProperty.call(props, key)) {
+          const val = props[key];
+          if (key === 'style' && typeof val === 'object') {
+              for (const styleKey in val) {
+                  if (Object.prototype.hasOwnProperty.call(val, styleKey)) {
+                      el.style[styleKey] = val[styleKey];
+                  }
+              }
+          }
+          else if (key === 'class') el.className = val;
+          else if (key === 'events' && typeof val === 'object') {
+              for (const evt in val) {
+                  if (Object.prototype.hasOwnProperty.call(val, evt)) {
+                      el.addEventListener(evt, val[evt]);
+                  }
+              }
+          }
+          else if (key === 'text') el.textContent = val;
+          else if (key === 'html') el.innerHTML = val;
+          else el[key] = val;
+      }
+  }
+
+  for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      el.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+  }
   return el;
 };
 
@@ -67,12 +121,14 @@ const createElement = (tag, props = {}, ...children) => {
 
 function createConfigCheckbox(key) {
   const elmInput = createElement('input', { type: 'checkbox', checked: configRead(key), events: { change: (evt) => configWrite(key, evt.target.checked) }});
+  
+  const labelContent = createElement('div', { class: 'label-content', style: { fontSize: '2.1vh' } }, elmInput, `\u00A0${configGetDesc(key)}`);
+  const elmLabel = createElement('label', {}, labelContent);
+  
   elmInput.addEventListener('focus', () => elmLabel.classList.add('focused'));
   elmInput.addEventListener('blur', () => elmLabel.classList.remove('focused'));
   configAddChangeListener(key, (evt) => elmInput.checked = evt.detail.newValue);
   
-  const labelContent = createElement('div', { class: 'label-content', style: { fontSize: '2.1vh' } }, elmInput, `\u00A0${configGetDesc(key)}`);
-  const elmLabel = createElement('label', {}, labelContent);
   return elmLabel;
 }
 
@@ -99,8 +155,8 @@ function createSegmentControl(key) {
     tabIndex: 0,
     events: {
       keydown: (e) => {
-        if (e.keyCode === 37) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
-        else if (e.keyCode === 39 || e.keyCode === 13) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
+        if (e.keyCode === REMOTE_KEYS.LEFT.code) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
+        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
       },
       click: () => cycle('next')
     }
@@ -148,10 +204,15 @@ function createSection(title, elements) {
   return fieldset;
 }
 
-function createShortcutControl(keyIndex) {
-  const configKey = `shortcut_key_${keyIndex}`;
+function createShortcutControl(keyIdentifier) {
+  const configKey = `shortcut_key_${keyIdentifier}`;
   const actions = Object.keys(shortcutActions);
+  const isColor = ['red', 'green', 'blue'].includes(keyIdentifier);
   
+  const labelText = isColor 
+    ? `${keyIdentifier.charAt(0).toUpperCase() + keyIdentifier.slice(1)} Button` 
+    : `Key ${keyIdentifier}`;
+
   const valueText = createElement('span', { class: 'current-value' });
   const updateDisplay = () => valueText.textContent = shortcutActions[configRead(configKey)] || configRead(configKey);
   const cycle = (dir) => {
@@ -168,13 +229,13 @@ function createShortcutControl(keyIndex) {
     tabIndex: 0,
     events: {
       keydown: (e) => {
-        if (e.keyCode === 37) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
-        else if (e.keyCode === 39 || e.keyCode === 13) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
+        if (e.keyCode === REMOTE_KEYS.LEFT.code) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
+        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
       },
       click: () => cycle('next')
     }
   }, 
-    createElement('span', { text: `Key ${keyIndex}`, class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
+    createElement('span', { text: labelText, class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
     createElement('div', { class: 'shortcut-value-container' },
       createElement('span', { text: '<', class: 'arrow-btn' }),
       valueText,
@@ -210,12 +271,12 @@ function createOpacityControl(key) {
     tabIndex: 0,
     events: {
       keydown: (e) => {
-        if (e.keyCode === 37) { // Left
+        if (e.keyCode === REMOTE_KEYS.LEFT.code) { // Left
           changeValue(-step); 
           e.stopPropagation(); 
           e.preventDefault(); 
         }
-        else if (e.keyCode === 39 || e.keyCode === 13) { // Right or Enter
+        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { // Right or Enter
           changeValue(step); 
           e.stopPropagation(); 
           e.preventDefault(); 
@@ -273,7 +334,7 @@ function createOptionsPanel() {
 
   // Keyboard Navigation for the Options Panel
   elmContainer.addEventListener('keydown', (evt) => {
-    if (getKeyColor(evt.charCode) === 'green') return; // Let global handler handle close
+    if (getKeyColor(evt.charCode || evt.keyCode) === 'green') return; // Let global handler handle close if mapped to green (or config_menu logic)
 
     if (evt.keyCode in ARROW_KEY_CODE) {
       const dir = ARROW_KEY_CODE[evt.keyCode];
@@ -298,7 +359,7 @@ function createOptionsPanel() {
         evt.preventDefault(); evt.stopPropagation(); return;
       }
       navigate(ARROW_KEY_CODE[evt.keyCode]);
-    } else if (evt.keyCode === 13) {
+    } else if (evt.keyCode === REMOTE_KEYS.ENTER.code) {
       if (evt instanceof KeyboardEvent) document.activeElement.click();
     } else if (evt.keyCode === 27) { // Escape
       showOptionsPanel(false);
@@ -359,7 +420,6 @@ function createOptionsPanel() {
   pageSponsor = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-sponsor', style: { display: 'none' }});
   pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> Main Settings', events: { click: () => setActivePage(0) }}));
   pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
-  // Removed enableSponsorBlockAutoSkip checkbox
   
   const elmBlock = createElement('blockquote', {},
     ...['Sponsor', 'Intro', 'Outro', 'Interaction', 'SelfPromo', 'MusicOfftopic', 'Filler', 'Hook', 'Preview'].map(s => createSegmentControl(`sbMode_${s.toLowerCase()}`)),
@@ -368,14 +428,14 @@ function createOptionsPanel() {
 	createConfigCheckbox('skipSegmentsOnce')
   );
   pageSponsor.appendChild(elmBlock);
-  pageSponsor.appendChild(createElement('div', { html: '<small>Sponsor segments skipping - https://sponsor.ajay.app<br>Use blue button on remote to skip to highlight or skip segments manually</small>' }));
+  pageSponsor.appendChild(createElement('div', { html: '<small>Sponsor segments skipping - https://sponsor.ajay.app</small>' }));
   pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'Shortcuts <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(2) }}));
   elmContainer.appendChild(pageSponsor);
 
   // --- Page 3: Shortcuts ---
   pageShortcuts = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-shortcuts', style: { display: 'none' }});
   pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> SponsorBlock Settings', events: { click: () => setActivePage(1) }}));
-  for (let i = 0; i <= 9; i++) pageShortcuts.appendChild(createShortcutControl(i));
+  shortcutKeys.forEach(key => pageShortcuts.appendChild(createShortcutControl(key)));
   pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'UI Tweaks <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(3) }}));
   elmContainer.appendChild(pageShortcuts);
   
@@ -394,14 +454,25 @@ function createOptionsPanel() {
   return elmContainer;
 }
 
-const optionsPanel = createOptionsPanel();
-document.body.appendChild(optionsPanel);
-let optionsPanelVisible = false;
+// Lazy Load: optionsPanel is not created here.
+// document.body.appendChild(optionsPanel); removed
 
 function showOptionsPanel(visible) {
   if (visible === undefined || visible === null) visible = true;
   
   if (visible && !optionsPanelVisible) {
+    
+    // Lazy Initialization
+    if (!optionsPanel) {
+        console.log('[UI] Initializing Options Panel (Lazy Load)...');
+        optionsPanel = createOptionsPanel();
+        document.body.appendChild(optionsPanel);
+        
+        // Apply startup states that depend on panel existence
+        applyOledMode(configRead('enableOledCareMode'));
+        applyTheme(configRead('uiTheme'));
+    }
+
     console.info('Showing and focusing options panel!');
     optionsPanel.style.display = 'block';
     if (optionsPanel.activePage === 1 && (isWatchPage())) sponsorBlockUI.togglePopup(true);
@@ -412,7 +483,7 @@ function showOptionsPanel(visible) {
     if (firstVisibleInput) { firstVisibleInput.focus(); lastSafeFocus = firstVisibleInput; }
     else { optionsPanel.focus(); lastSafeFocus = optionsPanel; }
     optionsPanelVisible = true;
-  } else if (!visible && optionsPanelVisible) {
+  } else if (!visible && optionsPanelVisible && optionsPanel) {
     console.info('Hiding options panel!');
     optionsPanel.style.display = 'none';
     sponsorBlockUI.togglePopup(false);
@@ -424,7 +495,7 @@ function showOptionsPanel(visible) {
 
 // Trap focus inside options panel when visible
 document.addEventListener('focus', (e) => {
-  if (!optionsPanelVisible) return;
+  if (!optionsPanelVisible || !optionsPanel) return;
   const target = e.target;
   const isSafeFocus = (optionsPanel && optionsPanel.contains(target)) || (target.closest && target.closest('.sb-segments-popup'));
   if (isSafeFocus) lastSafeFocus = target;
@@ -460,7 +531,9 @@ async function skipChapter(direction = 'next') {
   const getChapterEls = () => {
     const bar = document.querySelector('ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]');
     if (!bar) return [];
-    return Array.from(bar.children).filter(el => { const key = el.getAttribute('idomkey'); return key && key.startsWith('chapter-'); });
+    // Avoid creating an array copy if possible, but structure might require it. 
+    // Using bar.children directly in loop below.
+    return bar.children;
   };
 
   let chapterEls = getChapterEls();
@@ -482,31 +555,59 @@ async function skipChapter(direction = 'next') {
     return;
   }
 
-  let totalWidth = 0;
-  const chapterData = chapterEls.map(el => { const width = parseFloat(el.style.width || '0'); const data = { width, startIndex: totalWidth }; totalWidth += width; return data; });
-  if (totalWidth === 0) return;
-
-  const timestamps = chapterData.map(c => (c.startIndex / totalWidth) * video.duration);
+  // Single-pass calculation O(N)
+  const totalDuration = video.duration;
   const currentTime = video.currentTime;
-  let targetTime;
+  let accumulatedWidth = 0;
+  let totalWidth = 0;
 
-  if (direction === 'next') {
-    targetTime = timestamps.find(t => t > currentTime + 1);
-  } else {
-    // Find the chapter we are currently in
-    let currentIdx = -1;
-    for (let i = 0; i < timestamps.length; i++) { if (currentTime >= timestamps[i]) currentIdx = i; else break; }
-    
-    if (currentIdx !== -1) {
-      const chapterStart = timestamps[currentIdx];
-      // If we are deep into the chapter (>3s), restart chapter. Else go to previous.
-      if (currentTime - chapterStart > 3) targetTime = chapterStart;
-      else if (currentIdx > 0) targetTime = timestamps[currentIdx - 1];
-      else targetTime = 0;
-    } else targetTime = 0;
+  // 1. Calculate total width first
+  for (let i = 0; i < chapterEls.length; i++) {
+      const el = chapterEls[i];
+      if (el.getAttribute('idomkey')?.startsWith('chapter-')) {
+          totalWidth += parseFloat(el.style.width || '0');
+      }
   }
 
-  if (targetTime !== undefined && targetTime < video.duration) {
+  if (totalWidth === 0) return;
+
+  let targetTime = -1;
+  let currentChapterStart = 0;
+  let prevChapterStart = 0;
+
+  // 2. Find target
+  for (let i = 0; i < chapterEls.length; i++) {
+      const el = chapterEls[i];
+      if (!el.getAttribute('idomkey')?.startsWith('chapter-')) continue;
+
+      const width = parseFloat(el.style.width || '0');
+      const startTimestamp = (accumulatedWidth / totalWidth) * totalDuration;
+      accumulatedWidth += width;
+
+      if (direction === 'next') {
+        if (startTimestamp > currentTime + 1) {
+            targetTime = startTimestamp;
+            break;
+        }
+      } else {
+        // Prev logic
+        if (currentTime >= startTimestamp) {
+            prevChapterStart = currentChapterStart;
+            currentChapterStart = startTimestamp;
+        } else {
+            // Passed current time
+            break;
+        }
+      }
+  }
+  
+  // Finalize Previous Target
+  if (direction !== 'next') {
+      if (currentTime - currentChapterStart > 3) targetTime = currentChapterStart;
+      else targetTime = prevChapterStart;
+  }
+
+  if (targetTime !== -1 && targetTime < video.duration) {
     video.currentTime = targetTime;
     showNotification(direction === 'next' ? 'Next Chapter' : 'Previous Chapter');
     if (wasForcedNow) setTimeout(() => simulateBack(), 250);
@@ -514,6 +615,35 @@ async function skipChapter(direction = 'next') {
     showNotification(direction === 'next' ? 'No next chapter' : 'Start of video');
     if (wasForcedNow) setTimeout(() => simulateBack(), 250);
   }
+}
+
+function performBurstSeek(seconds, video) {
+    if (!video) video = document.querySelector('video');
+    if (!video) return;
+	
+	if ((seekAccumulator > 0 && seconds < 0) || (seekAccumulator < 0 && seconds > 0)) {
+        seekAccumulator = 0;
+    }
+
+    seekAccumulator += seconds;
+    video.currentTime += seconds;
+
+    if (seekResetTimer) clearTimeout(seekResetTimer);
+
+    const directionSymbol = seekAccumulator > 0 ? '+' : '';
+    const msg = `Skipped ${directionSymbol}${seekAccumulator}s`;
+
+    if (activeSeekNotification) {
+         activeSeekNotification.update(msg);
+    } else {
+         activeSeekNotification = showNotification(msg);
+    }
+
+    seekResetTimer = setTimeout(() => {
+        seekAccumulator = 0;
+        activeSeekNotification = null;
+        seekResetTimer = null;
+    }, 1200);
 }
 
 function triggerInternal(element, name) {
@@ -535,52 +665,12 @@ function triggerInternal(element, name) {
   return success;
 }
 
-function handleShortcutAction(action) {
-  const video = document.querySelector('video');
-  const player = document.getElementById('ytlr-player__player-container-player') || document.querySelector('.html5-video-player');
-  if (!video) return;
+// --- Shortcut Helper Functions (Static Logic) ---
+// Extracted to prevent object allocation inside handlers
 
-  const actions = {
-    chapter_skip: () => skipChapter('next'),
-    chapter_skip_prev: () => skipChapter('prev'),
-    seek_15_fwd: () => { video.currentTime = Math.min(video.duration, video.currentTime + 15); showNotification('Skipped +15s'); },
-    seek_15_back: () => { video.currentTime = Math.max(0, video.currentTime - 15); showNotification('Skipped -15s'); },
-    play_pause: () => {
-      if (video.paused) { 
-        video.play(); 
-        showNotification('Playing');
-      } else {
-		const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
-        const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
-		const watchOverlay = document.querySelector('.webOs-watch');
-		let needsHide = false;
-		if(!isControlsVisible) {
-		needsHide = true;
-        document.body.classList.add('ytaf-hide-controls');
-        if (watchOverlay) watchOverlay.style.opacity = '0';
-		}
-        
-        video.pause();	
-
-        // Dismiss controls
-		if(needsHide) {
-        shortcutDebounceTime = 650; 
-
-        sendKey(REMOTE_KEYS.UP);                            
-        setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
-        setTimeout(() => sendKey(REMOTE_KEYS.UP), 500);
-
-        setTimeout(() => {
-          document.body.classList.remove('ytaf-hide-controls');
-          if (watchOverlay) watchOverlay.style.opacity = '';
-        }, 750);
-		}
-        showNotification('Paused');
-      }
-    },
-    toggle_subs: () => {
-      let toggledViaApi = false;
-      if (player) {
+function toggleSubtitlesLogic(player) {
+    let toggledViaApi = false;
+    if (player) {
         // Try API first
         if (typeof player.loadModule === 'function') player.loadModule('captions');
         if (typeof player.getOption === 'function' && typeof player.setOption === 'function') {
@@ -596,9 +686,9 @@ function handleShortcutAction(action) {
             }
           } catch (e) { console.warn('[Shortcut] Subtitle API Error:', e); }
         }
-      }
-      // Fallback to UI clicking
-      if (!toggledViaApi) {
+    }
+    // Fallback to UI clicking
+    if (!toggledViaApi) {
         const capsBtn = document.querySelector('ytlr-captions-button yt-button-container') || document.querySelector('ytlr-captions-button ytlr-button');
         if (capsBtn) {
           if (triggerInternal(capsBtn, 'Captions')) {
@@ -610,42 +700,43 @@ function handleShortcutAction(action) {
           }
         }
         showNotification('Subtitles unavailable');
-      }
-    },
-    toggle_comments: () => {
-      // 1. Try finding Comments Button
-      let target = document.querySelector('yt-button-container[aria-label="Comments"]');
+    }
+}
 
-	  if (!target) {
-		target = document.querySelector('yt-icon.qHxFAf.ieYpu.nGYLgf') || 
-				 document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb') ||
-				 document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') || 
-				 document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || 
-				 document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
-	  }
-	  if (!target) {
+function toggleCommentsLogic() {
+    // 1. Try finding Comments Button
+    let target = document.querySelector('yt-button-container[aria-label="Comments"]');
+
+    if (!target) {
+        target = document.querySelector('yt-icon.qHxFAf.ieYpu.nGYLgf') || 
+                 document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb') ||
+                 document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') || 
+                 document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || 
+                 document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
+    }
+    if (!target) {
           target = document.querySelector('ytlr-button-renderer[idomkey="1"] yt-button-container'); // Shorts
-      }
-	  let commBtn = target ? target.closest('yt-button-container, ytlr-button') : null;
-      let isLiveChat = false;
+    }
+    let commBtn = target ? target.closest('yt-button-container, ytlr-button') : null;
+    let isLiveChat = false;
 
-      // 2. Fallback: Live Chat (Only if comments not found)
-      if (!commBtn) {
+    // 2. Fallback: Live Chat (Only if comments not found)
+    if (!commBtn) {
           const chatTarget = document.querySelector('ytlr-live-chat-toggle-button yt-button-container') ||
                              document.querySelector('yt-button-container[aria-label="Live chat"]');
           if (chatTarget) {
               commBtn = chatTarget;
               isLiveChat = true;
           }
-      }
+    }
 
-      // 3. Execution Logic
-      const isBtnActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
-      const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
-      const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
+    // 3. Execution Logic
+    const isBtnActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
+    const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
+    const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
       
-      if ((isBtnActive || isPanelVisible) && !isLiveChat) simulateBack();
-      else {
+    if ((isBtnActive || isPanelVisible) && !isLiveChat) simulateBack();
+    else {
         if (triggerInternal(commBtn, isLiveChat ? 'Live Chat' : 'Comments')) {
             if (isLiveChat) {
                 setTimeout(() => {
@@ -655,29 +746,30 @@ function handleShortcutAction(action) {
             }
         }
         else {
-			showNotification(isLiveChat ? 'Live Chat Unavailable' : 'Comments Unavailable');
+            showNotification(isLiveChat ? 'Live Chat Unavailable' : 'Comments Unavailable');
         }
-      }
-    },
-    toggle_description: () => {
-      // 1. Try English text finding
-      let descText = Array.from(document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe'))
-        .find(el => el.textContent.trim() === 'Description');
-      let target = descText ? descText.closest('yt-button-container') : null;
+    }
+}
 
-      // 2. Fallback: Structural finding for non-English (look for text-button in generic renderer, excluding subscribe/join which are usually different or have icons)
-      if (!target) {
+function toggleDescriptionLogic() {
+    // 1. Try English text finding
+    let descText = Array.from(document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe'))
+        .find(el => el.textContent.trim() === 'Description');
+    let target = descText ? descText.closest('yt-button-container') : null;
+
+    // 2. Fallback: Structural finding for non-English (look for text-button in generic renderer, excluding subscribe/join which are usually different or have icons)
+    if (!target) {
         const genericTextBtn = document.querySelector('ytlr-button-renderer yt-formatted-string.XGffTd.OqGroe');
         if (genericTextBtn) target = genericTextBtn.closest('yt-button-container');
-      }
+    }
 
-      const isDescActive = target && (target.getAttribute('aria-pressed') === 'true' || target.getAttribute('aria-selected') === 'true');
-      // Re-use panel detection from comments as they share the side panel space
-      const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
-      const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
+    const isDescActive = target && (target.getAttribute('aria-pressed') === 'true' || target.getAttribute('aria-selected') === 'true');
+    // Re-use panel detection from comments as they share the side panel space
+    const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
+    const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
 
-      if (isDescActive || isPanelVisible) simulateBack();
-      else {
+    if (isDescActive || isPanelVisible) simulateBack();
+    else {
         if (triggerInternal(target, 'Description')) {
             setTimeout(() => {
                 if (window.returnYouTubeDislike) {
@@ -687,31 +779,166 @@ function handleShortcutAction(action) {
             }, 350);
         }
         else showNotification('Description Unavailable');
-      }
-    },
-    save_to_playlist: () => {
-      // 1. Try English Aria Label
-      let target = document.querySelector('yt-button-container[aria-label="Save"]');
+    }
+}
 
-      // 2. Fallback: Specific icon class (p9sZp) found in Save button
-      if (!target) {
+function saveToPlaylistLogic() {
+    // 1. Try English Aria Label
+    let target = document.querySelector('yt-button-container[aria-label="Save"]');
+
+    // 2. Fallback: Specific icon class (p9sZp) found in Save button
+    if (!target) {
         const icon = document.querySelector('yt-icon.p9sZp');
         if (icon) target = icon.closest('yt-button-container');
-      }
-	  
-	  const panel = document.querySelector('.AmQJbe');
-	  
-	  if (panel) simulateBack();
-	  else {
-      if (triggerInternal(target, 'Save/Watch Later')) {
-      } else {
-        showNotification('Save Button Unavailable');
-      }
-	  }
     }
-  };
+      
+    const panel = document.querySelector('.AmQJbe');
+      
+    if (panel) simulateBack();
+    else {
+        if (!triggerInternal(target, 'Save/Watch Later')) {
+            showNotification('Save Button Unavailable');
+        }
+    }
+}
 
-  if (actions[action]) actions[action]();
+function playPauseLogic(video) {
+    const notify = (msg) => {
+        if (activePlayPauseNotification) {
+            activePlayPauseNotification.update(msg);
+        } else {
+            activePlayPauseNotification = showNotification(msg);
+        }
+        
+        if (playPauseNotificationTimer) clearTimeout(playPauseNotificationTimer);
+        playPauseNotificationTimer = setTimeout(() => {
+            activePlayPauseNotification = null;
+            playPauseNotificationTimer = null;
+        }, 3000);
+    };
+
+    if (video.paused) { 
+        video.play(); 
+        notify('Playing');
+    } else {
+        const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
+        const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
+        const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
+        const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
+        const watchOverlay = document.querySelector('.webOs-watch');
+        let needsHide = false;
+        if(!isControlsVisible) {
+            needsHide = true;
+            document.body.classList.add('ytaf-hide-controls');
+            if (watchOverlay) watchOverlay.style.opacity = '0';
+        }
+        
+        video.pause();
+        notify('Paused');
+
+        // Dismiss controls
+        if(needsHide && !isShortsPage() && !isPanelVisible) {
+            shortcutDebounceTime = 650;
+        
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
+            }
+            
+            setTimeout(() => sendKey(REMOTE_KEYS.BACK, document.activeElement), 250); // don't press back button if we're on shorts or we leave the page
+        }
+        
+        if(needsHide && !isShortsPage()) {
+            setTimeout(() => {
+              document.body.classList.remove('ytaf-hide-controls');
+              if (watchOverlay) watchOverlay.style.opacity = '';
+            }, 750);
+        }
+    }
+}
+
+function handleShortcutAction(action) {
+  // Global Actions - Do not require Video
+  if (action === 'config_menu') {
+      showOptionsPanel(!optionsPanelVisible);
+      return;
+  }
+  
+  if (action === 'oled_toggle') {
+      let overlay = document.getElementById('oled-black-overlay');
+      if (overlay) {
+          overlay.remove();
+          if (oledKeepAliveTimer) { clearInterval(oledKeepAliveTimer); oledKeepAliveTimer = null; }
+          showNotification('OLED Mode Deactivated');
+      } else {
+          if (optionsPanelVisible) showOptionsPanel(false);
+          overlay = createElement('div', { id: 'oled-black-overlay', style: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#000', zIndex: 9999 }});
+          document.body.appendChild(overlay);
+          
+          // Keep TV awake by simulating input
+          oledKeepAliveTimer = setInterval(() => {
+            sendKey(REMOTE_KEYS.UP);
+            setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
+          }, 30 * 60 * 1000);
+          showNotification('OLED Mode Activated');
+      }
+      return;
+  }
+
+  // Player Actions - Require Video/Context
+  // Check context for player actions (same check as used previously for keys 0-9)
+  if (!isWatchPage() && !isShortsPage()) return;
+  
+  const video = document.querySelector('video');
+  const player = document.getElementById(SELECTORS.PLAYER_ID) || document.querySelector('.html5-video-player');
+  if (!video) return;
+
+  switch (action) {
+    case 'chapter_skip':
+        skipChapter('next');
+        break;
+    case 'chapter_skip_prev':
+        skipChapter('prev');
+        break;
+    case 'seek_15_fwd':
+        performBurstSeek(5, video);
+        break;
+    case 'seek_15_back':
+        performBurstSeek(-5, video);
+        break;
+    case 'play_pause':
+        playPauseLogic(video);
+        break;
+    case 'toggle_subs':
+        toggleSubtitlesLogic(player);
+        break;
+    case 'toggle_comments':
+        toggleCommentsLogic();
+        break;
+    case 'toggle_description':
+        toggleDescriptionLogic();
+        break;
+    case 'save_to_playlist':
+        saveToPlaylistLogic();
+        break;
+    case 'sb_skip_prev':
+        if (window.sponsorblock) {
+            const success = window.sponsorblock.skipToPreviousSegment();
+            if (!success) showNotification('No previous segment found');
+        } else {
+            showNotification('SponsorBlock not loaded');
+        }
+        break;
+    case 'sb_manual_skip':
+        try {
+          if (window.sponsorblock) {
+            const handled = window.sponsorblock.handleBlueButton(); // Keep naming convention even if not blue button
+            if (!handled) showNotification('No action available');
+          } else showNotification('SponsorBlock not loaded');
+        } catch (e) { showNotification('Error: ' + e.message); }
+        break;
+    default:
+        console.warn(`[Shortcut] Unknown action: ${action}`);
+  }
 }
 
 // --- Global Input Handler ---
@@ -720,76 +947,49 @@ const eventHandler = (evt) => {
   if (evt.repeat) return;
   // console.info('Key event:', evt.type, evt.charCode, evt.keyCode);
 
-  const keyColor = getKeyColor(evt.charCode);
+  // 1. Identify Key (Name or Color)
+  let keyName = null;
+  const code = evt.keyCode || evt.charCode; 
+  const keyColor = getKeyColor(code);
   
-  // 1. Handle Menu Toggle (Green)
-  if (keyColor === 'green') {
-    evt.preventDefault();
-    evt.stopPropagation();
-    if (evt.type === 'keydown') showOptionsPanel(!optionsPanelVisible);
-    return false;
-  } 
-  // 2. Handle Manual Skip / Highlight Jump (Blue)
-  else if (keyColor === 'blue' && evt.type === 'keydown') {
-    if (!isWatchPage() && !isShortsPage()) return true;
-    
-    evt.preventDefault();
-    evt.stopPropagation();
-    try {
-      if (window.sponsorblock) {
-        const handled = window.sponsorblock.handleBlueButton();
-        if (!handled) showNotification('No action available');
-      } else showNotification('SponsorBlock not loaded');
-    } catch (e) { showNotification('Error: ' + e.message); }
-    return false;
-  } 
-  // 3. Handle OLED Mode (Red)
-  else if (keyColor === 'red' && evt.type === 'keydown') {
-    evt.preventDefault();
-    evt.stopPropagation();
-    let overlay = document.getElementById('oled-black-overlay');
-    if (overlay) {
-      overlay.remove();
-      if (oledKeepAliveTimer) { clearInterval(oledKeepAliveTimer); oledKeepAliveTimer = null; }
-      showNotification('OLED Mode Deactivated');
-    } else {
-      if (optionsPanelVisible) showOptionsPanel(false);
-      overlay = createElement('div', { id: 'oled-black-overlay', style: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#000', zIndex: 9999 }});
-      document.body.appendChild(overlay);
-      
-      // Keep TV awake by simulating input
-      oledKeepAliveTimer = setInterval(() => {
-        sendKey(REMOTE_KEYS.UP);
-        setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);
-      }, 30 * 60 * 1000);
-      showNotification('OLED Mode Activated');
-    }
-    return false;
-  } 
-  // 4. Handle Number Shortcuts (0-9)
-  else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
-    const now = Date.now();
-	const keyIndex = evt.keyCode - 48;
-    if (now - lastShortcutTime < shortcutDebounceTime && lastShortcutKey === keyIndex) {
-        console.log(`[Shortcut] Debounced duplicate key ${keyIndex}`);
-        evt.preventDefault(); 
-        evt.stopPropagation(); 
-        return false;
-    }
-    shortcutDebounceTime = 400;
-    lastShortcutTime = now;
-    lastShortcutKey = keyIndex;
-    
-    if (optionsPanelVisible) { evt.preventDefault(); evt.stopPropagation(); return false; }
-    if (!isWatchPage() && !isShortsPage()) return true;
-    
-    const action = configRead(`shortcut_key_${keyIndex}`);
-    
-    evt.preventDefault();
-    evt.stopPropagation();
-    if (action && action !== 'none') handleShortcutAction(action);
+  if (keyColor) {
+      keyName = keyColor;
+  } else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
+      keyName = String(evt.keyCode - 48);
   }
-  return true;
+
+  if (!keyName) return true; // Not a managed key
+
+  // 2. Get Action
+  const action = shortcutCache[keyName];
+  
+  // Fast boolean check to exit early
+  if (!action || action === 'none') return true;
+
+  // 3. Debounce (only for non-burst)
+  // Check action type for Burst Seek logic
+  const isBurstAction = action === 'seek_15_fwd' || action === 'seek_15_back';
+  const now = Date.now();
+
+  // Distinct debounce per key index/name
+  if (!isBurstAction && now - lastShortcutTime < shortcutDebounceTime && lastShortcutKey === keyName) {
+      console.log(`[Shortcut] Debounced duplicate key ${keyName}`);
+      evt.preventDefault(); 
+      evt.stopPropagation(); 
+      return false;
+  }
+  
+  shortcutDebounceTime = 100;
+  lastShortcutTime = now;
+  lastShortcutKey = keyName;
+  
+  if (optionsPanelVisible && action !== 'config_menu') { evt.preventDefault(); evt.stopPropagation(); return false; }
+  
+  evt.preventDefault();
+  evt.stopPropagation();
+  handleShortcutAction(action);
+  
+  return false;
 };
 
 document.addEventListener('keydown', eventHandler, true);
@@ -797,13 +997,28 @@ document.addEventListener('keydown', eventHandler, true);
 let notificationContainer = null;
 
 export function showNotification(text, time = 3000) {
-  if (configRead('disableNotifications')) return { remove: () => {} };
+  if (configRead('disableNotifications')) return { remove: () => {}, update: () => {} };
   
   if (!notificationContainer) {
     notificationContainer = createElement('div', { class: 'ytaf-notification-container' });
     if (configRead('enableOledCareMode')) notificationContainer.classList.add('oled-care');
     if (configRead('uiTheme') === 'classic-red') notificationContainer.classList.add('theme-classic-red');
     document.body.appendChild(notificationContainer);
+  }
+
+  // Check for existing notification with same text to prevent stacking
+  const existing = Array.from(notificationContainer.querySelectorAll('.message'))
+    .find(el => el.textContent === text && !el.classList.contains('message-hidden'));
+
+  if (existing) {
+      if (existing._removeTimer) clearTimeout(existing._removeTimer);
+      if (time > 0) {
+          existing._removeTimer = setTimeout(() => {
+              existing.classList.add('message-hidden');
+              setTimeout(() => existing.parentElement.remove(), 1000);
+          }, time);
+      }
+      return { remove: () => {}, update: () => {} };
   }
 
   const elmInner = createElement('div', { text, class: 'message message-hidden' });
@@ -813,15 +1028,33 @@ export function showNotification(text, time = 3000) {
   requestAnimationFrame(() => requestAnimationFrame(() => elmInner.classList.remove('message-hidden')));
 
   const remove = () => {
+      if (elmInner._removeTimer) clearTimeout(elmInner._removeTimer);
+      elmInner._removeTimer = null;
+      
       elmInner.classList.add('message-hidden');
       setTimeout(() => elm.remove(), 1000);
   };
 
   if (time > 0) {
-    setTimeout(remove, time);
+    elmInner._removeTimer = setTimeout(remove, time);
   }
+  
+  const update = (newText, newTime = 3000) => {
+      if (elmInner.textContent === newText) {
+          if (newTime > 0) {
+              if (elmInner._removeTimer) clearTimeout(elmInner._removeTimer);
+              elmInner._removeTimer = setTimeout(remove, newTime);
+          }
+          return;
+      }
+      
+      elmInner.textContent = newText;
+      elmInner.classList.remove('message-hidden');
+      if (elmInner._removeTimer) clearTimeout(elmInner._removeTimer);
+      if (newTime > 0) elmInner._removeTimer = setTimeout(remove, newTime);
+  };
 
-  return { remove };
+  return { remove, update };
 }
 
 // --- Initialization & CSS Injection ---
@@ -877,14 +1110,18 @@ function updateLogoState() {
 }
 
 function applyOledMode(enabled) {
-  const optionsPanel = document.querySelector('.ytaf-ui-container');
   const notificationContainer = document.querySelector('.ytaf-notification-container');
   const oledClass = 'oled-care';
 
   document.getElementById('style-gray-ui-oled-care')?.remove();
 
+  // Lazy Load Support: optionsPanel might be null
+  if (optionsPanel) {
+      if (enabled) optionsPanel.classList.add(oledClass);
+      else optionsPanel.classList.remove(oledClass);
+  }
+  
   if (enabled) {
-    optionsPanel?.classList.add(oledClass);
     if(notificationContainer) notificationContainer.classList.add(oledClass);
     
     const opacityVal = configRead('videoShelfOpacity');
@@ -894,27 +1131,57 @@ function applyOledMode(enabled) {
       ? '.app-quality-root .UGcxnc .dxLAmd { background-color: rgba(0, 0, 0, 0) !important; } .app-quality-root .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }' 
       : '';
     
-    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: `#container { background-color: black !important; } .ytLrGuideResponseMask { background-color: black !important; } .geClSe { background-color: black !important; } .hsdF6b { background-color: black !important; } .ytLrGuideResponseGradient { display: none; } .ytLrAnimatedOverlayContainer { background-color: black !important; } .iha0pc { color: #000 !important; } .ZghAqf { background-color: #000 !important; } .A0acyf.RAE3Re .AmQJbe { background-color: black !important; } .tVp1L { background-color: black !important; } .app-quality-root .DnwJH { background-color: black !important; } .qRdzpd.stQChb .TYE3Ed { background-color: black !important; } .k82tDb { background-color: #000 !important; } .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } ${transparentBgRules}` });
+    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: `
+        #container { background-color: black !important; } 
+        .ytLrGuideResponseMask { background-color: black !important; } 
+        .geClSe { background-color: black !important; } 
+        .hsdF6b { background-color: black !important; } 
+        .ytLrGuideResponseGradient { display: none; } 
+        .ytLrAnimatedOverlayContainer { background-color: black !important; } 
+        .iha0pc { color: #000 !important; } 
+        .ZghAqf { background-color: #000 !important; } 
+        .A0acyf.RAE3Re .AmQJbe { background-color: black !important; } 
+        .tVp1L { background-color: black !important; } 
+        .app-quality-root .DnwJH { background-color: black !important; } 
+        .qRdzpd.stQChb .TYE3Ed { background-color: black !important; } 
+        .k82tDb { background-color: #000 !important; } 
+        .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } 
+        .p0DeOc { background-color: black !important; background-image: none !important; }
+        ytlr-player-focus-ring { border: 0.375rem solid rgb(200, 200, 200) !important; }
+        ${transparentBgRules}` 
+    });
     document.head.appendChild(style);
   } else {
-    optionsPanel?.classList.remove(oledClass);
     if(notificationContainer) notificationContainer.classList.remove(oledClass);
   }
   updateLogoState();
 }
 
 function applyTheme(theme) {
-  const optionsPanel = document.querySelector('.ytaf-ui-container');
   const notificationContainer = document.querySelector('.ytaf-notification-container');
-  if (theme === 'classic-red') { optionsPanel?.classList.add('theme-classic-red'); notificationContainer?.classList.add('theme-classic-red'); }
-  else { optionsPanel?.classList.remove('theme-classic-red'); notificationContainer?.classList.remove('theme-classic-red'); }
+  // Lazy Load Support: optionsPanel might be null
+  if (optionsPanel) {
+      if (theme === 'classic-red') optionsPanel.classList.add('theme-classic-red');
+      else optionsPanel.classList.remove('theme-classic-red');
+  }
+  
+  if (theme === 'classic-red') { notificationContainer?.classList.add('theme-classic-red'); }
+  else { notificationContainer?.classList.remove('theme-classic-red'); }
   updateLogoState();
+}
+
+const menuKeyExists = shortcutKeys.some(key => shortcutCache[key] === 'config_menu');
+
+if (!menuKeyExists) {
+    console.warn('[UI] No menu keybind found. Forcing Green button to Open Settings.');
+    configWrite('shortcut_key_green', 'config_menu');
 }
 
 // --- Start-up ---
 initGlobalStyles();
 initVideoQuality();
 
+// Initial apply (will skip UI elements if they don't exist yet, but handle global styles)
 applyOledMode(configRead('enableOledCareMode'));
 configAddChangeListener('enableOledCareMode', (evt) => applyOledMode(evt.detail.newValue));
 

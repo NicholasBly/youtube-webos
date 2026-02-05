@@ -12,7 +12,6 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 - Hide Endcards
 - Shortcuts - Programmable 0-9 key shortcuts during video playback
 - Guest Mode: Hides annoying "Sign in" prompts
-- Full video description panel hack to restore visual elements and enable full navigation
 
 - SponsorBlock: Highlight feature added
 -- All segment types added (Hook, Tangents, muted segments)
@@ -20,11 +19,14 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 -- Segment UI list replicating desktop segment list
 -- Jump to highlight segment with blue button on LG remote
 -- Per-segment options including auto skip, manual skip, show in progress bar, and disabled
+-- Skip Segments Once option
 
 - Toggle display on/off with red button on LG remote for OLED TVs + persistent keepalive
 - Return YouTube Dislike - added to description tab in video
+- Display Time in UI: Smart clock that hides during fullscreen and when description panel is open
+- YouTube app fixes - Full video description panel hack to restore visual elements and enable full navigation
+- Customizable YouTube UI fixes such as multiline titles and video shelf opacity for better visibility
 - Bug fixes, UI fixes
-- Specific rules for different YouTube UI layouts
 
 ## Improvements
 - Rewritten codebase optimized for performance and efficiency to support LG TV hardware

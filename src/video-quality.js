@@ -1,7 +1,7 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config.js';
 import { showNotification } from './ui';
 import { WebOSVersion } from './webos-utils.js';
-import { sendKey, REMOTE_KEYS } from './utils.js';
+import { sendKey, REMOTE_KEYS, SELECTORS, isWatchPage } from './utils.js';
 
 // Debug mode - set to false for production
 const DEBUG = false;
@@ -10,8 +10,6 @@ const DEBUG = false;
 const TARGET_QUALITIES = new Set([
   'highres', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'
 ]);
-
-const movie_player = 'ytlr-player__player-container-player';
 
 // Caching: In-memory cache for localStorage
 let cachedQualitySettings = null;
@@ -24,7 +22,7 @@ let isDestroyed = false;
 let lastWriteTime = 0;
 let statePollingInterval = null;
 let lastKnownState = null;
-let isWatchPage = false;
+let _isWatchPageCached = false;
 let qualitySetForVideo = new Set();
 let videoBeingProcessed = null;
 
@@ -38,19 +36,6 @@ const STATE_PLAYING = 1;
 const STATE_PAUSED = 2;
 const STATE_BUFFERING = 3;
 const STATE_CUED = 5;
-
-const STATE_NAMES = {
-  '-1': 'UNSTARTED',
-  '0': 'ENDED',
-  '1': 'PLAYING',
-  '2': 'PAUSED',
-  '3': 'BUFFERING',
-  '5': 'CUED'
-};
-
-function checkIsWatchPage() {
-  return location.pathname === '/watch' || document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
-}
 
 function shouldForce() {
   return configRead('forceHighResVideo') && 
@@ -425,6 +410,7 @@ export function destroyVideoQuality() {
   configCleanup = null;
   qualitySetForVideo.clear();
   videoBeingProcessed = null;
+  _isWatchPageCached = false;
   // NOTE: We do NOT reset hasKickstarted here, so it persists for the session.
 }
 
@@ -434,13 +420,14 @@ export function initVideoQuality() {
   if (DEBUG) console.info('[VideoQuality] Initializing');
   
   isDestroyed = false;
+  _isWatchPageCached = true;
   
   setLocalStorageQuality();
   
   const attach = () => {
     if (isDestroyed) return true;
     
-    const p = document.getElementById(movie_player);
+    const p = document.getElementById(SELECTORS.PLAYER_ID);
               
     const isConnected = p && (p.isConnected !== undefined ? p.isConnected : document.contains(p));
     
@@ -513,22 +500,25 @@ export function initVideoQuality() {
 }
 
 function handleNavigation(event) {
-  const isWatch = (event?.detail?.pageType === 'watch') || checkIsWatchPage();
+  const isWatch = (event?.detail?.pageType === 'watch') || isWatchPage();
   
-  if (isWatch && !isWatchPage) {
+  if (isWatch && !_isWatchPageCached) {
     if (DEBUG) console.info('[VideoQuality] Navigation: Entering watch page');
-    isWatchPage = true;
     setTimeout(() => initVideoQuality(), 0); 
     
-  } else if (!isWatch && isWatchPage) {
+  } else if (!isWatch && _isWatchPageCached) {
     if (DEBUG) console.info('[VideoQuality] Navigation: Leaving watch page');
-    isWatchPage = false;
     destroyVideoQuality();
   }
 }
 
 function setupListeners() {
     window.addEventListener('yt-navigate-finish', handleNavigation);
+    
+    // Listen for our shared page update event from utils.js
+    window.addEventListener('ytaf-page-update', () => {
+        handleNavigation({ detail: { pageType: isWatchPage() ? 'watch' : 'other' }});
+    });
     
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => handleNavigation());
