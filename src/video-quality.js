@@ -3,16 +3,19 @@ import { showNotification } from './ui';
 import { WebOSVersion } from './webos-utils.js';
 import { sendKey, REMOTE_KEYS, SELECTORS, isWatchPage } from './utils.js';
 
-// Debug mode - set to false for production
 const DEBUG = false;
 
-// O(1) Lookup: Static Set for quality levels
 const TARGET_QUALITIES = new Set([
   'highres', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'
 ]);
 
-// Caching: In-memory cache for localStorage
+const IS_WEBOS_25 = WebOSVersion() === 25;
+const QUALITY_KEY = 'yt-player-quality';
+const ONE_YEAR_MS = 31536000000; // 365 * 24 * 60 * 60 * 1000
+
+// Caching: In-memory cache for localStorage & Config
 let cachedQualitySettings = null;
+let _shouldForce = false;
 
 let player = null;
 let lastVideoId = null;
@@ -23,10 +26,12 @@ let lastWriteTime = 0;
 let statePollingInterval = null;
 let lastKnownState = null;
 let _isWatchPageCached = false;
-let qualitySetForVideo = new Set();
 let videoBeingProcessed = null;
+let kickstartInProgress = false;
 
-// Flag to track if we've applied the "First Load Kick" this session
+const qualitySetForVideo = new Set();
+
+// webOS 25 first video fix
 let hasKickstarted = false;
 
 // Player States
@@ -37,53 +42,53 @@ const STATE_PAUSED = 2;
 const STATE_BUFFERING = 3;
 const STATE_CUED = 5;
 
-function shouldForce() {
-  return configRead('forceHighResVideo') && 
-         (!player?.isInline || !player.isInline());
+function isForceEnabled() {
+  return _shouldForce && (!player?.isInline || !player.isInline());
 }
 
 async function ensurePlaybackStarts() {
-  if (WebOSVersion() !== 25) return;
-  if (hasKickstarted) return;
+  if (!IS_WEBOS_25 || hasKickstarted || isDestroyed || !player || kickstartInProgress) return;
 
+  kickstartInProgress = true;
   if (DEBUG) console.info('[VideoQuality] 🚀 Starting playback enforcer...');
 
   const MAX_ATTEMPTS = 10;
   const INTERVAL_MS = 500;
 
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
-    if (isDestroyed || !player || hasKickstarted) return;
+    if (isDestroyed || !player || hasKickstarted) {
+      kickstartInProgress = false;
+      return;
+    }
 
     try {
       const currentState = player.getPlayerState?.();
 
       if (currentState === STATE_PLAYING) {
         hasKickstarted = true;
+        kickstartInProgress = false;
         if (DEBUG) console.info('[VideoQuality] ✅ Playback verified! Kickstart complete.');
         
-        const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
-        
-        const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
+        requestAnimationFrame(() => {
+            const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
+            const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
 
-        if (isControlsVisible) {
-            if (DEBUG) console.info('[VideoQuality] 🎮 Controls are focused. Hiding and dismissing...');
+            if (isControlsVisible) {
+                if (DEBUG) console.info('[VideoQuality] 🎮 Controls are focused. Hiding and dismissing...');
 
-            const hideStyle = document.createElement('style');
-            hideStyle.textContent = '.GLc3cc { opacity: 0 !important; transition: opacity 0.1s; }';
-            document.head.appendChild(hideStyle);
+                const hideStyle = document.createElement('style');
+                hideStyle.textContent = '.GLc3cc { opacity: 0 !important; transition: opacity 0.1s; }';
+                document.head.appendChild(hideStyle);
 
-            sendKey(REMOTE_KEYS.UP);                            
-            setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);     
-            setTimeout(() => sendKey(REMOTE_KEYS.UP), 500);     
+                sendKey(REMOTE_KEYS.UP);                            
+                setTimeout(() => sendKey(REMOTE_KEYS.UP), 250);     
+                setTimeout(() => sendKey(REMOTE_KEYS.UP), 500);     
 
-            setTimeout(() => {
-                if (hideStyle.isConnected) {
-                    hideStyle.remove();
-                }
-            }, 750);
-        } else {
-            if (DEBUG) console.info('[VideoQuality] Controls not focused (no MFDzfe--focused class). Skipping dismissal.');
-        }
+                setTimeout(() => {
+                    if (hideStyle.isConnected) hideStyle.remove();
+                }, 750);
+            }
+        });
         
         return;
       }
@@ -98,6 +103,7 @@ async function ensurePlaybackStarts() {
     await new Promise(resolve => setTimeout(resolve, INTERVAL_MS));
   }
 
+  kickstartInProgress = false;
   if (DEBUG && !hasKickstarted) {
     console.warn('[VideoQuality] ⚠️ Playback enforcer timed out without confirming PLAYING state.');
   }
@@ -105,39 +111,25 @@ async function ensurePlaybackStarts() {
 
 function isQualityAlreadyMax() {
   if (!player) return false;
-  
   try {
     const currentQuality = player.getPlaybackQuality?.();
-    const isMax = TARGET_QUALITIES.has(currentQuality);
-    
-    if (DEBUG) {
-      console.log('[VideoQuality] Quality check:', {
-        current: currentQuality,
-        isAlreadyMax: isMax
-      });
-    }
-    
-    return isMax;
+    return TARGET_QUALITIES.has(currentQuality);
   } catch (e) {
     return false;
   }
 }
 
 function setLocalStorageQuality() {
-  if (!shouldForce()) return false;
+  if (!isForceEnabled()) return false;
   
+  const now = Date.now();
+  if (now - lastWriteTime < 2000) return false;
+
   if (cachedQualitySettings && cachedQualitySettings.quality === 4320) {
     return false; 
   }
-
-  const now = Date.now();
-  if (now - lastWriteTime < 2000) {
-    return false;
-  }
   
   try {
-    const QUALITY_KEY = 'yt-player-quality';
-    
     if (!cachedQualitySettings) {
       const stored = window.localStorage.getItem(QUALITY_KEY);
       if (stored) {
@@ -157,34 +149,28 @@ function setLocalStorageQuality() {
     }
 
     const innerData = { quality: 4320, previousQuality: 4320 };
-    const oneYear = 365 * 24 * 60 * 60 * 1000;
       
     const qualityObj = {
       data: JSON.stringify(innerData),
       creation: now,
-      expiration: now + oneYear
+      expiration: now + ONE_YEAR_MS
     };
     
     window.localStorage.setItem(QUALITY_KEY, JSON.stringify(qualityObj));
     cachedQualitySettings = innerData;
     lastWriteTime = now;
     
-    if (DEBUG) {
-      console.info('[VideoQuality] Set localStorage quality to 4320p');
-    }
-    
+    DEBUG && console.info('[VideoQuality] Set localStorage quality to 4320p');
     return true;
     
   } catch (e) {
-    if (DEBUG) {
-      console.warn('[VideoQuality] Failed to set localStorage quality:', e);
-    }
+    DEBUG && console.warn('[VideoQuality] Failed to set localStorage quality:', e);
     return false;
   }
 }
 
 function setQualityOnPlayer() {
-  if (!player || !shouldForce() || isDestroyed) {
+  if (!player || !isForceEnabled() || isDestroyed) {
     return { success: false, upgraded: false };
   }
   
@@ -197,11 +183,7 @@ function setQualityOnPlayer() {
       return { success: true, upgraded: false };
     }
     
-    const beforeQuality = player.getPlaybackQuality?.();
-    
-    if (DEBUG) {
-      console.log('[VideoQuality] Upgrading quality from:', beforeQuality);
-    }
+    DEBUG && console.log('[VideoQuality] Upgrading quality from:', player.getPlaybackQuality?.());
     
     player.setPlaybackQualityRange('highres', 'highres');
     player.setPlaybackQuality?.('highres');
@@ -209,9 +191,7 @@ function setQualityOnPlayer() {
     const afterQuality = player.getPlaybackQuality?.();
     const qualityLabel = player.getPlaybackQualityLabel?.();
     
-    if (DEBUG) {
-      console.info('[VideoQuality] ✅ Quality upgraded to:', afterQuality, qualityLabel);
-    }
+    DEBUG && console.info('[VideoQuality] ✅ Quality upgraded to:', afterQuality, qualityLabel);
     
     return { 
       success: true, 
@@ -220,23 +200,18 @@ function setQualityOnPlayer() {
     };
     
   } catch (e) {
-    if (DEBUG) {
-      console.warn('[VideoQuality] Error setting quality:', e);
-    }
+    DEBUG && console.warn('[VideoQuality] Error setting quality:', e);
     return { success: false, upgraded: false };
   }
 }
 
-// Helper: reliable notification with label fallback
 function notifyIfUpgraded(result) {
   if (result && result.upgraded) {
     setTimeout(() => {
       try {
         const finalQuality = player.getPlaybackQualityLabel?.() || result.newQuality || 'high quality';
         showNotification(`Video quality upgraded to ${finalQuality}`);
-        if (DEBUG) {
-          console.info('[VideoQuality] Notification shown:', finalQuality);
-        }
+        DEBUG && console.info('[VideoQuality] Notification shown:', finalQuality);
       } catch (e) {
         showNotification('Video quality upgraded to high quality');
       }
@@ -245,13 +220,9 @@ function notifyIfUpgraded(result) {
 }
 
 function interceptAndUpgradeQuality(videoId) {
-  if (!player || !shouldForce() || isDestroyed) {
-    return;
-  }
+  if (!player || !isForceEnabled() || isDestroyed) return;
   
-  if (videoBeingProcessed === videoId) {
-    return;
-  }
+  if (videoBeingProcessed === videoId) return;
   
   if (isQualityAlreadyMax()) {
     qualitySetForVideo.add(videoId);
@@ -259,18 +230,13 @@ function interceptAndUpgradeQuality(videoId) {
   }
   
   videoBeingProcessed = videoId;
-  
-  if (DEBUG) {
-    console.info('[VideoQuality] 🛑 Intercepting playback to upgrade quality:', videoId);
-  }
+  DEBUG && console.info('[VideoQuality] 🛑 Intercepting playback to upgrade quality:', videoId);
   
   const currentState = player.getPlayerState?.();
   const wasPlaying = currentState === STATE_PLAYING;
   
   try {
-    if (wasPlaying) {
-      player.pauseVideo?.();
-    }
+    if (wasPlaying) player.pauseVideo?.();
   } catch (e) { /* ignore */ }
   
   requestAnimationFrame(() => {
@@ -286,20 +252,16 @@ function interceptAndUpgradeQuality(videoId) {
           player.playVideo?.();
         } catch (e) { /* ignore */ }
       }
-      
       notifyIfUpgraded(result);
-      
       videoBeingProcessed = null;
     });
   });
 }
 
 function handleStateChange(state) {
-  if (isDestroyed || !player || !shouldForce()) {
-    return;
-  }
+  if (isDestroyed || !player || !_shouldForce) return;
   
-  const actualState = (typeof state === 'object' && state.data !== undefined) ? state.data : state;
+  const actualState = (state && state.data !== undefined) ? state.data : state;
 
   try {
     const videoData = player.getVideoData?.();
@@ -311,58 +273,70 @@ function handleStateChange(state) {
     
     if (isNewVideo) {
       lastVideoId = videoId;
-      if (DEBUG) console.info('[VideoQuality] 🎬 New video:', videoId);
+      DEBUG && console.info('[VideoQuality] 🎬 New video:', videoId);
+      
+      if (actualState === STATE_UNSTARTED) {
+          setLocalStorageQuality();
+      }
     }
     
     if (qualitySetForVideo.has(videoId)) {
+      if (actualState === STATE_PLAYING) ensurePlaybackStarts();
       return;
     }
     
-    if (actualState === STATE_UNSTARTED && isNewVideo) {
-      setLocalStorageQuality();
-      const availableQualities = player.getAvailableQualityLevels?.();
-      if (availableQualities && availableQualities.length > 0) {
-        const result = setQualityOnPlayer();
-        notifyIfUpgraded(result);
-        qualitySetForVideo.add(videoId);
-      }
+    switch (actualState) {
+        case STATE_UNSTARTED:
+            if (isNewVideo) {
+                const availableQualities = player.getAvailableQualityLevels?.();
+                if (availableQualities?.length > 0) {
+                    const result = setQualityOnPlayer();
+                    notifyIfUpgraded(result);
+                    qualitySetForVideo.add(videoId);
+                }
+            }
+            break;
+            
+        case STATE_BUFFERING:
+            if (isNewVideo) {
+                const availableQualities = player.getAvailableQualityLevels?.();
+                if (availableQualities?.length > 0) {
+                   if (!isQualityAlreadyMax()) {
+                       const result = setQualityOnPlayer();
+                       notifyIfUpgraded(result);
+                       qualitySetForVideo.add(videoId);
+                   } else {
+                       qualitySetForVideo.add(videoId);
+                   }
+                }
+            }
+            break;
+            
+        case STATE_PLAYING:
+            if (!isQualityAlreadyMax()) {
+                interceptAndUpgradeQuality(videoId);
+            } else {
+                qualitySetForVideo.add(videoId);
+            }
+            break;
     }
-    else if (actualState === STATE_BUFFERING && isNewVideo) {
-      const availableQualities = player.getAvailableQualityLevels?.();
-      if (availableQualities && availableQualities.length > 0) {
-        if (!isQualityAlreadyMax()) {
-           const result = setQualityOnPlayer();
-           notifyIfUpgraded(result);
-           qualitySetForVideo.add(videoId);
-        } else {
-           qualitySetForVideo.add(videoId);
-        }
-      }
-    }
-    else if (actualState === STATE_PLAYING) {
-      if (!qualitySetForVideo.has(videoId) && !isQualityAlreadyMax()) {
-        interceptAndUpgradeQuality(videoId);
-      } else if (!qualitySetForVideo.has(videoId)) {
-        qualitySetForVideo.add(videoId);
-      }
-    }
+
 	ensurePlaybackStarts();
   } catch (e) {
-    if (DEBUG) console.warn('[VideoQuality] Error in state change handler:', e);
+    DEBUG && console.warn('[VideoQuality] Error in state change handler:', e);
   }
 }
 
 function startStatePolling() {
   if (statePollingInterval) return;
   
-  if (DEBUG) console.info('[VideoQuality] Starting state polling (Fallback)');
+  DEBUG && console.info('[VideoQuality] Starting state polling (Fallback)');
   
   statePollingInterval = setInterval(() => {
     if (isDestroyed || !player) {
       stopStatePolling();
       return;
     }
-    
     try {
       const state = player.getPlayerState?.();
       if (state !== lastKnownState) {
@@ -381,7 +355,7 @@ function stopStatePolling() {
 }
 
 export function destroyVideoQuality() {
-  if (DEBUG) console.info('[VideoQuality] Destroying');
+  DEBUG && console.info('[VideoQuality] Destroying');
   
   isDestroyed = true;
   
@@ -411,16 +385,19 @@ export function destroyVideoQuality() {
   qualitySetForVideo.clear();
   videoBeingProcessed = null;
   _isWatchPageCached = false;
-  // NOTE: We do NOT reset hasKickstarted here, so it persists for the session.
+  kickstartInProgress = false;
+  // Don't reset hasKickstarted here so it persists for the session
 }
 
 export function initVideoQuality() {
   if (initTimer || player) return;
   
-  if (DEBUG) console.info('[VideoQuality] Initializing');
+  DEBUG && console.info('[VideoQuality] Initializing');
   
   isDestroyed = false;
   _isWatchPageCached = true;
+  
+  _shouldForce = configRead('forceHighResVideo');
   
   setLocalStorageQuality();
   
@@ -428,8 +405,7 @@ export function initVideoQuality() {
     if (isDestroyed) return true;
     
     const p = document.getElementById(SELECTORS.PLAYER_ID);
-              
-    const isConnected = p && (p.isConnected !== undefined ? p.isConnected : document.contains(p));
+    const isConnected = p && (p.isConnected ?? document.contains(p));
     
     if (!p || !p.setPlaybackQualityRange || !isConnected) {
       return false;
@@ -443,10 +419,10 @@ export function initVideoQuality() {
         if (player.addEventListener) {
             player.addEventListener('onStateChange', handleStateChange);
             listenerAttached = true;
-            if (DEBUG) console.log('[VideoQuality] Native listener attached');
+            DEBUG && console.log('[VideoQuality] Native listener attached');
         }
       } catch (e) {
-        if (DEBUG) console.warn('[VideoQuality] Event listener failed, falling back to poll:', e);
+        DEBUG && console.warn('[VideoQuality] Event listener failed, falling back to poll:', e);
       }
       
       if (!listenerAttached) {
@@ -456,7 +432,9 @@ export function initVideoQuality() {
       if (configAddChangeListener && !configCleanup) {
         const onChange = (evt) => {
           if (isDestroyed) return;
-          if (evt.detail.newValue) {
+          _shouldForce = !!evt.detail.newValue;
+          
+          if (_shouldForce) {
             cachedQualitySettings = null;
             setLocalStorageQuality();
             qualitySetForVideo.clear();
@@ -466,13 +444,13 @@ export function initVideoQuality() {
           (() => configRemoveChangeListener?.('forceHighResVideo', onChange));
       }
       
-      if (DEBUG) console.info('[VideoQuality] ✅ Attached to player');
+      DEBUG && console.info('[VideoQuality] ✅ Attached to player');
       
       handleStateChange(player.getPlayerState?.());
       
       return true;
     } catch (e) {
-      if (DEBUG) console.warn('[VideoQuality] Error attaching:', e);
+      DEBUG && console.warn('[VideoQuality] Error attaching:', e);
       player = null;
       return false;
     }
@@ -487,7 +465,6 @@ export function initVideoQuality() {
       initTimer = null;
       return;
     }
-    
     if (attach() || attempts++ >= 50) {
       clearTimeout(initTimer);
       initTimer = null;
@@ -503,11 +480,11 @@ function handleNavigation(event) {
   const isWatch = (event?.detail?.pageType === 'watch') || isWatchPage();
   
   if (isWatch && !_isWatchPageCached) {
-    if (DEBUG) console.info('[VideoQuality] Navigation: Entering watch page');
-    setTimeout(() => initVideoQuality(), 0); 
+    DEBUG && console.info('[VideoQuality] Navigation: Entering watch page');
+    setTimeout(initVideoQuality, 0); 
     
   } else if (!isWatch && _isWatchPageCached) {
-    if (DEBUG) console.info('[VideoQuality] Navigation: Leaving watch page');
+    DEBUG && console.info('[VideoQuality] Navigation: Leaving watch page');
     destroyVideoQuality();
   }
 }
@@ -515,7 +492,6 @@ function handleNavigation(event) {
 function setupListeners() {
     window.addEventListener('yt-navigate-finish', handleNavigation);
     
-    // Listen for our shared page update event from utils.js
     window.addEventListener('ytaf-page-update', () => {
         handleNavigation({ detail: { pageType: isWatchPage() ? 'watch' : 'other' }});
     });
@@ -526,9 +502,7 @@ function setupListeners() {
         handleNavigation();
     }
     
-    window.addEventListener('beforeunload', () => {
-        destroyVideoQuality();
-    });
+    window.addEventListener('beforeunload', destroyVideoQuality);
 }
 
 setupListeners();

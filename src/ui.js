@@ -19,7 +19,9 @@ let shortcutDebounceTime = 100;
 
 // Seek Burst Variables
 let seekAccumulator = 0;
+let pendingSeekOffset = 0;
 let seekResetTimer = null;
+let seekApplyTimer = null;
 let activeSeekNotification = null;
 
 let activePlayPauseNotification = null;
@@ -28,6 +30,7 @@ let playPauseNotificationTimer = null;
 // Lazy load variable
 let optionsPanel = null;
 let optionsPanelVisible = false;
+let panelInitBlock = false;
 
 const shortcutCache = {};
 // Define keys including colors
@@ -458,6 +461,10 @@ function createOptionsPanel() {
 // document.body.appendChild(optionsPanel); removed
 
 function showOptionsPanel(visible) {
+  if (panelInitBlock) {
+      console.log('[UI] Options panel toggle blocked due to initialization lock.');
+      return;
+  }
   if (visible === undefined || visible === null) visible = true;
   
   if (visible && !optionsPanelVisible) {
@@ -465,6 +472,8 @@ function showOptionsPanel(visible) {
     // Lazy Initialization
     if (!optionsPanel) {
         console.log('[UI] Initializing Options Panel (Lazy Load)...');
+		panelInitBlock = true;
+        setTimeout(() => { panelInitBlock = false; }, 500);
         optionsPanel = createOptionsPanel();
         document.body.appendChild(optionsPanel);
         
@@ -621,15 +630,19 @@ function performBurstSeek(seconds, video) {
     if (!video) video = document.querySelector('video');
     if (!video) return;
 	
+    // Reset accumulators if direction changes (e.g. going from +15 to -15)
 	if ((seekAccumulator > 0 && seconds < 0) || (seekAccumulator < 0 && seconds > 0)) {
         seekAccumulator = 0;
+        pendingSeekOffset = 0; // Reset pending seek to prevent jitter
     }
 
     seekAccumulator += seconds;
-    video.currentTime += seconds;
+    pendingSeekOffset += seconds; // Add to the queue, don't apply to video yet
 
+    // Reset the "UI Fade Out" timer
     if (seekResetTimer) clearTimeout(seekResetTimer);
 
+    // Update UI immediately (lightweight operation)
     const directionSymbol = seekAccumulator > 0 ? '+' : '';
     const msg = `Skipped ${directionSymbol}${seekAccumulator}s`;
 
@@ -639,8 +652,20 @@ function performBurstSeek(seconds, video) {
          activeSeekNotification = showNotification(msg);
     }
 
+    // Debounce the heavy video seek operation
+    if (seekApplyTimer) clearTimeout(seekApplyTimer);
+
+    seekApplyTimer = setTimeout(() => {
+        if (pendingSeekOffset !== 0) {
+            // Apply the total calculated seek in one single operation
+            video.currentTime += pendingSeekOffset;
+            pendingSeekOffset = 0;
+        }
+    }, 200); // 200ms buffer allows rapid key presses without freezing the UI
+
     seekResetTimer = setTimeout(() => {
         seekAccumulator = 0;
+        pendingSeekOffset = 0;
         activeSeekNotification = null;
         seekResetTimer = null;
     }, 1200);
