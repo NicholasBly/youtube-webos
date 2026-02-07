@@ -57,6 +57,7 @@ class SponsorBlockHandler {
         this.wasMutedBySB = false;
         this.isDestroyed = false;
         this.skippedSegmentIndices = new Set();
+		this.tempWhitelistIndex = -1; // Whitelist segment when using shortcut
 
         // Manual skip tracking
         this.activeManualNotification = null;
@@ -786,11 +787,16 @@ class SponsorBlockHandler {
                      this.toggleTimeListener(false);
                  }
             }
+			this.tempWhitelistIndex = -1;
             return;
         }
 
         // We are inside a segment
         const seg = this.skipSegments[segmentIdx];
+		
+		if (this.tempWhitelistIndex !== -1 && seg.originalIndex !== this.tempWhitelistIndex) {
+            this.tempWhitelistIndex = -1;
+        }
 
         if (seg.mode === 'manual_skip') {
             if (this.currentManualSegment !== seg) {
@@ -810,6 +816,10 @@ class SponsorBlockHandler {
                 const categoryName = this.getCategoryName(seg.category);
                 showNotification(`${categoryName.charAt(0).toUpperCase() + categoryName.slice(1)} segment`);
             }
+            return;
+        }
+		
+		if (seg.originalIndex === this.tempWhitelistIndex) {
             return;
         }
 
@@ -923,7 +933,8 @@ class SponsorBlockHandler {
     }
 
     if (!targetSeg) return false;
-
+	
+	this.tempWhitelistIndex = targetSeg.originalIndex;
     this.video.currentTime = targetSeg.start;
     
     const categoryName = this.getCategoryName(targetSeg.category);
@@ -1091,6 +1102,7 @@ class SponsorBlockHandler {
         this.skipSegments = [];
         this.video = null;
         this.progressBar = null;
+		this.tempWhitelistIndex = -1;
 
         if (this.skippedSegmentIndices) {
             this.skippedSegmentIndices.clear();
