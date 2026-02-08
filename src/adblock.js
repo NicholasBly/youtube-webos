@@ -23,6 +23,8 @@ const PATTERN_CACHE = {
   topLiveGames: 'top live games'
 };
 
+const IGNORE_ON_SHORTS = ['SEARCH', 'PLAYER', 'ACTION'];
+
 const SCHEMA_REGISTRY = {
   typeSignatures: [
     {
@@ -106,12 +108,7 @@ function getCachedConfig() {
  * Main JSON.parse hook
  */
 function hookedParse(text, reviver) {
-  let data;
-  try {
-    data = origParse.call(this, text, reviver);
-  } catch (e) {
-    return origParse.call(this, text, reviver);
-  }
+  const data = origParse.call(this, text, reviver);
   
   if (!text || text.length < 500) return data;
    
@@ -143,7 +140,6 @@ function hookedParse(text, reviver) {
     const needsContentFiltering = enableAdBlock || hideGuestPrompts;
 
     if (isShortsPage()) {
-        const IGNORE_ON_SHORTS = ['SEARCH', 'PLAYER', 'ACTION'];
         if (responseType && IGNORE_ON_SHORTS.includes(responseType)) {
              return data;
         }
@@ -496,9 +492,6 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
     else if (hasGuestPromptRenderer(item, hideGuestPrompts)) {
       keepItem = false;
     }
-    else if (hideGuestPrompts && item.alertWithActionsRenderer) {
-        keepItem = false;
-    }
     
     if (keepItem && isReelAd(item, enableAdBlock)) {
       keepItem = false;
@@ -538,9 +531,6 @@ function filterItemsOptimized(items, config, needsContentFiltering) {
         keep = false;
       }
       else if (hasGuestPromptRenderer(item, hideGuestPrompts)) {
-        keep = false;
-      }
-      else if (hideGuestPrompts && item.alertWithActionsRenderer) {
         keep = false;
       }
       else if (hideGuestPrompts && item.gridButtonRenderer) {
