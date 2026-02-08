@@ -76,6 +76,13 @@ import './watch.js';
 function extractVideoId(params) {
     if (!params) return null;
 
+    if (params.contentId && typeof params.contentId === 'string') {
+        if (params.contentId.includes('v=')) {
+            return extractVideoId({ contentTarget: params.contentId });
+        }
+        return params.contentId;
+    }
+
     if (typeof params === 'string') {
         try {
             if (params.trim().startsWith('{')) {
@@ -167,5 +174,6 @@ document.addEventListener('webOSRelaunch', (evt) => {
 
 const version = WebOSVersion();
 if (version === 25) {
+  console.info('[Main] Enabling webOS Google Cast Block');
   initBlockWebOSCast();
 }
