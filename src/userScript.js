@@ -1,8 +1,9 @@
 import 'whatwg-fetch';
 import './domrect-polyfill';
-import { handleLaunch, sendKey, isGuestMode, REMOTE_KEYS } from './utils';
+
+import { handleLaunch, SELECTORS, REMOTE_KEYS, isGuestMode, sendKey, extractLaunchParams } from './utils';
 import { WebOSVersion } from './webos-utils.js';
-import { initBlockWebOSCast } from './block-webos-cast'; 
+import { initBlockWebOSCast } from './block-webos-cast';
 import './adblock.js';
 import './sponsorblock.js';
 import './font-fix.css';
@@ -12,11 +13,16 @@ import './yt-fixes.css';
 import './watch.js';
 
 (function initLoginBypass() {
+	const params = extractLaunchParams();
+    if (!params || (!params.contentTarget && !params.target)) {
+        return;
+    }
     console.info('[Main] Bypass: Service started.');
     
     const styleId = 'login-bypass-css';
+
     const cssContent = `
-        .WEB_PAGE_TYPE_ACCOUNT_SELECTOR,
+        .${SELECTORS.ACCOUNT_SELECTOR},
         ytlr-account-selector,
         .ytlr-account-selector,
         [class*="account-selector"] {
@@ -26,153 +32,54 @@ import './watch.js';
         }
     `;
 
-    let attempts = 0;
-    const maxAttempts = 300; // 30 seconds
+    if (document.head && !document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.innerHTML = cssContent;
+        document.head.appendChild(style);
+    }
+
     let hasBypassed = false;
 
-    const poller = setInterval(() => {
-        attempts++;
-        if (attempts > maxAttempts) {
-            clearInterval(poller);
-            return;
-        }
+    function runBypass() {
+        if (hasBypassed) return;
+        
+        console.info('[Main] Bypass: Selector Detected!');
+        hasBypassed = true;
 
-        if (document.head && !document.getElementById(styleId)) {
-            const style = document.createElement('style');
-            style.id = styleId;
-            style.innerHTML = cssContent;
-            document.head.appendChild(style);
-        }
+        setTimeout(() => {
+            if (isGuestMode()) {
+                sendKey(REMOTE_KEYS.DOWN);
+                setTimeout(() => { sendKey(REMOTE_KEYS.ENTER); finalize(); }, 200);
+            } else {
+                sendKey(REMOTE_KEYS.ENTER);
+                finalize();
+            }
+        }, 500);
+    }
 
-        if (document.body && !hasBypassed && document.body.classList.contains('WEB_PAGE_TYPE_ACCOUNT_SELECTOR')) {
-            console.info('[Main] Bypass: Selector Detected!');
-            hasBypassed = true;
-
-            setTimeout(() => {
-                if (isGuestMode()) {
-                    sendKey(REMOTE_KEYS.DOWN);
-                    setTimeout(() => { sendKey(REMOTE_KEYS.ENTER); finalize(); }, 200);
-                } else {
-                    sendKey(REMOTE_KEYS.ENTER);
-                    finalize();
-                }
-            }, 500);
+    window.addEventListener('ytaf-page-update', (evt) => {
+        if (evt.detail && evt.detail.isAccountSelector) {
+            runBypass();
         }
-    }, 100);
+    });
+
+    if (document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR)) {
+        runBypass();
+    }
 
     function finalize() {
         console.info('[Main] Bypass: Done. Cleaning up...');
-        clearInterval(poller);
+        
         setTimeout(() => {
             const style = document.getElementById(styleId);
             if (style) style.remove();
-            
-            const player = document.getElementById('movie_player');
-            if (player) player.focus();
         }, 2000);
     }
 })();
 
-function extractVideoId(params) {
-    if (!params) return null;
-
-    if (params.contentId && typeof params.contentId === 'string') {
-        if (params.contentId.includes('v=')) {
-            return extractVideoId({ contentTarget: params.contentId });
-        }
-        return params.contentId;
-    }
-
-    if (typeof params === 'string') {
-        try {
-            if (params.trim().startsWith('{')) {
-                const parsed = JSON.parse(params);
-                return extractVideoId(parsed);
-            }
-            if (params.includes('v=')) {
-                return extractVideoId({ contentTarget: params });
-            }
-        } catch (e) { }
-    }
-
-    const rawTarget = params.contentTarget || params.target;
-
-    if (typeof rawTarget === 'string' && rawTarget.includes('v=')) {
-        let cleanQuery = rawTarget;
-        if (cleanQuery.startsWith('v=v=')) cleanQuery = cleanQuery.substring(2);
-
-        const urlParams = new URLSearchParams(cleanQuery);
-        return urlParams.get('v');
-    }
-    return null;
-}
-
-function performNavigation(videoId) {
-    if (!videoId) return;
-    console.info(`[Main] Deep Link: Navigating to ${videoId}`);
-
-    const navPoller = setInterval(() => {
-        if (document.body) {
-            clearInterval(navPoller);
-            // Verify we aren't already there to avoid reload loops
-            if (!window.location.hash.includes(videoId)) {
-                window.location.hash = `/watch?v=${videoId}`;
-            }
-        }
-    }, 100);
-}
-
-(function initDeepLinkParams() {
-    console.info('[Main] Deep Link: Scanning...');
-    let attempts = 0;
-    
-    const paramPoller = setInterval(() => {
-        attempts++;
-        let foundId = null;
-
-        if (window.launchParams) foundId = extractVideoId(window.launchParams);
-        if (!foundId && window.PalmSystem && window.PalmSystem.launchParams) {
-             foundId = extractVideoId(window.PalmSystem.launchParams);
-        }
-
-        if (!foundId && window.location.search) {
-             foundId = extractVideoId({ contentTarget: window.location.search });
-        }
-
-        if (!foundId && window.location.hash && window.location.hash.includes('/watch?v=')) {
-             clearInterval(paramPoller);
-             return;
-        }
-
-        if (foundId) {
-            console.info('[Main] Deep Link: Params captured.');
-            clearInterval(paramPoller);
-            performNavigation(foundId);
-        } else if (attempts > 200) { // 20 seconds
-            clearInterval(paramPoller);
-            console.info('[Main] Deep Link: No params found (Timeout).');
-        }
-    }, 100);
-})();
-
-document.addEventListener('webOSLaunch', (evt) => {
-    const id = extractVideoId(evt.detail);
-    if (id) performNavigation(id);
-}, true);
-
-document.addEventListener('webOSRelaunch', (evt) => {
-    const id = extractVideoId(evt.detail);
-    if (id) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        evt.stopImmediatePropagation();
-        performNavigation(id);
-    } else {
-        handleLaunch(evt.detail);
-    }
-}, true);
-
 const version = WebOSVersion();
+
 if (version === 25) {
   console.info('[Main] Enabling webOS Google Cast Block');
   initBlockWebOSCast();

@@ -4,7 +4,8 @@ export const SELECTORS = {
   PLAYER_ID: 'ytlr-player__player-container-player',
   PLAYER_CONTAINER: 'ytlr-player__player-container',
   WATCH_PAGE_CLASS: 'WEB_PAGE_TYPE_WATCH',
-  SHORTS_PAGE_CLASS: 'WEB_PAGE_TYPE_SHORTS'
+  SHORTS_PAGE_CLASS: 'WEB_PAGE_TYPE_SHORTS',
+  ACCOUNT_SELECTOR: 'WEB_PAGE_TYPE_ACCOUNT_SELECTOR'
 };
 
 export const REMOTE_KEYS = {
@@ -33,6 +34,7 @@ export const REMOTE_KEYS = {
 
 let _isWatchPage = false;
 let _isShortsPage = false;
+let _isAccountSelectorPage = false;
 
 // Cache document.body to avoid DOM lookup overhead if used frequently
 let _body = typeof document !== 'undefined' ? document.body : null;
@@ -46,14 +48,22 @@ function updatePageState() {
     const cl = _body.classList;
     const newWatch = cl.contains(SELECTORS.WATCH_PAGE_CLASS);
     const newShorts = cl.contains(SELECTORS.SHORTS_PAGE_CLASS);
+	const newAccountSelector = cl.contains(SELECTORS.ACCOUNT_SELECTOR);
     
-    if (newWatch === _isWatchPage && newShorts === _isShortsPage) return;
+    if (newWatch === _isWatchPage && 
+        newShorts === _isShortsPage && 
+        newAccountSelector === _isAccountSelectorPage) return;
 
     _isWatchPage = newWatch;
     _isShortsPage = newShorts;
+    _isAccountSelectorPage = newAccountSelector;
     
     window.dispatchEvent(new CustomEvent('ytaf-page-update', { 
-        detail: { isWatch: _isWatchPage, isShorts: _isShortsPage } 
+        detail: { 
+            isWatch: _isWatchPage, 
+            isShorts: _isShortsPage,
+            isAccountSelector: _isAccountSelectorPage 
+        } 
     }));
 }
 

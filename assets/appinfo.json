@@ -25,7 +25,6 @@
   "trustLevel": "netcast",
   "privilegedJail": true,
   "supportQuickStart": true,
-  "handlesRelaunch": true,
   "dialAppName": "YouTube",
   "disableBackHistoryAPI": true,
   "supportGIP": true
