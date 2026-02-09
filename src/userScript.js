@@ -14,9 +14,9 @@ import './watch.js';
 
 (function initLoginBypass() {
 	const params = extractLaunchParams();
-    if (!params || (!params.contentTarget && !params.target)) {
-        return;
-    }
+    if (!params || Object.keys(params).length === 0) {
+		return;
+	}
     console.info('[Main] Bypass: Service started.');
     
     const styleId = 'login-bypass-css';
@@ -77,6 +77,15 @@ import './watch.js';
         }, 2000);
     }
 })();
+
+document.addEventListener(
+  'webOSRelaunch',
+  (evt) => {
+    console.info('RELAUNCH:', evt, window.launchParams);
+    handleLaunch(evt.detail);
+  },
+  true
+);
 
 const version = WebOSVersion();
 

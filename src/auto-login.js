@@ -1,94 +1,60 @@
 import { configRead, configAddChangeListener } from './config.js';
 
-function disableWhosWatching(enableWhoIsWatchingMenu) { // Credit to reisxd || https://github.com/reisxd/TizenTube/
+const STORAGE_KEY = 'yt.leanback.default::recurring_actions';
+const TARGET_ACTIONS = [
+  'startup-screen-account-selector-with-guest',
+  'whos_watching_fullscreen_zero_accounts',
+  'startup-screen-signed-out-welcome-back'
+];
+
+/**
+ * Disables "Who's watching" by pushing the lastFired date 7 days into the future.
+ * Credit: reisxd || https://github.com/reisxd/TizenTube/
+ */
+function disableWhosWatching() {
   try {
-    const recurringActionsKey = 'yt.leanback.default::recurring_actions';
-    const storedData = localStorage.getItem(recurringActionsKey);
-    
-    if (!storedData) {
-      console.warn('Auto login: No recurring actions data found in localStorage');
-      return;
-    }
-    
-    const LeanbackRecurringActions = JSON.parse(storedData);
-    const date = new Date();
-    
-    if (!enableWhoIsWatchingMenu) {
-      // Disable "Who's watching" by setting lastFired to 7 days in the future
-      console.info('Auto login: Disabling "Who\'s watching" screen');
-      date.setDate(date.getDate() + 7);
-      
-      // Update all relevant recurring actions
-      const actions = LeanbackRecurringActions.data?.data;
-      if (actions) {
-        if (actions["startup-screen-account-selector-with-guest"]) {
-          actions["startup-screen-account-selector-with-guest"].lastFired = date.getTime();
-        }
-        if (actions.whos_watching_fullscreen_zero_accounts) {
-          actions.whos_watching_fullscreen_zero_accounts.lastFired = date.getTime();
-        }
-        if (actions["startup-screen-signed-out-welcome-back"]) {
-          actions["startup-screen-signed-out-welcome-back"].lastFired = date.getTime();
-        }
-      }
-    } else {
-      // Enable "Who's watching" but respect the 2-hour cooldown
-      console.info('Auto login: Enabling "Who\'s watching" screen with cooldown check');
-      
-      const actions = LeanbackRecurringActions.data?.data;
-      if (actions && actions["startup-screen-account-selector-with-guest"]) {
-        const lastFiredTime = actions["startup-screen-account-selector-with-guest"].lastFired;
-        const timeDifference = date.getTime() - lastFiredTime;
-        const twoHoursInMs = 2 * 60 * 60 * 1000;
-        
-        // Only update if more than 2 hours have passed or if lastFired is in the future
-        if (timeDifference < 0 || timeDifference >= twoHoursInMs) {
-          actions["startup-screen-account-selector-with-guest"].lastFired = date.getTime();
-          if (actions.whos_watching_fullscreen_zero_accounts) {
-            actions.whos_watching_fullscreen_zero_accounts.lastFired = date.getTime();
-          }
-          if (actions["startup-screen-signed-out-welcome-back"]) {
-            actions["startup-screen-signed-out-welcome-back"].lastFired = date.getTime();
-          }
-        } else {
-          console.info('Auto login: Skipping "Who\'s watching" update due to 2-hour cooldown');
-          return;
-        }
+    const storedData = localStorage.getItem(STORAGE_KEY);
+    if (!storedData) return console.warn('Auto login: No recurring actions found');
+
+    const json = JSON.parse(storedData);
+    const actions = json.data?.data;
+
+    if (!actions) return;
+
+    const futureDate = Date.now() + (7 * 24 * 60 * 60 * 1000); // +7 days
+    let isModified = false;
+
+    for (const key of TARGET_ACTIONS) {
+      if (actions[key]) {
+        actions[key].lastFired = futureDate;
+        isModified = true;
       }
     }
-    
-    // Save updated data back to localStorage
-    localStorage.setItem(recurringActionsKey, JSON.stringify(LeanbackRecurringActions));
-    console.info('Auto login: Successfully updated "Who\'s watching" settings');
-    
+
+    if (isModified) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
+      console.info('Auto login: "Who\'s watching" screens disabled');
+    }
   } catch (error) {
-    console.error('Auto login: Failed to update "Who\'s watching" settings:', error);
+    console.error('Auto login: Failed to update settings:', error);
   }
 }
 
-function initAutoLogin() {
-  const autoLoginEnabled = configRead('enableAutoLogin');
-  
-  if (autoLoginEnabled) {
-    disableWhosWatching(false);
+export function initAutoLogin() {
+  if (configRead('enableAutoLogin')) {
+    disableWhosWatching();
   }
 }
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initAutoLogin);
-} else {
-  initAutoLogin();
-}
+document.readyState === 'loading'
+  ? document.addEventListener('DOMContentLoaded', initAutoLogin)
+  : initAutoLogin();
 
-// Listen for changes to the auto-login setting
-configAddChangeListener('enableAutoLogin', (evt) => {
-  if (evt.detail.newValue) {
-    console.info('Auto login setting changed');
-	initAutoLogin();
+configAddChangeListener('enableAutoLogin', ({ detail }) => {
+  if (detail.newValue) {
+    console.info('Auto login setting enabled');
+    initAutoLogin();
   } else {
     console.info('Auto login disabled');
   }
 });
-
-export { initAutoLogin };

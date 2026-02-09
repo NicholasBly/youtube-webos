@@ -33,12 +33,16 @@ const CHAIN_SKIP_CONSTANTS = {
 class SponsorBlockHandler {
     constructor(videoID) {
         this.videoID = videoID;
+        this.logPrefix = `[SB:${this.videoID}]`;
+        
         this.segments = [];
         this.highlightSegment = null;
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
+        
         this.debugMode = false;
+        
         this.isLegacyWebOS = WebOSVersion() === 5;
 
         // Tracking state
@@ -100,10 +104,9 @@ class SponsorBlockHandler {
     }
 
     log(level, message, ...args) {
-        // Check flag before string allocation
         if ((level === 'debug' || level === 'info') && !this.debugMode) return;
-        const prefix = `[SB:${this.videoID}]`;
-        console[level === 'warn' ? 'warn' : 'log'](prefix, message, ...args);
+        
+        console[level === 'warn' ? 'warn' : 'log'](this.logPrefix, message, ...args);
     }
 
     updateConfigCache() {
@@ -161,6 +164,8 @@ class SponsorBlockHandler {
         if (!this.video) return;
 
         if (enable) {
+            if (this.video.paused) return;
+
             if (!this.isTimeListenerActive) {
                 this.video.addEventListener('timeupdate', this.boundTimeUpdate);
                 this.isTimeListenerActive = true;
@@ -419,6 +424,8 @@ class SponsorBlockHandler {
 
         if (!this.videoID || this.isDestroyed) return;
 
+        this.start();
+
         const initVideoID = this.videoID;
         sponsorBlockUI.updateSegments([]);
 
@@ -437,7 +444,8 @@ class SponsorBlockHandler {
             this.segments = videoData.segments.sort((a, b) => a.segment[0] - b.segment[0]);
             this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
 
-            const video = document.querySelector('video');
+            // Use 'this.video' if start() already found it, or re-query
+            const video = this.video || document.querySelector('video');
             if (video && video.duration && !isNaN(video.duration)) {
                 this.processSegments(video.duration);
             }
@@ -448,8 +456,12 @@ class SponsorBlockHandler {
                 this.executeChainSkip(video);
             }
 
-            this.start();
+            // UI was already started, so now we just update the data
             sponsorBlockUI.updateSegments(this.segments);
+            
+            // Explicitly draw overlay now that data is ready
+            // (checkForProgressBar might have run when segments were empty)
+            this.drawOverlay();
 
             if (this.highlightSegment) {
                 const hlMode = this.configCache.sbMode_highlight;
@@ -472,21 +484,31 @@ class SponsorBlockHandler {
         if (!this.video) return;
 
         this.injectCSS();
-        this.toggleTimeListener(this.nextSegmentStart !== Infinity);
+        // Initial tracking setup
+        this.resetSegmentTracking();
 
         this.addEvent(this.video, 'ended', () => {
             this.hasPerformedChainSkip = false;
             this.clearLongDistanceTimer();
+            this.toggleTimeListener(false);
         });
 
         this.addEvent(this.video, 'play', () => {
             // Check for progress bar existence on play in case UI was destroyed (e.g. after side-panel interaction)
             this.checkForProgressBar();
+            
+            // Re-evaluate tracking (re-enables time listener if needed)
+            this.resetSegmentTracking();
 
             if (this.video.currentTime < CHAIN_SKIP_CONSTANTS.START_THRESHOLD) {
                 this.hasPerformedChainSkip = false;
                 this.executeChainSkip(this.video);
             }
+        });
+
+        this.addEvent(this.video, 'pause', () => {
+            this.stopHighFreqLoop();
+            this.toggleTimeListener(false);
         });
 
         this.addEvent(this.video, 'seeked', () => {
@@ -504,7 +526,11 @@ class SponsorBlockHandler {
                 this.lastSkippedSegmentIndex = -1;
                 this.lastNotifiedSegmentIndex = -1;
                 this.resetSegmentTracking();
-                this.handleTimeUpdate(); // Handle immediate skip
+                
+                // Only handle time update immediately if not paused
+                if (!this.video.paused) {
+                    this.handleTimeUpdate(); 
+                }
             }
 
             this.isSkipping = false;
