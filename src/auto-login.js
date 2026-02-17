@@ -1,4 +1,5 @@
 import { configRead, configAddChangeListener } from './config.js';
+import { SELECTORS, REMOTE_KEYS, isGuestMode, sendKey, extractLaunchParams } from './utils';
 
 const STORAGE_KEY = 'yt.leanback.default::recurring_actions';
 const TARGET_ACTIONS = [
@@ -6,6 +7,10 @@ const TARGET_ACTIONS = [
   'whos_watching_fullscreen_zero_accounts',
   'startup-screen-signed-out-welcome-back'
 ];
+
+const BYPASS_STYLE_ID = 'login-bypass-css';
+let hasBypassed = false;
+let pageObserverAttached = false;
 
 /**
  * Disables "Who's watching" by pushing the lastFired date 7 days into the future.
@@ -40,9 +45,74 @@ function disableWhosWatching() {
   }
 }
 
+function injectBypassCSS() {
+    if (document.head && !document.getElementById(BYPASS_STYLE_ID)) {
+        const style = document.createElement('style');
+        style.id = BYPASS_STYLE_ID;
+        style.innerHTML = `
+            .${SELECTORS.ACCOUNT_SELECTOR},
+            ytlr-account-selector,
+            .ytlr-account-selector,
+            [class*="account-selector"] {
+                opacity: 0 !important;
+                visibility: hidden !important;
+                display: none !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+function finalizeBypass() {
+    console.info('[Auto Login] Bypass: Done. Cleaning up...');
+    setTimeout(() => {
+        const style = document.getElementById(BYPASS_STYLE_ID);
+        if (style) style.remove();
+        hasBypassed = false; 
+    }, 2000);
+}
+
+export function attemptActiveBypass(force = false) {
+    const isSelector = document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR);
+    
+    const params = extractLaunchParams();
+    const hasParams = params && Object.keys(params).length > 0;
+
+    if (!isSelector && !force) return;
+    if (!hasParams && !force && !configRead('enableAutoLogin')) return;
+    
+    if (hasBypassed) return;
+
+    console.info('[Auto Login] Active Bypass: Selector Detected! Executing sequence...');
+    hasBypassed = true;
+    injectBypassCSS();
+
+    setTimeout(() => {
+        if (isGuestMode()) {
+            sendKey(REMOTE_KEYS.DOWN);
+            setTimeout(() => { sendKey(REMOTE_KEYS.ENTER); finalizeBypass(); }, 200);
+        } else {
+            sendKey(REMOTE_KEYS.ENTER);
+            finalizeBypass();
+        }
+    }, 500);
+}
+
+function setupActiveBypassListener() {
+    if (pageObserverAttached) return;
+    window.addEventListener('ytaf-page-update', (evt) => {
+        if (evt.detail && evt.detail.isAccountSelector) {
+            attemptActiveBypass();
+        }
+    });
+    pageObserverAttached = true;
+}
+
 export function initAutoLogin() {
   if (configRead('enableAutoLogin')) {
+    console.info('[Auto Login] Initializing...');
     disableWhosWatching();
+    setupActiveBypassListener();
   }
 }
 

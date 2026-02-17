@@ -1,4 +1,5 @@
 let cachedWebOSVersion = null;
+export let simulatorMode = false;
 //let cachedNewLayout = null;
 
 /**
@@ -77,7 +78,7 @@ export function WebOSVersion() {
     } else {
       cachedWebOSVersion = 0;
     }
-    
+    simulatorMode = true;
     return cachedWebOSVersion;
   }
 

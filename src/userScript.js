@@ -1,8 +1,8 @@
 import 'whatwg-fetch';
 import './domrect-polyfill';
-
-import { handleLaunch, SELECTORS, REMOTE_KEYS, isGuestMode, sendKey, extractLaunchParams } from './utils';
-import { WebOSVersion } from './webos-utils.js';
+import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
+import { attemptActiveBypass } from './auto-login.js';
+import { WebOSVersion, simulatorMode } from './webos-utils.js';
 import { initBlockWebOSCast } from './block-webos-cast';
 import './adblock.js';
 import './sponsorblock.js';
@@ -12,84 +12,30 @@ import './screensaver-fix';
 import './yt-fixes.css';
 import './watch.js';
 
-(function initLoginBypass() {
+const version = WebOSVersion();
+
+(function oneTimeParamsCheck() {
 	const params = extractLaunchParams();
     if (!params || Object.keys(params).length === 0) {
 		return;
 	}
-    console.info('[Main] Bypass: Service started.');
-    
-    const styleId = 'login-bypass-css';
-
-    const cssContent = `
-        .${SELECTORS.ACCOUNT_SELECTOR},
-        ytlr-account-selector,
-        .ytlr-account-selector,
-        [class*="account-selector"] {
-            opacity: 0 !important;
-            visibility: hidden !important;
-            display: none !important;
-        }
-    `;
-
-    if (document.head && !document.getElementById(styleId)) {
-        const style = document.createElement('style');
-        style.id = styleId;
-        style.innerHTML = cssContent;
-        document.head.appendChild(style);
-    }
-
-    let hasBypassed = false;
-
-    function runBypass() {
-        if (hasBypassed) return;
-        
-        console.info('[Main] Bypass: Selector Detected!');
-        hasBypassed = true;
-
-        setTimeout(() => {
-            if (isGuestMode()) {
-                sendKey(REMOTE_KEYS.DOWN);
-                setTimeout(() => { sendKey(REMOTE_KEYS.ENTER); finalize(); }, 200);
-            } else {
-                sendKey(REMOTE_KEYS.ENTER);
-                finalize();
-            }
-        }, 500);
-    }
-
-    window.addEventListener('ytaf-page-update', (evt) => {
-        if (evt.detail && evt.detail.isAccountSelector) {
-            runBypass();
-        }
-    });
-
-    if (document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR)) {
-        runBypass();
-    }
-
-    function finalize() {
-        console.info('[Main] Bypass: Done. Cleaning up...');
-        
-        setTimeout(() => {
-            const style = document.getElementById(styleId);
-            if (style) style.remove();
-        }, 2000);
-    }
+	else attemptActiveBypass();
 })();
 
 document.addEventListener(
   'webOSRelaunch',
   (evt) => {
     console.info('RELAUNCH:', evt, window.launchParams);
+    if (document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR)) {
+        console.info('[Main] Relaunch detected on Account Selector. Triggering bypass.');
+        attemptActiveBypass(true);
+    }
     handleLaunch(evt.detail);
   },
   true
 );
 
-const version = WebOSVersion();
-
-if (version === 25) {
+if (version === 25 && simulatorMode === false) {
   console.info('[Main] Enabling webOS Google Cast Block');
   initBlockWebOSCast();
 }
