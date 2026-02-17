@@ -49,7 +49,7 @@ function injectBypassCSS() {
     if (document.head && !document.getElementById(BYPASS_STYLE_ID)) {
         const style = document.createElement('style');
         style.id = BYPASS_STYLE_ID;
-        style.innerHTML = `
+        style.textContent = `
             .${SELECTORS.ACCOUNT_SELECTOR},
             ytlr-account-selector,
             .ytlr-account-selector,

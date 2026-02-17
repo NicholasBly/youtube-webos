@@ -108,7 +108,6 @@ const createElement = (tag, props = {}, ...children) => {
               }
           }
           else if (key === 'text') el.textContent = val;
-          else if (key === 'html') el.innerHTML = val;
           else el[key] = val;
       }
   }
@@ -415,13 +414,13 @@ function createOptionsPanel() {
   pageMain.appendChild(createSection('Video Player', [createConfigCheckbox('forceHighResVideo'), createConfigCheckbox('hideEndcards'), createConfigCheckbox('enableReturnYouTubeDislike')]));
   pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createConfigCheckbox('hideLogo'), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
   
-  const navHintNextMain = createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'SponsorBlock Settings <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(1) }});
+  const navHintNextMain = createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(1) }}, 'SponsorBlock Settings ', createElement('span', { class: 'arrow', text: '→' }));
   pageMain.appendChild(navHintNextMain);
   elmContainer.appendChild(pageMain);
 
   // --- Page 2: SponsorBlock ---
   pageSponsor = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-sponsor', style: { display: 'none' }});
-  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> Main Settings', events: { click: () => setActivePage(0) }}));
+  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(0) }}, createElement('span', { class: 'arrow', text: '←' }), ' Main Settings'));
   pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
   
   const elmBlock = createElement('blockquote', {},
@@ -431,20 +430,20 @@ function createOptionsPanel() {
 	createConfigCheckbox('skipSegmentsOnce')
   );
   pageSponsor.appendChild(elmBlock);
-  pageSponsor.appendChild(createElement('div', { html: '<small>Sponsor segments skipping - https://sponsor.ajay.app</small>' }));
-  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'Shortcuts <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(2) }}));
+  pageSponsor.appendChild(createElement('div', {}, createElement('small', { text: 'Sponsor segments skipping - https://sponsor.ajay.app' })));
+  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(2) }}, 'Shortcuts ', createElement('span', { class: 'arrow', text: '→' })));
   elmContainer.appendChild(pageSponsor);
 
   // --- Page 3: Shortcuts ---
   pageShortcuts = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-shortcuts', style: { display: 'none' }});
-  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> SponsorBlock Settings', events: { click: () => setActivePage(1) }}));
+  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(1) }}, createElement('span', { class: 'arrow', text: '←' }), ' SponsorBlock Settings'));
   shortcutKeys.forEach(key => pageShortcuts.appendChild(createShortcutControl(key)));
-  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'UI Tweaks <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(3) }}));
+  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(3) }}, 'UI Tweaks ', createElement('span', { class: 'arrow', text: '→' })));
   elmContainer.appendChild(pageShortcuts);
   
   // --- Page 4: UI Tweaks ---
   pageUITweaks = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-ui-tweaks', style: { display: 'none' }});
-  pageUITweaks.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> Shortcuts', events: { click: () => setActivePage(2) }}));
+  pageUITweaks.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(2) }}, createElement('span', { class: 'arrow', text: '←' }), ' Shortcuts'));
   
   pageUITweaks.appendChild(createSection('Player UI Tweaks', [
       createOpacityControl('videoShelfOpacity'),
@@ -1156,7 +1155,7 @@ function applyOledMode(enabled) {
       ? '.app-quality-root .UGcxnc .dxLAmd { background-color: rgba(0, 0, 0, 0) !important; } .app-quality-root .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }' 
       : '';
     
-    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: `
+    const style = createElement('style', { id: 'style-gray-ui-oled-care', text: `
         #container { background-color: black !important; } 
         .ytLrGuideResponseMask { background-color: black !important; } 
         .geClSe { background-color: black !important; } 

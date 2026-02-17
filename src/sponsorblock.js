@@ -440,7 +440,11 @@ class SponsorBlockHandler {
             if (this.isDestroyed || this.videoID !== initVideoID) return;
             const videoData = Array.isArray(data) ? data.find(x => x.videoID === this.videoID) : data;
 
-            if (!videoData?.segments?.length) return;
+            if (!videoData || !videoData.segments || videoData.segments.length === 0) {
+                this.log('debug', "No SponsorBlock segments available, cleaning up");
+                this.destroy(); 
+                return;
+            }
 
             // sort in place is fine
             this.segments = videoData.segments.sort((a, b) => a.segment[0] - b.segment[0]);
