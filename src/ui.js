@@ -340,9 +340,9 @@ function createOptionsPanel() {
 
     if (evt.keyCode in ARROW_KEY_CODE) {
       const dir = ARROW_KEY_CODE[evt.keyCode];
+      const preFocus = document.activeElement;
+
       if (dir === 'left' || dir === 'right') {
-        const preFocus = document.activeElement;
-        
         // Prevent accidental page switch when modifying controls
         if (preFocus.classList.contains('shortcut-control-row')) return;
         if (activePage === 1) {
@@ -356,11 +356,23 @@ function createOptionsPanel() {
         if (preFocus === document.activeElement) {
           if (dir === 'right' && activePage < 3) setActivePage(activePage + 1);
           else if (dir === 'left' && activePage > 0) setActivePage(activePage - 1);
-          evt.preventDefault(); evt.stopPropagation(); return;
+        }
+        evt.preventDefault(); evt.stopPropagation(); return;
+      } else if (dir === 'up' || dir === 'down') {
+        navigate(dir);
+        
+        // Wrap around logic if focus didn't move
+        if (preFocus === document.activeElement) {
+          const focusables = Array.from(elmContainer.querySelectorAll('input, .shortcut-control-row, .ytaf-nav-hint, button'))
+            .filter(el => el.offsetParent !== null && !el.disabled);
+          
+          if (focusables.length > 0) {
+            if (dir === 'up') focusables[focusables.length - 1].focus();
+            else if (dir === 'down') focusables[0].focus();
+          }
         }
         evt.preventDefault(); evt.stopPropagation(); return;
       }
-      navigate(ARROW_KEY_CODE[evt.keyCode]);
     } else if (evt.keyCode === REMOTE_KEYS.ENTER.code) {
       if (evt instanceof KeyboardEvent) document.activeElement.click();
     } else if (evt.keyCode === 27) { // Escape

@@ -6,7 +6,7 @@ import { WebOSVersion, simulatorMode } from './webos-utils.js';
 import { initBlockWebOSCast } from './block-webos-cast';
 import './adblock.js';
 import './sponsorblock.js';
-import './font-fix.css';
+import './emoji-font.ts';
 import './thumbnail-quality.js';
 import './screensaver-fix';
 import './yt-fixes.css';
