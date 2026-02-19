@@ -133,7 +133,16 @@ function populateSearchHistory(container) {
             row.setAttribute('tabindex', '0');
             row.setAttribute('role', 'button');
             row.style.cssText = `display: flex; align-items: center; padding: 0.8rem 1rem; margin-bottom: 0.5rem; background-color: rgba(255,255,255,0.1); border-radius: 4px; cursor: pointer; color: #f1f1f1; font-family: Roboto, sans-serif; font-size: 1.4rem; transition: background-color 0.2s;`;
-            row.innerHTML = `<span style="margin-right: 1rem; opacity: 0.7;">↺</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${searchTerm}</span>`;
+            const iconSpan = document.createElement('span');
+            iconSpan.style.cssText = 'margin-right: 1rem; opacity: 0.7;';
+            iconSpan.textContent = '↺';
+            
+            const textSpan = document.createElement('span');
+            textSpan.style.cssText = 'flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+            textSpan.textContent = searchTerm;
+
+            row.appendChild(iconSpan);
+            row.appendChild(textSpan);
             
             row.addEventListener('click', () => {
                 window.location.hash = `#/results?search_query=${encodeURIComponent(searchTerm)}`;

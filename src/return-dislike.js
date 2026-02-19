@@ -171,7 +171,7 @@ class ReturnYouTubeDislike {
              // Panel removed: Clear references immediately
              this.panelElement = null;
              this.isPanelFocused = false;
-             this.menuItemsCache = []; // FIX: Clear stale cache
+             this.menuItemsCache = []; // Clear stale cache
              this.menuItemsMap.clear();
              this.lastFocusedElement = null;
              this.focusedIndex = -1;
@@ -508,7 +508,12 @@ class ReturnYouTubeDislike {
       const dislikeElement = likesElement.cloneNode(false);
       dislikeElement.id = 'ryd-dislike-factoid';
       dislikeElement.setAttribute('idomkey', 'factoid-ryd');
-      dislikeElement.innerHTML = likesElement.innerHTML;
+      while (dislikeElement.firstChild) {
+          dislikeElement.removeChild(dislikeElement.firstChild);
+      }
+      Array.from(likesElement.childNodes).forEach(child => {
+          dislikeElement.appendChild(child.cloneNode(true));
+      });
 
       const valueElement = dislikeElement.querySelector(mode.valueSelector);
       const labelElement = dislikeElement.querySelector(mode.labelSelector);

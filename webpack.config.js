@@ -35,7 +35,9 @@ const makeConfig = (env) => {
           
           // Strip local polyfills
           //[path.resolve(__dirname, 'src/spatial-navigation-polyfill.js')]: false,
-          [path.resolve(__dirname, 'src/domrect-polyfill.js')]: false
+          [path.resolve(__dirname, 'src/domrect-polyfill.js')]: false,
+		  [path.resolve(__dirname, 'src/emoji-font.ts')]: false,
+		  [path.resolve(__dirname, 'src/emoji-font.css')]: false
         } : {}
       },
       module: {

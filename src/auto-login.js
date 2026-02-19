@@ -1,94 +1,130 @@
 import { configRead, configAddChangeListener } from './config.js';
+import { SELECTORS, REMOTE_KEYS, isGuestMode, sendKey, extractLaunchParams } from './utils';
 
-function disableWhosWatching(enableWhoIsWatchingMenu) { // Credit to reisxd || https://github.com/reisxd/TizenTube/
+const STORAGE_KEY = 'yt.leanback.default::recurring_actions';
+const TARGET_ACTIONS = [
+  'startup-screen-account-selector-with-guest',
+  'whos_watching_fullscreen_zero_accounts',
+  'startup-screen-signed-out-welcome-back'
+];
+
+const BYPASS_STYLE_ID = 'login-bypass-css';
+let hasBypassed = false;
+let pageObserverAttached = false;
+
+/**
+ * Disables "Who's watching" by pushing the lastFired date 7 days into the future.
+ * Credit: reisxd || https://github.com/reisxd/TizenTube/
+ */
+function disableWhosWatching() {
   try {
-    const recurringActionsKey = 'yt.leanback.default::recurring_actions';
-    const storedData = localStorage.getItem(recurringActionsKey);
-    
-    if (!storedData) {
-      console.warn('Auto login: No recurring actions data found in localStorage');
-      return;
-    }
-    
-    const LeanbackRecurringActions = JSON.parse(storedData);
-    const date = new Date();
-    
-    if (!enableWhoIsWatchingMenu) {
-      // Disable "Who's watching" by setting lastFired to 7 days in the future
-      console.info('Auto login: Disabling "Who\'s watching" screen');
-      date.setDate(date.getDate() + 7);
-      
-      // Update all relevant recurring actions
-      const actions = LeanbackRecurringActions.data?.data;
-      if (actions) {
-        if (actions["startup-screen-account-selector-with-guest"]) {
-          actions["startup-screen-account-selector-with-guest"].lastFired = date.getTime();
-        }
-        if (actions.whos_watching_fullscreen_zero_accounts) {
-          actions.whos_watching_fullscreen_zero_accounts.lastFired = date.getTime();
-        }
-        if (actions["startup-screen-signed-out-welcome-back"]) {
-          actions["startup-screen-signed-out-welcome-back"].lastFired = date.getTime();
-        }
-      }
-    } else {
-      // Enable "Who's watching" but respect the 2-hour cooldown
-      console.info('Auto login: Enabling "Who\'s watching" screen with cooldown check');
-      
-      const actions = LeanbackRecurringActions.data?.data;
-      if (actions && actions["startup-screen-account-selector-with-guest"]) {
-        const lastFiredTime = actions["startup-screen-account-selector-with-guest"].lastFired;
-        const timeDifference = date.getTime() - lastFiredTime;
-        const twoHoursInMs = 2 * 60 * 60 * 1000;
-        
-        // Only update if more than 2 hours have passed or if lastFired is in the future
-        if (timeDifference < 0 || timeDifference >= twoHoursInMs) {
-          actions["startup-screen-account-selector-with-guest"].lastFired = date.getTime();
-          if (actions.whos_watching_fullscreen_zero_accounts) {
-            actions.whos_watching_fullscreen_zero_accounts.lastFired = date.getTime();
-          }
-          if (actions["startup-screen-signed-out-welcome-back"]) {
-            actions["startup-screen-signed-out-welcome-back"].lastFired = date.getTime();
-          }
-        } else {
-          console.info('Auto login: Skipping "Who\'s watching" update due to 2-hour cooldown');
-          return;
-        }
+    const storedData = localStorage.getItem(STORAGE_KEY);
+    if (!storedData) return console.warn('Auto login: No recurring actions found');
+
+    const json = JSON.parse(storedData);
+    const actions = json.data?.data;
+
+    if (!actions) return;
+
+    const futureDate = Date.now() + (7 * 24 * 60 * 60 * 1000); // +7 days
+    let isModified = false;
+
+    for (const key of TARGET_ACTIONS) {
+      if (actions[key]) {
+        actions[key].lastFired = futureDate;
+        isModified = true;
       }
     }
-    
-    // Save updated data back to localStorage
-    localStorage.setItem(recurringActionsKey, JSON.stringify(LeanbackRecurringActions));
-    console.info('Auto login: Successfully updated "Who\'s watching" settings');
-    
+
+    if (isModified) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
+      console.info('Auto login: "Who\'s watching" screens disabled');
+    }
   } catch (error) {
-    console.error('Auto login: Failed to update "Who\'s watching" settings:', error);
+    console.error('Auto login: Failed to update settings:', error);
   }
 }
 
-function initAutoLogin() {
-  const autoLoginEnabled = configRead('enableAutoLogin');
-  
-  if (autoLoginEnabled) {
-    disableWhosWatching(false);
+function injectBypassCSS() {
+    if (document.head && !document.getElementById(BYPASS_STYLE_ID)) {
+        const style = document.createElement('style');
+        style.id = BYPASS_STYLE_ID;
+        style.textContent = `
+            .${SELECTORS.ACCOUNT_SELECTOR},
+            ytlr-account-selector,
+            .ytlr-account-selector,
+            [class*="account-selector"] {
+                opacity: 0 !important;
+                visibility: hidden !important;
+                display: none !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+function finalizeBypass() {
+    console.info('[Auto Login] Bypass: Done. Cleaning up...');
+    setTimeout(() => {
+        const style = document.getElementById(BYPASS_STYLE_ID);
+        if (style) style.remove();
+        hasBypassed = false; 
+    }, 2000);
+}
+
+export function attemptActiveBypass(force = false) {
+    const isSelector = document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR);
+    
+    const params = extractLaunchParams();
+    const hasParams = params && Object.keys(params).length > 0;
+
+    if (!isSelector && !force) return;
+    if (!hasParams && !force && !configRead('enableAutoLogin')) return;
+    
+    if (hasBypassed) return;
+
+    console.info('[Auto Login] Active Bypass: Selector Detected! Executing sequence...');
+    hasBypassed = true;
+    injectBypassCSS();
+
+    setTimeout(() => {
+        if (isGuestMode()) {
+            sendKey(REMOTE_KEYS.DOWN);
+            setTimeout(() => { sendKey(REMOTE_KEYS.ENTER); finalizeBypass(); }, 200);
+        } else {
+            sendKey(REMOTE_KEYS.ENTER);
+            finalizeBypass();
+        }
+    }, 500);
+}
+
+function setupActiveBypassListener() {
+    if (pageObserverAttached) return;
+    window.addEventListener('ytaf-page-update', (evt) => {
+        if (evt.detail && evt.detail.isAccountSelector) {
+            attemptActiveBypass();
+        }
+    });
+    pageObserverAttached = true;
+}
+
+export function initAutoLogin() {
+  if (configRead('enableAutoLogin')) {
+    console.info('[Auto Login] Initializing...');
+    disableWhosWatching();
+    setupActiveBypassListener();
   }
 }
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initAutoLogin);
-} else {
-  initAutoLogin();
-}
+document.readyState === 'loading'
+  ? document.addEventListener('DOMContentLoaded', initAutoLogin)
+  : initAutoLogin();
 
-// Listen for changes to the auto-login setting
-configAddChangeListener('enableAutoLogin', (evt) => {
-  if (evt.detail.newValue) {
-    console.info('Auto login setting changed');
-	initAutoLogin();
+configAddChangeListener('enableAutoLogin', ({ detail }) => {
+  if (detail.newValue) {
+    console.info('Auto login setting enabled');
+    initAutoLogin();
   } else {
     console.info('Auto login disabled');
   }
 });
-
-export { initAutoLogin };

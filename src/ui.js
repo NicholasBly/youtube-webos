@@ -19,7 +19,9 @@ let shortcutDebounceTime = 100;
 
 // Seek Burst Variables
 let seekAccumulator = 0;
+let pendingSeekOffset = 0;
 let seekResetTimer = null;
+let seekApplyTimer = null;
 let activeSeekNotification = null;
 
 let activePlayPauseNotification = null;
@@ -28,6 +30,7 @@ let playPauseNotificationTimer = null;
 // Lazy load variable
 let optionsPanel = null;
 let optionsPanelVisible = false;
+let panelInitBlock = false;
 
 const shortcutCache = {};
 // Define keys including colors
@@ -105,7 +108,6 @@ const createElement = (tag, props = {}, ...children) => {
               }
           }
           else if (key === 'text') el.textContent = val;
-          else if (key === 'html') el.innerHTML = val;
           else el[key] = val;
       }
   }
@@ -338,9 +340,9 @@ function createOptionsPanel() {
 
     if (evt.keyCode in ARROW_KEY_CODE) {
       const dir = ARROW_KEY_CODE[evt.keyCode];
+      const preFocus = document.activeElement;
+
       if (dir === 'left' || dir === 'right') {
-        const preFocus = document.activeElement;
-        
         // Prevent accidental page switch when modifying controls
         if (preFocus.classList.contains('shortcut-control-row')) return;
         if (activePage === 1) {
@@ -354,11 +356,23 @@ function createOptionsPanel() {
         if (preFocus === document.activeElement) {
           if (dir === 'right' && activePage < 3) setActivePage(activePage + 1);
           else if (dir === 'left' && activePage > 0) setActivePage(activePage - 1);
-          evt.preventDefault(); evt.stopPropagation(); return;
+        }
+        evt.preventDefault(); evt.stopPropagation(); return;
+      } else if (dir === 'up' || dir === 'down') {
+        navigate(dir);
+        
+        // Wrap around logic if focus didn't move
+        if (preFocus === document.activeElement) {
+          const focusables = Array.from(elmContainer.querySelectorAll('input, .shortcut-control-row, .ytaf-nav-hint, button'))
+            .filter(el => el.offsetParent !== null && !el.disabled);
+          
+          if (focusables.length > 0) {
+            if (dir === 'up') focusables[focusables.length - 1].focus();
+            else if (dir === 'down') focusables[0].focus();
+          }
         }
         evt.preventDefault(); evt.stopPropagation(); return;
       }
-      navigate(ARROW_KEY_CODE[evt.keyCode]);
     } else if (evt.keyCode === REMOTE_KEYS.ENTER.code) {
       if (evt instanceof KeyboardEvent) document.activeElement.click();
     } else if (evt.keyCode === 27) { // Escape
@@ -412,13 +426,13 @@ function createOptionsPanel() {
   pageMain.appendChild(createSection('Video Player', [createConfigCheckbox('forceHighResVideo'), createConfigCheckbox('hideEndcards'), createConfigCheckbox('enableReturnYouTubeDislike')]));
   pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createConfigCheckbox('hideLogo'), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
   
-  const navHintNextMain = createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'SponsorBlock Settings <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(1) }});
+  const navHintNextMain = createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(1) }}, 'SponsorBlock Settings ', createElement('span', { class: 'arrow', text: '→' }));
   pageMain.appendChild(navHintNextMain);
   elmContainer.appendChild(pageMain);
 
   // --- Page 2: SponsorBlock ---
   pageSponsor = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-sponsor', style: { display: 'none' }});
-  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> Main Settings', events: { click: () => setActivePage(0) }}));
+  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(0) }}, createElement('span', { class: 'arrow', text: '←' }), ' Main Settings'));
   pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
   
   const elmBlock = createElement('blockquote', {},
@@ -428,20 +442,20 @@ function createOptionsPanel() {
 	createConfigCheckbox('skipSegmentsOnce')
   );
   pageSponsor.appendChild(elmBlock);
-  pageSponsor.appendChild(createElement('div', { html: '<small>Sponsor segments skipping - https://sponsor.ajay.app</small>' }));
-  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'Shortcuts <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(2) }}));
+  pageSponsor.appendChild(createElement('div', {}, createElement('small', { text: 'Sponsor segments skipping - https://sponsor.ajay.app' })));
+  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(2) }}, 'Shortcuts ', createElement('span', { class: 'arrow', text: '→' })));
   elmContainer.appendChild(pageSponsor);
 
   // --- Page 3: Shortcuts ---
   pageShortcuts = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-shortcuts', style: { display: 'none' }});
-  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> SponsorBlock Settings', events: { click: () => setActivePage(1) }}));
+  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(1) }}, createElement('span', { class: 'arrow', text: '←' }), ' SponsorBlock Settings'));
   shortcutKeys.forEach(key => pageShortcuts.appendChild(createShortcutControl(key)));
-  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, html: 'UI Tweaks <span class="arrow">&rarr;</span>', events: { click: () => setActivePage(3) }}));
+  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(3) }}, 'UI Tweaks ', createElement('span', { class: 'arrow', text: '→' })));
   elmContainer.appendChild(pageShortcuts);
   
   // --- Page 4: UI Tweaks ---
   pageUITweaks = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-ui-tweaks', style: { display: 'none' }});
-  pageUITweaks.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, html: '<span class="arrow">&larr;</span> Shortcuts', events: { click: () => setActivePage(2) }}));
+  pageUITweaks.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(2) }}, createElement('span', { class: 'arrow', text: '←' }), ' Shortcuts'));
   
   pageUITweaks.appendChild(createSection('Player UI Tweaks', [
       createOpacityControl('videoShelfOpacity'),
@@ -458,6 +472,10 @@ function createOptionsPanel() {
 // document.body.appendChild(optionsPanel); removed
 
 function showOptionsPanel(visible) {
+  if (panelInitBlock) {
+      console.log('[UI] Options panel toggle blocked due to initialization lock.');
+      return;
+  }
   if (visible === undefined || visible === null) visible = true;
   
   if (visible && !optionsPanelVisible) {
@@ -465,6 +483,8 @@ function showOptionsPanel(visible) {
     // Lazy Initialization
     if (!optionsPanel) {
         console.log('[UI] Initializing Options Panel (Lazy Load)...');
+		panelInitBlock = true;
+        setTimeout(() => { panelInitBlock = false; }, 500);
         optionsPanel = createOptionsPanel();
         document.body.appendChild(optionsPanel);
         
@@ -621,15 +641,19 @@ function performBurstSeek(seconds, video) {
     if (!video) video = document.querySelector('video');
     if (!video) return;
 	
+    // Reset accumulators if direction changes (e.g. going from +15 to -15)
 	if ((seekAccumulator > 0 && seconds < 0) || (seekAccumulator < 0 && seconds > 0)) {
         seekAccumulator = 0;
+        pendingSeekOffset = 0; // Reset pending seek to prevent jitter
     }
 
     seekAccumulator += seconds;
-    video.currentTime += seconds;
+    pendingSeekOffset += seconds; // Add to the queue, don't apply to video yet
 
+    // Reset the "UI Fade Out" timer
     if (seekResetTimer) clearTimeout(seekResetTimer);
 
+    // Update UI immediately (lightweight operation)
     const directionSymbol = seekAccumulator > 0 ? '+' : '';
     const msg = `Skipped ${directionSymbol}${seekAccumulator}s`;
 
@@ -639,8 +663,20 @@ function performBurstSeek(seconds, video) {
          activeSeekNotification = showNotification(msg);
     }
 
+    // Debounce the heavy video seek operation
+    if (seekApplyTimer) clearTimeout(seekApplyTimer);
+
+    seekApplyTimer = setTimeout(() => {
+        if (pendingSeekOffset !== 0) {
+            // Apply the total calculated seek in one single operation
+            video.currentTime += pendingSeekOffset;
+            pendingSeekOffset = 0;
+        }
+    }, 200); // 200ms buffer allows rapid key presses without freezing the UI
+
     seekResetTimer = setTimeout(() => {
         seekAccumulator = 0;
+        pendingSeekOffset = 0;
         activeSeekNotification = null;
         seekResetTimer = null;
     }, 1200);
@@ -1131,7 +1167,7 @@ function applyOledMode(enabled) {
       ? '.app-quality-root .UGcxnc .dxLAmd { background-color: rgba(0, 0, 0, 0) !important; } .app-quality-root .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }' 
       : '';
     
-    const style = createElement('style', { id: 'style-gray-ui-oled-care', html: `
+    const style = createElement('style', { id: 'style-gray-ui-oled-care', text: `
         #container { background-color: black !important; } 
         .ytLrGuideResponseMask { background-color: black !important; } 
         .geClSe { background-color: black !important; } 

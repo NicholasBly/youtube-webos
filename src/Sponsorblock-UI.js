@@ -182,16 +182,36 @@ class SponsorBlockUI {
         popup.className = 'sb-segments-popup';
         popup.setAttribute('tabindex', '-1'); 
         
-        popup.innerHTML = `
-            <div class="sb-popup-header">
-                <div class="sb-header-title-row">
-                    <img class="sb-header-icon" src="${sponsorBlockIcon}" alt="SponsorBlock">
-                    <span class="sb-header-text">SponsorBlock</span>
-                </div>
-                <div class="sb-header-subtitle">This video has segments in the database!</div>
-            </div>
-            <div class="sb-list-container"></div>
-        `;
+        const header = document.createElement('div');
+        header.className = 'sb-popup-header';
+        
+        const titleRow = document.createElement('div');
+        titleRow.className = 'sb-header-title-row';
+        
+        const icon = document.createElement('img');
+        icon.className = 'sb-header-icon';
+        icon.src = sponsorBlockIcon;
+        icon.alt = 'SponsorBlock';
+        
+        const titleText = document.createElement('span');
+        titleText.className = 'sb-header-text';
+        titleText.textContent = 'SponsorBlock';
+        
+        titleRow.appendChild(icon);
+        titleRow.appendChild(titleText);
+        
+        const subtitle = document.createElement('div');
+        subtitle.className = 'sb-header-subtitle';
+        subtitle.textContent = 'This video has segments in the database!';
+        
+        header.appendChild(titleRow);
+        header.appendChild(subtitle);
+        
+        const listContainer = document.createElement('div');
+        listContainer.className = 'sb-list-container';
+        
+        popup.appendChild(header);
+        popup.appendChild(listContainer);
         document.body.appendChild(popup);
         this.popup = popup;
 
@@ -201,7 +221,7 @@ class SponsorBlockUI {
     updateSegments(segments) {
         if (!this.popup) this.createPopup();
         const container = this.popup.querySelector('.sb-list-container');
-        container.innerHTML = '';
+        container.textContent = '';
 		
         this.hasSegments = segments && segments.length > 0;
         if (!this.hasSegments) {
@@ -230,13 +250,27 @@ class SponsorBlockUI {
                 timeLabel = `${startTime} to ${endTime}`;
             }
 
-            row.innerHTML = `
-                <div class="sb-row-left">
-                    <div class="sb-segment-dot" style="background-color: ${color}"></div>
-                    <span class="sb-segment-category">${categoryName}</span>
-                </div>
-                <span class="sb-segment-time">${timeLabel}</span>
-            `;
+            const leftRow = document.createElement('div');
+            leftRow.className = 'sb-row-left';
+
+            const dot = document.createElement('div');
+            dot.className = 'sb-segment-dot';
+            dot.style.backgroundColor = color;
+
+            const categorySpan = document.createElement('span');
+            categorySpan.className = 'sb-segment-category';
+            categorySpan.textContent = categoryName;
+
+            leftRow.appendChild(dot);
+            leftRow.appendChild(categorySpan);
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'sb-segment-time';
+            timeSpan.textContent = timeLabel;
+
+            row.appendChild(leftRow);
+            row.appendChild(timeSpan);
+            
             container.appendChild(row);
         });
 			if (this.visible) {

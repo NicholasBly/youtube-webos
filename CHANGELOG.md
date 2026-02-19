@@ -4,6 +4,87 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.7.2] - 2026/02/18
+
+## Summary
+1. Emoji / Characters / Symbols support for legacy webOS versions
+2. Auto login - bypass login screen when opening YouTube app via SSH/SSAP
+3. Fast Forward / Rewind Shortcut improvements
+4. Bug Fixes, optimizations, and other improvements
+
+## Added
+
+### Emoji / Characters / Symbols Fix for legacy webOS
++ Implemented emojis into YouTube app via twemoji for legacy webOS - https://github.com/NicholasBly/youtube-webos/issues/42
++ Implemented fix for mathematical symbols/characters
++ Text/emoji fixes only run on webOS 3 - 5 and is excluded from modern build
++ Removed font-fix.css and applied new rules injected via style ID legacy-webos-font-fix in emoji-font.ts
+
+### General
++ Add vertical wrap-around navigation in config UI - https://github.com/NicholasBly/youtube-webos/discussions/50
+
+## Fixes
+
+### Launching App with Video - Auto Login
++ Handle sending URLs to TV via luna/ssap - https://github.com/NicholasBly/youtube-webos/issues/52
++ Bypasses login screen in guest mode and normal mode - checks whether you are in guest mode or logged in to properly select the right login screen element
++ Hides login screen until it is successfully bypassed, allowing clean load right into video
+
+### SponsorBlock
++ Fixed SponsorBlock segments not appearing on progress bar for 5 seconds on video load if Return YouTube Dislike was disabled
++ Fixed segment sleep timer continuing if video was paused (timer now syncs with YouTube play/pause events to track time)
+
+### General
++ Fix first config menu open key press sometimes not working on fresh app load
++ Changed "Upgrade Thumbnail Quality" to "Max Thumbnail Quality" text in config UI
++ Exclude Google Cast Block from running on webOS 25 simulator
++ Resolved "This document requires TrustedHTML assignment" error + crash
+
+## Changes
+
+### Shortcuts
++ Fast Forward / Rewind Burst: Only set video time after 200ms, so quick key presses don't trigger video seek events multiple times, causing lag
+
+## Optimizations
+
+### video-quality.js
+
+CPU Hot Path Optimization (handleStateChange):
++ Config Caching: Replaced the expensive configRead call in every state change with a cached _shouldForce boolean that updates via listener
++ Static Constants: Moved WebOSVersion() check to a top-level constant IS_WEBOS_25 to avoid function call overhead on every check
++ Execution Guard: Added a kickstartInProgress guard to ensurePlaybackStarts to prevent multiple concurrent recursive loops/promises from spawning during rapid state changes
+
+Memory & Allocation:
++ Object Reuse: Cached the localStorage qualityObj structure to reduce garbage collection pressure
++ Reduced Parsing: Optimized setLocalStorageQuality to avoid unnecessary JSON parsing if the cache is already valid
+
+Algorithmic Improvements:
++ Fail-Fast Logic: Reordered checks in hot functions to exit immediately (e.g., checking isDestroyed or !_shouldForce before doing any work)
++ Event Loop Efficiency: Used requestAnimationFrame for DOM updates to align with the browser's refresh rate and prevent layout thrashing
+
+Code Updates:
++ Combined variable declarations
++ Utilized short-circuit evaluation for logging (DEBUG && console.log) to prevent argument evaluation in production
+
+### adblock.js
++ Small code optimizations and redundant code removal
+
+### auto-login.js
++ O(1) Operations: Replaced multiple sequential if checks with a constant-time array iteration over predefined keys. This scales better and improves cache locality
++ Dead Code Removal: Removed the enable logic inside disableWhosWatching since it's never called
++ Performance: Replaced Date object instantiation and manipulation (which involves overhead) with direct integer arithmetic using Date.now()
++ Code Reduction: Reduced lines by ~50% while maintaining readability and original functionality
++ Consistency: Standardized variable naming and error handling
+
+### SponsorBlock
++ After no segments are found on the server, run destroy() to clean up SponsorBlock so no observers are running unnecessarily
++ Tighten sleep timer thresholds (5s -> 3s before segment and 2s -> 1s buffer)
++ Prioritize nextSegmentIndex instead of handleTimeUpdate to check the predicted segment index first (O(1)) before binary search (O(log N))
++ Move additional config keys to the top of the file and map them along with existing CONFIG_MAPPING
++ checkForProgressBar() -> Cache successful selector for progress bar and try that first when called
++ Remove duplicated logic in play and seeked events which is already handled in executeChainSkip
++ handleTimeUpdate() additional early exit optimization
+
 ## [0.7.1] - 2026/02/04
 
 ## Summary
