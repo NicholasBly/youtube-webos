@@ -13,16 +13,16 @@
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4",
-        "version": "0.7.1",
+        "version": "0.7.2",
         "type": "web",
         "title": "YouTube AdFree",
         "appDescription": "YouTube AdFree",
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.1/youtube.leanback.v4_0.7.1_all.ipk",
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.2/youtube.leanback.v4_0.7.2_all.ipk",
         "ipkHash": {
-          "sha256": "5bc66378301f78346b9055fa5842c76db1b7b085f6d51084d0bc1c01ec7881ac"
+          "sha256": "412becdab936ed42ae60eabe62b598a58817c2d5bcda1b80221689ef52be631f"
         }
       }
     },
@@ -33,16 +33,16 @@
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4.webos22",
-        "version": "0.7.1",
+        "version": "0.7.2",
         "type": "web",
         "title": "YouTube AdFree (webOS 22+)",
         "appDescription": "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware.",
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.1/youtube.leanback.v4_0.7.1_all_webOS22%2B.ipk",
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.2/youtube.leanback.v4_0.7.2_all_webOS22%2B.ipk",
         "ipkHash": {
-          "sha256": "edb2c68280ed71190e56f59c3888570c4c58df1934734c6c464b70846f041227"
+          "sha256": "65f8679079144425a4921360cefa4a3136de766ebf6979af6179a69cc6c78917"
         }
       }
     }
