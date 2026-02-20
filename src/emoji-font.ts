@@ -46,19 +46,10 @@ const emojiObs = new MutationObserver((mutations) => {
           const currentText = elem.textContent || '';
           if (elem.dataset.lastParsedText !== currentText) {
             elem.dataset.lastParsedText = currentText;
-            twemoji.parse(elem, twemojiOptions);
-          }
-          
-          if (elem.querySelectorAll) {
-            const children = elem.querySelectorAll('yt-formatted-string, span, div');
-            for (let k = 0; k < children.length; k++) {
-              const child = children[k] as HTMLElement;
-              const childText = child.textContent || '';
-              
-              if (child.dataset.lastParsedText !== childText) {
-                child.dataset.lastParsedText = childText;
-                twemoji.parse(child, twemojiOptions);
-              }
+            try {
+              twemoji.parse(elem, twemojiOptions);
+            } catch (err) {
+              console.warn('[Emoji-Font] Error parsing node:', err);
             }
           }
         }
@@ -73,7 +64,7 @@ const emojiObs = new MutationObserver((mutations) => {
 
 if (document.characterSet === 'UTF-8') {
   if (WebOSVersion() === 5) {
-	const style = document.createElement('style');
+    const style = document.createElement('style');
     style.id = 'legacy-webos-font-fix';
     style.textContent = `
       @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Math&display=swap');

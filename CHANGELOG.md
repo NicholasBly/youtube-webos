@@ -4,6 +4,201 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.7.2] - 2026/02/18
+
+## Summary
+1. Emoji / Characters / Symbols support for legacy webOS versions
+2. Auto login - bypass login screen when opening YouTube app via SSH/SSAP
+3. Fast Forward / Rewind Shortcut improvements
+4. Bug Fixes, optimizations, and other improvements
+
+## Added
+
+### Emoji / Characters / Symbols Fix for legacy webOS
++ Implemented emojis into YouTube app via twemoji for legacy webOS - https://github.com/NicholasBly/youtube-webos/issues/42
++ Implemented fix for mathematical symbols/characters
++ Text/emoji fixes only run on webOS 3 - 5 and is excluded from modern build
++ Removed font-fix.css and applied new rules injected via style ID legacy-webos-font-fix in emoji-font.ts
+
+### General
++ Add vertical wrap-around navigation in config UI - https://github.com/NicholasBly/youtube-webos/discussions/50
+
+## Fixes
+
+### Launching App with Video - Auto Login
++ Handle sending URLs to TV via luna/ssap - https://github.com/NicholasBly/youtube-webos/issues/52
++ Bypasses login screen in guest mode and normal mode - checks whether you are in guest mode or logged in to properly select the right login screen element
++ Hides login screen until it is successfully bypassed, allowing clean load right into video
+
+### SponsorBlock
++ Fixed SponsorBlock segments not appearing on progress bar for 5 seconds on video load if Return YouTube Dislike was disabled
++ Fixed segment sleep timer continuing if video was paused (timer now syncs with YouTube play/pause events to track time)
+
+### General
++ Fix first config menu open key press sometimes not working on fresh app load
++ Changed "Upgrade Thumbnail Quality" to "Max Thumbnail Quality" text in config UI
++ Exclude Google Cast Block from running on webOS 25 simulator
++ Resolved "This document requires TrustedHTML assignment" error + crash
+
+## Changes
+
+### Shortcuts
++ Fast Forward / Rewind Burst: Only set video time after 200ms, so quick key presses don't trigger video seek events multiple times, causing lag
+
+## Optimizations
+
+### video-quality.js
+
+CPU Hot Path Optimization (handleStateChange):
++ Config Caching: Replaced the expensive configRead call in every state change with a cached _shouldForce boolean that updates via listener
++ Static Constants: Moved WebOSVersion() check to a top-level constant IS_WEBOS_25 to avoid function call overhead on every check
++ Execution Guard: Added a kickstartInProgress guard to ensurePlaybackStarts to prevent multiple concurrent recursive loops/promises from spawning during rapid state changes
+
+Memory & Allocation:
++ Object Reuse: Cached the localStorage qualityObj structure to reduce garbage collection pressure
++ Reduced Parsing: Optimized setLocalStorageQuality to avoid unnecessary JSON parsing if the cache is already valid
+
+Algorithmic Improvements:
++ Fail-Fast Logic: Reordered checks in hot functions to exit immediately (e.g., checking isDestroyed or !_shouldForce before doing any work)
++ Event Loop Efficiency: Used requestAnimationFrame for DOM updates to align with the browser's refresh rate and prevent layout thrashing
+
+Code Updates:
++ Combined variable declarations
++ Utilized short-circuit evaluation for logging (DEBUG && console.log) to prevent argument evaluation in production
+
+### adblock.js
++ Small code optimizations and redundant code removal
+
+### auto-login.js
++ O(1) Operations: Replaced multiple sequential if checks with a constant-time array iteration over predefined keys. This scales better and improves cache locality
++ Dead Code Removal: Removed the enable logic inside disableWhosWatching since it's never called
++ Performance: Replaced Date object instantiation and manipulation (which involves overhead) with direct integer arithmetic using Date.now()
++ Code Reduction: Reduced lines by ~50% while maintaining readability and original functionality
++ Consistency: Standardized variable naming and error handling
+
+### SponsorBlock
++ After no segments are found on the server, run destroy() to clean up SponsorBlock so no observers are running unnecessarily
++ Tighten sleep timer thresholds (5s -> 3s before segment and 2s -> 1s buffer)
++ Prioritize nextSegmentIndex instead of handleTimeUpdate to check the predicted segment index first (O(1)) before binary search (O(log N))
++ Move additional config keys to the top of the file and map them along with existing CONFIG_MAPPING
++ checkForProgressBar() -> Cache successful selector for progress bar and try that first when called
++ Remove duplicated logic in play and seeked events which is already handled in executeChainSkip
++ handleTimeUpdate() additional early exit optimization
+
+## [0.7.1] - 2026/02/04
+
+## Summary
+
+This release focuses heavily on **performance, stability, and responsiveness**. The core state management system has been rewritten to consolidate expensive DOM observers and functions into a centralized `PageManager`. This significantly reduces CPU usage and provides a smoother experience, especially on older TVs.
+
+New features include smart shortcut chaining (skip 5s, 10s, 15s... smoothly without notification spam) and a new shortcut to jump to the start of the last SponsorBlock segment. The red, green, and blue buttons on the LG remote are now apart of shortcuts and can be assigned any shortcut.
+
+## New Features
+
+### Shortcuts
+
+**Smart Skip Chaining**
+
++ Skip Forward/Backward now moves in **5-second increments*+ (previously fixed at 15s)
++ Pressing the key multiple times will "chain" the skip distance
++ The on-screen notification now updates dynamically (e.g., "Skipping +10s", "Skipping +15s") instead of spamming multiple notifications
++ Removed debounce delay for instant responsiveness
+
+**Skip to Last SponsorBlock Segment**
+
++ Added new shortcut to jump immediately to the start of the previous SponsorBlock segment in the video
++ SponsorBlock segment will be temporarily whitelisted so you can watch it without the auto skip kicking in (if "Skip Segments Once" is disabled)
+
++ Added red, green, and blue buttons to shortcuts
++ + If open/close config shortcut is unbound and YouTube is force closed, a startup check will ensure it is bound to green on startup
+
+### AdBlock
++ Added guest mode filtering of "Sign in for better recommendations" button on home screen
+
+## Optimizations
+
+### Core System (utils.js)
+
+**Centralized State Management**
+
++ Implemented `PageManager`: A single system that tracks "Watch" vs "Shorts" state for the entire app
++ Replaced multiple CPU-intensive `MutationObservers` scattered across different files with a single, efficient observer
++ Added `isWatchPage()` and `isShortsPage()` exports for O(1) instant state access
++ **Impact:*+ significantly reduces CPU and memory usage
+
++ Predetermine sendKey support at launch via browser compatibility check and not every time during each sendKey call
++ Cached launch params to ensure JSON.parse only happens once per session
++ Early exit optimizations
+
+### Configuration System (config.js)
+
+**Pure JS Callback System**
+
++ Replaced the old DOM-based event messaging (DocumentFragment/CustomEvent) with a lightweight Map/Set callback system
++ Eliminates the memory and CPU overhead of creating ~50 DOM nodes just to handle settings
++ **I/O Debouncing:*+ Added "dirty checking" to write operations—prevents blocking I/O and expensive JSON serialization if values haven't actually changed
++ Optimized config reads to O(1) speed
+
+### SponsorBlock
+
+**Smart Sleep Logic**
+
++ Added logic to "sleep" segment checking for (x - 2) seconds until the next segment appears
++ Stops the loop from unnecessarily checking for segments every frame when none are nearby
++ Dynamic Listeners: Automatically disconnects time listeners when the last segment is passed and reconnects if you seek back
++ **Caching:*+ `checkForProgressBar` now caches the element and only re-queries the DOM if it disconnects
+
+### UI & Shortcuts
+
+**Lazy Loading & Caching**
+
++ Config UI is now lazy-loaded (only initializes when opened)
++ **Shortcut Caching:*+ `handleShortcutAction` no longer creates ~13 objects/functions per keypress
++ Refactored hot paths to use `switch` statements for maximum JavaScript engine efficiency
++ Reduced DOM Thrashing: Passed the video element from handleShortcutAction into helper functions (performBurstSeek, playPauseLogic) to avoid querying document.querySelector('video') multiple times per keypress
+
+### AdBlock
++ Performance: Replaced O(N) string scanning in detectResponseType with O(1) object path lookups to reduce latency on large requests
++ Memory: Refactored filterItemsOptimized to use in-place array modification, significantly reducing Garbage Collection (GC) pressure
++ Optimization: Pre-compiled all registry paths into arrays to eliminate runtime string splitting and caching
++ Cleanup: Removed pathCache and legacy text-based detection patterns
+
+## Fixes
+
+### Screensaver
+
+**Shorts Support**
+
++ Attempted fix for screensaver activating while watching Shorts (needs further testing)
++ Implemented a "keepalive" mechanism that sends a simulated Yellow Button press every 30 seconds only when video is playing/active
+
+**Legacy Support**
+
++ webOS 3: Refactored sendKey command to improve simulated key presses
+
+### Play / Pause Shortcut
+
++ Improved logic: Sends the "Back" key instead of multiple "Up" presses to dismiss player controls
++ Bug Fix: Automatically blurs the active element (like the play button) before dismissing UI to prevent accidental activation on webOS 3.x
++ Fixed bug where the shortcut would close the Description Panel if it was open
+
+### General
+
++ **Guest Mode:*+ Updated schema paths to fix the "Hide Sign-in Button"
++ **OLED Keepalive:*+ Enhanced `sendKey` command logic (cancelable: false) to ensure keepalive signals reach the system
+
+## Changes
+
+### OLED-Care Mode
+
++ Shorts background is now set to **Pure Black**
++ Focus ring on Shorts is set to a dimmer white to reduce screen burn-in risk
+
+### General
++ Notifications won't appear if the previous one was the same text and is already on screen (timer will just be extended)
++ Converted remaining pixel values to viewport units in ui.css
++ Play / Pause toggle updates the existing notification if still on screen
+
 ## [0.7.0] - 2026/01/27
 
 ## New Features
