@@ -25,12 +25,22 @@ const emojiObs = new MutationObserver((mutations) => {
     } else if (mut.type === 'childList') {
       for (let j = 0; j < mut.addedNodes.length; j++) {
         const node = mut.addedNodes[j];
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          nodesToParse.add(node as HTMLElement);
-          shouldParse = true;
-        } else if (node.nodeType === Node.TEXT_NODE && node.parentNode) {
+        
+        if (node.nodeType === Node.TEXT_NODE && node.parentNode) {
           nodesToParse.add(node.parentNode as HTMLElement);
           shouldParse = true;
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null);
+          let textNode;
+          while ((textNode = walker.nextNode())) {
+            // Only target text nodes that actually contain characters
+            if (textNode.nodeValue && textNode.nodeValue.trim().length > 0) {
+              if (textNode.parentNode) {
+                nodesToParse.add(textNode.parentNode as HTMLElement);
+                shouldParse = true;
+              }
+            }
+          }
         }
       }
     }
@@ -43,11 +53,22 @@ const emojiObs = new MutationObserver((mutations) => {
       nodesToParse.forEach((elem) => {
         if (document.body.contains(elem)) {
           
+          const IGNORE_TAGS = ['BODY', 'HTML', 'HEAD', 'SCRIPT', 'STYLE', 'SVG', 'IMG'];
+          if (IGNORE_TAGS.includes(elem.tagName.toUpperCase())) return;
+
           const currentText = elem.textContent || '';
           if (elem.dataset.lastParsedText !== currentText) {
             elem.dataset.lastParsedText = currentText;
+            
             try {
-              twemoji.parse(elem, twemojiOptions);
+              const originalHTML = elem.innerHTML;
+              let parsedHTML = twemoji.parse(originalHTML, twemojiOptions);
+              
+              if (originalHTML !== parsedHTML) {
+                // Strip alt attribute for legacy Chromium parsing
+                parsedHTML = parsedHTML.replace(/ alt="[^"]+"/g, '');
+                elem.innerHTML = parsedHTML;
+              }
             } catch (err) {
               console.warn('[Emoji-Font] Error parsing node:', err);
             }
