@@ -12,6 +12,8 @@ class Watch {
     // Constants
     this._PLAYER_SELECTOR = 'ytlr-watch-default'; // Kept specific to this clock feature if needed, or could use SELECTORS.PLAYER_CONTAINER if appropriate.
     this._DEBOUNCE_DELAY = 50;
+	this._cachedPlayer = null;
+    this._cachedOverlay = null;
 
     // Bind methods
     this.onOledChange = this.onOledChange.bind(this);
@@ -80,18 +82,24 @@ class Watch {
   updateVisibility() {
     if (!this._watch) return;
 
-    const player = document.querySelector(this._PLAYER_SELECTOR);
+    if (!this._cachedPlayer || !document.body.contains(this._cachedPlayer)) {
+        this._cachedPlayer = document.querySelector(this._PLAYER_SELECTOR);
+    }
     
-    if (!player) {
+    if (!this._cachedPlayer) {
       if (this._watch.style.display !== 'block') {
          this._watch.style.display = 'block';
       }
       return;
     }
 
-	const isHybridFocused = player.getAttribute('hybridnavfocusable') === 'true';
-    const isPlayerElementActive = document.activeElement === player || document.activeElement === document.body;
-    const isOverlayActive = document.querySelector('.AmQJbe');
+    if (!this._cachedOverlay || !document.body.contains(this._cachedOverlay)) {
+        this._cachedOverlay = document.querySelector('.AmQJbe');
+    }
+
+    const isHybridFocused = this._cachedPlayer.getAttribute('hybridnavfocusable') === 'true';
+    const isPlayerElementActive = document.activeElement === this._cachedPlayer || document.activeElement === document.body;
+    const isOverlayActive = !!this._cachedOverlay;
 
     const shouldHide = isHybridFocused || isPlayerElementActive || isOverlayActive;
     

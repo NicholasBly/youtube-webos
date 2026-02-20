@@ -2,6 +2,7 @@ import { configRead, configAddChangeListener, configRemoveChangeListener } from 
 import { isShortsPage } from './utils'; // Shared State
 
 const DEBUG = false;
+const FORCE_FALLBACK = false;
 
 function debugLog(msg, ...args) {
   if (DEBUG) console.log(`[AdBlock] ${msg}`, ...args);
@@ -18,9 +19,9 @@ let configCache = {
   lastUpdate: 0
 };
 
-const PATTERN_CACHE = {
-  shorts: 'shorts',
-  topLiveGames: 'top live games'
+const PATTERN_CACHE = { // case sensitive, eliminates toLowerCase
+  shorts: 'Shorts',
+  topLiveGames: 'Top live games'
 };
 
 const IGNORE_ON_SHORTS = ['SEARCH', 'PLAYER', 'ACTION'];
@@ -144,8 +145,13 @@ function hookedParse(text, reviver) {
              return data;
         }
     }
-
-    if (responseType && SCHEMA_REGISTRY.paths[responseType]) {
+	if (FORCE_FALLBACK) {
+      if (DEBUG) debugLog(`Forcing Fallback Logic on payload`);
+      if (!Array.isArray(data)) {
+          applyFallbackFilters(data, config, needsContentFiltering);
+      }
+    }
+    else if (responseType && SCHEMA_REGISTRY.paths[responseType]) {
       if (DEBUG) debugLog(`Schema Match: [${responseType}]`);
       applySchemaFilters(data, responseType, config, needsContentFiltering);
     } 
@@ -225,7 +231,7 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
         let contents = getByPath(data, schema.mainContent);
         
         if (!contents) {
-            const sectionList = findFirstObject(data, 'sectionListRenderer', 15);
+            const sectionList = findObjects(data, ['sectionListRenderer'], 8).sectionListRenderer;
             if (sectionList && sectionList.contents) {
                 contents = sectionList.contents;
                 if (DEBUG) debugLog('HOME_BROWSE: Using fallback search');
@@ -260,7 +266,7 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
         let contents = getByPath(data, schema.mainContent);
         
         if (!contents) {
-             const sectionList = findFirstObject(data, 'sectionListRenderer', 15);
+             const sectionList = findObjects(data, ['sectionListRenderer'], 8).sectionListRenderer;
              if (sectionList && sectionList.contents) {
                  contents = sectionList.contents;
                  if (DEBUG) debugLog('SEARCH: Using fallback search');
@@ -331,7 +337,7 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
         }
 
         if (!overlay) {
-           overlay = findFirstObject(data, 'playerOverlayRenderer', 8);
+           overlay = findObjects(data, ['playerOverlayRenderer'], 8).playerOverlayRenderer;
            if (DEBUG && overlay) debugLog(`${responseType}: Path failed, found overlay via fallback`);
         }
         
@@ -347,7 +353,7 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
              pivotContents = getByPath(data, schema.pivotPath);
          }
          if (!pivotContents) {
-             const pivot = findFirstObject(data, 'pivot', 10);
+             const pivot = findObjects(data, ['pivot'], 8).pivot;
              if (pivot?.sectionListRenderer?.contents) {
                  pivotContents = pivot.sectionListRenderer.contents;
                  if (DEBUG) debugLog(`${responseType}: Found pivot via fallback search`);
@@ -367,59 +373,53 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
 function applyFallbackFilters(data, config, needsContentFiltering) {
   if (config.enableAdBlock) {
     removePlayerAdsOptimized(data);
-    
-    const overlayRenderer = findFirstObject(data, 'playerOverlayRenderer', 8);
-    if (overlayRenderer && overlayRenderer.timelyActionRenderers) {
-        delete overlayRenderer.timelyActionRenderers;
-        if (DEBUG) debugLog('FALLBACK: Removed timelyActionRenderers');
-    }
   }
 
-  const pivot = findFirstObject(data, 'pivot', 10);
-  if (pivot?.sectionListRenderer?.contents) {
-      if (Array.isArray(pivot.sectionListRenderer.contents)) {
-          processSectionListOptimized(pivot.sectionListRenderer.contents, config, needsContentFiltering, 'Fallback Pivot');
+  // Single sweep for all fallback data
+  const needles = ['playerOverlayRenderer', 'pivot', 'sectionListRenderer', 'gridRenderer', 'gridContinuation', 'sectionListContinuation', 'entries'];
+  const found = findObjects(data, needles, 10);
+
+  if (config.enableAdBlock && found.playerOverlayRenderer) {
+      cleanPlayerOverlay(found.playerOverlayRenderer);
+  }
+
+  if (found.pivot?.sectionListRenderer?.contents) {
+      if (Array.isArray(found.pivot.sectionListRenderer.contents)) {
+          processSectionListOptimized(found.pivot.sectionListRenderer.contents, config, needsContentFiltering, 'Fallback Pivot');
       }
   }
 
-  const foundRenderer = findFirstObject(data, 'sectionListRenderer', 10);
-  if (foundRenderer?.contents) {
-    if (Array.isArray(foundRenderer.contents)) {
-      processSectionListOptimized(foundRenderer.contents, config, needsContentFiltering, 'Fallback sectionListRenderer');
+  if (found.sectionListRenderer?.contents) {
+    if (Array.isArray(found.sectionListRenderer.contents)) {
+      processSectionListOptimized(found.sectionListRenderer.contents, config, needsContentFiltering, 'Fallback sectionListRenderer');
+    }
+  }
+  
+  if (found.sectionListContinuation?.contents) {
+    if (Array.isArray(found.sectionListContinuation.contents)) {
+      processSectionListOptimized(found.sectionListContinuation.contents, config, needsContentFiltering, 'Fallback sectionListContinuation');
     }
   }
 
-  const gridRenderer = findFirstObject(data, 'gridRenderer', 10);
-  if (gridRenderer?.items) {
-    filterItemsOptimized(gridRenderer.items, config, needsContentFiltering);
+  if (found.gridRenderer?.items) {
+    filterItemsOptimized(found.gridRenderer.items, config, needsContentFiltering);
   }
 
-  const gridContinuation = findFirstObject(data, 'gridContinuation', 10);
-  if (gridContinuation?.items) {
-    filterItemsOptimized(gridContinuation.items, config, needsContentFiltering);
+  if (found.gridContinuation?.items) {
+    filterItemsOptimized(found.gridContinuation.items, config, needsContentFiltering);
   }
-
-  if (Array.isArray(data.onResponseReceivedActions)) {
-    for (let i = 0; i < data.onResponseReceivedActions.length; i++) {
-      const action = data.onResponseReceivedActions[i];
-      
-      if (action.reloadContinuationItemsCommand?.continuationItems) {
-        filterItemsOptimized(
-          action.reloadContinuationItemsCommand.continuationItems,
-          config,
-          needsContentFiltering
-        );
-      }
-      
-      if (action.appendContinuationItemsAction?.continuationItems) {
-        filterItemsOptimized(
-          action.appendContinuationItemsAction.continuationItems,
-          config,
-          needsContentFiltering
-        );
+  
+  if (found.entries) {
+    if (Array.isArray(found.entries)) {
+      const oldLen = found.entries.length;
+      filterItemsOptimized(found.entries, config, needsContentFiltering);
+      if (DEBUG && oldLen !== found.entries.length) {
+        debugLog(`Fallback entries: Removed ${oldLen - found.entries.length} items`);
       }
     }
   }
+
+  processActions(data.onResponseReceivedActions, config, needsContentFiltering);
 }
 
 // ============================================================================
@@ -429,9 +429,9 @@ function applyFallbackFilters(data, config, needsContentFiltering) {
 function getShelfTitleOptimized(shelf) {
   if (!shelf) return '';
   let text = shelf.title?.runs?.[0]?.text;
-  if (text) return text.toLowerCase();
+  if (text) return text;
   text = shelf.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title?.runs?.[0]?.text;
-  return text ? text.toLowerCase() : '';
+  return text || '';
 }
 
 function isReelAd(item, enableAdBlock) {
@@ -450,6 +450,26 @@ function hasAdRenderer(item, enableAdBlock) {
 
 function hasGuestPromptRenderer(item, hideGuestPrompts) {
   return hideGuestPrompts && (item.feedNudgeRenderer || item.alertWithActionsRenderer);
+}
+
+function processActions(actions, config, needsContentFiltering) {
+  if (!Array.isArray(actions)) return;
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i];
+    if (action.reloadContinuationItemsCommand?.continuationItems) {
+      filterItemsOptimized(action.reloadContinuationItemsCommand.continuationItems, config, needsContentFiltering);
+    }
+    if (action.appendContinuationItemsAction?.continuationItems) {
+      filterItemsOptimized(action.appendContinuationItemsAction.continuationItems, config, needsContentFiltering);
+    }
+  }
+}
+
+function cleanPlayerOverlay(overlay) {
+  if (overlay?.timelyActionRenderers) {
+    delete overlay.timelyActionRenderers;
+    if (DEBUG) debugLog('Cleaned Player Overlay: Removed timelyActionRenderers');
+  }
 }
 
 function processSectionListOptimized(contents, config, needsContentFiltering, contextName = '') {
@@ -614,16 +634,40 @@ function removePlayerAdsOptimized(data) {
   if (DEBUG && cleared > 0) debugLog('Cleaned Player Ads/Placements');
 }
 
-function findFirstObject(haystack, needle, maxDepth = 10) {
-  if (!haystack || typeof haystack !== 'object' || maxDepth <= 0) return null;
-  if (haystack[needle]) return haystack[needle];
-  for (const key in haystack) {
-    if (haystack.hasOwnProperty(key) && typeof haystack[key] === 'object') {
-      const result = findFirstObject(haystack[key], needle, maxDepth - 1);
-      if (result) return result;
+function findObjects(haystack, needlesArray, maxDepth = 10) {
+  if (!haystack || typeof haystack !== 'object' || maxDepth <= 0 || !needlesArray.length) return {};
+
+  const results = {};
+  let foundCount = 0;
+  const targetCount = needlesArray.length;
+  
+  const queue = [{ obj: haystack, depth: 0 }];
+  let idx = 0; // Pointer to avoid shift() O(N) penalty
+
+  while (idx < queue.length && foundCount < targetCount) {
+    const current = queue[idx++];
+    if (current.depth > maxDepth) continue;
+
+    // Check for all requested keys
+    for (let i = 0; i < targetCount; i++) {
+      const needle = needlesArray[i];
+      if (!results[needle] && current.obj[needle] !== undefined) {
+        results[needle] = current.obj[needle];
+        foundCount++;
+      }
+    }
+
+    if (foundCount === targetCount) break; // Early exit if all found
+
+    const keys = Object.keys(current.obj);
+    for (let i = 0; i < keys.length; i++) {
+      const child = current.obj[keys[i]];
+      if (child && typeof child === 'object') {
+        queue.push({ obj: child, depth: current.depth + 1 });
+      }
     }
   }
-  return null;
+  return results;
 }
 
 // ============================================================================
