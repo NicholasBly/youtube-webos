@@ -34,7 +34,7 @@ const makeConfig = (env) => {
           'whatwg-fetch': false,
           
           // Strip local polyfills
-          //[path.resolve(__dirname, 'src/spatial-navigation-polyfill.js')]: false,
+          [path.resolve(__dirname, 'src/spatial-navigation-polyfill.js')]: path.resolve(__dirname, 'src/spatial-navigation-polyfill.modern.js'),
           [path.resolve(__dirname, 'src/domrect-polyfill.js')]: false,
 		  [path.resolve(__dirname, 'src/emoji-font.ts')]: false,
 		  [path.resolve(__dirname, 'src/emoji-font.css')]: false
