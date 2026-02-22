@@ -9,6 +9,7 @@ import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, SELECTORS } from './utils.js';
 import { initAdblock, destroyAdblock } from './adblock.js';
+import { isLegacyWebOS } from './webos-utils.js';
 
 let lastSafeFocus = null;
 let oledKeepAliveTimer = null;
@@ -457,11 +458,17 @@ function createOptionsPanel() {
   pageUITweaks = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-ui-tweaks', style: { display: 'none' }});
   pageUITweaks.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(2) }}, createElement('span', { class: 'arrow', text: '←' }), ' Shortcuts'));
   
-  pageUITweaks.appendChild(createSection('Player UI Tweaks', [
+  const playerUITweaks = [
       createOpacityControl('videoShelfOpacity'),
       createElement('div', { text: 'Adjusts opacity of black background underneath videos (Requires OLED-care mode)', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
-	  createConfigCheckbox('fixMultilineTitles')
-  ]));
+      createConfigCheckbox('fixMultilineTitles')
+  ];
+
+  if (isLegacyWebOS()) {
+      playerUITweaks.push(createConfigCheckbox('enableLegacyEmojiFix'));
+  }
+
+  pageUITweaks.appendChild(createSection('Player UI Tweaks', playerUITweaks));
   
   elmContainer.appendChild(pageUITweaks);
 

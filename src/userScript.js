@@ -2,7 +2,7 @@ import 'whatwg-fetch';
 import './domrect-polyfill';
 import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
 import { attemptActiveBypass } from './auto-login.js';
-import { WebOSVersion, simulatorMode } from './webos-utils.js';
+import { isWebOS25, simulatorMode, isLegacyWebOS } from './webos-utils.js';
 import { initBlockWebOSCast } from './block-webos-cast';
 import './adblock.js';
 import './sponsorblock.js';
@@ -12,7 +12,7 @@ import './screensaver-fix';
 import './yt-fixes.css';
 import './watch.js';
 
-const version = WebOSVersion();
+const version = isLegacyWebOS();
 
 (function oneTimeParamsCheck() {
 	const params = extractLaunchParams();
@@ -35,7 +35,7 @@ document.addEventListener(
   true
 );
 
-if (version === 25 && simulatorMode === false) {
+if (isWebOS25 && simulatorMode === false) {
   console.info('[Main] Enabling webOS Google Cast Block');
   initBlockWebOSCast();
 }

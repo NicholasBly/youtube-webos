@@ -1,4 +1,5 @@
-let cachedWebOSVersion = null;
+let cachedIsLegacy = null;
+let webOS25 = null;
 export let simulatorMode = false;
 //let cachedNewLayout = null;
 
@@ -29,9 +30,16 @@ export let simulatorMode = false;
  * Falls back to Chrome version detection for simulator environments.
  * @returns {number} webOS version number (25, or 5 for legacy/unknown)
  */
-export function WebOSVersion() {
-  if (cachedWebOSVersion !== null) {
-    return cachedWebOSVersion;
+export function isWebOS25() {
+  if (webOS25 === null) {
+    isLegacyWebOS();
+  }
+  return webOS25;
+}
+ 
+export function isLegacyWebOS() {
+  if (cachedIsLegacy !== null) {
+    return cachedIsLegacy;
   }
 
   const ua = window.navigator.userAgent;
@@ -45,8 +53,8 @@ export function WebOSVersion() {
     // Detect webOS 25 (Firmware major version >= 33)
     if (majorVersion >= 33) {
       console.info(`[WebOSUtils] Detected webOS 25 via firmware version: ${firmwareVersion}`);
-      cachedWebOSVersion = 25;
-      return 25;
+	  webOS25 = true;
+      return cachedIsLegacy = false;
     }
   }
 
@@ -59,8 +67,7 @@ export function WebOSVersion() {
     // If year is 2021 or below, treat as legacy webOS (returns 5)
     if (year <= 2021) {
       console.info(`[WebOSUtils] Detected Legacy webOS via platform year: ${year}`);
-      cachedWebOSVersion = 5;
-      return 5;
+      return cachedIsLegacy = true;
     }
   }
 
@@ -72,17 +79,16 @@ export function WebOSVersion() {
     console.info(`[WebOSUtils] Detected Chrome version: ${chromeVersion} (simulator mode)`);
     
     if (chromeVersion >= 120) {
-      cachedWebOSVersion = 25;
+      cachedIsLegacy = false;
     } else if (chromeVersion <= 79) {
-      cachedWebOSVersion = 5;
+      cachedIsLegacy = true;
     } else {
-      cachedWebOSVersion = 0;
+      cachedIsLegacy = null;
     }
     simulatorMode = true;
-    return cachedWebOSVersion;
+    return cachedIsLegacy;
   }
 
   console.warn('[WebOSUtils] Could not detect webOS version from user agent');
-  cachedWebOSVersion = 0;
-  return 0;
+  return cachedIsLegacy = null;
 }

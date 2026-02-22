@@ -1,5 +1,6 @@
 import twemoji from '@twemoji/api';
-import { WebOSVersion } from './webos-utils.js';
+import { isLegacyWebOS } from './webos-utils.js';
+import { configRead, configAddChangeListener } from './config.js';
 import './emoji-font.css';
 
 // We now track raw Node objects instead of Elements
@@ -71,31 +72,39 @@ const emojiObs = new MutationObserver((mutations) => {
           if (originalText.trim().length === 0 || originalText === '\u200B') return;
 
           try {
-			const cleanText = originalText.replace(/[\u200C\u200E\u200F\u202A-\u202E\u2060\uFEFF]/g, '');
-            let parsedHTML = twemoji.parse(cleanText, twemojiOptions);
-            
-            // Only manipulate the DOM if Twemoji actually changed the string
-            if (parsedHTML !== cleanText || cleanText !== originalText) {
-              parsedHTML = parsedHTML.replace(/ alt="[^"]+"/g, ''); // Fix Chromium 38 bug
-              
-              // Keep the Polymer text node alive, but empty it out with a zero-width space
-              // This stops duplication because Polymer's binding reference is never broken
-              textNode.nodeValue = '\u200B';
-              
-              // Insert or update our sibling span right next to the empty text node
-              let sibling = textNode.nextSibling as HTMLElement;
-              if (sibling && sibling.classList && sibling.classList.contains('twemoji-injected')) {
-                sibling.innerHTML = parsedHTML;
-              } else {
-                const span = document.createElement('span');
-                span.className = 'twemoji-injected';
-                span.innerHTML = parsedHTML;
-                parent.insertBefore(span, textNode.nextSibling);
-              }
-            }
-          } catch (err) {
-            console.error('[Emoji-Debug] Error processing text node:', err);
-          }
+			  const cleanText = originalText.replace(/[\u200C\u200E\u200F\u202A-\u202E\u2060\uFEFF]/g, '');
+			  let parsedHTML = twemoji.parse(cleanText, twemojiOptions);
+			  
+			  if (parsedHTML !== cleanText || cleanText !== originalText) {
+				parsedHTML = parsedHTML.replace(/<img[^>]+alt="([^"]+)"[^>]*>/g, (match, altText) => {
+				  const imgWithoutAlt = match.replace(/\s?alt="[^"]+"/, '');
+				  const hiddenText = `<span style="position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); border:0;">${altText}</span>`;
+				  return imgWithoutAlt + hiddenText;
+				});
+				
+				textNode.nodeValue = '\u200B';
+				
+				let existingSpan = null;
+				for (let i = 0; i < parent.childNodes.length; i++) {
+					const child = parent.childNodes[i] as HTMLElement;
+					if (child.nodeType === Node.ELEMENT_NODE && child.classList && child.classList.contains('twemoji-injected')) {
+						existingSpan = child;
+						break;
+					}
+				}
+
+				if (existingSpan) {
+				  existingSpan.innerHTML = parsedHTML;
+				} else {
+				  const span = document.createElement('span');
+				  span.className = 'twemoji-injected';
+				  span.innerHTML = parsedHTML;
+				  parent.insertBefore(span, textNode.nextSibling);
+				}
+			  }
+			} catch (err) {
+			  console.error('[Emoji-Debug] Error processing text node:', err);
+			}
         }
       });
 
@@ -107,7 +116,7 @@ const emojiObs = new MutationObserver((mutations) => {
 });
 
 if (document.characterSet === 'UTF-8') {
-  if (WebOSVersion() === 5) {
+  if (isLegacyWebOS()) {
     const style = document.createElement('style');
     style.id = 'legacy-webos-font-fix';
     style.textContent = `
@@ -121,11 +130,23 @@ if (document.characterSet === 'UTF-8') {
     `;
     document.head.appendChild(style);
 	
-    emojiObs.observe(document.body, { 
-      childList: true, 
-      subtree: true,
-      characterData: true 
-    });
-    console.log('[Emoji-Debug] Cloudflare SSL-safe Twemoji observer initialized.');
+    const toggleEmojiObserver = () => {
+      if (configRead('enableLegacyEmojiFix')) {
+        emojiObs.observe(document.body, { 
+          childList: true, 
+          subtree: true,
+          characterData: true 
+        });
+        console.log('[Emoji-Debug] Legacy Emoji fix enabled and observing.');
+      } else {
+        emojiObs.disconnect();
+        textNodesToProcess.clear();
+        console.log('[Emoji-Debug] Legacy Emoji fix disabled. Observer disconnected.');
+      }
+    };
+
+    toggleEmojiObserver();
+
+    configAddChangeListener('enableLegacyEmojiFix', toggleEmojiObserver);
   }
 }

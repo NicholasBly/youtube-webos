@@ -2,7 +2,7 @@ import sha256 from 'tiny-sha256';
 import { configRead, configAddChangeListener, configRemoveChangeListener, segmentTypes } from './config';
 import { showNotification } from './ui';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { WebOSVersion } from './webos-utils.js';
+import { isLegacyWebOS } from './webos-utils.js';
 
 const SPONSORBLOCK_CONFIG = {
     primaryAPI: 'https://sponsorblock.inf.re/api',
@@ -46,7 +46,7 @@ class SponsorBlockHandler {
         
         this.debugMode = false;
         
-        this.isLegacyWebOS = WebOSVersion() === 5;
+        this.isLegacyWebOSVer = isLegacyWebOS();
 
         // Tracking state
         this.lastSkipTime = -1;
@@ -732,7 +732,7 @@ class SponsorBlockHandler {
                 segment.segment[1] = duration;
                 changed = true;
             }
-            if (this.isLegacyWebOS && segment.segment[1] >= duration - 0.5) {
+            if (this.isLegacyWebOSVer && segment.segment[1] >= duration - 0.5) {
                 segment.segment[1] = Math.max(0, duration - 0.30);
                 changed = true;
             }
@@ -875,7 +875,7 @@ class SponsorBlockHandler {
             return;
         }
 
-        if (this.isLegacyWebOS &&
+        if (this.isLegacyWebOSVer &&
             segmentIdx === this.lastSkippedSegmentIndex &&
             this.video.duration - currentTime < 1.0) {
             return;
@@ -906,7 +906,7 @@ class SponsorBlockHandler {
 		
 		segmentsToMark.forEach(idx => this.skippedSegmentIndices.add(idx));
 
-        if (this.isLegacyWebOS) {
+        if (this.isLegacyWebOSVer) {
             const duration = this.video.duration;
             if (jumpTarget >= duration - 0.5) {
                 jumpTarget = Math.max(0, duration - 0.25);
@@ -923,7 +923,7 @@ class SponsorBlockHandler {
 
         this.video.currentTime = jumpTarget;
 
-        if (!this.isLegacyWebOS) {
+        if (!this.isLegacyWebOSVer) {
             const timeRemaining = this.video.duration - this.video.currentTime;
             if (timeRemaining > 0.5 && this.video.paused) {
                 this.video.play();
