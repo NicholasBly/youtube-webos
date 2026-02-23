@@ -68,7 +68,7 @@ function finalizeBypass() {
     setTimeout(() => {
         const style = document.getElementById(BYPASS_STYLE_ID);
         if (style) style.remove();
-        hasBypassed = false; 
+        // hasBypassed = false; 
     }, 2000);
 }
 
@@ -79,10 +79,9 @@ export function attemptActiveBypass(force = false) {
     const hasParams = params && Object.keys(params).length > 0;
 
     if (!isSelector && !force) return;
-    if (!hasParams && !force && !configRead('enableAutoLogin')) return;
-    
-    if (hasBypassed) return;
-
+    // if (!hasParams && !force) return; Still checking for account selector page on normal loads too
+    if (hasBypassed && !force) return;
+	
     console.info('[Auto Login] Active Bypass: Selector Detected! Executing sequence...');
     hasBypassed = true;
     injectBypassCSS();
@@ -98,12 +97,16 @@ export function attemptActiveBypass(force = false) {
     }, 500);
 }
 
+export function resetActiveBypass() {
+    hasBypassed = false;
+}
+
 function setupActiveBypassListener() {
     if (pageObserverAttached) return;
     window.addEventListener('ytaf-page-update', (evt) => {
         if (evt.detail && evt.detail.isAccountSelector) {
             attemptActiveBypass();
-        }
+        } 
     });
     pageObserverAttached = true;
 }
@@ -113,6 +116,13 @@ export function initAutoLogin() {
     console.info('[Auto Login] Initializing...');
     disableWhosWatching();
     setupActiveBypassListener();
+    
+    setTimeout(() => {
+        if (!hasBypassed) {
+            console.info('[Auto Login] Startup window closed');
+            hasBypassed = true;
+        }
+    }, 15000);
   }
 }
 

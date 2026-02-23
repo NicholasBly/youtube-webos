@@ -1,7 +1,7 @@
 import 'whatwg-fetch';
 import './domrect-polyfill';
 import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
-import { attemptActiveBypass } from './auto-login.js';
+import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';
 import { isWebOS25, simulatorMode, isLegacyWebOS } from './webos-utils.js';
 import { initBlockWebOSCast } from './block-webos-cast';
 import './adblock.js';
@@ -26,6 +26,7 @@ document.addEventListener(
   'webOSRelaunch',
   (evt) => {
     console.info('RELAUNCH:', evt, window.launchParams);
+	resetActiveBypass();
     if (document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR)) {
         console.info('[Main] Relaunch detected on Account Selector. Triggering bypass.');
         attemptActiveBypass(true);
@@ -35,7 +36,7 @@ document.addEventListener(
   true
 );
 
-if (isWebOS25 && simulatorMode === false) {
+if (isWebOS25() && simulatorMode === false) {
   console.info('[Main] Enabling webOS Google Cast Block');
   initBlockWebOSCast();
 }

@@ -1,5 +1,5 @@
-let cachedIsLegacy = null;
-let webOS25 = null;
+let cachedIsLegacy = undefined;
+let webOS25 = false;
 export let simulatorMode = false;
 //let cachedNewLayout = null;
 
@@ -31,14 +31,14 @@ export let simulatorMode = false;
  * @returns {number} webOS version number (25, or 5 for legacy/unknown)
  */
 export function isWebOS25() {
-  if (webOS25 === null) {
+  if (cachedIsLegacy === undefined) {
     isLegacyWebOS();
   }
   return webOS25;
 }
  
 export function isLegacyWebOS() {
-  if (cachedIsLegacy !== null) {
+  if (cachedIsLegacy !== undefined) {
     return cachedIsLegacy;
   }
 
@@ -64,7 +64,7 @@ export function isLegacyWebOS() {
   if (platformMatch) {
     const year = parseInt(platformMatch[1], 10);
 
-    // If year is 2021 or below, treat as legacy webOS (returns 5)
+    // If year is 2021 or below, treat as legacy webOS
     if (year <= 2021) {
       console.info(`[WebOSUtils] Detected Legacy webOS via platform year: ${year}`);
       return cachedIsLegacy = true;
@@ -78,15 +78,15 @@ export function isLegacyWebOS() {
     const chromeVersion = parseInt(chromeMatch[1], 10);
     console.info(`[WebOSUtils] Detected Chrome version: ${chromeVersion} (simulator mode)`);
     
-    if (chromeVersion >= 120) {
-      cachedIsLegacy = false;
-    } else if (chromeVersion <= 79) {
-      cachedIsLegacy = true;
-    } else {
-      cachedIsLegacy = null;
-    }
     simulatorMode = true;
-    return cachedIsLegacy;
+    
+    if (chromeVersion >= 120) {
+      return cachedIsLegacy = false;
+    } else if (chromeVersion <= 79) {
+      return cachedIsLegacy = true;
+    } else {
+      return cachedIsLegacy = null;
+    }
   }
 
   console.warn('[WebOSUtils] Could not detect webOS version from user agent');

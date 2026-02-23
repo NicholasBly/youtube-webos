@@ -59,12 +59,9 @@ function processTextNode(textNode: Node): void {
 
   try {
     const cleanText = originalText.replace(CLEAN_TEXT_RE, '');
-    
-    // Cache Hit Check: Skip all expensive parsing if we've seen this string before
     let parsedHTML = parsedTextCache.get(cleanText);
 
     if (!parsedHTML) {
-      // Cache Miss: Process it natively, then store it.
       let rawHTML = twemoji.parse(cleanText, twemojiOptions);
 
       if (rawHTML !== cleanText) {
@@ -73,14 +70,12 @@ function processTextNode(textNode: Node): void {
           return `<img${beforeAlt}${afterAlt}>${hiddenText}`;
         });
 
-        // Store in cache and manage cache size (FIFO eviction)
         parsedTextCache.set(cleanText, parsedHTML);
         if (parsedTextCache.size > MAX_CACHE_SIZE) {
           const firstKey = parsedTextCache.keys().next().value;
           if (firstKey) parsedTextCache.delete(firstKey);
         }
       } else {
-        // No actual emojis were parsed out, so cache the original clean string to avoid retries
         parsedTextCache.set(cleanText, cleanText);
         parsedHTML = cleanText;
       }
@@ -89,15 +84,31 @@ function processTextNode(textNode: Node): void {
     if (parsedHTML !== cleanText || cleanText !== originalText) {
       textNode.nodeValue = '\u200B';
 
-      const existingSpan = nodeToSpan.get(textNode);
+      let existingSpan = nodeToSpan.get(textNode);
+
+      const siblings = parent.childNodes;
+      for (let i = siblings.length - 1; i >= 0; i--) {
+          const child = siblings[i];
+          if (child.nodeType === Node.ELEMENT_NODE && (child as Element).classList.contains('twemoji-injected')) {
+              const owner = (child as any)._twemojiOwnerNode;
+              if (!owner || owner.parentNode !== parent || (owner === textNode && child !== existingSpan)) {
+                  parent.removeChild(child);
+              }
+          }
+      }
+
       if (existingSpan && existingSpan.parentNode === parent) {
         existingSpan.innerHTML = parsedHTML;
       } else {
-        const span = document.createElement('span');
-        span.className = 'twemoji-injected';
-        span.innerHTML = parsedHTML;
-        parent.insertBefore(span, textNode.nextSibling);
-        nodeToSpan.set(textNode, span);
+        // We use a custom <emoji-render> tag instead of <span>. 
+        // This makes us completely immune to YouTube's "yt-formatted-string > span" flexbox CSS rules.
+        existingSpan = document.createElement('emoji-render');
+        existingSpan.className = 'twemoji-injected';
+        existingSpan.innerHTML = parsedHTML;
+        // Bind this injected element to the specific text node that spawned it
+        (existingSpan as any)._twemojiOwnerNode = textNode;
+        parent.insertBefore(existingSpan, textNode.nextSibling);
+        nodeToSpan.set(textNode, existingSpan);
       }
     }
   } catch (err) {
@@ -141,7 +152,6 @@ const emojiObs = new MutationObserver((mutations) => {
     }
   }
 
-  // Hardware-Synced Batching: Fire immediately before the next screen paint instead of an arbitrary 250ms delay
   if (textNodesToProcess.size > 0 && frameId === null) {
     frameId = window.requestAnimationFrame(processQueue);
   }
@@ -155,8 +165,11 @@ if (document.characterSet === 'UTF-8' && isLegacyWebOS()) {
     yt-formatted-string, .yt-tv-text, .video-title, .title, #title, .description, #description, .video-title-text, .badge-text {
         font-family: 'Roboto', 'YouTube Noto', 'YouTube Sans', 'Arial', 'Noto Sans Math', sans-serif !important;
     }
-    span.twemoji-injected {
-        display: inline;
+    emoji-render.twemoji-injected {
+        display: inline !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        vertical-align: baseline !important;
     }
   `;
   document.head.appendChild(style);
@@ -168,12 +181,12 @@ if (document.characterSet === 'UTF-8' && isLegacyWebOS()) {
         subtree: true,
         characterData: true
       });
-      console.log('[Emoji-Debug] Legacy Emoji fix enabled and observing.');
+      console.log('[Emoji-Debug] Legacy Emoji fix enabled.');
     } else {
       emojiObs.disconnect();
       textNodesToProcess.clear();
       parsedTextCache.clear();
-      console.log('[Emoji-Debug] Legacy Emoji fix disabled. Observer disconnected.');
+      console.log('[Emoji-Debug] Legacy Emoji fix disabled.');
     }
   };
 
