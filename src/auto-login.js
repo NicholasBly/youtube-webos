@@ -16,7 +16,7 @@ let pageObserverAttached = false;
  * Disables "Who's watching" by pushing the lastFired date 7 days into the future.
  * Credit: reisxd || https://github.com/reisxd/TizenTube/
  */
-function disableWhosWatching() {
+function disableWhosWatching(enable = true) {
   try {
     const storedData = localStorage.getItem(STORAGE_KEY);
     if (!storedData) return console.warn('Auto login: No recurring actions found');
@@ -26,19 +26,20 @@ function disableWhosWatching() {
 
     if (!actions) return;
 
-    const futureDate = Date.now() + (7 * 24 * 60 * 60 * 1000); // +7 days
+    // Use a future date if enabling, or Date.now() if disabling
+    const targetDate = enable ? Date.now() + (7 * 24 * 60 * 60 * 1000) : Date.now();
     let isModified = false;
 
     for (const key of TARGET_ACTIONS) {
       if (actions[key]) {
-        actions[key].lastFired = futureDate;
+        actions[key].lastFired = targetDate;
         isModified = true;
       }
     }
 
     if (isModified) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
-      console.info('Auto login: "Who\'s watching" screens disabled');
+      console.info(`Auto login: "Who's watching" screens ${enable ? 'disabled' : 'enabled'}`);
     }
   } catch (error) {
     console.error('Auto login: Failed to update settings:', error);
@@ -136,5 +137,6 @@ configAddChangeListener('enableAutoLogin', ({ detail }) => {
     initAutoLogin();
   } else {
     console.info('Auto login disabled');
+    disableWhosWatching(false); // Reset local storage time value
   }
 });

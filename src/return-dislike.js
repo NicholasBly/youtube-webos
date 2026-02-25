@@ -157,7 +157,7 @@ class ReturnYouTubeDislike {
     const mainContainer = document.querySelector(SELECTORS.mainContainer) || document.body;
     
     this.bodyObserver = new MutationObserver(this.handleBodyMutation);
-    this.bodyObserver.observe(mainContainer, { childList: true, subtree: true, attributes: true });
+    this.bodyObserver.observe(mainContainer, { childList: true, subtree: true });
     this.observers.add(this.bodyObserver);
 
     const existingPanel = document.querySelector(SELECTORS.panel);

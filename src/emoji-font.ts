@@ -3,12 +3,13 @@ import { isLegacyWebOS } from './webos-utils.js';
 import { configRead, configAddChangeListener } from './config.js';
 import './emoji-font.css';
 
-const MAYBE_EMOJI_RE = /[\u00A9\u00AE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23E9-\u23F3\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB-\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u261D\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692-\u2697\u2699\u269B\u269C\u26A0\u26A1\u26AA\u26AB\u26B0\u26B1\u26BD\u26BE\u26C4\u26C5\u26CE\u26CF\u26D1\u26D3\u26D4\u26E9\u26EA\u26F0-\u26F5\u26F7-\u26FA\u26FD\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B50\u2B55\u3030\u303D\u3297\u3299]|[\uD83C-\uDBFF][\uDC00-\uDFFF]/;
-const CLEAN_TEXT_RE = /[\u200C\u200E\u200F\u202A-\u202E\u2060\uFEFF]/g;
-const IMG_ALT_RE = /<img([^>]+)alt="([^"]+)"([^>]*)>/g;
-const TARGET_CONTAINER = 'yt-formatted-string';
+const DEBUG_EMOJI_DOM = false;
 
-// Memory Cache for pre-processed text to guarantee instantaneous re-renders
+// ONLY look for the invisible markers injected by adblock.js
+const WRAPPED_EMOJI_RE = /\u200B([^\u200C]+)\u200C/; // Note: Removed global 'g' flag for precise splitText matching
+const HAS_WRAPPED_EMOJI_RE = /\u200B[^\u200C]+\u200C/;
+const IMG_ALT_RE = /<img([^>]+)alt="([^"]+)"([^>]*)>/g;
+
 const parsedTextCache = new Map<string, string>();
 const MAX_CACHE_SIZE = 500;
 
@@ -20,104 +21,132 @@ let isParsing = false;
 
 const twemojiOptions = {
   callback: function(icon: string) {
-    return `https://cdnjs.cloudflare.com/ajax/libs/twemoji/15.1.0/72x72/${icon}.png`;
+    return `https://cdnjs.cloudflare.com/ajax/libs/twemoji/16.0.1/72x72/${icon}.png`;
   }
 };
 
 function queueTextNode(node: Node): void {
   const val = node.nodeValue;
-  if (!val || val === '\u200B' || !MAYBE_EMOJI_RE.test(val)) return;
+  if (!val || !HAS_WRAPPED_EMOJI_RE.test(val)) return;
 
   const parent = node.parentElement;
   if (!parent || parent.classList.contains('twemoji-injected')) return;
 
-  if (parent.closest(TARGET_CONTAINER)) {
-    textNodesToProcess.add(node);
-  }
+  textNodesToProcess.add(node);
 }
 
 function processQueue(): void {
   isParsing = true;
-
   for (const textNode of textNodesToProcess) {
     processTextNode(textNode);
   }
-
   textNodesToProcess.clear();
   isParsing = false;
   frameId = null;
 }
 
 function processTextNode(textNode: Node): void {
-  if (!document.body.contains(textNode) || !textNode.parentNode) return;
+  if (!textNode.parentNode) return;
 
   const parent = textNode.parentNode as HTMLElement;
   if (parent.classList?.contains('twemoji-injected')) return;
 
-  const originalText = textNode.nodeValue || '';
-  if (originalText.trim().length === 0 || originalText === '\u200B' || !MAYBE_EMOJI_RE.test(originalText)) return;
+  let currentNode = textNode as Text;
+  let match = WRAPPED_EMOJI_RE.exec(currentNode.nodeValue || '');
 
-  try {
-    const cleanText = originalText.replace(CLEAN_TEXT_RE, '');
-    let parsedHTML = parsedTextCache.get(cleanText);
+  // Using splitText() prevents nuking the surrounding words. 
+  // It perfectly isolates the emoji into its own text node, keeping YouTube's Polymer math happy.
+  while (match) {
+    const startIndex = match.index;
+    const emojiLength = match[0].length;
+    const cleanEmoji = match[1]; // The emoji without \u200B and \u200C
 
+    // 1. Slice off any normal text BEFORE the emoji
+    if (startIndex > 0) {
+      currentNode = currentNode.splitText(startIndex);
+    }
+
+    // 2. Slice off any normal text AFTER the emoji
+    let nextNode: Text | null = null;
+    if (currentNode.nodeValue!.length > emojiLength) {
+      nextNode = currentNode.splitText(emojiLength);
+    }
+
+    // currentNode is now EXACTLY just "\u200B[EMOJI]\u200C"
+    
+    let parsedHTML = parsedTextCache.get(cleanEmoji);
     if (!parsedHTML) {
-      let rawHTML = twemoji.parse(cleanText, twemojiOptions);
+      let twemojiHTML = twemoji.parse(cleanEmoji, twemojiOptions);
 
-      if (rawHTML !== cleanText) {
-        parsedHTML = rawHTML.replace(IMG_ALT_RE, (_match, beforeAlt, altText, afterAlt) => {
-          const hiddenText = `<span style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);border:0;">${altText}</span>`;
-          return `<img${beforeAlt}${afterAlt}>${hiddenText}`;
+      if (twemojiHTML !== cleanEmoji) {
+        parsedHTML = twemojiHTML.replace(IMG_ALT_RE, (_match, beforeAlt, altText, afterAlt) => {
+          const hiddenText = `<span class="twemoji-hidden-text">\u200B${altText}\u200C</span>`;
+          return `<img${beforeAlt}alt="${altText}"${afterAlt}>${hiddenText}`;
         });
-
-        parsedTextCache.set(cleanText, parsedHTML);
+        
+        parsedTextCache.set(cleanEmoji, parsedHTML);
         if (parsedTextCache.size > MAX_CACHE_SIZE) {
           const firstKey = parsedTextCache.keys().next().value;
           if (firstKey) parsedTextCache.delete(firstKey);
         }
       } else {
-        parsedTextCache.set(cleanText, cleanText);
-        parsedHTML = cleanText;
+        parsedHTML = cleanEmoji;
       }
     }
 
-    if (parsedHTML !== cleanText || cleanText !== originalText) {
-      textNode.nodeValue = '\u200B';
+    if (parsedHTML !== cleanEmoji) {
+      currentNode.nodeValue = '';
 
-      let existingSpan = nodeToSpan.get(textNode);
-
-      const siblings = parent.childNodes;
-      for (let i = siblings.length - 1; i >= 0; i--) {
-          const child = siblings[i];
-          if (child.nodeType === Node.ELEMENT_NODE && (child as Element).classList.contains('twemoji-injected')) {
-              const owner = (child as any)._twemojiOwnerNode;
-              if (!owner || owner.parentNode !== parent || (owner === textNode && child !== existingSpan)) {
-                  parent.removeChild(child);
-              }
-          }
-      }
+      let existingSpan = nodeToSpan.get(currentNode);
 
       if (existingSpan && existingSpan.parentNode === parent) {
         existingSpan.innerHTML = parsedHTML;
+        if (DEBUG_EMOJI_DOM) console.log('[Emoji-DOM-Debug] Replaced emoji in existing span.');
       } else {
-        // We use a custom <emoji-render> tag instead of <span>. 
-        // This makes us completely immune to YouTube's "yt-formatted-string > span" flexbox CSS rules.
         existingSpan = document.createElement('emoji-render');
         existingSpan.className = 'twemoji-injected';
         existingSpan.innerHTML = parsedHTML;
-        // Bind this injected element to the specific text node that spawned it
-        (existingSpan as any)._twemojiOwnerNode = textNode;
-        parent.insertBefore(existingSpan, textNode.nextSibling);
-        nodeToSpan.set(textNode, existingSpan);
+        
+        // Insert right next to the zeroed-out text node
+        parent.insertBefore(existingSpan, currentNode.nextSibling);
+        nodeToSpan.set(currentNode, existingSpan);
+        if (DEBUG_EMOJI_DOM) console.log('[Emoji-DOM-Debug] Injected new emoji-render span for:', cleanEmoji);
       }
     }
-  } catch (err) {
-    console.error('[Emoji-Debug] Error processing text node:', err);
+
+    // Move to the next slice of text if there's more in the original string
+    if (nextNode && HAS_WRAPPED_EMOJI_RE.test(nextNode.nodeValue || '')) {
+      currentNode = nextNode;
+      match = WRAPPED_EMOJI_RE.exec(currentNode.nodeValue || '');
+    } else {
+      break; // No more emojis in this block
+    }
   }
+}
+
+function scanElement(el: Element) {
+    const textContent = el.textContent;
+    if (!textContent || !HAS_WRAPPED_EMOJI_RE.test(textContent)) return;
+    try {
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+        let tNode: Node | null;
+        let queuedCount = 0;
+        while ((tNode = walker.nextNode())) {
+            queueTextNode(tNode);
+            queuedCount++;
+        }
+        if (DEBUG_EMOJI_DOM && queuedCount > 0) {
+            console.log(`[Emoji-DOM-Debug] Found and queued ${queuedCount} text nodes in element:`, el.tagName);
+        }
+    } catch (err) {
+        if (DEBUG_EMOJI_DOM) console.error('[Emoji-DOM-Debug] TreeWalker error:', err);
+    }
 }
 
 const emojiObs = new MutationObserver((mutations) => {
   if (isParsing) return;
+
+  let addedNodesCount = 0;
 
   for (let i = 0; i < mutations.length; i++) {
     const mut = mutations[i];
@@ -125,31 +154,35 @@ const emojiObs = new MutationObserver((mutations) => {
     if (mut.type === 'characterData') {
       queueTextNode(mut.target);
     } else if (mut.type === 'childList') {
+      const removedNodes = mut.removedNodes;
+      for (let j = 0; j < removedNodes.length; j++) {
+        const removed = removedNodes[j];
+        if (removed.nodeType === Node.TEXT_NODE) {
+          const orphanSpan = nodeToSpan.get(removed);
+          if (orphanSpan && orphanSpan.parentNode) {
+            orphanSpan.parentNode.removeChild(orphanSpan);
+          }
+        }
+      }
+
       const addedNodes = mut.addedNodes;
       for (let j = 0; j < addedNodes.length; j++) {
         const node = addedNodes[j];
-
+        addedNodesCount++;
+        
         if (node.nodeType === Node.TEXT_NODE) {
           queueTextNode(node);
         } else if (node.nodeType === Node.ELEMENT_NODE) {
           const el = node as Element;
           if (el.classList?.contains('twemoji-injected')) continue;
-
-          const textContent = el.textContent;
-          if (!textContent || !MAYBE_EMOJI_RE.test(textContent)) continue;
-
-          try {
-            const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
-            let tNode: Node | null;
-            while ((tNode = walker.nextNode())) {
-              queueTextNode(tNode);
-            }
-          } catch (err) {
-            console.error('[Emoji-Debug] TreeWalker error:', err);
-          }
+          scanElement(el);
         }
       }
     }
+  }
+
+  if (DEBUG_EMOJI_DOM && addedNodesCount > 0 && textNodesToProcess.size > 0) {
+      console.log(`[Emoji-DOM-Debug] MutationObserver processed added nodes. Text nodes queued: ${textNodesToProcess.size}`);
   }
 
   if (textNodesToProcess.size > 0 && frameId === null) {
@@ -160,7 +193,7 @@ const emojiObs = new MutationObserver((mutations) => {
 if (document.characterSet === 'UTF-8' && isLegacyWebOS()) {
   const style = document.createElement('style');
   style.id = 'legacy-webos-font-fix';
-  style.textContent = `
+  style.styleSheet ? (style.styleSheet.cssText = "") : (style.textContent = `
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Math&display=swap');
     yt-formatted-string, .yt-tv-text, .video-title, .title, #title, .description, #description, .video-title-text, .badge-text {
         font-family: 'Roboto', 'YouTube Noto', 'YouTube Sans', 'Arial', 'Noto Sans Math', sans-serif !important;
@@ -171,7 +204,7 @@ if (document.characterSet === 'UTF-8' && isLegacyWebOS()) {
         padding: 0 !important;
         vertical-align: baseline !important;
     }
-  `;
+  `);
   document.head.appendChild(style);
 
   const toggleEmojiObserver = () => {
@@ -181,12 +214,18 @@ if (document.characterSet === 'UTF-8' && isLegacyWebOS()) {
         subtree: true,
         characterData: true
       });
-      console.log('[Emoji-Debug] Legacy Emoji fix enabled.');
+      
+      scanElement(document.body);
+      if (textNodesToProcess.size > 0 && frameId === null) {
+        frameId = window.requestAnimationFrame(processQueue);
+      }
+      
+      if (DEBUG_EMOJI_DOM) console.log('[Emoji-Debug] Legacy Emoji fix enabled.');
     } else {
       emojiObs.disconnect();
       textNodesToProcess.clear();
       parsedTextCache.clear();
-      console.log('[Emoji-Debug] Legacy Emoji fix disabled.');
+      if (DEBUG_EMOJI_DOM) console.log('[Emoji-Debug] Legacy Emoji fix disabled.');
     }
   };
 

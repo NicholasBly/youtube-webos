@@ -82,7 +82,7 @@ class Watch {
   updateVisibility() {
     if (!this._watch) return;
 
-    if (!this._cachedPlayer || !document.body.contains(this._cachedPlayer)) {
+    if (!this._cachedPlayer || !this._cachedPlayer.isConnected) {
         this._cachedPlayer = document.querySelector(this._PLAYER_SELECTOR);
     }
     
@@ -93,7 +93,7 @@ class Watch {
       return;
     }
 
-    if (!this._cachedOverlay || !document.body.contains(this._cachedOverlay)) {
+    if (!this._cachedOverlay || !this._cachedOverlay.isConnected) {
         this._cachedOverlay = document.querySelector('.AmQJbe');
     }
 

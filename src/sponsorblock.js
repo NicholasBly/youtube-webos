@@ -623,7 +623,7 @@ class SponsorBlockHandler {
     checkForProgressBar() {
         if (this.isDestroyed) return;
         // Don't re-query if we have a valid progress bar in DOM
-        if (this.overlay && this.overlay.parentNode && document.body.contains(this.overlay.parentNode)) {
+        if (this.overlay && this.overlay.parentNode && this.overlay.parentNode.isConnected) {
             return;
         }
 
@@ -670,7 +670,7 @@ class SponsorBlockHandler {
         if (!duration || isNaN(duration)) return;
 
         const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${this.configCache.sbMode_highlight}`;
-        if (overlayHash === this.lastOverlayHash && this.overlay && document.body.contains(this.overlay)) {
+        if (overlayHash === this.lastOverlayHash && this.overlay && this.overlay.isConnected) {
             return;
         }
         this.lastOverlayHash = overlayHash;

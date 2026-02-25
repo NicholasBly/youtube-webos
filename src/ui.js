@@ -529,7 +529,7 @@ document.addEventListener('focus', (e) => {
   else {
     e.stopPropagation();
     e.preventDefault();
-    if (lastSafeFocus && document.body.contains(lastSafeFocus)) lastSafeFocus.focus();
+    if (lastSafeFocus && lastSafeFocus.isConnected) lastSafeFocus.focus();
     else {
       const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(el => el.offsetParent !== null && !el.disabled);
       if (firstVisibleInput) firstVisibleInput.focus();
