@@ -76,8 +76,8 @@ function finalizeBypass() {
 export function attemptActiveBypass(force = false) {
     const isSelector = document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR);
     
-    const params = extractLaunchParams();
-    const hasParams = params && Object.keys(params).length > 0;
+    // const params = extractLaunchParams();
+    // const hasParams = params && Object.keys(params).length > 0;
 
     if (!isSelector && !force) return;
     // if (!hasParams && !force) return; Still checking for account selector page on normal loads too

@@ -1,10 +1,10 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
-import { debounce, SELECTORS } from './utils'; // Shared Debounce
+import { debounce } from './utils';
 import './watch.css';
 
 class Watch {
   constructor() {
-    // Standard properties (No '#' private fields for webOS 3 compatibility)
+    // Standard properties
     this._watch = null;
     this._timer = null;
     this._globalListeners = [];
@@ -40,7 +40,6 @@ class Watch {
 
   applyOledMode(enabled) {
     if (this._watch) {
-      // Chrome 38 supports classList.toggle with second argument
       this._watch.classList.toggle('oled-mode', enabled);
     }
   }
@@ -157,12 +156,10 @@ function toggleWatch(show) {
     if (!watchInstance) {
       watchInstance = new Watch();
     }
-  } else {
-    if (watchInstance) {
+  } else if (watchInstance) {
       watchInstance.destroy();
       watchInstance = null;
     }
-  }
 }
 
 toggleWatch(configRead('showWatch'));

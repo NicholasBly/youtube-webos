@@ -55,6 +55,7 @@ export const segmentTypes = {
 
 export const shortcutActions = {
   none: 'None',
+  refresh_page: 'Refresh Page',
   chapter_skip: 'Skip to Next Chapter',
   chapter_skip_prev: 'Skip to Previous Chapter',
   sb_skip_prev: 'Skip to Last SponsorBlock Segment',

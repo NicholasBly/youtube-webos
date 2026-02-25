@@ -2,7 +2,7 @@ import 'whatwg-fetch';
 import './domrect-polyfill';
 import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
 import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';
-import { isWebOS25, simulatorMode, isLegacyWebOS } from './webos-utils.js';
+import { isWebOS25, simulatorMode } from './webos-utils.js';
 import { initBlockWebOSCast } from './block-webos-cast';
 import './adblock.js';
 import './sponsorblock.js';
@@ -12,14 +12,11 @@ import './screensaver-fix';
 import './yt-fixes.css';
 import './watch.js';
 
-const version = isLegacyWebOS();
-
 (function oneTimeParamsCheck() {
-	const params = extractLaunchParams();
-    if (!params || Object.keys(params).length === 0) {
-		return;
-	}
-	else attemptActiveBypass();
+    const params = extractLaunchParams();
+    if (params && Object.keys(params).length > 0) {
+        attemptActiveBypass();
+    }
 })();
 
 document.addEventListener(

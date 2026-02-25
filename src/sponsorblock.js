@@ -172,13 +172,11 @@ class SponsorBlockHandler {
                 this.isTimeListenerActive = true;
 				this.log('debug', 'Time listener attached');
             }
-        } else {
-            if (this.isTimeListenerActive) {
+        } else if (this.isTimeListenerActive) {
                 this.video.removeEventListener('timeupdate', this.boundTimeUpdate);
                 this.isTimeListenerActive = false;
 				this.log('debug', 'Time listener detached');
             }
-        }
     }
 
     clearLongDistanceTimer() {
@@ -441,7 +439,7 @@ class SponsorBlockHandler {
             const videoData = Array.isArray(data) ? data.find(x => x.videoID === this.videoID) : data;
 
             if (!videoData || !videoData.segments || videoData.segments.length === 0) {
-                this.log('debug', "No SponsorBlock segments available, cleaning up");
+                this.log('debug', 'No SponsorBlock segments available, cleaning up');
                 this.destroy(); 
                 return;
             }
@@ -479,7 +477,7 @@ class SponsorBlockHandler {
             }
         } catch (e) {
             if (!this.isDestroyed) {
-                showNotification("SB Error: " + e.message);
+                showNotification('SB Error: ' + e.message);
                 this.log('warn', 'Fetch failed', e);
             }
         }

@@ -1,9 +1,9 @@
 import twemoji from '@twemoji/api';
-import { isLegacyWebOS } from './webos-utils.js';
+import { getWebOSVersion } from './webos-utils.js';
 import { configRead, configAddChangeListener } from './config.js';
 import './emoji-font.css';
 
-const DEBUG_EMOJI_DOM = false;
+const DEBUG_EMOJI_DOM = true;
 
 // ONLY look for the invisible markers injected by adblock.js
 const WRAPPED_EMOJI_RE = /\u200B([^\u200C]+)\u200C/; // Note: Removed global 'g' flag for precise splitText matching
@@ -190,7 +190,7 @@ const emojiObs = new MutationObserver((mutations) => {
   }
 });
 
-if (document.characterSet === 'UTF-8' && isLegacyWebOS()) {
+if (document.characterSet === 'UTF-8' && getWebOSVersion() <= 4) {
   const style = document.createElement('style');
   style.id = 'legacy-webos-font-fix';
   style.styleSheet ? (style.styleSheet.cssText = "") : (style.textContent = `

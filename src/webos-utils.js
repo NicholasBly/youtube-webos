@@ -1,94 +1,74 @@
-let cachedIsLegacy = undefined;
-let webOS25 = false;
 export let simulatorMode = false;
-//let cachedNewLayout = null;
+let cachedWebOSVersion = undefined;
 
-/**
- * Detects if the user is using the "New" YouTube UI
- * As of 1/7/2026 the code is no longer needed as YouTube is only using one UI
- * @returns {boolean}
- */
-// export function isNewYouTubeLayout() {
-  // if (cachedNewLayout !== null) {
-    // return cachedNewLayout;
-  // }
+const WEBOS_YEAR_MAP = {
+  2016: 3,
+  2017: 3,
+  2018: 4,
+  2019: 4,
+  2020: 5,
+  2021: 6,
+  2022: 22,
+  2023: 23,
+  2024: 24,
+  2025: 25
+};
 
-  // // WebOS 24 / 25 typically uses this tag for the app host
-  // cachedNewLayout = !!document.querySelector('gJiGL'); // ytLrAppHost previously
-  
-  // if (cachedNewLayout) {
-    // console.info('[WebOSUtils] New YouTube UI detected');
-  // }
-  
-  // return cachedNewLayout;
-// }
-
-/**
- * Detects the webOS version using the User Agent string.
- * Prioritizes firmware version for newer models (webOS 25+).
- * Uses webOS.TV year detection for legacy models (2021 and older).
- * Falls back to Chrome version detection for simulator environments.
- * @returns {number} webOS version number (25, or 5 for legacy/unknown)
- */
-export function isWebOS25() {
-  if (cachedIsLegacy === undefined) {
-    isLegacyWebOS();
-  }
-  return webOS25;
-}
- 
-export function isLegacyWebOS() {
-  if (cachedIsLegacy !== undefined) {
-    return cachedIsLegacy;
+export function getWebOSVersion() {
+  if (cachedWebOSVersion !== undefined) {
+    return cachedWebOSVersion;
   }
 
   const ua = window.navigator.userAgent;
 
-  // 1. Check Firmware Version (Primary for webOS 25+)
-  const firmwareMatch = ua.match(/_TV_O18\/(\d+\.\d+\.\d+)/);
-  if (firmwareMatch) {
-    const firmwareVersion = firmwareMatch[1];
-    const majorVersion = parseInt(firmwareVersion.split('.')[0], 10);
-    
-    // Detect webOS 25 (Firmware major version >= 33)
-    if (majorVersion >= 33) {
-      console.info(`[WebOSUtils] Detected webOS 25 via firmware version: ${firmwareVersion}`);
-	  webOS25 = true;
-      return cachedIsLegacy = false;
-    }
-  }
-
-  // 2. Check Platform Year (Primary for Legacy webOS 3, 4, 5, 6)
-  // Format: (webOS.TV-YYYY)
+  // 1. Check Platform Year
   const platformMatch = ua.match(/webOS\.TV-(\d{4})/);
   if (platformMatch) {
     const year = parseInt(platformMatch[1], 10);
+    if (WEBOS_YEAR_MAP[year]) {
+      cachedWebOSVersion = WEBOS_YEAR_MAP[year];
+      console.info(`[WebOSUtils] Detected webOS ${cachedWebOSVersion} via platform year: ${year}`);
+      return cachedWebOSVersion;
+    }
+  }
 
-    // If year is 2021 or below, treat as legacy webOS
-    if (year <= 2021) {
-      console.info(`[WebOSUtils] Detected Legacy webOS via platform year: ${year}`);
-      return cachedIsLegacy = true;
+  // 2. Check Firmware Version (Fallback for webOS 25+)
+  const firmwareMatch = ua.match(/_TV_O18\/(\d+\.\d+\.\d+)/);
+  if (firmwareMatch) {
+    const majorVersion = parseInt(firmwareMatch[1].split('.')[0], 10);
+    if (majorVersion >= 33) {
+      cachedWebOSVersion = 25;
+      console.info(`[WebOSUtils] Detected webOS 25 via firmware version: ${firmwareMatch[1]}`);
+      return cachedWebOSVersion;
     }
   }
 
   // 3. Fallback: Chrome version detection (for simulator environments)
   const chromeMatch = ua.match(/Chrome\/(\d+)/);
-  
   if (chromeMatch) {
     const chromeVersion = parseInt(chromeMatch[1], 10);
     console.info(`[WebOSUtils] Detected Chrome version: ${chromeVersion} (simulator mode)`);
-    
     simulatorMode = true;
-    
+
     if (chromeVersion >= 120) {
-      return cachedIsLegacy = false;
+      cachedWebOSVersion = 25;
     } else if (chromeVersion <= 79) {
-      return cachedIsLegacy = true;
+      cachedWebOSVersion = 4;
     } else {
-      return cachedIsLegacy = null;
+      cachedWebOSVersion = 6;
     }
+    return cachedWebOSVersion;
   }
 
-  console.warn('[WebOSUtils] Could not detect webOS version from user agent');
-  return cachedIsLegacy = null;
+  console.warn('[WebOSUtils] Could not detect webOS version from user agent. Defaulting to 6.');
+  return cachedWebOSVersion = 6;
+}
+
+export function isWebOS25() {
+  return getWebOSVersion() >= 25;
+}
+
+export function isLegacyWebOS() {
+  const version = getWebOSVersion();
+  return version >= 3 && version <= 6;
 }

@@ -36,11 +36,11 @@ let hasKickstarted = false;
 
 // Player States
 const STATE_UNSTARTED = -1;
-const STATE_ENDED = 0;
+// const STATE_ENDED = 0;
 const STATE_PLAYING = 1;
-const STATE_PAUSED = 2;
+// const STATE_PAUSED = 2;
 const STATE_BUFFERING = 3;
-const STATE_CUED = 5;
+// const STATE_CUED = 5;
 
 function isForceEnabled() {
   return _shouldForce && (!player?.isInline || !player.isInline());
@@ -99,7 +99,8 @@ async function ensurePlaybackStarts() {
     } catch (e) {
       if (DEBUG) console.warn('[VideoQuality] Kick attempt failed:', e);
     }
-
+	
+	// eslint-disable-next-line no-await-in-loop
     await new Promise(resolve => setTimeout(resolve, INTERVAL_MS));
   }
 

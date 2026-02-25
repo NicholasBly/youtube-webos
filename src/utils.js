@@ -206,7 +206,7 @@ function getYTURL() {
 }
 
 function concatSearchParams(a, b) {
-    b.forEach((value, key) => a.append(key, value));
+    b.forEach((value, key) => { a.append(key, value); });
     return a;
 }
 

@@ -9,7 +9,7 @@ import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, SELECTORS } from './utils.js';
 import { initAdblock, destroyAdblock } from './adblock.js';
-import { isLegacyWebOS } from './webos-utils.js';
+import { getWebOSVersion } from './webos-utils.js';
 
 let lastSafeFocus = null;
 let oledKeepAliveTimer = null;
@@ -58,7 +58,7 @@ if (!Element.prototype.matches) {
 }
 if (!Element.prototype.closest) {
   Element.prototype.closest = function(s) {
-    var el = this;
+    let el = this;
     do {
       if (Element.prototype.matches.call(el, s)) return el;
       el = el.parentElement || el.parentNode;
@@ -412,8 +412,8 @@ function createOptionsPanel() {
   const setState = (el, enabled) => { if (!el) return; const input = el.querySelector('input'); if (input) { input.disabled = !enabled; el.style.opacity = enabled ? '1' : '0.5'; }};
   const updateDependencyState = () => {
     const isAdBlockOn = configRead('enableAdBlock');
-    if (!isAdBlockOn) { [elRemoveGlobalShorts, elRemoveTopLiveGames, elGuestPrompts].forEach(el => setState(el, false)); return; }
-    [elRemoveGlobalShorts, elRemoveTopLiveGames, elGuestPrompts].forEach(el => setState(el, true));
+    if (!isAdBlockOn) { [elRemoveGlobalShorts, elRemoveTopLiveGames, elGuestPrompts].forEach(el => { setState(el, false); }); return; }
+	[elRemoveGlobalShorts, elRemoveTopLiveGames, elGuestPrompts].forEach(el => { setState(el, true); });
   };
   
   elAdBlock.querySelector('input').addEventListener('change', updateDependencyState);
@@ -450,7 +450,7 @@ function createOptionsPanel() {
   // --- Page 3: Shortcuts ---
   pageShortcuts = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-shortcuts', style: { display: 'none' }});
   pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(1) }}, createElement('span', { class: 'arrow', text: '←' }), ' SponsorBlock Settings'));
-  shortcutKeys.forEach(key => pageShortcuts.appendChild(createShortcutControl(key)));
+  shortcutKeys.forEach(key => { pageShortcuts.appendChild(createShortcutControl(key)); });
   pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(3) }}, 'UI Tweaks ', createElement('span', { class: 'arrow', text: '→' })));
   elmContainer.appendChild(pageShortcuts);
   
@@ -464,7 +464,7 @@ function createOptionsPanel() {
       createConfigCheckbox('fixMultilineTitles')
   ];
 
-  if (isLegacyWebOS()) {
+  if (getWebOSVersion() <= 4) {
       playerUITweaks.push(createConfigCheckbox('enableLegacyEmojiFix'));
   }
 
@@ -616,15 +616,13 @@ async function skipChapter(direction = 'next') {
             targetTime = startTimestamp;
             break;
         }
-      } else {
+      } else if (currentTime >= startTimestamp) {
         // Prev logic
-        if (currentTime >= startTimestamp) {
-            prevChapterStart = currentChapterStart;
-            currentChapterStart = startTimestamp;
-        } else {
-            // Passed current time
-            break;
-        }
+        prevChapterStart = currentChapterStart;
+        currentChapterStart = startTimestamp;
+      } else {
+        // Passed current time
+        break;
       }
   }
   
@@ -779,8 +777,7 @@ function toggleCommentsLogic() {
     const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
       
     if ((isBtnActive || isPanelVisible) && !isLiveChat) simulateBack();
-    else {
-        if (triggerInternal(commBtn, isLiveChat ? 'Live Chat' : 'Comments')) {
+    else if (triggerInternal(commBtn, isLiveChat ? 'Live Chat' : 'Comments')) {
             if (isLiveChat) {
                 setTimeout(() => {
                     const pressed = commBtn.getAttribute('aria-pressed') === 'true';
@@ -791,7 +788,6 @@ function toggleCommentsLogic() {
         else {
             showNotification(isLiveChat ? 'Live Chat Unavailable' : 'Comments Unavailable');
         }
-    }
 }
 
 function toggleDescriptionLogic() {
@@ -812,8 +808,7 @@ function toggleDescriptionLogic() {
     const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
 
     if (isDescActive || isPanelVisible) simulateBack();
-    else {
-        if (triggerInternal(target, 'Description')) {
+    else if (triggerInternal(target, 'Description')) {
             setTimeout(() => {
                 if (window.returnYouTubeDislike) {
                     console.log('[Shortcut] Manually triggering RYD check for description panel...');
@@ -822,7 +817,6 @@ function toggleDescriptionLogic() {
             }, 350);
         }
         else showNotification('Description Unavailable');
-    }
 }
 
 function saveToPlaylistLogic() {
@@ -838,11 +832,43 @@ function saveToPlaylistLogic() {
     const panel = document.querySelector('.AmQJbe');
       
     if (panel) simulateBack();
-    else {
-        if (!triggerInternal(target, 'Save/Watch Later')) {
+    else if (!triggerInternal(target, 'Save/Watch Later')) {
             showNotification('Save Button Unavailable');
         }
-    }
+}
+
+function refreshPageLogic() {
+    const commandPayload = {
+        clickTrackingParams: "",
+        signalServiceEndpoint: {
+            signal: "CLIENT_SIGNAL",
+            actions: [
+                {
+                    clickTrackingParams: "",
+                    signalAction: {
+                        signal: "SOFT_RELOAD_PAGE"
+                    },
+                    commandMetadata: {
+                        webCommandMetadata: {
+                            clientAction: true
+                        }
+                    }
+                }
+            ]
+        }
+    };
+
+    const appRoot = document.querySelector('ytlr-app') || document.body;
+    console.log("[Shortcut] Triggering soft reload...");
+    
+    appRoot.dispatchEvent(new CustomEvent('innertube-command', {
+        bubbles: true,
+        cancelable: false,
+        composed: true,
+        detail: commandPayload
+    }));
+    
+    // showNotification('Refreshing Page...');
 }
 
 function playPauseLogic(video) {
@@ -924,6 +950,14 @@ function handleShortcutAction(action) {
           }, 30 * 60 * 1000);
           showNotification('OLED Mode Activated');
       }
+      return;
+  }
+  if (action === 'refresh_page') {
+      if (isWatchPage() || isShortsPage()) {
+          showNotification('Cannot refresh on player pages');
+          return;
+      }
+      refreshPageLogic();
       return;
   }
 
@@ -1128,7 +1162,7 @@ function initGlobalStyles() {
             body.ytaf-hide-controls .webOs-watch { opacity: 0 !important; }
 			
 			/* Fix Multiline Titles */
-            ${fixTitles ? `.app-quality-root .SK1srf .WVWtef, .app-quality-root .SK1srf .niS3yd { padding-bottom: 0.37vh !important; padding-top: 0.37vh !important; }` : ''}
+            ${fixTitles ? '.app-quality-root .SK1srf .WVWtef, .app-quality-root .SK1srf .niS3yd { padding-bottom: 0.37vh !important; padding-top: 0.37vh !important; }' : ''}
         `;
     };
 
@@ -1194,9 +1228,7 @@ function applyOledMode(enabled) {
         ${transparentBgRules}` 
     });
     document.head.appendChild(style);
-  } else {
-    if(notificationContainer) notificationContainer.classList.remove(oledClass);
-  }
+  } else if(notificationContainer) notificationContainer.classList.remove(oledClass);
   updateLogoState();
 }
 

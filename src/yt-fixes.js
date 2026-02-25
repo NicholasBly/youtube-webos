@@ -1,4 +1,4 @@
-import { configRead } from './config.js';
+// import { configRead } from './config.js';
 
 let historyCache = false;
 let searchHistoryObserver = null;
@@ -124,7 +124,7 @@ function populateSearchHistory(container) {
         }
 
         container.dataset.historyFixed = 'true';
-        container.style.cssText = `display: flex; flex-direction: column; width: 30rem; position: absolute; left: 6.5rem; top: 7.25rem; height: auto; padding: 1rem; box-sizing: border-box; background-color: transparent; z-index: 999;`;
+        container.style.cssText = 'display: flex; flex-direction: column; width: 30rem; position: absolute; left: 6.5rem; top: 7.25rem; height: auto; padding: 1rem; box-sizing: border-box; background-color: transparent; z-index: 999;';
 
         historyData.slice(0, 8).forEach(item => {
             const searchTerm = item[0];
@@ -132,7 +132,7 @@ function populateSearchHistory(container) {
             row.className = 'injected-history-item';
             row.setAttribute('tabindex', '0');
             row.setAttribute('role', 'button');
-            row.style.cssText = `display: flex; align-items: center; padding: 0.8rem 1rem; margin-bottom: 0.5rem; background-color: rgba(255,255,255,0.1); border-radius: 4px; cursor: pointer; color: #f1f1f1; font-family: Roboto, sans-serif; font-size: 1.4rem; transition: background-color 0.2s;`;
+            row.style.cssText = 'display: flex; align-items: center; padding: 0.8rem 1rem; margin-bottom: 0.5rem; background-color: rgba(255,255,255,0.1); border-radius: 4px; cursor: pointer; color: #f1f1f1; font-family: Roboto, sans-serif; font-size: 1.4rem; transition: background-color 0.2s;';
             const iconSpan = document.createElement('span');
             iconSpan.style.cssText = 'margin-right: 1rem; opacity: 0.7;';
             iconSpan.textContent = '↺';
