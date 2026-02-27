@@ -12,6 +12,16 @@ import './screensaver-fix';
 import './yt-fixes.css';
 import './watch.js';
 
+if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
+    Object.defineProperty(Node.prototype, 'isConnected', {
+        get: function() {
+            return document.contains(this);
+        },
+        configurable: true,
+        enumerable: true
+    });
+}
+
 (function oneTimeParamsCheck() {
     const params = extractLaunchParams();
     if (params && Object.keys(params).length > 0) {

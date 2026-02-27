@@ -3,7 +3,7 @@ import { isShortsPage } from './utils';
 import { getWebOSVersion } from './webos-utils';
 
 const DEBUG = false;
-const EMOJI_DEBUG = true; 
+const EMOJI_DEBUG = false; 
 const FORCE_FALLBACK = false;
 
 // --- CONSTANTS & CONFIGURATION ---

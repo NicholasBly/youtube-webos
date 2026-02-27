@@ -3,7 +3,7 @@ import { getWebOSVersion } from './webos-utils.js';
 import { configRead, configAddChangeListener } from './config.js';
 import './emoji-font.css';
 
-const DEBUG_EMOJI_DOM = true;
+const DEBUG_EMOJI_DOM = false;
 
 // ONLY look for the invisible markers injected by adblock.js
 const WRAPPED_EMOJI_RE = /\u200B([^\u200C]+)\u200C/; // Note: Removed global 'g' flag for precise splitText matching
