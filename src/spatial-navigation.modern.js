@@ -24,7 +24,7 @@
   window.addEventListener('resize', () => {
     viewportWidth = window.innerWidth;
     viewportHeight = window.innerHeight;
-  });
+  }, { passive: true });
 
   function initiateSpatialNavigation() {
     window.navigate = navigate;
@@ -82,7 +82,9 @@
       }
     });
 
-    document.addEventListener('mouseup', (e) => startingPoint = { x: e.clientX, y: e.clientY });
+    document.addEventListener('mouseup', (e) => {
+    startingPoint = { x: e.clientX, y: e.clientY };
+    }, { passive: true });
 
     window.addEventListener('focusin', (e) => {
       if (e.target !== window) {
@@ -158,7 +160,7 @@
     if (bestCandidate) {
       if (!createSpatNavEvents('beforefocus', bestCandidate, null, dir)) return true;
       const container = bestCandidate.getSpatialNavigationContainer();
-      bestCandidate.focus({ preventScroll: container !== window && getCSSSpatNavAction(container) !== 'focus' });
+      bestCandidate.focus({ preventScroll: container === window || getCSSSpatNavAction(container) !== 'focus' });
       startingPoint = null;
       return true;
     }
@@ -180,14 +182,13 @@
   function moveScroll(element, dir, offset = 0) {
     if (!element) return;
     
-    const scrollY = (viewportHeight * 0.3) + offset; 
-    const scrollX = (viewportWidth * 0.15) + offset; 
+    const scrollStep = 40 + offset;
 
     switch (dir) {
-      case 'left': element.scrollBy({ left: -scrollX }); break;
-      case 'right': element.scrollBy({ left: scrollX }); break;
-      case 'up': element.scrollBy({ top: -scrollY }); break;
-      case 'down': element.scrollBy({ top: scrollY }); break;
+      case 'left': element.scrollBy({ left: -scrollStep }); break;
+      case 'right': element.scrollBy({ left: scrollStep }); break;
+      case 'up': element.scrollBy({ top: -scrollStep }); break;
+      case 'down': element.scrollBy({ top: scrollStep }); break;
     }
   }
 
@@ -241,9 +242,11 @@
     const rawCandidates = args.candidates?.length ? args.candidates : defaultCandidates;
     const candidates = [];
     
+    const isDefault = rawCandidates === defaultCandidates; 
+    
     for (let i = 0; i < rawCandidates.length; i++) {
         const c = rawCandidates[i];
-        if (container.contains(c) && container !== c) candidates.push(c);
+        if (container.contains(c) && (!isDefault || container !== c)) candidates.push(c);
     }
 
     if (!candidates.length) return null;
@@ -409,7 +412,7 @@
   // Direct looping over NodeList instead of spreading to array first.
   function focusableAreas(option = { mode: 'visible' }) {
     const container = this.parentElement ? this : document.body;
-    const elements = container.querySelectorAll('*');
+    const elements = container.getElementsByTagName('*');
     const result = [];
     
     for (let i = 0; i < elements.length; i++) {
@@ -527,11 +530,11 @@
   }
 
   function isHTMLScrollBoundary(element, dir) {
-    switch (dir) {
-      case 'left': return element.scrollLeft === 0;
-      case 'right': return (element.scrollWidth - element.scrollLeft - element.clientWidth) === 0;
-      case 'up': return element.scrollTop === 0;
-      case 'down': return (element.scrollHeight - element.scrollTop - element.clientHeight) === 0;
+  switch (dir) {
+      case 'left': return element.scrollLeft <= 1;
+      case 'right': return Math.abs(element.scrollWidth - element.scrollLeft - element.clientWidth) <= 1;
+      case 'up': return element.scrollTop <= 1;
+      case 'down': return Math.abs(element.scrollHeight - element.scrollTop - element.clientHeight) <= 1;
     }
     return false;
   }
@@ -573,6 +576,7 @@
   }
 
   function isBeingRendered(element) {
+    if (!element.parentElement) return isVisibleStyleProperty(element);
     if (!isVisibleStyleProperty(element.parentElement)) return false;
     const style = getCachedComputedStyle(element);
     return isVisibleStyleProperty(element) && style.opacity !== '0' && style.height !== '0px' && style.width !== '0px';
@@ -755,10 +759,20 @@
 	}
 
   function getBoundingClientRect(element) {
-    if (!mapOfBoundRect) return element.getBoundingClientRect();
+    if (!mapOfBoundRect) return element.getBoundingClientRect(); 
+    
     let rect = mapOfBoundRect.get(element);
     if (!rect) {
-      rect = element.getBoundingClientRect(); // Native DOMRect is faster than creating a new JS Object
+      const r = element.getBoundingClientRect();
+      
+      rect = {
+        top: Number(r.top.toFixed(2)),
+        right: Number(r.right.toFixed(2)),
+        bottom: Number(r.bottom.toFixed(2)),
+        left: Number(r.left.toFixed(2)),
+        width: Number(r.width.toFixed(2)),
+        height: Number(r.height.toFixed(2))
+      };
       mapOfBoundRect.set(element, rect);
     }
     return rect;
@@ -773,9 +787,103 @@
     return result;
   }
 
+  function getExperimentalAPI() {
+    function canScroll(container, dir) {
+      return (isScrollable(container, dir) && !isScrollBoundary(container, dir)) ||
+             (!container.parentElement && !isHTMLScrollBoundary(container, dir));
+    }
+
+    function findTarget(findCandidate, element, dir, option) {
+      let eventTarget = element;
+      if (eventTarget === document || eventTarget === document.documentElement) {
+        eventTarget = document.body || document.documentElement;
+      }
+
+      if ((isContainer(eventTarget) || eventTarget.nodeName === 'BODY') && eventTarget.nodeName !== 'INPUT') {
+        if (eventTarget.nodeName === 'IFRAME') eventTarget = eventTarget.contentDocument.body;
+        const candidates = getSpatialNavigationCandidates(eventTarget, option);
+        if (candidates?.length > 0) {
+          return findCandidate ? getFilteredSpatialNavigationCandidates(eventTarget, dir, candidates) : eventTarget.spatialNavigationSearch(dir, {candidates});
+        }
+        if (canScroll(eventTarget, dir)) return findCandidate ? [] : eventTarget;
+      }
+
+      let container = eventTarget.getSpatialNavigationContainer();
+      let parentContainer = container.parentElement ? container.getSpatialNavigationContainer() : null;
+      if (!parentContainer && window.location !== window.parent.location) {
+        parentContainer = window.parent.document.documentElement;
+      }
+
+      while (parentContainer) {
+        const candidates = filteredCandidates(eventTarget, getSpatialNavigationCandidates(container, option), dir, container);
+        if (candidates?.length > 0) {
+          const bestNextTarget = eventTarget.spatialNavigationSearch(dir, {candidates, container});
+          if (bestNextTarget) return findCandidate ? candidates : bestNextTarget;
+        } else if (canScroll(container, dir)) {
+          return findCandidate ? [] : eventTarget;
+        } else if (container === document || container === document.documentElement) {
+          container = window.document.documentElement;
+          if (window.location !== window.parent.location) {
+            eventTarget = window.frameElement;
+            container = window.parent.document.documentElement;
+            parentContainer = container.parentElement ? container.getSpatialNavigationContainer() : null;
+            if (!parentContainer) break;
+          }
+        } else {
+          if (isFocusable(container)) eventTarget = container;
+          container = parentContainer;
+          parentContainer = container.parentElement ? container.getSpatialNavigationContainer() : null;
+          if (!parentContainer) break;
+        }
+      }
+
+      if (!parentContainer && container) {
+        const candidates = filteredCandidates(eventTarget, getSpatialNavigationCandidates(container, option), dir, container);
+        if (candidates?.length > 0) {
+          const bestNextTarget = eventTarget.spatialNavigationSearch(dir, {candidates, container});
+          if (bestNextTarget) return findCandidate ? candidates : bestNextTarget;
+        }
+      }
+
+      if (canScroll(container, dir)) return eventTarget;
+    }
+
+    return {
+      isContainer,
+      isScrollContainer,
+      isVisibleInScroller,
+      findCandidates: (element, dir, option) => findTarget(true, element, dir, option),
+      findNextTarget: (element, dir, option) => findTarget(false, element, dir, option),
+      getDistanceFromTarget: (element, candidateElement, dir) => {
+        if ((isContainer(element) || element.nodeName === 'BODY') && element.nodeName !== 'INPUT') {
+          const candidates = getSpatialNavigationCandidates(element);
+          if (candidates.indexOf(candidateElement) !== -1) {
+            return getInnerDistance(getBoundingClientRect(element), getBoundingClientRect(candidateElement), dir);
+          }
+        }
+        return getDistance(getBoundingClientRect(element), getBoundingClientRect(candidateElement), dir);
+      }
+    };
+  }
+
+  function getInitialAPIs() {
+    return {
+      enableExperimentalAPIs,
+      get keyMode() { return this._keymode ? this._keymode : 'ARROW'; },
+      set keyMode(mode) { this._keymode = (['SHIFTARROW', 'ARROW', 'NONE'].includes(mode)) ? mode : 'ARROW'; },
+      setStartingPoint: function (x, y) { startingPoint = (x && y) ? { x, y } : null; }
+    };
+  }
+
+  function enableExperimentalAPIs(option) {
+    const currentKeyMode = window.__spatialNavigation__?.keyMode;
+    window.__spatialNavigation__ = (option === false) ? getInitialAPIs() : Object.assign(getInitialAPIs(), getExperimentalAPI());
+    window.__spatialNavigation__.keyMode = currentKeyMode;
+    Object.seal(window.__spatialNavigation__);
+  }
+
   initiateSpatialNavigation();
-  window.__spatialNavigation__ = { keyMode: 'ARROW', setStartingPoint: (x, y) => startingPoint = (x && y) ? { x, y } : null };
-  Object.seal(window.__spatialNavigation__);
+  enableExperimentalAPIs(false);
   
   window.addEventListener('load', spatialNavigationHandler);
 })();
