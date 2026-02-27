@@ -52,7 +52,7 @@ export function getWebOSVersion() {
 
     if (chromeVersion >= 120) {
       cachedWebOSVersion = 25;
-    } else if (chromeVersion <= 79) {
+    } else if (chromeVersion <= 53) { // webOS 4
       cachedWebOSVersion = 4;
     } else {
       cachedWebOSVersion = 6;

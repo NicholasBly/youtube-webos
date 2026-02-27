@@ -1,6 +1,6 @@
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
-import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight } from './config.js';
+import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight, forcePreviewModes } from './config.js';
 import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
@@ -251,6 +251,46 @@ function createShortcutControl(keyIdentifier) {
   return container;
 }
 
+function createPreviewControl(key) {
+  const modesMap = forcePreviewModes;
+  const modes = Object.keys(modesMap);
+  
+  const valueText = createElement('span', { class: 'current-value' });
+  const updateDisplay = () => valueText.textContent = modesMap[configRead(key)] || configRead(key);
+  
+  const cycle = (dir) => {
+    let idx = modes.indexOf(configRead(key));
+    if (idx === -1) idx = 0;
+    idx = dir === 'next' ? (idx + 1) % modes.length : (idx - 1 + modes.length) % modes.length;
+    configWrite(key, modes[idx]);
+    updateDisplay();
+  };
+
+  const container = createElement('div', { 
+    class: 'shortcut-control-row',
+    style: { padding: '0.6vh 0', margin: '0.2vh 0' }, 
+    tabIndex: 0,
+    events: {
+      keydown: (e) => {
+        if (e.keyCode === REMOTE_KEYS.LEFT.code) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
+        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
+      },
+      click: () => cycle('next')
+    }
+  },
+    createElement('span', { text: configGetDesc(key), class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
+    createElement('div', { class: 'shortcut-value-container' },
+      createElement('span', { text: '<', class: 'arrow-btn' }),
+      valueText,
+      createElement('span', { text: '>', class: 'arrow-btn' })
+    )
+  );
+  
+  configAddChangeListener(key, updateDisplay);
+  updateDisplay();
+  return container;
+}
+
 // --- Main Options Panel Logic ---
 
 function createOpacityControl(key) {
@@ -461,7 +501,8 @@ function createOptionsPanel() {
   const playerUITweaks = [
       createOpacityControl('videoShelfOpacity'),
       createElement('div', { text: 'Adjusts opacity of black background underneath videos (Requires OLED-care mode)', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
-      createConfigCheckbox('fixMultilineTitles')
+      createConfigCheckbox('fixMultilineTitles'),
+	  createPreviewControl('forcePreviews')
   ];
 
   if (getWebOSVersion() <= 4) {

@@ -46,6 +46,28 @@ function disableWhosWatching(enable = true) {
   }
 }
 
+export function setInlinePlayback(mode) {
+  if (mode === 'disabled') return;
+  
+  const isEnabled = mode === 'force_on';
+  try {
+    localStorage.setItem('yt.leanback.default::inline-playback-enabled', JSON.stringify({ data: isEnabled }));
+    console.info(`[Auto Login] Inline playback (previews) forced to: ${isEnabled}`);
+  } catch (error) {
+    console.error('[Auto Login] Failed to update inline playback setting:', error);
+  }
+}
+
+export function initPreviews() {
+  const mode = configRead('forcePreviews');
+  if (mode === 'disabled') return;
+
+  // Delay by 2.5 seconds to ensure it applies after YouTube's initial load overrides
+  setTimeout(() => {
+    setInlinePlayback(mode);
+  }, 2500); 
+}
+
 function injectBypassCSS() {
     if (document.head && !document.getElementById(BYPASS_STYLE_ID)) {
         const style = document.createElement('style');
@@ -128,8 +150,8 @@ export function initAutoLogin() {
 }
 
 document.readyState === 'loading'
-  ? document.addEventListener('DOMContentLoaded', initAutoLogin)
-  : initAutoLogin();
+  ? document.addEventListener('DOMContentLoaded', () => { initAutoLogin(); initPreviews(); })
+  : (initAutoLogin(), initPreviews());
 
 configAddChangeListener('enableAutoLogin', ({ detail }) => {
   if (detail.newValue) {
@@ -139,4 +161,8 @@ configAddChangeListener('enableAutoLogin', ({ detail }) => {
     console.info('Auto login disabled');
     disableWhosWatching(false); // Reset local storage time value
   }
+});
+
+configAddChangeListener('forcePreviews', ({ detail }) => {
+  setInlinePlayback(detail.newValue);
 });

@@ -1,16 +1,5 @@
 import 'whatwg-fetch';
 import './domrect-polyfill';
-import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
-import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';
-import { isWebOS25, simulatorMode } from './webos-utils.js';
-import { initBlockWebOSCast } from './block-webos-cast';
-import './adblock.js';
-import './sponsorblock.js';
-import './emoji-font.ts';
-import './thumbnail-quality.js';
-import './screensaver-fix';
-import './yt-fixes.css';
-import './watch.js';
 
 if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
     Object.defineProperty(Node.prototype, 'isConnected', {
@@ -21,6 +10,18 @@ if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnect
         enumerable: true
     });
 }
+
+import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
+import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';
+import { isWebOS25, simulatorMode } from './webos-utils.js';
+import { initBlockWebOSCast } from './block-webos-cast';
+import './adblock.js';
+import './sponsorblock.js';
+import './emoji-font.js';
+import './thumbnail-quality.js';
+import './screensaver-fix.js';
+import './yt-fixes.css';
+import './watch.js';
 
 (function oneTimeParamsCheck() {
     const params = extractLaunchParams();
