@@ -1,6 +1,6 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config.js';
 import { showNotification } from './ui';
-import { WebOSVersion } from './webos-utils.js';
+import { isWebOS25 } from './webos-utils.js';
 import { sendKey, REMOTE_KEYS, SELECTORS, isWatchPage } from './utils.js';
 
 const DEBUG = false;
@@ -9,7 +9,7 @@ const TARGET_QUALITIES = new Set([
   'highres', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'
 ]);
 
-const IS_WEBOS_25 = WebOSVersion() === 25;
+const IS_WEBOS_25 = isWebOS25();
 const QUALITY_KEY = 'yt-player-quality';
 const ONE_YEAR_MS = 31536000000; // 365 * 24 * 60 * 60 * 1000
 
@@ -36,11 +36,11 @@ let hasKickstarted = false;
 
 // Player States
 const STATE_UNSTARTED = -1;
-const STATE_ENDED = 0;
+// const STATE_ENDED = 0;
 const STATE_PLAYING = 1;
-const STATE_PAUSED = 2;
+// const STATE_PAUSED = 2;
 const STATE_BUFFERING = 3;
-const STATE_CUED = 5;
+// const STATE_CUED = 5;
 
 function isForceEnabled() {
   return _shouldForce && (!player?.isInline || !player.isInline());
@@ -99,7 +99,8 @@ async function ensurePlaybackStarts() {
     } catch (e) {
       if (DEBUG) console.warn('[VideoQuality] Kick attempt failed:', e);
     }
-
+	
+	// eslint-disable-next-line no-await-in-loop
     await new Promise(resolve => setTimeout(resolve, INTERVAL_MS));
   }
 

@@ -34,7 +34,7 @@ const makeConfig = (env) => {
           'whatwg-fetch': false,
           
           // Strip local polyfills
-          //[path.resolve(__dirname, 'src/spatial-navigation-polyfill.js')]: false,
+          [path.resolve(__dirname, 'src/spatial-navigation-polyfill.js')]: path.resolve(__dirname, 'src/spatial-navigation.modern.js'),
           [path.resolve(__dirname, 'src/domrect-polyfill.js')]: false,
 		  [path.resolve(__dirname, 'src/emoji-font.ts')]: false,
 		  [path.resolve(__dirname, 'src/emoji-font.css')]: false
@@ -60,7 +60,7 @@ const makeConfig = (env) => {
               configFile: false,
               presets: [
                 ['@babel/preset-env', {
-                  targets: "chrome 87", 
+                  targets: 'chrome 87', 
                   bugfixes: true,
                   modules: false,
                   useBuiltIns: false

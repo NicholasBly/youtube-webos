@@ -16,7 +16,7 @@ let pageObserverAttached = false;
  * Disables "Who's watching" by pushing the lastFired date 7 days into the future.
  * Credit: reisxd || https://github.com/reisxd/TizenTube/
  */
-function disableWhosWatching() {
+function disableWhosWatching(enable = true) {
   try {
     const storedData = localStorage.getItem(STORAGE_KEY);
     if (!storedData) return console.warn('Auto login: No recurring actions found');
@@ -26,23 +26,46 @@ function disableWhosWatching() {
 
     if (!actions) return;
 
-    const futureDate = Date.now() + (7 * 24 * 60 * 60 * 1000); // +7 days
+    // Use a future date if enabling, or Date.now() if disabling
+    const targetDate = enable ? Date.now() + (7 * 24 * 60 * 60 * 1000) : Date.now();
     let isModified = false;
 
     for (const key of TARGET_ACTIONS) {
       if (actions[key]) {
-        actions[key].lastFired = futureDate;
+        actions[key].lastFired = targetDate;
         isModified = true;
       }
     }
 
     if (isModified) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
-      console.info('Auto login: "Who\'s watching" screens disabled');
+      console.info(`Auto login: "Who's watching" screens ${enable ? 'disabled' : 'enabled'}`);
     }
   } catch (error) {
     console.error('Auto login: Failed to update settings:', error);
   }
+}
+
+export function setInlinePlayback(mode) {
+  if (mode === 'disabled') return;
+  
+  const isEnabled = mode === 'force_on';
+  try {
+    localStorage.setItem('yt.leanback.default::inline-playback-enabled', JSON.stringify({ data: isEnabled }));
+    console.info(`[Auto Login] Inline playback (previews) forced to: ${isEnabled}`);
+  } catch (error) {
+    console.error('[Auto Login] Failed to update inline playback setting:', error);
+  }
+}
+
+export function initPreviews() {
+  const mode = configRead('forcePreviews');
+  if (mode === 'disabled') return;
+
+  // Delay by 2.5 seconds to ensure it applies after YouTube's initial load overrides
+  setTimeout(() => {
+    setInlinePlayback(mode);
+  }, 2500); 
 }
 
 function injectBypassCSS() {
@@ -68,21 +91,20 @@ function finalizeBypass() {
     setTimeout(() => {
         const style = document.getElementById(BYPASS_STYLE_ID);
         if (style) style.remove();
-        hasBypassed = false; 
+        // hasBypassed = false; 
     }, 2000);
 }
 
 export function attemptActiveBypass(force = false) {
     const isSelector = document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR);
     
-    const params = extractLaunchParams();
-    const hasParams = params && Object.keys(params).length > 0;
+    // const params = extractLaunchParams();
+    // const hasParams = params && Object.keys(params).length > 0;
 
     if (!isSelector && !force) return;
-    if (!hasParams && !force && !configRead('enableAutoLogin')) return;
-    
-    if (hasBypassed) return;
-
+    // if (!hasParams && !force) return; Still checking for account selector page on normal loads too
+    if (hasBypassed && !force) return;
+	
     console.info('[Auto Login] Active Bypass: Selector Detected! Executing sequence...');
     hasBypassed = true;
     injectBypassCSS();
@@ -98,12 +120,16 @@ export function attemptActiveBypass(force = false) {
     }, 500);
 }
 
+export function resetActiveBypass() {
+    hasBypassed = false;
+}
+
 function setupActiveBypassListener() {
     if (pageObserverAttached) return;
     window.addEventListener('ytaf-page-update', (evt) => {
         if (evt.detail && evt.detail.isAccountSelector) {
             attemptActiveBypass();
-        }
+        } 
     });
     pageObserverAttached = true;
 }
@@ -113,12 +139,19 @@ export function initAutoLogin() {
     console.info('[Auto Login] Initializing...');
     disableWhosWatching();
     setupActiveBypassListener();
+    
+    setTimeout(() => {
+        if (!hasBypassed) {
+            console.info('[Auto Login] Startup window closed');
+            hasBypassed = true;
+        }
+    }, 15000);
   }
 }
 
 document.readyState === 'loading'
-  ? document.addEventListener('DOMContentLoaded', initAutoLogin)
-  : initAutoLogin();
+  ? document.addEventListener('DOMContentLoaded', () => { initAutoLogin(); initPreviews(); })
+  : (initAutoLogin(), initPreviews());
 
 configAddChangeListener('enableAutoLogin', ({ detail }) => {
   if (detail.newValue) {
@@ -126,5 +159,10 @@ configAddChangeListener('enableAutoLogin', ({ detail }) => {
     initAutoLogin();
   } else {
     console.info('Auto login disabled');
+    disableWhosWatching(false); // Reset local storage time value
   }
+});
+
+configAddChangeListener('forcePreviews', ({ detail }) => {
+  setInlinePlayback(detail.newValue);
 });

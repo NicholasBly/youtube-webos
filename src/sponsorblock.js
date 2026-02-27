@@ -2,7 +2,7 @@ import sha256 from 'tiny-sha256';
 import { configRead, configAddChangeListener, configRemoveChangeListener, segmentTypes } from './config';
 import { showNotification } from './ui';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { WebOSVersion } from './webos-utils.js';
+import { isLegacyWebOS } from './webos-utils.js';
 
 const SPONSORBLOCK_CONFIG = {
     primaryAPI: 'https://sponsorblock.inf.re/api',
@@ -46,7 +46,7 @@ class SponsorBlockHandler {
         
         this.debugMode = false;
         
-        this.isLegacyWebOS = WebOSVersion() === 5;
+        this.isLegacyWebOSVer = isLegacyWebOS();
 
         // Tracking state
         this.lastSkipTime = -1;
@@ -172,13 +172,11 @@ class SponsorBlockHandler {
                 this.isTimeListenerActive = true;
 				this.log('debug', 'Time listener attached');
             }
-        } else {
-            if (this.isTimeListenerActive) {
+        } else if (this.isTimeListenerActive) {
                 this.video.removeEventListener('timeupdate', this.boundTimeUpdate);
                 this.isTimeListenerActive = false;
 				this.log('debug', 'Time listener detached');
             }
-        }
     }
 
     clearLongDistanceTimer() {
@@ -441,7 +439,7 @@ class SponsorBlockHandler {
             const videoData = Array.isArray(data) ? data.find(x => x.videoID === this.videoID) : data;
 
             if (!videoData || !videoData.segments || videoData.segments.length === 0) {
-                this.log('debug', "No SponsorBlock segments available, cleaning up");
+                this.log('debug', 'No SponsorBlock segments available, cleaning up');
                 this.destroy(); 
                 return;
             }
@@ -479,7 +477,7 @@ class SponsorBlockHandler {
             }
         } catch (e) {
             if (!this.isDestroyed) {
-                showNotification("SB Error: " + e.message);
+                showNotification('SB Error: ' + e.message);
                 this.log('warn', 'Fetch failed', e);
             }
         }
@@ -623,7 +621,7 @@ class SponsorBlockHandler {
     checkForProgressBar() {
         if (this.isDestroyed) return;
         // Don't re-query if we have a valid progress bar in DOM
-        if (this.overlay && this.overlay.parentNode && document.body.contains(this.overlay.parentNode)) {
+        if (this.overlay && this.overlay.parentNode && this.overlay.parentNode.isConnected) {
             return;
         }
 
@@ -670,7 +668,7 @@ class SponsorBlockHandler {
         if (!duration || isNaN(duration)) return;
 
         const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${this.configCache.sbMode_highlight}`;
-        if (overlayHash === this.lastOverlayHash && this.overlay && document.body.contains(this.overlay)) {
+        if (overlayHash === this.lastOverlayHash && this.overlay && this.overlay.isConnected) {
             return;
         }
         this.lastOverlayHash = overlayHash;
@@ -732,7 +730,7 @@ class SponsorBlockHandler {
                 segment.segment[1] = duration;
                 changed = true;
             }
-            if (this.isLegacyWebOS && segment.segment[1] >= duration - 0.5) {
+            if (this.isLegacyWebOSVer && segment.segment[1] >= duration - 0.5) {
                 segment.segment[1] = Math.max(0, duration - 0.30);
                 changed = true;
             }
@@ -875,7 +873,7 @@ class SponsorBlockHandler {
             return;
         }
 
-        if (this.isLegacyWebOS &&
+        if (this.isLegacyWebOSVer &&
             segmentIdx === this.lastSkippedSegmentIndex &&
             this.video.duration - currentTime < 1.0) {
             return;
@@ -906,7 +904,7 @@ class SponsorBlockHandler {
 		
 		segmentsToMark.forEach(idx => this.skippedSegmentIndices.add(idx));
 
-        if (this.isLegacyWebOS) {
+        if (this.isLegacyWebOSVer) {
             const duration = this.video.duration;
             if (jumpTarget >= duration - 0.5) {
                 jumpTarget = Math.max(0, duration - 0.25);
@@ -923,7 +921,7 @@ class SponsorBlockHandler {
 
         this.video.currentTime = jumpTarget;
 
-        if (!this.isLegacyWebOS) {
+        if (!this.isLegacyWebOSVer) {
             const timeRemaining = this.video.duration - this.video.currentTime;
             if (timeRemaining > 0.5 && this.video.paused) {
                 this.video.play();

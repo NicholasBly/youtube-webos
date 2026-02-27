@@ -68,18 +68,29 @@ function updatePageState() {
 }
 
 if (typeof document !== 'undefined') {
-    const initObserver = () => {
-        _body = document.body;
-        const pageObserver = new MutationObserver(updatePageState);
-        pageObserver.observe(_body, { attributes: true, attributeFilter: ['class'] });
-        updatePageState();
-    };
+	const initObserver = () => {
+		_body = document.body;
+		const pageObserver = new MutationObserver((mutations) => {
+			for (let m of mutations) {
+				if (m.target.className !== m.oldValue) {
+					updatePageState();
+					break;
+				}
+			}
+		});
+		pageObserver.observe(_body, { 
+			attributes: true, 
+			attributeFilter: ['class'],
+			attributeOldValue: true 
+		});
+		updatePageState();
+	};
 
-    if (document.body) {
-        initObserver();
-    } else {
-        document.addEventListener('DOMContentLoaded', initObserver);
-    }
+	if (document.body) {
+		initObserver();
+	} else {
+		document.addEventListener('DOMContentLoaded', initObserver);
+	}
 }
 
 export const isWatchPage = () => _isWatchPage;
@@ -195,7 +206,7 @@ function getYTURL() {
 }
 
 function concatSearchParams(a, b) {
-    b.forEach((value, key) => a.append(key, value));
+    b.forEach((value, key) => { a.append(key, value); });
     return a;
 }
 

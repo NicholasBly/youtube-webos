@@ -1,10 +1,10 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
-import { debounce, SELECTORS } from './utils'; // Shared Debounce
+import { debounce } from './utils';
 import './watch.css';
 
 class Watch {
   constructor() {
-    // Standard properties (No '#' private fields for webOS 3 compatibility)
+    // Standard properties
     this._watch = null;
     this._timer = null;
     this._globalListeners = [];
@@ -12,6 +12,8 @@ class Watch {
     // Constants
     this._PLAYER_SELECTOR = 'ytlr-watch-default'; // Kept specific to this clock feature if needed, or could use SELECTORS.PLAYER_CONTAINER if appropriate.
     this._DEBOUNCE_DELAY = 50;
+	this._cachedPlayer = null;
+    this._cachedOverlay = null;
 
     // Bind methods
     this.onOledChange = this.onOledChange.bind(this);
@@ -38,7 +40,6 @@ class Watch {
 
   applyOledMode(enabled) {
     if (this._watch) {
-      // Chrome 38 supports classList.toggle with second argument
       this._watch.classList.toggle('oled-mode', enabled);
     }
   }
@@ -80,18 +81,24 @@ class Watch {
   updateVisibility() {
     if (!this._watch) return;
 
-    const player = document.querySelector(this._PLAYER_SELECTOR);
+    if (!this._cachedPlayer || !this._cachedPlayer.isConnected) {
+        this._cachedPlayer = document.querySelector(this._PLAYER_SELECTOR);
+    }
     
-    if (!player) {
+    if (!this._cachedPlayer) {
       if (this._watch.style.display !== 'block') {
          this._watch.style.display = 'block';
       }
       return;
     }
 
-	const isHybridFocused = player.getAttribute('hybridnavfocusable') === 'true';
-    const isPlayerElementActive = document.activeElement === player || document.activeElement === document.body;
-    const isOverlayActive = document.querySelector('.AmQJbe');
+    if (!this._cachedOverlay || !this._cachedOverlay.isConnected) {
+        this._cachedOverlay = document.querySelector('.AmQJbe');
+    }
+
+    const isHybridFocused = this._cachedPlayer.getAttribute('hybridnavfocusable') === 'true';
+    const isPlayerElementActive = document.activeElement === this._cachedPlayer || document.activeElement === document.body;
+    const isOverlayActive = !!this._cachedOverlay;
 
     const shouldHide = isHybridFocused || isPlayerElementActive || isOverlayActive;
     
@@ -149,12 +156,10 @@ function toggleWatch(show) {
     if (!watchInstance) {
       watchInstance = new Watch();
     }
-  } else {
-    if (watchInstance) {
+  } else if (watchInstance) {
       watchInstance.destroy();
       watchInstance = null;
     }
-  }
 }
 
 toggleWatch(configRead('showWatch'));

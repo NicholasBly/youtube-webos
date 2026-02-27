@@ -75,8 +75,8 @@ class ReturnYouTubeDislike {
   }
 
   log(level, message) {
-    var args = [].slice.call(arguments, 2); 
-    var prefix = '[RYD:' + this.videoID + '] [' + level.toUpperCase() + ']';
+    let args = [].slice.call(arguments, 2); 
+    let prefix = '[RYD:' + this.videoID + '] [' + level.toUpperCase() + ']';
     console.log.apply(console, [prefix, message].concat(args));
   }
 
@@ -250,7 +250,7 @@ class ReturnYouTubeDislike {
   refreshMenuCache() {
       if (!this.panelElement) return;
       // PERF: Only query once
-      var rawItems = [].slice.call(this.panelElement.querySelectorAll(SELECTORS.menuItem));
+      let rawItems = [].slice.call(this.panelElement.querySelectorAll(SELECTORS.menuItem));
       // Filter nested items
       this.menuItemsCache = rawItems.filter(item => !item.querySelector(SELECTORS.menuItem));
       

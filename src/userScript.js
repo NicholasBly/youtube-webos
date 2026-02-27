@@ -1,31 +1,40 @@
 import 'whatwg-fetch';
 import './domrect-polyfill';
+
+if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
+    Object.defineProperty(Node.prototype, 'isConnected', {
+        get: function() {
+            return document.contains(this);
+        },
+        configurable: true,
+        enumerable: true
+    });
+}
+
 import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
-import { attemptActiveBypass } from './auto-login.js';
-import { WebOSVersion, simulatorMode } from './webos-utils.js';
+import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';
+import { isWebOS25, simulatorMode } from './webos-utils.js';
 import { initBlockWebOSCast } from './block-webos-cast';
 import './adblock.js';
 import './sponsorblock.js';
-import './emoji-font.ts';
+import './emoji-font.js';
 import './thumbnail-quality.js';
-import './screensaver-fix';
+import './screensaver-fix.js';
 import './yt-fixes.css';
 import './watch.js';
 
-const version = WebOSVersion();
-
 (function oneTimeParamsCheck() {
-	const params = extractLaunchParams();
-    if (!params || Object.keys(params).length === 0) {
-		return;
-	}
-	else attemptActiveBypass();
+    const params = extractLaunchParams();
+    if (params && Object.keys(params).length > 0) {
+        attemptActiveBypass();
+    }
 })();
 
 document.addEventListener(
   'webOSRelaunch',
   (evt) => {
     console.info('RELAUNCH:', evt, window.launchParams);
+	resetActiveBypass();
     if (document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR)) {
         console.info('[Main] Relaunch detected on Account Selector. Triggering bypass.');
         attemptActiveBypass(true);
@@ -35,7 +44,7 @@ document.addEventListener(
   true
 );
 
-if (version === 25 && simulatorMode === false) {
+if (isWebOS25() && simulatorMode === false) {
   console.info('[Main] Enabling webOS Google Cast Block');
   initBlockWebOSCast();
 }

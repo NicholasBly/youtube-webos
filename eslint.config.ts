@@ -49,7 +49,7 @@ const configs = [
       'no-useless-return': 'error',
       'arrow-body-style': ['error', 'as-needed'],
       'no-lonely-if': 'error',
-      'prefer-object-has-own': 'error',
+      'prefer-object-has-own': 'off',
       'prefer-exponentiation-operator': 'error',
       'prefer-regex-literals': ['error', { disallowRedundantWrapping: true }],
       'array-callback-return': [

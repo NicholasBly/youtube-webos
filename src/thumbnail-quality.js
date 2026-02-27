@@ -1,19 +1,17 @@
-import { waitForChildAdd } from "./utils"
-import { configRead, configAddChangeListener } from "./config"
+import { waitForChildAdd } from './utils'
+import { configRead, configAddChangeListener } from './config'
 
 // --- Configuration & Constants ---
 const MAX_CONCURRENT_REQUESTS = 3
 const IMAGE_LOAD_TIMEOUT = 5000
 const CACHE_SIZE_LIMIT = 200
-// REMOVED: MAX_CHECK_PER_RUN (Causes starvation of new elements)
-// REMOVED: MAX_OBSERVED_ELEMENTS (Causes elements to be lost on large grids)
 
 const YT_TARGET_THUMBNAIL_NAMES = [
-  "maxresdefault",
-  "sddefault",
-  "hqdefault",
-  "mqdefault",
-  "default"
+  'maxresdefault',
+  'sddefault',
+  'hqdefault',
+  'mqdefault',
+  'default'
 ]
 
 const PLACEHOLDER_DIMENSIONS = [
@@ -22,7 +20,7 @@ const PLACEHOLDER_DIMENSIONS = [
 ]
 
 const webpTestImgs = {
-  lossy: "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"
+  lossy: 'UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA'
 }
 
 // --- State Management ---
@@ -47,7 +45,7 @@ function detectWebP() {
     }
     img.onload = () => done(img.width > 0 && img.height > 0)
     img.onerror = () => done(false)
-    img.src = "data:image/webp;base64," + webpTestImgs.lossy
+    img.src = 'data:image/webp;base64,' + webpTestImgs.lossy
   })
 }
 
@@ -59,7 +57,7 @@ function ensureWebpDetection() {
 // --- Helpers ---
 
 function getThumbnailUrl(originalUrl, targetQuality) {
-  const YT_THUMBNAIL_PATHNAME_REGEX = /vi(?:_webp)?(\/.*?\/)([a-z0-9]+?)(_\w*?)?\.[a-z]+$/
+  const YT_THUMBNAIL_PATHNAME_REGEX = /vi(?:_webp)?(\/.*?\/)([a-z0-9]+)(_\w*)?\.[a-z]+$/
 
   if (originalUrl.hostname.match(/^i\d/) !== null) return null
 
@@ -70,8 +68,8 @@ function getThumbnailUrl(originalUrl, targetQuality) {
   
   if (YT_TARGET_THUMBNAIL_NAMES.indexOf(videoId) === -1) return null
 
-  const extension = webpSupported ? "webp" : "jpg"
-  const newPathPrefix = webpSupported ? "vi_webp" : "vi"
+  const extension = webpSupported ? 'webp' : 'jpg'
+  const newPathPrefix = webpSupported ? 'vi_webp' : 'vi'
 
   const newPathname = originalUrl.pathname.replace(
     YT_THUMBNAIL_PATHNAME_REGEX,
@@ -82,21 +80,21 @@ function getThumbnailUrl(originalUrl, targetQuality) {
 
   const newUrl = new URL(originalUrl)
   newUrl.pathname = newPathname
-  newUrl.search = ""
+  newUrl.search = ''
   return newUrl
 }
 
 function parseCSSUrl(value) {
   if (!value) return undefined
   
-  if (value.indexOf("&amp;") !== -1) {
-    value = value.replace(/&amp;/g, "&")
+  if (value.indexOf('&amp;') !== -1) {
+    value = value.replace(/&amp;/g, '&')
   }
 
   if (urlCache.has(value)) return urlCache.get(value)
 
   try {
-    if (value.indexOf("url(") === -1) return undefined
+    if (value.indexOf('url(') === -1) return undefined
 
     const match = value.match(/url\(['"]?([^'"]+?)['"]?\)/)
     if (match && match[1]) {
@@ -136,7 +134,7 @@ function probeImage(url) {
       if (img) {
         img.onload = null
         img.onerror = null
-        img.src = ""
+        img.src = ''
         img = null
       }
     }
@@ -198,7 +196,7 @@ async function processUpgrade(element, generationId) {
   
   if (!currentUrl) return
 
-  const videoIdMatch = currentUrl.pathname.match(/\/vi(?:_webp)?\/([^\/]+)\//)
+  const videoIdMatch = currentUrl.pathname.match(/\/vi(?:_webp)?\/([^/]+)\//)
   if (!videoIdMatch) return
   const videoId = videoIdMatch[1]
 
@@ -212,7 +210,7 @@ async function processUpgrade(element, generationId) {
 
   await ensureWebpDetection()
 
-  const candidateQualities = ["maxresdefault", "sddefault", "hqdefault"]
+  const candidateQualities = ['maxresdefault', 'sddefault', 'hqdefault']
 
   for (const quality of candidateQualities) {
     const currentState = elementState.get(element)
@@ -301,7 +299,7 @@ function handleScrollForFallback() {
 
 // --- IntersectionObserver with Fallback ---
 
-const intersectionObserver = typeof IntersectionObserver !== "undefined"
+const intersectionObserver = typeof IntersectionObserver !== 'undefined'
   ? new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting) {
@@ -314,7 +312,7 @@ const intersectionObserver = typeof IntersectionObserver !== "undefined"
           }
         }
       }
-    }, { rootMargin: "200px" })
+    }, { rootMargin: '200px' })
   : null
 
 function observeNode(node) {
@@ -327,21 +325,21 @@ function observeNode(node) {
 
 // --- MutationObserver ---
 
-const dummy = document.createElement("div")
+const dummy = document.createElement('div')
 
 const mutationObserver = new MutationObserver(mutations => {
-  const YT_THUMBNAIL_ELEMENT_TAG = "ytlr-thumbnail-details"
+  const YT_THUMBNAIL_ELEMENT_TAG = 'ytlr-thumbnail-details'
 
   for (const mut of mutations) {
-    if (mut.type === "attributes") {
+    if (mut.type === 'attributes') {
       const node = mut.target
       
       // Safety check for matches support
       if (node.matches && node.matches(YT_THUMBNAIL_ELEMENT_TAG)) {
-        dummy.style.cssText = mut.oldValue || ""
+        dummy.style.cssText = mut.oldValue || ''
         
         if (
-          node.style.backgroundImage !== "" &&
+          node.style.backgroundImage !== '' &&
           node.style.backgroundImage !== dummy.style.backgroundImage
         ) {
           const s = elementState.get(node)
@@ -370,7 +368,7 @@ const mutationObserver = new MutationObserver(mutations => {
           observeNode(node)
         }
       }
-    } else if (mut.type === "childList") {
+    } else if (mut.type === 'childList') {
       for (const node of mut.addedNodes) {
         if (node instanceof HTMLElement) {
           if (node.matches && node.matches(YT_THUMBNAIL_ELEMENT_TAG)) {
@@ -408,30 +406,30 @@ let isObserving = false
 async function enableObserver() {
   if (isObserving) return
 
-  let appContainer = document.querySelector("ytlr-app");
+  let appContainer = document.querySelector('ytlr-app');
 
   if (!appContainer) {
     try {
       appContainer = await waitForChildAdd(
         document.body,
-        n => n.nodeName === "YTLR-APP",
+        n => n.nodeName === 'YTLR-APP',
         false,
         null,
         2000
       )
     } catch (e) {
       appContainer = document.body
-      console.warn("[ThumbnailFix] Container not found, using body")
+      console.warn('[ThumbnailFix] Container not found, using body')
     }
   }
 
   console.info(`[ThumbnailFix] Active on: ${appContainer.tagName}`)
 
-  document.addEventListener("visibilitychange", handleVisibilityChange)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 
   if (!intersectionObserver) {
-    console.info("[ThumbnailFix] Using scroll-based fallback for webOS 3 (Chrome 38)")
-    window.addEventListener("scroll", handleScrollForFallback, true)
+    console.info('[ThumbnailFix] Using scroll-based fallback for webOS 3 (Chrome 38)')
+    window.addEventListener('scroll', handleScrollForFallback, true)
     runFallbackCheck()
   }
 
@@ -439,7 +437,7 @@ async function enableObserver() {
     subtree: true,
     childList: true,
     attributes: true,
-    attributeFilter: ["style"],
+    attributeFilter: ['style'],
     attributeOldValue: true
   })
 
@@ -452,7 +450,7 @@ export function cleanup() {
   if (intersectionObserver) {
     intersectionObserver.disconnect()
   } else {
-    window.removeEventListener("scroll", handleScrollForFallback, true)
+    window.removeEventListener('scroll', handleScrollForFallback, true)
     if (scrollCheckTimeout) {
       clearTimeout(scrollCheckTimeout)
       scrollCheckTimeout = null
@@ -461,7 +459,7 @@ export function cleanup() {
   
   observedElements.clear()
   
-  document.removeEventListener("visibilitychange", handleVisibilityChange)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   
   isObserving = false
   requestQueue.clear()
@@ -469,8 +467,8 @@ export function cleanup() {
   elementState = new WeakMap()
 }
 
-if (configRead("upgradeThumbnails")) enableObserver()
+if (configRead('upgradeThumbnails')) enableObserver()
 
-configAddChangeListener("upgradeThumbnails", evt => {
+configAddChangeListener('upgradeThumbnails', evt => {
   evt.detail.newValue ? enableObserver() : cleanup()
 })

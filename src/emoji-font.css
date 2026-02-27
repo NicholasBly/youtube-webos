@@ -4,3 +4,13 @@ img.emoji {
   margin: 0 0.05em 0 0.1em;
   vertical-align: -0.1em;
 }
+
+.twemoji-hidden-text {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  color: transparent;
+  user-select: none;
+  vertical-align: baseline;
+}
