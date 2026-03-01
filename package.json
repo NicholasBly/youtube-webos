@@ -1,6 +1,6 @@
 {
   "name": "youtube-webos",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Ad-free YouTube app for webOS",
   "type": "module",
   "main": "index.js",
@@ -26,7 +26,7 @@
   "dependencies": {
     "@babel/runtime-corejs3": "^7.28.0",
     "@twemoji/api": "^17.0.2",
-    "core-js-pure": "^3.47.0",
+    "core-js-pure": "^3.48.0",
     "regenerator-runtime": "^0.14.1",
     "tiny-sha256": "^1.0.2",
     "whatwg-fetch": "^3.6.20"
@@ -46,7 +46,6 @@
     "babel-loader": "^10.0.0",
     "babel-plugin-polyfill-corejs3": "^0.13.0",
     "babel-plugin-polyfill-regenerator": "^0.6.5",
-    "baseline-browser-mapping": "^2.9.11",
     "copy-webpack-plugin": "^13.0.0",
     "css-loader": "^7.1.2",
     "cssnano": "^7.1.2",
@@ -55,12 +54,11 @@
     "eslint-plugin-regexp": "^2.9.0",
     "globals": "^16.3.0",
     "husky": "^9.1.7",
-    "jiti": "^2.4.2",
     "lint-staged": "^16.2.7",
     "postcss": "^8.5.6",
     "postcss-load-config": "^6.0.1",
     "postcss-loader": "^8.1.1",
-    "postcss-preset-env": "^10.5.0",
+    "postcss-preset-env": "^11.2.0",
     "prettier": "^3.7.4",
     "style-loader": "^4.0.0",
     "transform-async-modules-webpack-plugin": "^1.1.1",

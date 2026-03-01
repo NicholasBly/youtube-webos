@@ -7,7 +7,7 @@ import './return-dislike.js';
 // import { initYouTubeFixes } from './yt-fixes.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, SELECTORS } from './utils.js';
+import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS } from './utils.js';
 import { initAdblock, destroyAdblock } from './adblock.js';
 import { getWebOSVersion } from './webos-utils.js';
 
@@ -36,6 +36,23 @@ let panelInitBlock = false;
 const shortcutCache = {};
 // Define keys including colors
 const shortcutKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'red', 'green', 'blue'];
+
+const ACTION_SCOPES = {
+    config_menu: 'GLOBAL',
+    oled_toggle: 'GLOBAL',
+    refresh_page: 'NON_VIDEO',
+    chapter_skip: 'VIDEO',
+    chapter_skip_prev: 'VIDEO',
+    seek_15_fwd: 'VIDEO',
+    seek_15_back: 'VIDEO',
+    play_pause: 'VIDEO',
+    toggle_subs: 'VIDEO',
+    toggle_comments: 'VIDEO',
+    toggle_description: 'VIDEO',
+    save_to_playlist: 'VIDEO',
+    sb_skip_prev: 'VIDEO',
+    sb_manual_skip: 'VIDEO'
+};
 
 function updateShortcutCache(key) {
     shortcutCache[key] = configRead(`shortcut_key_${key}`);
@@ -135,22 +152,17 @@ function createConfigCheckbox(key) {
   return elmLabel;
 }
 
-function createSegmentControl(key) {
-  const isHighlight = key === 'sbMode_highlight';
-  const modesMap = isHighlight ? sbModesHighlight : sbModes;
-  const modes = Object.keys(modesMap);
-  const colorKey = isHighlight ? 'poi_highlightColor' : key.replace('sbMode_', '') + 'Color';
-  
+function createSection(title, elements) {
+  const legend = createElement('div', { text: title, style: { color: '#aaa', fontSize: '2.4vh', marginBottom: '0.4vh', fontWeight: 'bold', textTransform: 'uppercase' }});
+  const fieldset = createElement('div', { class: 'ytaf-settings-section', style: { marginTop: '1vh', marginBottom: '0.5vh', padding: '0vh', border: '2px solid #444', borderRadius: '5px' }}, legend, ...elements);
+  return fieldset;
+}
+
+// --- Generic UI Components Factory ---
+
+function createGenericControlRow(labelText, displayValueGetter, onLeft, onRight, onClick, extraElements = null) {
   const valueText = createElement('span', { class: 'current-value' });
-  const updateDisplay = () => valueText.textContent = modesMap[configRead(key)] || configRead(key);
-  
-  const cycle = (dir) => {
-    let idx = modes.indexOf(configRead(key));
-    if (idx === -1) idx = 0;
-    idx = dir === 'next' ? (idx + 1) % modes.length : (idx - 1 + modes.length) % modes.length;
-    configWrite(key, modes[idx]);
-    updateDisplay();
-  };
+  const updateDisplay = () => valueText.textContent = displayValueGetter();
 
   const container = createElement('div', { 
     class: 'shortcut-control-row',
@@ -158,21 +170,57 @@ function createSegmentControl(key) {
     tabIndex: 0,
     events: {
       keydown: (e) => {
-        if (e.keyCode === REMOTE_KEYS.LEFT.code) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
-        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
+        if (e.keyCode === REMOTE_KEYS.LEFT.code) { onLeft(); e.stopPropagation(); e.preventDefault(); }
+        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { onRight(); e.stopPropagation(); e.preventDefault(); }
       },
-      click: () => cycle('next')
+      click: () => onClick()
     }
   },
-    createElement('span', { text: configGetDesc(key), class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
+    createElement('span', { text: labelText, class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
     createElement('div', { class: 'shortcut-value-container' },
-      createElement('span', { text: '<', class: 'arrow-btn' }),
+      createElement('span', { text: '<', class: 'arrow-btn', events: { click: (e) => { e.stopPropagation(); onLeft(); } } }),
       valueText,
-      createElement('span', { text: '>', class: 'arrow-btn' })
+      createElement('span', { text: '>', class: 'arrow-btn', events: { click: (e) => { e.stopPropagation(); onRight(); } } })
     )
   );
 
+  if (extraElements) {
+     container.querySelector('.shortcut-value-container').appendChild(extraElements);
+  }
+
+  return { container, updateDisplay };
+}
+
+function createCycleControl(configKey, labelText, modesArray, displayMap = null, extraElements = null) {
+    const displayValueGetter = () => displayMap ? displayMap[configRead(configKey)] || configRead(configKey) : configRead(configKey);
+    const cycle = (dir) => {
+        let idx = modesArray.indexOf(configRead(configKey));
+        if (idx === -1) idx = 0;
+        idx = dir === 'next' ? (idx + 1) % modesArray.length : (idx - 1 + modesArray.length) % modesArray.length;
+        configWrite(configKey, modesArray[idx]);
+        updateDisplay();
+    };
+
+    const { container, updateDisplay } = createGenericControlRow(
+        labelText, displayValueGetter,
+        () => cycle('prev'), () => cycle('next'), () => cycle('next'),
+        extraElements
+    );
+
+    configAddChangeListener(configKey, updateDisplay);
+    updateDisplay();
+    return container;
+}
+
+function createSegmentControl(key) {
+  const isHighlight = key === 'sbMode_highlight';
+  const modesMap = isHighlight ? sbModesHighlight : sbModes;
+  const modes = Object.keys(modesMap);
+  const colorKey = isHighlight ? 'poi_highlightColor' : key.replace('sbMode_', '') + 'Color';
+
   const hasColorPicker = segmentTypes[key.replace('sbMode_', '')] || (isHighlight && segmentTypes['poi_highlight']);
+  let extraElements = null;
+
   if (hasColorPicker) {
       const resetButton = createElement('button', { 
           text: 'R', 
@@ -193,18 +241,10 @@ function createSegmentControl(key) {
       });
       
       configAddChangeListener(colorKey, (evt) => { colorInput.value = evt.detail.newValue; window.sponsorblock?.buildOverlay(); });
-      container.querySelector('.shortcut-value-container').appendChild(createElement('div', { style: { display: 'flex', marginLeft: '10px' } }, resetButton, colorInput));
+      extraElements = createElement('div', { style: { display: 'flex', marginLeft: '10px' } }, resetButton, colorInput);
   }
-  
-  configAddChangeListener(key, updateDisplay);
-  updateDisplay();
-  return container;
-}
 
-function createSection(title, elements) {
-  const legend = createElement('div', { text: title, style: { color: '#aaa', fontSize: '2.4vh', marginBottom: '0.4vh', fontWeight: 'bold', textTransform: 'uppercase' }});
-  const fieldset = createElement('div', { class: 'ytaf-settings-section', style: { marginTop: '1vh', marginBottom: '0.5vh', padding: '0vh', border: '2px solid #444', borderRadius: '5px' }}, legend, ...elements);
-  return fieldset;
+  return createCycleControl(key, configGetDesc(key), modes, modesMap, extraElements);
 }
 
 function createShortcutControl(keyIdentifier) {
@@ -216,90 +256,19 @@ function createShortcutControl(keyIdentifier) {
     ? `${keyIdentifier.charAt(0).toUpperCase() + keyIdentifier.slice(1)} Button` 
     : `Key ${keyIdentifier}`;
 
-  const valueText = createElement('span', { class: 'current-value' });
-  const updateDisplay = () => valueText.textContent = shortcutActions[configRead(configKey)] || configRead(configKey);
-  const cycle = (dir) => {
-    let idx = actions.indexOf(configRead(configKey));
-    if (idx === -1) idx = 0;
-    idx = dir === 'next' ? (idx + 1) % actions.length : (idx - 1 + actions.length) % actions.length;
-    configWrite(configKey, actions[idx]);
-    updateDisplay();
-  };
-
-  const container = createElement('div', { 
-    class: 'shortcut-control-row', 
-    style: { padding: '0.6vh 0', margin: '0.2vh 0' },
-    tabIndex: 0,
-    events: {
-      keydown: (e) => {
-        if (e.keyCode === REMOTE_KEYS.LEFT.code) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
-        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
-      },
-      click: () => cycle('next')
-    }
-  }, 
-    createElement('span', { text: labelText, class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
-    createElement('div', { class: 'shortcut-value-container' },
-      createElement('span', { text: '<', class: 'arrow-btn' }),
-      valueText,
-      createElement('span', { text: '>', class: 'arrow-btn' })
-    )
-  );
-  
-  configAddChangeListener(configKey, updateDisplay);
-  updateDisplay();
-  return container;
+  return createCycleControl(configKey, labelText, actions, shortcutActions);
 }
 
 function createPreviewControl(key) {
-  const modesMap = forcePreviewModes;
-  const modes = Object.keys(modesMap);
-  
-  const valueText = createElement('span', { class: 'current-value' });
-  const updateDisplay = () => valueText.textContent = modesMap[configRead(key)] || configRead(key);
-  
-  const cycle = (dir) => {
-    let idx = modes.indexOf(configRead(key));
-    if (idx === -1) idx = 0;
-    idx = dir === 'next' ? (idx + 1) % modes.length : (idx - 1 + modes.length) % modes.length;
-    configWrite(key, modes[idx]);
-    updateDisplay();
-  };
-
-  const container = createElement('div', { 
-    class: 'shortcut-control-row',
-    style: { padding: '0.6vh 0', margin: '0.2vh 0' }, 
-    tabIndex: 0,
-    events: {
-      keydown: (e) => {
-        if (e.keyCode === REMOTE_KEYS.LEFT.code) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
-        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
-      },
-      click: () => cycle('next')
-    }
-  },
-    createElement('span', { text: configGetDesc(key), class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
-    createElement('div', { class: 'shortcut-value-container' },
-      createElement('span', { text: '<', class: 'arrow-btn' }),
-      valueText,
-      createElement('span', { text: '>', class: 'arrow-btn' })
-    )
-  );
-  
-  configAddChangeListener(key, updateDisplay);
-  updateDisplay();
-  return container;
+  return createCycleControl(key, configGetDesc(key), Object.keys(forcePreviewModes), forcePreviewModes);
 }
-
-// --- Main Options Panel Logic ---
 
 function createOpacityControl(key) {
   const step = 5;
   const min = 0;
   const max = 100;
   
-  const valueText = createElement('span', { class: 'current-value' });
-  const updateDisplay = () => valueText.textContent = `${configRead(key)}%`;
+  const displayValueGetter = () => `${configRead(key)}%`;
   
   const changeValue = (delta) => {
     let val = configRead(key);
@@ -308,38 +277,17 @@ function createOpacityControl(key) {
     updateDisplay();
   };
 
-  const container = createElement('div', { 
-    class: 'shortcut-control-row',
-    style: { padding: '0.6vh 0', margin: '0.2vh 0' },
-    tabIndex: 0,
-    events: {
-      keydown: (e) => {
-        if (e.keyCode === REMOTE_KEYS.LEFT.code) { // Left
-          changeValue(-step); 
-          e.stopPropagation(); 
-          e.preventDefault(); 
-        }
-        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { // Right or Enter
-          changeValue(step); 
-          e.stopPropagation(); 
-          e.preventDefault(); 
-        }
-      },
-      click: () => changeValue(step)
-    }
-  }, 
-    createElement('span', { text: configGetDesc(key), class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
-    createElement('div', { class: 'shortcut-value-container' },
-      createElement('span', { text: '<', class: 'arrow-btn', events: { click: (e) => { e.stopPropagation(); changeValue(-step); } } }),
-      valueText,
-      createElement('span', { text: '>', class: 'arrow-btn', events: { click: (e) => { e.stopPropagation(); changeValue(step); } } })
-    )
+  const { container, updateDisplay } = createGenericControlRow(
+      configGetDesc(key), displayValueGetter,
+      () => changeValue(-step), () => changeValue(step), () => changeValue(step)
   );
   
   configAddChangeListener(key, updateDisplay);
   updateDisplay();
   return container;
 }
+
+// --- Main Options Panel Logic ---
 
 function createOptionsPanel() {
   const elmContainer = createElement('div', { 
@@ -1065,33 +1013,53 @@ const eventHandler = (evt) => {
   if (evt.repeat) return;
   // console.info('Key event:', evt.type, evt.charCode, evt.keyCode);
 
-  // 1. Identify Key (Name or Color)
+  // Identify Key (Name or Color)
   let keyName = null;
   const code = evt.keyCode || evt.charCode; 
   const keyColor = getKeyColor(code);
+  const isNumberKey = evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57;
   
   if (keyColor) {
       keyName = keyColor;
-  } else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
+  } else if (isNumberKey) {
+      if (isSearchPage()) return true; 
       keyName = String(evt.keyCode - 48);
   }
 
   if (!keyName) return true; // Not a managed key
 
-  // 2. Get Action
+  // Get Action
   const action = shortcutCache[keyName];
-  
-  // Fast boolean check to exit early
   if (!action || action === 'none') return true;
 
-  // 3. Debounce (only for non-burst)
-  // Check action type for Burst Seek logic
+  // Scope & Context Checking (O(1) Efficiency)
+  const isVideoPage = isWatchPage() || isShortsPage();
+  const actionScope = ACTION_SCOPES[action] || 'VIDEO'; // Default unknown actions to VIDEO for safety
+  
+  // If the user is typing in a native text box, let standard characters (like 0-9) pass through
+  if (!keyColor && (evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA')) {
+      console.log("We are typing!");
+	  return true;
+  }
+  if (!action || action === 'none') {
+      if (isVideoPage) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          return false;
+      } else {
+          return true;
+      }
+  }
+
+  // Release the key instantly if the action's required scope doesn't match the page
+  if (actionScope === 'VIDEO' && !isVideoPage) return true;
+
+  // --- Proceed to Debounce and Execution ---
+  
   const isBurstAction = action === 'seek_15_fwd' || action === 'seek_15_back';
   const now = Date.now();
 
-  // Distinct debounce per key index/name
   if (!isBurstAction && now - lastShortcutTime < shortcutDebounceTime && lastShortcutKey === keyName) {
-      console.log(`[Shortcut] Debounced duplicate key ${keyName}`);
       evt.preventDefault(); 
       evt.stopPropagation(); 
       return false;

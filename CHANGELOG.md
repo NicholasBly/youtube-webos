@@ -4,6 +4,59 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.7.3] - 2026/02/27
+
+## New Features
++ Added "Reload Page" shortcut -> performs a soft reload, the same as pressing the "Refresh" button at the bottom of the page. Only works on the home screen - https://github.com/NicholasBly/youtube-webos/issues/59
+
++ Added "Force Previews" -> On startup, ensures this setting is enabled/disabled to your preference. "Disabled", "Force On", and "Force Off" will be selectable options, "Disabled" by default. Will force the key to enabled/disabled on startup
+
++ Added "Emoji + Character Fix" option to config UI for WebOS 3 and 4. Enables emoji support and support for additional mathematical characters. Applies to video titles on the home screen, video titles during playback, description panel, comments, and full description. Zero-width space characters are also filtered out
+- Processed strings are cached to eliminate pop-in effect
+- Several optimizations and improvements to emoji replacement logic
+- Twemoji updated to 16.0.1 from 15.1.0
+
+## Bug Fixes
++ Fixed Arabic characters - https://github.com/NicholasBly/youtube-webos/issues/56
++ Fixed shorts shelf appearing in Subscriptions tab - https://github.com/NicholasBly/youtube-webos/issues/58
++ Fixed back button on home screen causing auto login to kick in, preventing app closure
++ Auto Login: Reset recurring actions to Date.now when disabling Auto Login (Removes 7 day login screen nag delay) - https://github.com/NicholasBly/youtube-webos/issues/57
+
+## AdBlock
+
+### Optimizations
+
+Smoother UI Performance: Improved CPU/memory usage/garbage colection when targeting Shorts and Top live games shelves. We don't need to run .toLowerCase(), which can create dozens of new string objects, to identify the shelf title when we know exactly what it looks like in the JSON
+
+Extracted array-looping logic for continuation items into a shared processActions() utility, removing duplicate logic blocks between schema matches and fallback scenarios
+
+Faster filtering if using fallback filtering logic: Replaced multiple deep-search passes with a single sweep that can target multiple elements. The filter can now locate and remove multiple items in large data chunks much faster
+
+### Fixes - Fallback logic
+Note: The fallback option is a more expensive way to recursively filter, this kicks in if YouTube updates their JSON object paths as a way to keep functionality after an update
++ Fixed "Sign in for better recommendations" button removal on continuation paths
++ Fixed Shorts sponsored ads
+
+## Spatial Navigation
+
+Added spatial-navigation.modern.js
++ A version of spatial navigation for the modern build (webOS 22+ and ES6+)
++ Strips out the unnecessary polyfills
++ Webpack selects the correct spatial navigation file when building the .ipk per legacy/modern build
++ Lowered file size on modern build
+
+### Optimizations
+
++ Several optimizations for spatial-navigation.modern.js (O(1))
++ Improved scrolling performance
++ Cached screen resolution and getComputedStyle for performance
+
+## Watch.js
++ Cache dom elements for updateVisibility()
+
+## Utils.js
++ updatePageState() - check mutation's old value before updating page state. Reduces unnecessary DOM evaluations and event dispatches on irrelevant body class changes
+
 ## [0.7.2] - 2026/02/18
 
 ## Summary

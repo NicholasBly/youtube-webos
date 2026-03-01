@@ -5,7 +5,8 @@ export const SELECTORS = {
   PLAYER_CONTAINER: 'ytlr-player__player-container',
   WATCH_PAGE_CLASS: 'WEB_PAGE_TYPE_WATCH',
   SHORTS_PAGE_CLASS: 'WEB_PAGE_TYPE_SHORTS',
-  ACCOUNT_SELECTOR: 'WEB_PAGE_TYPE_ACCOUNT_SELECTOR'
+  ACCOUNT_SELECTOR: 'WEB_PAGE_TYPE_ACCOUNT_SELECTOR',
+  SEARCH_PAGE_CLASS: 'WEB_PAGE_TYPE_SEARCH'
 };
 
 export const REMOTE_KEYS = {
@@ -35,6 +36,7 @@ export const REMOTE_KEYS = {
 let _isWatchPage = false;
 let _isShortsPage = false;
 let _isAccountSelectorPage = false;
+let _isSearchPage = false;
 
 // Cache document.body to avoid DOM lookup overhead if used frequently
 let _body = typeof document !== 'undefined' ? document.body : null;
@@ -49,20 +51,24 @@ function updatePageState() {
     const newWatch = cl.contains(SELECTORS.WATCH_PAGE_CLASS);
     const newShorts = cl.contains(SELECTORS.SHORTS_PAGE_CLASS);
 	const newAccountSelector = cl.contains(SELECTORS.ACCOUNT_SELECTOR);
+	const newSearch = cl.contains(SELECTORS.SEARCH_PAGE_CLASS);
     
     if (newWatch === _isWatchPage && 
         newShorts === _isShortsPage && 
-        newAccountSelector === _isAccountSelectorPage) return;
+        newAccountSelector === _isAccountSelectorPage &&
+        newSearch === _isSearchPage) return;
 
     _isWatchPage = newWatch;
     _isShortsPage = newShorts;
     _isAccountSelectorPage = newAccountSelector;
+	_isSearchPage = newSearch;
     
     window.dispatchEvent(new CustomEvent('ytaf-page-update', { 
         detail: { 
             isWatch: _isWatchPage, 
             isShorts: _isShortsPage,
-            isAccountSelector: _isAccountSelectorPage 
+            isAccountSelector: _isAccountSelectorPage,
+			isSearch: _isSearchPage
         } 
     }));
 }
@@ -95,6 +101,7 @@ if (typeof document !== 'undefined') {
 
 export const isWatchPage = () => _isWatchPage;
 export const isShortsPage = () => _isShortsPage;
+export const isSearchPage = () => _isSearchPage;
 
 export function debounce(func, wait) {
   let timeout;

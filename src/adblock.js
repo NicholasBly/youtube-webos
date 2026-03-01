@@ -1,4 +1,4 @@
-import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
+import { configGetAll } from './config';
 import { isShortsPage } from './utils';
 import { getWebOSVersion } from './webos-utils';
 
@@ -67,34 +67,10 @@ const SCHEMA_REGISTRY = {
 let origParse = JSON.parse;
 let isHooked = false;
 
-let configCache = {
-  enableAdBlock: true,
-  removeGlobalShorts: false,
-  removeTopLiveGames: false,
-  hideGuestPrompts: false,
-  enableLegacyEmojiFix: false,
-  lastUpdate: 0
-};
-
 // --- CORE FUNCTIONS ---
 
 function debugLog(msg, ...args) {
   if (DEBUG) console.log(`[AdBlock] ${msg}`, ...args);
-}
-
-function updateConfigCache() {
-  configCache = {
-    enableAdBlock: configRead(CONFIG_KEYS.ADBLOCK),
-    removeGlobalShorts: configRead(CONFIG_KEYS.SHORTS),
-    removeTopLiveGames: configRead(CONFIG_KEYS.LIVE_GAMES),
-    hideGuestPrompts: configRead(CONFIG_KEYS.GUEST_PROMPTS),
-    enableLegacyEmojiFix: configRead(CONFIG_KEYS.EMOJI_FIX) && getWebOSVersion() <= 4,
-    lastUpdate: Date.now()
-  };
-}
-
-function getCachedConfig() {
-  return configCache;
 }
 
 function processEmojiString(str) {
@@ -211,10 +187,17 @@ function hookedParse(text, reviver) {
       return data;
   }
    
-  const config = getCachedConfig();
-  const { enableAdBlock, removeGlobalShorts, removeTopLiveGames, hideGuestPrompts, enableLegacyEmojiFix } = config;
+  // Pull live configuration per-request
+  const globalCfg = configGetAll();
+  const config = {
+    enableAdBlock: globalCfg[CONFIG_KEYS.ADBLOCK],
+    removeGlobalShorts: globalCfg[CONFIG_KEYS.SHORTS],
+    removeTopLiveGames: globalCfg[CONFIG_KEYS.LIVE_GAMES],
+    hideGuestPrompts: globalCfg[CONFIG_KEYS.GUEST_PROMPTS],
+    enableLegacyEmojiFix: globalCfg[CONFIG_KEYS.EMOJI_FIX] && getWebOSVersion() <= 4
+  };
 
-  if (!enableAdBlock && !removeGlobalShorts && !removeTopLiveGames && !hideGuestPrompts && !enableLegacyEmojiFix) return data;
+  if (!config.enableAdBlock && !config.removeGlobalShorts && !config.removeTopLiveGames && !config.hideGuestPrompts && !config.enableLegacyEmojiFix) return data;
   if (!data || typeof data !== 'object') return data;
   
   const isAPIResponse = !!(data.responseContext || data.playerResponse || data.onResponseReceivedActions || data.onResponseReceivedEndpoints || data.frameworkUpdates || data.sectionListRenderer || data.entries || data.continuationContents);
@@ -222,7 +205,7 @@ function hookedParse(text, reviver) {
 
   try {
     const responseType = detectResponseType(data);
-    const needsContentFiltering = enableAdBlock || hideGuestPrompts || enableLegacyEmojiFix;
+    const needsContentFiltering = config.enableAdBlock || config.hideGuestPrompts || config.enableLegacyEmojiFix;
 
     if (isShortsPage() && responseType && IGNORE_ON_SHORTS.includes(responseType)) return data;
 
@@ -534,7 +517,21 @@ function clearArrayIfExists(obj, key) {
 
 function removePlayerAdsOptimized(data) {
   let cleared = 0;
-  cleared += clearArrayIfExists(data, 'adPlacements'); cleared += clearArrayIfExists(data, 'playerAds'); cleared += clearArrayIfExists(data, 'adSlots');
+  cleared += clearArrayIfExists(data, 'adPlacements'); 
+  cleared += clearArrayIfExists(data, 'playerAds'); 
+  cleared += clearArrayIfExists(data, 'adSlots');
+
+  // Strip attestation and telemetry mismatches
+  if (data.attestation) {
+      delete data.attestation;
+      cleared++;
+      if (DEBUG) debugLog('Cleaned Player Attestation Challenge');
+  }
+  if (data.adBreakHeartbeatParams) {
+      delete data.adBreakHeartbeatParams;
+      cleared++;
+      if (DEBUG) debugLog('Cleaned Ad Break Heartbeat');
+  }
   if (data.playerResponse) {
     cleared += clearArrayIfExists(data.playerResponse, 'adPlacements'); cleared += clearArrayIfExists(data.playerResponse, 'playerAds'); cleared += clearArrayIfExists(data.playerResponse, 'adSlots');
   }
@@ -576,16 +573,9 @@ export function initAdblock() {
   if (isHooked) return;
   console.info('[AdBlock] Initializing hybrid hook (Debug Mode: ' + DEBUG + ')');
   
-  updateConfigCache();
   origParse = JSON.parse;
   JSON.parse = function (text, reviver) { return hookedParse.call(this, text, reviver); };
   isHooked = true;
-  
-  configAddChangeListener(CONFIG_KEYS.ADBLOCK, updateConfigCache);
-  configAddChangeListener(CONFIG_KEYS.SHORTS, updateConfigCache);
-  configAddChangeListener(CONFIG_KEYS.LIVE_GAMES, updateConfigCache);
-  configAddChangeListener(CONFIG_KEYS.GUEST_PROMPTS, updateConfigCache);
-  configAddChangeListener(CONFIG_KEYS.EMOJI_FIX, updateConfigCache);
 }
 
 export function destroyAdblock() {
@@ -594,12 +584,6 @@ export function destroyAdblock() {
   
   JSON.parse = origParse;
   isHooked = false;
-  
-  configRemoveChangeListener(CONFIG_KEYS.ADBLOCK, updateConfigCache);
-  configRemoveChangeListener(CONFIG_KEYS.SHORTS, updateConfigCache);
-  configRemoveChangeListener(CONFIG_KEYS.LIVE_GAMES, updateConfigCache);
-  configRemoveChangeListener(CONFIG_KEYS.GUEST_PROMPTS, updateConfigCache);
-  configRemoveChangeListener(CONFIG_KEYS.EMOJI_FIX, updateConfigCache);
 }
 
 initAdblock();

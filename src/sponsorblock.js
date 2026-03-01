@@ -1,5 +1,5 @@
 import sha256 from 'tiny-sha256';
-import { configRead, configAddChangeListener, configRemoveChangeListener, segmentTypes } from './config';
+import { configAddChangeListener, configRemoveChangeListener, segmentTypes, configGetAll } from './config';
 import { showNotification } from './ui';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { isLegacyWebOS } from './webos-utils.js';
@@ -42,7 +42,7 @@ class SponsorBlockHandler {
         this.video = null;
         this.progressBar = null;
         this.overlay = null;
-		this.activeBarSelector = null;
+        this.activeBarSelector = null;
         
         this.debugMode = false;
         
@@ -64,7 +64,7 @@ class SponsorBlockHandler {
         this.wasMutedBySB = false;
         this.isDestroyed = false;
         this.skippedSegmentIndices = new Set();
-		this.tempWhitelistIndex = -1; // Whitelist segment when using shortcut
+        this.tempWhitelistIndex = -1; // Whitelist segment when using shortcut
 
         // Manual skip tracking
         this.activeManualNotification = null;
@@ -87,10 +87,8 @@ class SponsorBlockHandler {
         this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
         this.longDistanceTimer = null;
 
-        this.configCache = {};
         this.lastOverlayHash = null;
 
-        this.updateConfigCache();
         this.setupConfigListeners();
 
         this.log('info', `Created handler for ${this.videoID}`);
@@ -108,26 +106,8 @@ class SponsorBlockHandler {
 
     log(level, message, ...args) {
         if ((level === 'debug' || level === 'info') && !this.debugMode) return;
-        
         console[level === 'warn' ? 'warn' : 'log'](this.logPrefix, message, ...args);
     }
-
-    updateConfigCache() {
-		this.activeCategories.clear();
-		this.configCache = {};
-
-		for (const [cat, configKey] of Object.entries(CONFIG_MAPPING)) {
-			const mode = configRead(configKey);
-			this.configCache[cat] = mode;
-			if (mode !== 'disable') this.activeCategories.add(cat);
-		}
-
-		EXTRA_CONFIG_KEYS.forEach(key => {
-			this.configCache[key] = configRead(key);
-		});
-
-		this.rebuildSkipSegments();
-	}
 
     rebuildSkipSegments() {
         this.stopHighFreqLoop();
@@ -139,6 +119,7 @@ class SponsorBlockHandler {
         }
 
         this.skipSegments = [];
+        const config = configGetAll();
 
         const len = this.segments.length;
         for (let i = 0; i < len; i++) {
@@ -146,7 +127,7 @@ class SponsorBlockHandler {
 
             if (seg.category === 'poi_highlight') continue;
 
-            const mode = this.configCache[seg.category];
+            const mode = config[CONFIG_MAPPING[seg.category]];
             if (!mode || mode === 'disable' || mode === 'seek_bar') continue;
             if (seg.actionType && seg.actionType !== 'skip') continue;
 
@@ -170,13 +151,13 @@ class SponsorBlockHandler {
             if (!this.isTimeListenerActive) {
                 this.video.addEventListener('timeupdate', this.boundTimeUpdate);
                 this.isTimeListenerActive = true;
-				this.log('debug', 'Time listener attached');
+                this.log('debug', 'Time listener attached');
             }
         } else if (this.isTimeListenerActive) {
                 this.video.removeEventListener('timeupdate', this.boundTimeUpdate);
                 this.isTimeListenerActive = false;
-				this.log('debug', 'Time listener detached');
-            }
+                this.log('debug', 'Time listener detached');
+        }
     }
 
     clearLongDistanceTimer() {
@@ -267,15 +248,26 @@ class SponsorBlockHandler {
     }
 
     setupConfigListeners() {
-		this.boundConfigUpdate = this.updateConfigCache.bind(this);
-		
-		const configKeys = [...Object.values(CONFIG_MAPPING), ...EXTRA_CONFIG_KEYS];
+        this.boundConfigUpdate = () => {
+            this.activeCategories.clear();
+            const config = configGetAll();
+            for (const [cat, configKey] of Object.entries(CONFIG_MAPPING)) {
+                if (config[configKey] !== 'disable') this.activeCategories.add(cat);
+            }
+            this.rebuildSkipSegments();
+            this.drawOverlay();
+        };
+        
+        const configKeys = [...Object.values(CONFIG_MAPPING), ...EXTRA_CONFIG_KEYS];
 
-		for (const key of configKeys) {
-			configAddChangeListener(key, this.boundConfigUpdate);
-			this.configListeners.push({ key, callback: this.boundConfigUpdate });
-		}
-	}
+        for (const key of configKeys) {
+            configAddChangeListener(key, this.boundConfigUpdate);
+            this.configListeners.push({ key, callback: this.boundConfigUpdate });
+        }
+        
+        // Initial setup run
+        this.boundConfigUpdate();
+    }
 
     buildSkipChain(segments) {
         if (!segments || segments.length === 0) return null;
@@ -327,8 +319,9 @@ class SponsorBlockHandler {
 
         if (video.currentTime > CHAIN_SKIP_CONSTANTS.START_THRESHOLD) return false;
 
+        const config = configGetAll();
         const enabledSegs = this.segments.filter(s =>
-            s.category !== 'poi_highlight' && this.configCache[s.category] === 'auto_skip'
+            s.category !== 'poi_highlight' && config[CONFIG_MAPPING[s.category]] === 'auto_skip'
         );
 
         if (enabledSegs.length === 0) return false;
@@ -391,8 +384,8 @@ class SponsorBlockHandler {
         video.currentTime = chain.endTime;
         this.lastSkipTime = chain.endTime;
         this.hasPerformedChainSkip = true;
-		
-		enabledSegs.forEach(seg => {
+        
+        enabledSegs.forEach(seg => {
             if (seg.segment[1] <= chain.endTime + 0.1) {
                 const idx = this.segments.indexOf(seg);
                 if (idx !== -1) this.skippedSegmentIndices.add(idx);
@@ -468,7 +461,8 @@ class SponsorBlockHandler {
             this.drawOverlay();
 
             if (this.highlightSegment) {
-                const hlMode = this.configCache.sbMode_highlight;
+                const config = configGetAll();
+                const hlMode = config.sbMode_highlight;
                 if (hlMode === 'auto_skip') {
                     this.jumpToNextHighlight();
                 } else if (hlMode === 'ask') {
@@ -505,7 +499,7 @@ class SponsorBlockHandler {
             this.resetSegmentTracking();
 
             this.hasPerformedChainSkip = false;
-			this.executeChainSkip(this.video);
+            this.executeChainSkip(this.video);
         });
 
         this.addEvent(this.video, 'pause', () => {
@@ -519,7 +513,7 @@ class SponsorBlockHandler {
             this.stopHighFreqLoop();
 
             this.hasPerformedChainSkip = false;
-			this.executeChainSkip(this.video);
+            this.executeChainSkip(this.video);
 
             if (!this.isSkipping) {
                 this.lastSkipTime = -1;
@@ -627,39 +621,39 @@ class SponsorBlockHandler {
 
         let target = null;
 
-		// Try the cached selector first
-		if (this.activeBarSelector) {
-			target = document.querySelector(this.activeBarSelector);
-		}
+        // Try the cached selector first
+        if (this.activeBarSelector) {
+            target = document.querySelector(this.activeBarSelector);
+        }
 
-		// Iterate list only if cache missed
-		if (!target) {
-			const selectors = [
-				'ytlr-multi-markers-player-bar-renderer [idomkey="segment"]',
-				'ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]',
-				'ytlr-multi-markers-player-bar-renderer',
-				'ytlr-progress-bar [idomkey="slider"]',
-				'.ytLrProgressBarSliderBase',
-				'.afTAdb'
-			];
+        // Iterate list only if cache missed
+        if (!target) {
+            const selectors = [
+                'ytlr-multi-markers-player-bar-renderer [idomkey="segment"]',
+                'ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]',
+                'ytlr-multi-markers-player-bar-renderer',
+                'ytlr-progress-bar [idomkey="slider"]',
+                '.ytLrProgressBarSliderBase',
+                '.afTAdb'
+            ];
 
-			for (const selector of selectors) {
-				target = document.querySelector(selector);
-				if (target) {
-					this.activeBarSelector = selector;
-					break;
-				}
-			}
-		}
+            for (const selector of selectors) {
+                target = document.querySelector(selector);
+                if (target) {
+                    this.activeBarSelector = selector;
+                    break;
+                }
+            }
+        }
 
-		if (target) {
-			this.progressBar = target;
-			const style = window.getComputedStyle(target);
-			if (style.position === 'static') target.style.position = 'relative';
-			if (style.overflow !== 'visible') target.style.setProperty('overflow', 'visible', 'important');
-			this.drawOverlay();
-		}
-	}
+        if (target) {
+            this.progressBar = target;
+            const style = window.getComputedStyle(target);
+            if (style.position === 'static') target.style.position = 'relative';
+            if (style.overflow !== 'visible') target.style.setProperty('overflow', 'visible', 'important');
+            this.drawOverlay();
+        }
+    }
 
     drawOverlay() {
         if (!this.progressBar || !this.segments.length || this.isDestroyed) return;
@@ -667,7 +661,8 @@ class SponsorBlockHandler {
         const duration = this.video ? this.video.duration : 0;
         if (!duration || isNaN(duration)) return;
 
-        const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${this.configCache.sbMode_highlight}`;
+        const config = configGetAll();
+        const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${config.sbMode_highlight}`;
         if (overlayHash === this.lastOverlayHash && this.overlay && this.overlay.isConnected) {
             return;
         }
@@ -676,7 +671,7 @@ class SponsorBlockHandler {
         if (this.overlay) this.overlay.remove();
 
         const fragment = document.createDocumentFragment();
-        const highlightMode = this.configCache.sbMode_highlight;
+        const highlightMode = config.sbMode_highlight;
 
         const len = this.segments.length;
         for (let i = 0; i < len; i++) {
@@ -686,7 +681,7 @@ class SponsorBlockHandler {
             if (isHighlight) {
                 if (!highlightMode || highlightMode === 'disable') continue;
             } else {
-                const mode = this.configCache[segment.category];
+                const mode = config[CONFIG_MAPPING[segment.category]];
                 if (!mode || mode === 'disable') continue;
             }
 
@@ -694,7 +689,7 @@ class SponsorBlockHandler {
             const div = document.createElement('div');
 
             const colorKey = isHighlight ? 'poi_highlightColor' : `${segment.category}Color`;
-            const color = configRead(colorKey) || segmentTypes[segment.category]?.color || '#00d400';
+            const color = config[colorKey] || segmentTypes[segment.category]?.color || '#00d400';
 
             div.style.backgroundColor = color;
             div.style.position = 'absolute';
@@ -770,7 +765,7 @@ class SponsorBlockHandler {
     }
 
     handleTimeUpdate() {
-		if (this.isSkipping) return;
+        if (this.isSkipping) return;
         if (this.skipSegments.length === 0) {
             this.toggleTimeListener(false);
             return;
@@ -833,14 +828,14 @@ class SponsorBlockHandler {
                      this.toggleTimeListener(false);
                  }
             }
-			this.tempWhitelistIndex = -1;
+            this.tempWhitelistIndex = -1;
             return;
         }
 
         // We are inside a segment
         const seg = this.skipSegments[segmentIdx];
-		
-		if (this.tempWhitelistIndex !== -1 && seg.originalIndex !== this.tempWhitelistIndex) {
+        
+        if (this.tempWhitelistIndex !== -1 && seg.originalIndex !== this.tempWhitelistIndex) {
             this.tempWhitelistIndex = -1;
         }
 
@@ -864,12 +859,13 @@ class SponsorBlockHandler {
             }
             return;
         }
-		
-		if (seg.originalIndex === this.tempWhitelistIndex) {
+        
+        if (seg.originalIndex === this.tempWhitelistIndex) {
             return;
         }
 
-        if (this.configCache.skipSegmentsOnce && this.skippedSegmentIndices.has(seg.originalIndex)) {
+        const config = configGetAll();
+        if (config.skipSegmentsOnce && this.skippedSegmentIndices.has(seg.originalIndex)) {
             return;
         }
 
@@ -901,8 +897,8 @@ class SponsorBlockHandler {
         this.isSkipping = true;
         this.lastSkipTime = currentTime;
         this.lastSkippedSegmentIndex = segmentIdx;
-		
-		segmentsToMark.forEach(idx => this.skippedSegmentIndices.add(idx));
+        
+        segmentsToMark.forEach(idx => this.skippedSegmentIndices.add(idx));
 
         if (this.isLegacyWebOSVer) {
             const duration = this.video.duration;
@@ -957,15 +953,16 @@ class SponsorBlockHandler {
     jumpToNextHighlight() {
         if (!this.video || !this.highlightSegment) return false;
 
-        const mode = this.configCache.sbMode_highlight;
+        const config = configGetAll();
+        const mode = config.sbMode_highlight;
         if (!mode || mode === 'disable') return false;
 
         this.video.currentTime = this.highlightSegment.segment[0];
         this.requestAF(() => showNotification('Jumped to Highlight'));
         return true;
     }
-	
-	skipToPreviousSegment() {
+    
+    skipToPreviousSegment() {
     if (!this.video || !this.skipSegments.length) return false;
 
     const currentTime = this.video.currentTime;
@@ -979,8 +976,8 @@ class SponsorBlockHandler {
     }
 
     if (!targetSeg) return false;
-	
-	this.tempWhitelistIndex = targetSeg.originalIndex;
+    
+    this.tempWhitelistIndex = targetSeg.originalIndex;
     this.video.currentTime = targetSeg.start;
     
     const categoryName = this.getCategoryName(targetSeg.category);
@@ -988,7 +985,7 @@ class SponsorBlockHandler {
     
     this.requestAF(() => showNotification(`Seeked to ${title}`));
     return true;
-	}
+    }
 
     handleBlueButton() {
         if (this.currentManualSegment) {
@@ -1148,14 +1145,12 @@ class SponsorBlockHandler {
         this.skipSegments = [];
         this.video = null;
         this.progressBar = null;
-		this.tempWhitelistIndex = -1;
+        this.tempWhitelistIndex = -1;
 
         if (this.skippedSegmentIndices) {
             this.skippedSegmentIndices.clear();
             this.skippedSegmentIndices = null;
         }
-
-        this.configCache = {};
     }
 }
 
@@ -1192,7 +1187,8 @@ if (typeof window !== 'undefined') {
                 }
             } catch (e) { /* ignore */ }
 
-            if (videoID && configRead('enableSponsorBlock')) {
+            const config = configGetAll();
+            if (videoID && config.enableSponsorBlock) {
                 window.sponsorblock = new SponsorBlockHandler(videoID);
                 window.sponsorblock.init();
             }

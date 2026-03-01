@@ -1,56 +1,16 @@
 const CONFIG_KEY = 'ytaf-configuration';
 
 export const segmentTypes = {
-  sponsor: {
-    color: '#00d400',
-    opacity: '0.7',
-    name: 'sponsored'
-  },
-  intro: {
-    color: '#00ffff',
-    opacity: '0.7',
-    name: 'intro'
-  },
-  outro: {
-    color: '#0202ed',
-    opacity: '0.7',
-    name: 'outro'
-  },
-  interaction: {
-    color: '#cc00ff',
-    opacity: '0.7',
-    name: 'interaction reminder'
-  },
-  selfpromo: {
-    color: '#ffff00',
-    opacity: '0.7',
-    name: 'self-promotion'
-  },
-  musicofftopic: {
-    color: '#ff9900',
-    opacity: '0.7',
-    name: 'non-music part'
-  },
-  preview: {
-    color: '#008fd6',
-    opacity: '0.7',
-    name: 'recap or preview'
-  },
-  poi_highlight: {
-    color: '#ff1684',
-    opacity: '0.8',
-    name: 'poi_highlight'
-  },
-  filler: {
-    color: '#7300ff',
-    opacity: '0.7',
-    name: 'tangents/jokes'
-  },
-  hook: {
-    color: '#395699',
-    opacity: '0.7',
-    name: 'hook/greetings'
-  }
+  sponsor: { color: '#00d400', opacity: '0.7', name: 'sponsored' },
+  intro: { color: '#00ffff', opacity: '0.7', name: 'intro' },
+  outro: { color: '#0202ed', opacity: '0.7', name: 'outro' },
+  interaction: { color: '#cc00ff', opacity: '0.7', name: 'interaction reminder' },
+  selfpromo: { color: '#ffff00', opacity: '0.7', name: 'self-promotion' },
+  musicofftopic: { color: '#ff9900', opacity: '0.7', name: 'non-music part' },
+  preview: { color: '#008fd6', opacity: '0.7', name: 'recap or preview' },
+  poi_highlight: { color: '#ff1684', opacity: '0.8', name: 'poi_highlight' },
+  filler: { color: '#7300ff', opacity: '0.7', name: 'tangents/jokes' },
+  hook: { color: '#395699', opacity: '0.7', name: 'hook/greetings' }
 };
 
 export const shortcutActions = {
@@ -70,6 +30,7 @@ export const shortcutActions = {
   sb_manual_skip: 'Manual Skip / Jump to Highlight',
   config_menu: 'Open/Close Settings'
 };
+
 
 export const sbModes = {
   auto_skip: 'Auto Skip',
@@ -96,18 +57,11 @@ const configOptions = new Map([
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
   ['upgradeThumbnails', { default: false, desc: 'Max Thumbnail Quality' }],
-  [
-    'removeGlobalShorts', 
-    { default: false, desc: 'Remove Shorts (Global)' }
-  ],
-  [
-    'removeTopLiveGames', 
-    { default: false, desc: 'Remove Top Live Games' }
-  ],
+  ['removeGlobalShorts', { default: false, desc: 'Remove Shorts (Global)' }],
+  ['removeTopLiveGames', { default: false, desc: 'Remove Top Live Games' }],
   ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
   ['enableMutedSegments', { default: false, desc: 'Allow segments that mute audio' }],
   ['skipSegmentsOnce', { default: false, desc: 'Skip Segments Once' }],
-  
   ['sbMode_sponsor', { default: 'auto_skip', desc: 'Sponsor' }],
   ['sbMode_intro', { default: 'auto_skip', desc: 'Intermission/Intro' }],
   ['sbMode_outro', { default: 'auto_skip', desc: 'Endcards/Credits' }],
@@ -118,35 +72,10 @@ const configOptions = new Map([
   ['sbMode_filler', { default: 'seek_bar', desc: 'Filler/Tangents' }],
   ['sbMode_hook', { default: 'seek_bar', desc: 'Hook/Greetings' }],
   ['sbMode_highlight', { default: 'seek_bar', desc: 'Highlight' }],
-
-  [
-  'hideEndcards',
-  {
-    default: false,
-    desc: 'Hide Endcards'
-  }
-  ],
-  [
-  'enableAutoLogin',
-  {
-    default: true,
-    desc: 'Auto Login'
-  }
-  ],
-  [
-    'hideLogo',
-    {
-      default: false,
-      desc: 'Hide YouTube Logo'
-    }
-  ],
-    [
-    'showWatch',
-    {
-      default: false,
-      desc: 'Display Time in UI'
-    }
-  ],
+  ['hideEndcards', { default: false, desc: 'Hide Endcards' }],
+  ['enableAutoLogin', { default: true, desc: 'Auto Login' }],
+  ['hideLogo', { default: false, desc: 'Hide YouTube Logo' }],
+  ['showWatch', { default: false, desc: 'Display Time in UI' }],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
   ['videoShelfOpacity', { default: 100, desc: 'Video shelf opacity' }],
   ['fixMultilineTitles', { default: true, desc: 'Fix Multiline Titles' }],
@@ -159,10 +88,7 @@ const configOptions = new Map([
 
 // Register shortcut keys 0-9
 for (let i = 0; i < 10; i++) {
-  configOptions.set(`shortcut_key_${i}`, {
-    default: i === 5 ? 'chapter_skip' : 'none',
-    desc: `Key ${i} Action`
-  });
+  configOptions.set(`shortcut_key_${i}`, { default: i === 5 ? 'chapter_skip' : 'none', desc: `Key ${i} Action` });
 }
 
 // Register shortcut keys Red, Green, Blue
@@ -171,120 +97,70 @@ for (let i = 0; i < 10; i++) {
     if (color === 'red') def = 'oled_toggle';
     if (color === 'green') def = 'config_menu';
     if (color === 'blue') def = 'sb_manual_skip';
-
-    configOptions.set(`shortcut_key_${color}`, {
-        default: def,
-        desc: `${color.charAt(0).toUpperCase() + color.slice(1)} Button Action`
-    });
+    configOptions.set(`shortcut_key_${color}`, { default: def, desc: `${color.charAt(0).toUpperCase() + color.slice(1)} Button Action` });
 });
 
 for (const [key, value] of Object.entries(segmentTypes)) {
-  configOptions.set(`${key}Color`, {
-    default: value.color,
-    desc: `Color for ${value.name}`
-  });
+  configOptions.set(`${key}Color`, { default: value.color, desc: `Color for ${value.name}` });
 }
 
-// Build defaultConfig once.
 const defaultConfig = {};
-for (const [k, v] of configOptions) {
-  defaultConfig[k] = v.default;
-}
+for (const [k, v] of configOptions) { defaultConfig[k] = v.default; }
 
-// Use a pure JS Map for listeners instead of DOM Fragments.
-// Key -> Set<Callback>
 const changeListeners = new Map();
 
 function loadStoredConfig() {
   const storage = window.localStorage.getItem(CONFIG_KEY);
-
-  if (storage === null) {
-    console.info('Config not set; using defaults.');
-    return null;
-  }
-
-  try {
-    return JSON.parse(storage);
-  } catch (err) {
-    console.warn('Error parsing stored config:', err);
-    return null;
-  }
+  if (storage === null) return null;
+  try { return JSON.parse(storage); } catch (err) { return null; }
 }
 
-// Merge defaults with storage immediately.
-// This ensures localConfig is always complete, removing need for checks in configRead.
 let localConfig = Object.assign({}, defaultConfig, loadStoredConfig() || {});
 
-function configExists(key) {
-  return configOptions.has(key);
-}
+function configExists(key) { return configOptions.has(key); }
 
 export function configGetDesc(key) {
-  if (!configExists(key)) {
-    throw new Error('tried to get desc for unknown config key: ' + key);
-  }
-
+  if (!configExists(key)) throw new Error('tried to get desc for unknown config key: ' + key);
   return configOptions.get(key).desc;
 }
 
 export function configRead(key) {
-  if (!configExists(key)) {
-    throw new Error('tried to read unknown config key: ' + key);
-  }
-  
+  if (!configExists(key)) throw new Error('tried to read unknown config key: ' + key);
   return localConfig[key];
 }
 
 export function configWrite(key, value) {
-  if (!configExists(key)) {
-    throw new Error('tried to write unknown config key: ' + key);
-  }
-
+  if (!configExists(key)) throw new Error('tried to write unknown config key: ' + key);
   const oldValue = localConfig[key];
-
-  if (oldValue === value) {
-    return; 
-  }
+  if (oldValue === value) return; 
 
   console.info('Changing key', key, 'from', oldValue, 'to', value);
   localConfig[key] = value;
-  
   window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
 
   const listeners = changeListeners.get(key);
   if (listeners) {
-    const syntheticEvent = {
-        detail: { key, newValue: value, oldValue }
-    };
-    for (const callback of listeners) {
-        callback(syntheticEvent);
-    }
+    const syntheticEvent = { detail: { key, newValue: value, oldValue } };
+    for (const callback of listeners) { callback(syntheticEvent); }
   }
 }
 
-/**
- * Add a listener for changes in the value of a specified config option
- * @param {string} key Config option to monitor
- * @param {(evt: Object) => void} callback Function to be called on change
- */
 export function configAddChangeListener(key, callback) {
   if (!configExists(key)) return;
-
-  if (!changeListeners.has(key)) {
-      changeListeners.set(key, new Set());
-  }
+  if (!changeListeners.has(key)) changeListeners.set(key, new Set());
   changeListeners.get(key).add(callback);
 }
 
 export function configRemoveChangeListener(key, callback) {
-  if (changeListeners.has(key)) {
-    changeListeners.get(key).delete(callback);
-  }
+  if (changeListeners.has(key)) changeListeners.get(key).delete(callback);
 }
 
 export function configGetDefault(key) {
-  if (!configExists(key)) {
-    throw new Error('tried to get default for unknown config key: ' + key);
-  }
+  if (!configExists(key)) throw new Error('tried to get default for unknown config key: ' + key);
   return configOptions.get(key).default;
+}
+
+// NEW: Export the live object reference directly for zero-overhead caching
+export function configGetAll() {
+  return localConfig;
 }
