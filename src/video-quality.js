@@ -263,6 +263,10 @@ function handleStateChange(state) {
   if (isDestroyed || !player || !_shouldForce) return;
   
   const actualState = (state && state.data !== undefined) ? state.data : state;
+  
+  window.dispatchEvent(new CustomEvent('yt-player-state-change', { 
+    detail: { state: actualState, videoId: lastVideoId }
+  }));
 
   try {
     const videoData = player.getVideoData?.();

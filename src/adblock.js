@@ -34,7 +34,7 @@ const EMOJI_RE_CAP = new RegExp(`(${EMOJI_RE.source})`, 'g');
 const EMOJI_RE_GLOBAL = new RegExp(EMOJI_RE.source, 'g');
 const CLEAN_TEXT_RE = /[\u2060\uFEFF]/g;
 
-const IGNORE_ON_SHORTS = ['SEARCH', 'PLAYER', 'ACTION'];
+const IGNORE_ON_SHORTS = new Set(['SEARCH', 'PLAYER', 'ACTION']);
 
 const SCHEMA_REGISTRY = {
   typeSignatures: [
@@ -207,7 +207,7 @@ function hookedParse(text, reviver) {
     const responseType = detectResponseType(data);
     const needsContentFiltering = config.enableAdBlock || config.hideGuestPrompts || config.enableLegacyEmojiFix;
 
-    if (isShortsPage() && responseType && IGNORE_ON_SHORTS.includes(responseType)) return data;
+    if (isShortsPage() && responseType && IGNORE_ON_SHORTS.has(responseType)) return data;
 
     if (FORCE_FALLBACK) {
       if (DEBUG) debugLog(`FORCE_FALLBACK active. Using fallback filters.`);

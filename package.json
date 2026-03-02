@@ -26,7 +26,7 @@
   "dependencies": {
     "@babel/runtime-corejs3": "^7.28.0",
     "@twemoji/api": "^17.0.2",
-    "core-js-pure": "^3.48.0",
+    "core-js-pure": "^3.47.0",
     "regenerator-runtime": "^0.14.1",
     "tiny-sha256": "^1.0.2",
     "whatwg-fetch": "^3.6.20"
@@ -58,7 +58,7 @@
     "postcss": "^8.5.6",
     "postcss-load-config": "^6.0.1",
     "postcss-loader": "^8.1.1",
-    "postcss-preset-env": "^11.2.0",
+    "postcss-preset-env": "^10.5.0",
     "prettier": "^3.7.4",
     "style-loader": "^4.0.0",
     "transform-async-modules-webpack-plugin": "^1.1.1",

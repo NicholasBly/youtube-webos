@@ -37,6 +37,22 @@ const shortcutCache = {};
 // Define keys including colors
 const shortcutKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'red', 'green', 'blue'];
 
+const COLOR_KEYS = new Set(['red', 'green', 'blue']);
+
+const cachedSelectors = {
+    comments: null,
+    description: null,
+    save: null
+};
+
+window.addEventListener('ytaf-page-update', (e) => {
+    if (e.detail.isWatch) {
+        cachedSelectors.comments = null;
+        cachedSelectors.description = null;
+        cachedSelectors.save = null;
+    }
+});
+
 const ACTION_SCOPES = {
     config_menu: 'GLOBAL',
     oled_toggle: 'GLOBAL',
@@ -250,7 +266,7 @@ function createSegmentControl(key) {
 function createShortcutControl(keyIdentifier) {
   const configKey = `shortcut_key_${keyIdentifier}`;
   const actions = Object.keys(shortcutActions);
-  const isColor = ['red', 'green', 'blue'].includes(keyIdentifier);
+  const isColor = COLOR_KEYS.has(keyIdentifier);
   
   const labelText = isColor 
     ? `${keyIdentifier.charAt(0).toUpperCase() + keyIdentifier.slice(1)} Button` 
@@ -734,23 +750,34 @@ function toggleSubtitlesLogic(player) {
 }
 
 function toggleCommentsLogic() {
-    // 1. Try finding Comments Button
-    let target = document.querySelector('yt-button-container[aria-label="Comments"]');
+    let target = null;
+    if (cachedSelectors.comments) {
+        target = document.querySelector(cachedSelectors.comments);
+    }
 
     if (!target) {
-        target = document.querySelector('yt-icon.qHxFAf.ieYpu.nGYLgf') || 
-                 document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb') ||
-                 document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') || 
-                 document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || 
-                 document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
+        const queryList = [
+            'yt-button-container[aria-label="Comments"]',
+            'yt-icon.qHxFAf.ieYpu.nGYLgf',
+            'yt-icon.qHxFAf.ieYpu.wFZPnb',
+            'ytlr-button-renderer[idomkey="item-1"] ytlr-button',
+            '[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button',
+            'ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button',
+            'ytlr-button-renderer[idomkey="1"] yt-button-container'
+        ];
+
+        for (let i = 0; i < queryList.length; i++) {
+            target = document.querySelector(queryList[i]);
+            if (target) {
+                cachedSelectors.comments = queryList[i];
+                break;
+            }
+        }
     }
-    if (!target) {
-          target = document.querySelector('ytlr-button-renderer[idomkey="1"] yt-button-container'); // Shorts
-    }
+
     let commBtn = target ? target.closest('yt-button-container, ytlr-button') : null;
     let isLiveChat = false;
 
-    // 2. Fallback: Live Chat (Only if comments not found)
     if (!commBtn) {
           const chatTarget = document.querySelector('ytlr-live-chat-toggle-button yt-button-container') ||
                              document.querySelector('yt-button-container[aria-label="Live chat"]');
@@ -760,7 +787,6 @@ function toggleCommentsLogic() {
           }
     }
 
-    // 3. Execution Logic
     const isBtnActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
     const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
     const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
@@ -780,19 +806,30 @@ function toggleCommentsLogic() {
 }
 
 function toggleDescriptionLogic() {
-    // 1. Try English text finding
-    let descText = Array.from(document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe'))
-        .find(el => el.textContent.trim() === 'Description');
-    let target = descText ? descText.closest('yt-button-container') : null;
+    let target = null;
 
-    // 2. Fallback: Structural finding for non-English (look for text-button in generic renderer, excluding subscribe/join which are usually different or have icons)
+    if (cachedSelectors.description) {
+        const cachedEl = document.querySelector(cachedSelectors.description);
+        target = cachedEl ? cachedEl.closest('yt-button-container') : null;
+    }
+
     if (!target) {
-        const genericTextBtn = document.querySelector('ytlr-button-renderer yt-formatted-string.XGffTd.OqGroe');
-        if (genericTextBtn) target = genericTextBtn.closest('yt-button-container');
+        let descText = Array.from(document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe'))
+            .find(el => el.textContent.trim() === 'Description');
+        
+        if (descText) {
+            target = descText.closest('yt-button-container');
+        } else {
+            const fallbackSelector = 'ytlr-button-renderer yt-formatted-string.XGffTd.OqGroe';
+            const genericTextBtn = document.querySelector(fallbackSelector);
+            if (genericTextBtn) {
+                target = genericTextBtn.closest('yt-button-container');
+                cachedSelectors.description = fallbackSelector;
+            }
+        }
     }
 
     const isDescActive = target && (target.getAttribute('aria-pressed') === 'true' || target.getAttribute('aria-selected') === 'true');
-    // Re-use panel detection from comments as they share the side panel space
     const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
     const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
 
@@ -809,13 +846,29 @@ function toggleDescriptionLogic() {
 }
 
 function saveToPlaylistLogic() {
-    // 1. Try English Aria Label
-    let target = document.querySelector('yt-button-container[aria-label="Save"]');
+    let target = null;
 
-    // 2. Fallback: Specific icon class (p9sZp) found in Save button
+    if (cachedSelectors.save) {
+        const el = document.querySelector(cachedSelectors.save);
+        if (el) {
+            target = cachedSelectors.save === 'yt-icon.p9sZp' ? el.closest('yt-button-container') : el;
+        }
+    }
+
     if (!target) {
-        const icon = document.querySelector('yt-icon.p9sZp');
-        if (icon) target = icon.closest('yt-button-container');
+        const queryList = [
+            'yt-button-container[aria-label="Save"]',
+            'yt-icon.p9sZp'
+        ];
+
+        for (let i = 0; i < queryList.length; i++) {
+            const el = document.querySelector(queryList[i]);
+            if (el) {
+                target = queryList[i] === 'yt-icon.p9sZp' ? el.closest('yt-button-container') : el;
+                cachedSelectors.save = queryList[i];
+                break;
+            }
+        }
     }
       
     const panel = document.querySelector('.AmQJbe');

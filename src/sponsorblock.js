@@ -482,36 +482,31 @@ class SponsorBlockHandler {
         if (!this.video) return;
 
         this.injectCSS();
-        // Initial tracking setup
         this.resetSegmentTracking();
 
-        this.addEvent(this.video, 'ended', () => {
-            this.hasPerformedChainSkip = false;
-            this.clearLongDistanceTimer();
-            this.toggleTimeListener(false);
-        });
-
-        this.addEvent(this.video, 'play', () => {
-            // Check for progress bar existence on play in case UI was destroyed (e.g. after side-panel interaction)
-            this.checkForProgressBar();
+        this.boundStateChange = (e) => {
+            const state = e.detail.state;
             
-            // Re-evaluate tracking (re-enables time listener if needed)
-            this.resetSegmentTracking();
-
-            this.hasPerformedChainSkip = false;
-            this.executeChainSkip(this.video);
-        });
-
-        this.addEvent(this.video, 'pause', () => {
-            this.stopHighFreqLoop();
-            this.toggleTimeListener(false);
-        });
+            if (state === 0) { // ENDED
+                this.hasPerformedChainSkip = false;
+                this.clearLongDistanceTimer();
+                this.toggleTimeListener(false);
+            } else if (state === 1) { // PLAYING
+                this.checkForProgressBar();
+                this.resetSegmentTracking();
+                this.hasPerformedChainSkip = false;
+                this.executeChainSkip(this.video);
+            } else if (state === 2) { // PAUSED
+                this.stopHighFreqLoop();
+                this.toggleTimeListener(false);
+            }
+        };
+        
+        window.addEventListener('yt-player-state-change', this.boundStateChange);
 
         this.addEvent(this.video, 'seeked', () => {
             if (this.isDestroyed) return;
-
             this.stopHighFreqLoop();
-
             this.hasPerformedChainSkip = false;
             this.executeChainSkip(this.video);
 
@@ -520,13 +515,8 @@ class SponsorBlockHandler {
                 this.lastSkippedSegmentIndex = -1;
                 this.lastNotifiedSegmentIndex = -1;
                 this.resetSegmentTracking();
-                
-                // Only handle time update immediately if not paused
-                if (!this.video.paused) {
-                    this.handleTimeUpdate(); 
-                }
+                if (!this.video.paused) this.handleTimeUpdate(); 
             }
-
             this.isSkipping = false;
         });
 
@@ -537,9 +527,7 @@ class SponsorBlockHandler {
             }
         });
 
-        if (this.video.duration) {
-            this.processSegments(this.video.duration);
-        }
+        if (this.video.duration) this.processSegments(this.video.duration);
 
         this.observePlayerUI();
         this.checkForProgressBar();
@@ -1084,6 +1072,11 @@ class SponsorBlockHandler {
 
         this.toggleTimeListener(false);
         this.clearLongDistanceTimer();
+		
+		if (this.boundStateChange) {
+            window.removeEventListener('yt-player-state-change', this.boundStateChange);
+            this.boundStateChange = null;
+        }
 
         this.rafIds.forEach(id => cancelAnimationFrame(id));
         this.rafIds.clear();
