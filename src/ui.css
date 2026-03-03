@@ -212,10 +212,16 @@
 }
 
 .ytaf-ui-container.theme-classic-red .shortcut-control-row:focus,
-.ytaf-ui-container.theme-classic-red label:focus-within,
 .ytaf-ui-container.theme-classic-red label.focused {
   background: rgba(255, 0, 0, 0.1);
   box-shadow: 0 0 0 0.19vh rgba(255, 0, 0, 0.5);
+  outline: none;
+}
+
+.ytaf-ui-container.theme-classic-red label:focus-within {
+  background: rgba(255, 0, 0, 0.1);
+  box-shadow: 0 0 0 0.19vh rgba(255, 0, 0, 0.5);
+  outline: none;
 }
 
 .ytaf-ui-container blockquote {
@@ -343,7 +349,7 @@
 /* Tab Menu */
 .ytaf-tab-menu {
   display: flex;
-  justify-content: space-evenly;
+  justify-content: center;
   background: rgba(0, 0, 0, 0.2);
   border-bottom: 0.19vh solid rgba(0, 212, 255, 0.3);
   padding: 0.5vh 1vh;
@@ -356,6 +362,8 @@
 }
 
 .ytaf-tab-btn {
+  flex: 1;
+  margin: 0 0.5vh;
   background: transparent;
   border: none;
   color: #5599aa;
@@ -365,7 +373,7 @@
   border-radius: 0.75vh;
   cursor: pointer;
   outline: none;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
   font-family: inherit;
 }
 

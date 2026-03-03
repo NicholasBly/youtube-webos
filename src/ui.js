@@ -345,34 +345,33 @@ function createOptionsPanel() {
   });
   tabBtns.forEach(btn => tabMenu.appendChild(btn));
 
-  const setActivePage = (pageIndex) => {
-    activePage = elmContainer.activePage = pageIndex;
-    [pageMain, pageSponsor, pageShortcuts, pageUITweaks].forEach(p => { if(p) p.style.display = 'none'; });
-    
-    tabBtns.forEach((btn, idx) => {
-      if (idx === pageIndex) btn.classList.add('active');
-      else btn.classList.remove('active');
-    });
-    
-    const pages = [
-      { page: pageMain, selector: 'input', popup: false },
-      { page: pageSponsor, selector: '.shortcut-control-row, input', popup: (isWatchPage()) },
-      { page: pageShortcuts, selector: '.shortcut-control-row', popup: false },
-      { page: pageUITweaks, selector: '.shortcut-control-row, input', popup: false }
-    ];
-    
-    if (pages[pageIndex]) {
-      pages[pageIndex].page.style.display = 'block';
-      
-      const activeEl = document.activeElement;
-      const isTabFocused = activeEl && activeEl.classList.contains('ytaf-tab-btn');
-      if (!isTabFocused) {
-        const focusTarget = pages[pageIndex].page.querySelector(pages[pageIndex].selector);
-        if(focusTarget) focusTarget.focus();
-      }
-      sponsorBlockUI.togglePopup(pages[pageIndex].popup);
-    }
-  };
+	const setActivePage = (pageIndex) => {
+	  if (pageIndex === activePage) return; // Don't do work if we are already on this tab
+	  const pagesArray = [pageMain, pageSponsor, pageShortcuts, pageUITweaks];
+	  const focusSelectors = ['input', '.shortcut-control-row, input', '.shortcut-control-row', '.shortcut-control-row, input'];
+	  const hasPopups = [false, true, false, false];
+
+	  // 1. Deactivate old state
+	  pagesArray[activePage].style.display = 'none';
+	  tabBtns[activePage].classList.remove('active');
+
+	  // 2. Set new state
+	  activePage = elmContainer.activePage = pageIndex;
+	  pagesArray[activePage].style.display = 'block';
+	  tabBtns[activePage].classList.add('active');
+
+	  // 3. Focus management
+	  const activeEl = document.activeElement;
+	  const isTabFocused = activeEl && activeEl.classList.contains('ytaf-tab-btn');
+	  
+	  if (!isTabFocused) {
+		const focusTarget = pagesArray[activePage].querySelector(focusSelectors[activePage]);
+		if (focusTarget) focusTarget.focus();
+	  }
+	  
+	  // 4. Handle SponsorBlock popup state
+	  sponsorBlockUI.togglePopup(hasPopups[activePage] && isWatchPage());
+	};
 
   // Keyboard Navigation for the Options Panel
   elmContainer.addEventListener('keydown', (evt) => {
@@ -390,11 +389,10 @@ function createOptionsPanel() {
         
         // Tab menu wrap-around logic
         if (preFocus === document.activeElement && preFocus.classList.contains('ytaf-tab-btn')) {
-           const tabElements = Array.from(elmContainer.querySelectorAll('.ytaf-tab-btn'));
-           const idx = tabElements.indexOf(preFocus);
-           if (dir === 'right' && idx === tabElements.length - 1) tabElements[0].focus();
-           else if (dir === 'left' && idx === 0) tabElements[tabElements.length - 1].focus();
-        }
+			const idx = tabBtns.indexOf(preFocus);
+			if (dir === 'right' && idx === tabBtns.length - 1) tabBtns[0].focus();
+			else if (dir === 'left' && idx === 0) tabBtns[tabBtns.length - 1].focus();
+		}
         
         evt.preventDefault(); evt.stopPropagation(); return;
       } else if (dir === 'up' || dir === 'down') {
@@ -404,20 +402,20 @@ function createOptionsPanel() {
         if (dir === 'up' && preFocus !== postFocus) {
             if (preFocus.closest('.ytaf-settings-page') && postFocus.classList.contains('ytaf-tab-btn')) {
                 const activeTabBtn = elmContainer.querySelector('.ytaf-tab-btn.active');
-                if (activeTabBtn) activeTabBtn.focus(); // Force focus to the active tab
+                if (activeTabBtn) activeTabBtn.focus();
             }
         }
 
         if (preFocus === postFocus) {
-          const activeTabBtn = elmContainer.querySelector('.ytaf-tab-btn.active');
-          
-          const visiblePage = elmContainer.querySelector('.ytaf-settings-page[style*="display: block"]');
-          let pageFocusables = [];
-          
-          if (visiblePage) {
-              pageFocusables = Array.from(visiblePage.querySelectorAll('input, .shortcut-control-row, button'))
-                .filter(el => el.offsetParent !== null && !el.disabled && el.tabIndex !== -1); 
-          }
+          const activeTabBtn = tabBtns[activePage];
+		  const pagesList = [pageMain, pageSponsor, pageShortcuts, pageUITweaks];
+		  const visiblePage = pagesList[activePage]; 
+		  let pageFocusables = [];
+
+		  if (visiblePage) {
+			  pageFocusables = Array.from(visiblePage.querySelectorAll('input:not([disabled]), .shortcut-control-row, button:not([disabled])'))
+				  .filter(el => el.tabIndex !== -1);
+		  }
           
           const focusables = [activeTabBtn, ...pageFocusables].filter(Boolean);
           
@@ -436,8 +434,13 @@ function createOptionsPanel() {
     evt.preventDefault(); evt.stopPropagation();
   }, true);
 
-  // Logo creation with theme toggle
-  const toggleTheme = (evt) => { evt.preventDefault(); evt.stopPropagation(); configWrite('uiTheme', configRead('uiTheme') === 'blue-force-field' ? 'classic-red' : 'blue-force-field'); };
+  const toggleTheme = (evt) => { 
+      evt.preventDefault(); 
+      evt.stopPropagation(); 
+      configWrite('uiTheme', configRead('uiTheme') === 'blue-force-field' ? 'classic-red' : 'blue-force-field'); 
+      const activeTab = elmContainer.querySelector('.ytaf-tab-btn.active');
+      if (activeTab) activeTab.focus();
+  };
   const createLogo = (src, cls) => createElement('img', { src, alt: 'Logo', class: `ytaf-logo ${cls}`, title: 'Click to switch theme', style: cls !== 'logo-blue' ? { display: 'none' } : {}, events: { click: toggleTheme }});
   
   const elmHeading = createElement('h1', {},
@@ -560,9 +563,11 @@ function showOptionsPanel(visible) {
         activeTabBtn.focus();
         lastSafeFocus = activeTabBtn;
     } else {
-        const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row, .ytaf-tab-btn')).find(el => el.offsetParent !== null && !el.disabled);
+        const activeTabBtn = optionsPanel.querySelector('.ytaf-tab-btn.active');
+		if (activeTabBtn) activeTabBtn.focus();
+			else optionsPanel.focus();
         if (firstVisibleInput) { firstVisibleInput.focus(); lastSafeFocus = firstVisibleInput; }
-        else { optionsPanel.focus(); lastSafeFocus = optionsPanel; }
+			else { optionsPanel.focus(); lastSafeFocus = optionsPanel; }
     }
     optionsPanelVisible = true;
   } else if (!visible && optionsPanelVisible && optionsPanel) {
