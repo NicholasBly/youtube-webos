@@ -320,21 +320,56 @@ function createOptionsPanel() {
   elmContainer.activePage = 0;
   let pageMain, pageSponsor, pageShortcuts, pageUITweaks;
 
+  const tabMenu = createElement('div', { 
+    class: 'ytaf-tab-menu',
+    events: {
+      mouseleave: () => {
+        const activeTabBtn = elmContainer.querySelector('.ytaf-tab-btn.active');
+        if (activeTabBtn && document.activeElement && document.activeElement.classList.contains('ytaf-tab-btn')) {
+            activeTabBtn.focus();
+        }
+      }
+    }
+  });
+  const tabs = ['Main', 'SponsorBlock', 'Shortcuts', 'UI Tweaks'];
+  const tabBtns = tabs.map((name, index) => {
+    return createElement('button', {
+      class: index === 0 ? 'ytaf-tab-btn active' : 'ytaf-tab-btn',
+      text: name,
+      tabIndex: 0,
+      events: { 
+        click: () => setActivePage(index),
+        mouseenter: (e) => e.target.focus()
+      }
+    });
+  });
+  tabBtns.forEach(btn => tabMenu.appendChild(btn));
+
   const setActivePage = (pageIndex) => {
     activePage = elmContainer.activePage = pageIndex;
     [pageMain, pageSponsor, pageShortcuts, pageUITweaks].forEach(p => { if(p) p.style.display = 'none'; });
     
+    tabBtns.forEach((btn, idx) => {
+      if (idx === pageIndex) btn.classList.add('active');
+      else btn.classList.remove('active');
+    });
+    
     const pages = [
       { page: pageMain, selector: 'input', popup: false },
-      { page: pageSponsor, selector: '.shortcut-control-row', popup: (isWatchPage()) },
+      { page: pageSponsor, selector: '.shortcut-control-row, input', popup: (isWatchPage()) },
       { page: pageShortcuts, selector: '.shortcut-control-row', popup: false },
-      { page: pageUITweaks, selector: '.shortcut-control-row', popup: false }
+      { page: pageUITweaks, selector: '.shortcut-control-row, input', popup: false }
     ];
     
     if (pages[pageIndex]) {
       pages[pageIndex].page.style.display = 'block';
-      const focusTarget = pages[pageIndex].page.querySelector(pages[pageIndex].selector);
-      if(focusTarget) focusTarget.focus();
+      
+      const activeEl = document.activeElement;
+      const isTabFocused = activeEl && activeEl.classList.contains('ytaf-tab-btn');
+      if (!isTabFocused) {
+        const focusTarget = pages[pageIndex].page.querySelector(pages[pageIndex].selector);
+        if(focusTarget) focusTarget.focus();
+      }
       sponsorBlockUI.togglePopup(pages[pageIndex].popup);
     }
   };
@@ -348,28 +383,43 @@ function createOptionsPanel() {
       const preFocus = document.activeElement;
 
       if (dir === 'left' || dir === 'right') {
-        // Prevent accidental page switch when modifying controls
+        // Prevent modifying row from navigating away
         if (preFocus.classList.contains('shortcut-control-row')) return;
-        if (activePage === 1) {
-          // Sponsor page now uses shortcut-control-row so this check is redundant but safe
-          if (preFocus.matches('blockquote input[type="checkbox"]')) { setActivePage(0); evt.preventDefault(); evt.stopPropagation(); return; }
-        }
 
         navigate(dir);
         
-        // If focus didn't move (hit edge), try changing pages
-        if (preFocus === document.activeElement) {
-          if (dir === 'right' && activePage < 3) setActivePage(activePage + 1);
-          else if (dir === 'left' && activePage > 0) setActivePage(activePage - 1);
+        // Tab menu wrap-around logic
+        if (preFocus === document.activeElement && preFocus.classList.contains('ytaf-tab-btn')) {
+           const tabElements = Array.from(elmContainer.querySelectorAll('.ytaf-tab-btn'));
+           const idx = tabElements.indexOf(preFocus);
+           if (dir === 'right' && idx === tabElements.length - 1) tabElements[0].focus();
+           else if (dir === 'left' && idx === 0) tabElements[tabElements.length - 1].focus();
         }
+        
         evt.preventDefault(); evt.stopPropagation(); return;
       } else if (dir === 'up' || dir === 'down') {
         navigate(dir);
-        
-        // Wrap around logic if focus didn't move
-        if (preFocus === document.activeElement) {
-          const focusables = Array.from(elmContainer.querySelectorAll('input, .shortcut-control-row, .ytaf-nav-hint, button'))
-            .filter(el => el.offsetParent !== null && !el.disabled);
+        const postFocus = document.activeElement;
+
+        if (dir === 'up' && preFocus !== postFocus) {
+            if (preFocus.closest('.ytaf-settings-page') && postFocus.classList.contains('ytaf-tab-btn')) {
+                const activeTabBtn = elmContainer.querySelector('.ytaf-tab-btn.active');
+                if (activeTabBtn) activeTabBtn.focus(); // Force focus to the active tab
+            }
+        }
+
+        if (preFocus === postFocus) {
+          const activeTabBtn = elmContainer.querySelector('.ytaf-tab-btn.active');
+          
+          const visiblePage = elmContainer.querySelector('.ytaf-settings-page[style*="display: block"]');
+          let pageFocusables = [];
+          
+          if (visiblePage) {
+              pageFocusables = Array.from(visiblePage.querySelectorAll('input, .shortcut-control-row, button'))
+                .filter(el => el.offsetParent !== null && !el.disabled && el.tabIndex !== -1); 
+          }
+          
+          const focusables = [activeTabBtn, ...pageFocusables].filter(Boolean);
           
           if (focusables.length > 0) {
             if (dir === 'up') focusables[focusables.length - 1].focus();
@@ -397,6 +447,7 @@ function createOptionsPanel() {
     createLogo('https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/NB%20Logo-gigapixel4.png', 'logo-dark')
   );
   elmContainer.appendChild(elmHeading);
+  elmContainer.appendChild(tabMenu);
 
   // --- Page 1: Main ---
   pageMain = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-main' });
@@ -430,14 +481,10 @@ function createOptionsPanel() {
 
   pageMain.appendChild(createSection('Video Player', [createConfigCheckbox('forceHighResVideo'), createConfigCheckbox('hideEndcards'), createConfigCheckbox('enableReturnYouTubeDislike')]));
   pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createConfigCheckbox('hideLogo'), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
-  
-  const navHintNextMain = createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(1) }}, 'SponsorBlock Settings ', createElement('span', { class: 'arrow', text: '→' }));
-  pageMain.appendChild(navHintNextMain);
   elmContainer.appendChild(pageMain);
 
   // --- Page 2: SponsorBlock ---
   pageSponsor = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-sponsor', style: { display: 'none' }});
-  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(0) }}, createElement('span', { class: 'arrow', text: '←' }), ' Main Settings'));
   pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
   
   const elmBlock = createElement('blockquote', {},
@@ -448,25 +495,22 @@ function createOptionsPanel() {
   );
   pageSponsor.appendChild(elmBlock);
   pageSponsor.appendChild(createElement('div', {}, createElement('small', { text: 'Sponsor segments skipping - https://sponsor.ajay.app' })));
-  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(2) }}, 'Shortcuts ', createElement('span', { class: 'arrow', text: '→' })));
   elmContainer.appendChild(pageSponsor);
 
   // --- Page 3: Shortcuts ---
   pageShortcuts = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-shortcuts', style: { display: 'none' }});
-  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(1) }}, createElement('span', { class: 'arrow', text: '←' }), ' SponsorBlock Settings'));
   shortcutKeys.forEach(key => { pageShortcuts.appendChild(createShortcutControl(key)); });
-  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(3) }}, 'UI Tweaks ', createElement('span', { class: 'arrow', text: '→' })));
   elmContainer.appendChild(pageShortcuts);
   
   // --- Page 4: UI Tweaks ---
   pageUITweaks = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-ui-tweaks', style: { display: 'none' }});
-  pageUITweaks.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(2) }}, createElement('span', { class: 'arrow', text: '←' }), ' Shortcuts'));
   
   const playerUITweaks = [
       createOpacityControl('videoShelfOpacity'),
       createElement('div', { text: 'Adjusts opacity of black background underneath videos (Requires OLED-care mode)', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
-      createConfigCheckbox('fixMultilineTitles'),
-	  createPreviewControl('forcePreviews')
+	  createPreviewControl('forcePreviews'),
+	  createElement('div', { text: 'Forces the video thumbnail preview on/off on app load', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
+	  createConfigCheckbox('fixMultilineTitles')
   ];
 
   if (getWebOSVersion() <= 4) {
@@ -511,9 +555,15 @@ function showOptionsPanel(visible) {
     else sponsorBlockUI.togglePopup(false);
     
     // Find best initial focus
-    const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(el => el.offsetParent !== null && !el.disabled);
-    if (firstVisibleInput) { firstVisibleInput.focus(); lastSafeFocus = firstVisibleInput; }
-    else { optionsPanel.focus(); lastSafeFocus = optionsPanel; }
+    const activeTabBtn = optionsPanel.querySelector('.ytaf-tab-btn.active');
+    if (activeTabBtn) {
+        activeTabBtn.focus();
+        lastSafeFocus = activeTabBtn;
+    } else {
+        const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row, .ytaf-tab-btn')).find(el => el.offsetParent !== null && !el.disabled);
+        if (firstVisibleInput) { firstVisibleInput.focus(); lastSafeFocus = firstVisibleInput; }
+        else { optionsPanel.focus(); lastSafeFocus = optionsPanel; }
+    }
     optionsPanelVisible = true;
   } else if (!visible && optionsPanelVisible && optionsPanel) {
     console.info('Hiding options panel!');
@@ -536,7 +586,7 @@ document.addEventListener('focus', (e) => {
     e.preventDefault();
     if (lastSafeFocus && lastSafeFocus.isConnected) lastSafeFocus.focus();
     else {
-      const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(el => el.offsetParent !== null && !el.disabled);
+      const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row, .ytaf-tab-btn')).find(el => el.offsetParent !== null && !el.disabled);
       if (firstVisibleInput) firstVisibleInput.focus();
       else optionsPanel.focus();
     }
@@ -1271,21 +1321,22 @@ function applyOledMode(enabled) {
       : '';
     
     const style = createElement('style', { id: 'style-gray-ui-oled-care', text: `
-        #container { background-color: black !important; } 
-        .ytLrGuideResponseMask { background-color: black !important; } 
-        .geClSe { background-color: black !important; } 
-        .hsdF6b { background-color: black !important; } 
+        #container { background-color: #000 !important; } 
+        .ytLrGuideResponseMask { background-color: #000 !important; } 
+        .geClSe { background-color: #000 !important; } 
+        .hsdF6b { background-color: #000 !important; } 
         .ytLrGuideResponseGradient { display: none; } 
-        .ytLrAnimatedOverlayContainer { background-color: black !important; } 
+        .ytLrAnimatedOverlayContainer { background-color: #000 !important; } 
         .iha0pc { color: #000 !important; } 
         .ZghAqf { background-color: #000 !important; } 
-        .A0acyf.RAE3Re .AmQJbe { background-color: black !important; } 
-        .tVp1L { background-color: black !important; } 
-        .app-quality-root .DnwJH { background-color: black !important; } 
-        .qRdzpd.stQChb .TYE3Ed { background-color: black !important; } 
+        .A0acyf.RAE3Re .AmQJbe { background-color: #000 !important; } 
+        .tVp1L { background-color: #000 !important; } 
+        .app-quality-root .DnwJH { background-color: #000 !important; } 
+        .qRdzpd.stQChb .TYE3Ed { background-color: #000 !important; } 
         .k82tDb { background-color: #000 !important; } 
+		.KzcwEe { background-color: #000 !important; } /* Video Time Label */
         .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } 
-        .p0DeOc { background-color: black !important; background-image: none !important; }
+        .p0DeOc { background-color: #000 !important; background-image: none !important; }
         ytlr-player-focus-ring { border: 0.375rem solid rgb(200, 200, 200) !important; }
         ${transparentBgRules}` 
     });
