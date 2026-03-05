@@ -1,12 +1,27 @@
 import { configGetAll } from './config';
 import { isShortsPage } from './utils';
 import { getWebOSVersion } from './webos-utils';
+import { FetchRegistry } from './hooks';
 
 const DEBUG = false;
 const EMOJI_DEBUG = false; 
 const FORCE_FALLBACK = false;
 
+let isTelemetryHooked = false;
+let originalXHROpen = null;
+let originalXHRSend = null;
+let originalSendBeacon = null;
+
 // --- CONSTANTS & CONFIGURATION ---
+
+const BLOCKED_TELEMETRY_PATHS = [
+  '/youtubei/v1/log_event',
+  '/ptracking',
+  // '/api/stats/watchtime', probably don't filter this out as it affects watch time statistics
+  '/api/stats/atr',
+  '/api/stats/qoe',
+  '/pagead/viewthroughconversion'
+];
 
 const UI_STRINGS = {
   SHORTS_TITLE: 'Shorts',
@@ -23,6 +38,7 @@ const YT_CONSTANTS = {
 
 const CONFIG_KEYS = {
   ADBLOCK: 'enableAdBlock',
+  TRACKING: 'enableTrackingBlock',
   SHORTS: 'removeGlobalShorts',
   LIVE_GAMES: 'removeTopLiveGames',
   GUEST_PROMPTS: 'hideGuestSignInPrompts',
@@ -164,6 +180,114 @@ function findAndProcessText(obj, maxDepth = 40, currentDepth = 0) {
   }
 }
 
+function stripTrackingParams(obj, maxDepth = 40, currentDepth = 0) {
+  if (!obj || typeof obj !== 'object' || currentDepth > maxDepth) return;
+
+  if (typeof obj.trackingParams === 'string') obj.trackingParams = '';
+  if (typeof obj.clickTrackingParams === 'string') obj.clickTrackingParams = '';
+
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) {
+      if (obj[i] && typeof obj[i] === 'object') {
+        stripTrackingParams(obj[i], maxDepth, currentDepth + 1);
+      }
+    }
+  } else {
+    const keys = Object.keys(obj);
+    for (let i = 0; i < keys.length; i++) {
+      const val = obj[keys[i]];
+      if (val && typeof val === 'object') {
+        stripTrackingParams(val, maxDepth, currentDepth + 1);
+      }
+    }
+  }
+}
+
+function isTelemetryUrl(urlStr) {
+  if (!urlStr) return false;
+  return BLOCKED_TELEMETRY_PATHS.some(path => urlStr.includes(path));
+}
+
+const telemetryFetchHandler = (evt) => {
+  const { url } = evt.detail;
+  if (isTelemetryUrl(url.pathname) || isTelemetryUrl(url.href)) {
+    if (DEBUG) console.info('[AdBlock] Blocked telemetry Fetch request:', url.href);
+    evt.preventDefault();
+  }
+};
+
+export function initTrackingBlock() {
+  if (isTelemetryHooked) return;
+  try {
+    // 1. Hook Fetch
+    FetchRegistry.getInstance().addEventListener('request', telemetryFetchHandler);
+
+    // 2. Hook XMLHttpRequest
+    originalXHROpen = window.XMLHttpRequest.prototype.open;
+    originalXHRSend = window.XMLHttpRequest.prototype.send;
+
+    window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
+      // Store the URL on the instance so we can read it during send()
+      this._requestUrl = typeof url === 'string' ? url : url?.toString();
+      return originalXHROpen.apply(this, [method, url, ...args]);
+    };
+
+    window.XMLHttpRequest.prototype.send = function(body) {
+      if (isTelemetryUrl(this._requestUrl)) {
+        if (DEBUG) console.info('[AdBlock] Blocked telemetry XHR request:', this._requestUrl);
+        // Silently drop the request
+        return; 
+      }
+      return originalXHRSend.apply(this, [body]);
+    };
+
+    // 3. Hook sendBeacon (often used for page-unload analytics)
+    if (navigator.sendBeacon) {
+      originalSendBeacon = navigator.sendBeacon;
+      navigator.sendBeacon = function(url, data) {
+        const urlStr = typeof url === 'string' ? url : url?.toString();
+        if (isTelemetryUrl(urlStr)) {
+          if (DEBUG) console.info('[AdBlock] Blocked telemetry Beacon request:', urlStr);
+          return true; // Return true to trick the app into thinking it succeeded
+        }
+        return originalSendBeacon.apply(navigator, [url, data]);
+      };
+    }
+
+    isTelemetryHooked = true;
+    console.info('[AdBlock] Telemetry network hooks enabled (Fetch, XHR, Beacon)');
+  } catch (e) {
+    console.error('[AdBlock] Failed to initialize telemetry network blockers:', e);
+  }
+}
+
+export function destroyTrackingBlock() {
+  if (!isTelemetryHooked) return;
+  try {
+    // 1. Unhook Fetch
+    FetchRegistry.getInstance().removeEventListener('request', telemetryFetchHandler);
+
+    // 2. Unhook XMLHttpRequest
+    if (originalXHROpen && originalXHRSend) {
+      window.XMLHttpRequest.prototype.open = originalXHROpen;
+      window.XMLHttpRequest.prototype.send = originalXHRSend;
+      originalXHROpen = null;
+      originalXHRSend = null;
+    }
+
+    // 3. Unhook sendBeacon
+    if (originalSendBeacon) {
+      navigator.sendBeacon = originalSendBeacon;
+      originalSendBeacon = null;
+    }
+
+    isTelemetryHooked = false;
+    console.info('[AdBlock] Telemetry network hooks disabled');
+  } catch (e) {
+    console.error('[AdBlock] Failed to remove telemetry network blockers:', e);
+  }
+}
+
 function logSchemaMiss(data, textLength) {
   try {
     let info = '';
@@ -191,13 +315,14 @@ function hookedParse(text, reviver) {
   const globalCfg = configGetAll();
   const config = {
     enableAdBlock: globalCfg[CONFIG_KEYS.ADBLOCK],
+	enableTrackingBlock: globalCfg[CONFIG_KEYS.TRACKING],
     removeGlobalShorts: globalCfg[CONFIG_KEYS.SHORTS],
     removeTopLiveGames: globalCfg[CONFIG_KEYS.LIVE_GAMES],
     hideGuestPrompts: globalCfg[CONFIG_KEYS.GUEST_PROMPTS],
     enableLegacyEmojiFix: globalCfg[CONFIG_KEYS.EMOJI_FIX] && getWebOSVersion() <= 4
   };
 
-  if (!config.enableAdBlock && !config.removeGlobalShorts && !config.removeTopLiveGames && !config.hideGuestPrompts && !config.enableLegacyEmojiFix) return data;
+  if (!config.enableAdBlock && !config.enableTrackingBlock && !config.removeGlobalShorts && !config.removeTopLiveGames && !config.hideGuestPrompts && !config.enableLegacyEmojiFix) return data;
   if (!data || typeof data !== 'object') return data;
   
   const isAPIResponse = !!(data.responseContext || data.playerResponse || data.onResponseReceivedActions || data.onResponseReceivedEndpoints || data.frameworkUpdates || data.sectionListRenderer || data.entries || data.continuationContents);
@@ -225,6 +350,11 @@ function hookedParse(text, reviver) {
     
     if (config.enableLegacyEmojiFix && data.frameworkUpdates) {
         findAndProcessText(data.frameworkUpdates, 50);
+    }
+    
+    if (config.enableTrackingBlock) {
+        stripTrackingParams(data, 50);
+        if (DEBUG) debugLog('Stripped trackingParams globally');
     }
     
   } catch (e) {

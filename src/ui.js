@@ -8,7 +8,7 @@ import './return-dislike.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS } from './utils.js';
-import { initAdblock, destroyAdblock } from './adblock.js';
+import { initAdblock, destroyAdblock, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
 import { getWebOSVersion } from './webos-utils.js';
 
 let lastSafeFocus = null;
@@ -456,7 +456,8 @@ function createOptionsPanel() {
   pageMain = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-main' });
   
   const elAdBlock = createConfigCheckbox('enableAdBlock');
-  const cosmeticGroup = [elAdBlock];
+  const elTrackingBlock = createConfigCheckbox('enableTrackingBlock');
+  const cosmeticGroup = [elAdBlock, elTrackingBlock];
   let elRemoveGlobalShorts = null, elRemoveTopLiveGames = null, elGuestPrompts = null;
   
   elRemoveGlobalShorts = createConfigCheckbox('removeGlobalShorts');
@@ -1382,8 +1383,14 @@ applyTheme(configRead('uiTheme'));
 configAddChangeListener('uiTheme', (evt) => applyTheme(evt.detail.newValue));
 
 configAddChangeListener('enableAdBlock', (evt) => {
-  if (evt.detail.newValue) { initAdblock(); showNotification('AdBlock Enabled'); }
-  else { destroyAdblock(); showNotification('AdBlock Disabled'); }
+  if (evt.detail.newValue) { initAdblock(); }
+  else { destroyAdblock(); }
+});
+
+// Add the listener for your new Tracking setting
+configAddChangeListener('enableTrackingBlock', (evt) => {
+  if (evt.detail.newValue) { initTrackingBlock(); }
+  else { destroyTrackingBlock(); }
 });
 
 configAddChangeListener('videoShelfOpacity', () => {
@@ -1392,6 +1399,8 @@ configAddChangeListener('videoShelfOpacity', () => {
   }
 });
 
+// Apply initial states on boot
 if (!configRead('enableAdBlock')) destroyAdblock();
+if (configRead('enableTrackingBlock')) initTrackingBlock();
 
 setTimeout(() => showNotification('Press [GREEN] to open SponsorBlock configuration screen'), 2000);
