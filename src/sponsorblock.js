@@ -602,45 +602,43 @@ class SponsorBlockHandler {
 
     checkForProgressBar() {
         if (this.isDestroyed) return;
-
-        const selectors = [
-            'ytlr-multi-markers-player-bar-renderer [idomkey="segment"]',
-            'ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]',
-            'ytlr-multi-markers-player-bar-renderer',
-            'ytlr-progress-bar [idomkey="slider"]',
-            '.ytLrProgressBarSliderBase',
-            '.afTAdb'
-        ];
+        // Don't re-query if we have a valid progress bar in DOM
+        if (this.overlay && this.overlay.parentNode && this.overlay.parentNode.isConnected) {
+            return;
+        }
 
         let target = null;
 
-        for (const selector of selectors) {
-            const els = document.querySelectorAll(selector);
-            if (els.length > 0) {
-                for (let i = els.length - 1; i >= 0; i--) {
-                    if (els[i].offsetWidth > 0 || els[i].offsetHeight > 0 || els[i].getClientRects().length > 0) {
-                        target = els[i];
-                        break;
-                    }
-                }
-                if (!target) {
-                    target = els[els.length - 1];
-                }
-            }
-            if (target) break;
+        // Try the cached selector first
+        if (this.activeBarSelector) {
+            target = document.querySelector(this.activeBarSelector);
         }
 
-        if (!target) return;
+        // Iterate list only if cache missed
+        if (!target) {
+            const selectors = [
+                'ytlr-multi-markers-player-bar-renderer [idomkey="segment"]',
+                'ytlr-multi-markers-player-bar-renderer [idomkey="progress-bar"]',
+                'ytlr-multi-markers-player-bar-renderer',
+                'ytlr-progress-bar [idomkey="slider"]',
+                '.ytLrProgressBarSliderBase',
+                '.afTAdb'
+            ];
 
-        if (this.progressBar !== target || !this.overlay || this.overlay.parentNode !== target) {
+            for (const selector of selectors) {
+                target = document.querySelector(selector);
+                if (target) {
+                    this.activeBarSelector = selector;
+                    break;
+                }
+            }
+        }
+
+        if (target) {
             this.progressBar = target;
-            
-            // Apply required styling to the new progress bar
             const style = window.getComputedStyle(target);
             if (style.position === 'static') target.style.position = 'relative';
             if (style.overflow !== 'visible') target.style.setProperty('overflow', 'visible', 'important');
-            
-            // Redraw or move our overlay to the new bar
             this.drawOverlay();
         }
     }
@@ -653,16 +651,9 @@ class SponsorBlockHandler {
 
         const config = configGetAll();
         const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${config.sbMode_highlight}`;
-        
-        // If the segments haven't changed and the overlay already exists in memory...
-        if (overlayHash === this.lastOverlayHash && this.overlay) {
-            // Re-attach it to the progress bar if the framework detached it!
-            if (this.overlay.parentNode !== this.progressBar) {
-                this.progressBar.appendChild(this.overlay);
-            }
+        if (overlayHash === this.lastOverlayHash && this.overlay && this.overlay.isConnected) {
             return;
         }
-        
         this.lastOverlayHash = overlayHash;
 
         if (this.overlay) this.overlay.remove();
