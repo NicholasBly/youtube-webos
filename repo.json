@@ -22,7 +22,7 @@
         "rootRequired": false,
         "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.4/youtube.leanback.v4_0.7.4_all.ipk",
         "ipkHash": {
-          "sha256": "eb886d428e2df878263396ec6d3a3729d2e8a8c6f5a21fd641e68d972c124084"
+          "sha256": "31a3077b1cf6c2e03fcafb05fa2b132aa9b73e2649d8e63c6ada7d9f95362a53"
         }
       }
     },
@@ -42,7 +42,7 @@
         "rootRequired": false,
         "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.4/youtube.leanback.v4_0.7.4_all_webOS22%2B.ipk",
         "ipkHash": {
-          "sha256": "e10c002e55208c027f0852d99896c72f687397dea39fb9a72cb6f9bda2f0f1f6"
+          "sha256": "705655cc83139476cdde02fd957f44bce11e9d38104a179154ff632a643917cb"
         }
       }
     }
