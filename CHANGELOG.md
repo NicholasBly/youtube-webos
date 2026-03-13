@@ -4,6 +4,74 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.7.4] - 2026/03/12
+
+## Added
++ Added "Reduce Telemetry & Tracking"
++ Strips "trackingParams" and "clickTrackingParams" from every JSON request
++ Hooks Fetch/XHR to filter out outgoing network requests to:
+/youtubei/v1/log_event
+/ptracking
+/api/stats/atr
+/api/stats/qoe
+/pagead/viewthroughconversion
+Note: watchtime stats are not filtered as that would likely affect your playback history
+
+## AdBlock
++ Clean out player attestation challenge and ad break heartbeat keys when filtering out ads
+
+## Fixes
++ Fixed inability to type numbers with a keyboard into the YouTube search bar
++ Fixed SponsorBlock segments not appearing on non-chapter video's progress bars - https://github.com/NicholasBly/youtube-webos/issues/68
+
+## General / Optimizations
+
++ Consolidated UI.js UI component generation
++ Centralized config caching across config.js, sponsorblock.js, and adblock.js
++ Removed unused packages - jiti, baseline-browser-mapping
++ Converted some constants to sets for O(1) lookups
+
+## Thumbnail Quality
++ Removed intersection observer and scroll observer for legacy webOS
++ Thumbnails are now queued from the order they appear via requestQueue Set
++ Added qualityCache map to store videoID and the max quality for that video, so if the thumbnail gets destroyed/removed we can check the cache later for faster lookup
+
+## Performance & Memory Optimizations (webOS)
+
+### Event Bus Integration (sponsorblock.js, watch.js)
++ New yt-player-state-change custom event: created a single event dispatcher inside video-quality.js to synchronize video elements/queries across SponsorBlock and watch (clock UI)
+
+### Garbage Collection — O(1) (thumbnail-quality.js, emoji-font.js)
++ Cache Clearing Enhancements 
+
+### Smart UI Pausing (thumbnail-quality.js, emoji-font.js)
++ Thumbnail quality and emoji replacement logic now pauses when not actively viewing the home / video page
+
+### Scoped Mutation Observers (thumbnail-quality.js)
++ Split the global observer into two lightweight ones — a structural observer for new elements, and a targeted style observer scoped strictly to individual thumbnail nodes
+
+### O(1) Selector Caching (ui.js)
++ Cache successful selector for shortcut elements
+
+### Document Tag Filtering (emoji-font.js)
++ Added ALLOWED_EMOJI_TAGS Set to skip unnecessary emoji replacement
+
+## OLED-Care Mode
++ Updated Video Time Label to pure black from #060606
+
+## Config UI
++ Updated Config UI to use page tabs at the top
++ Fixed navigation logic to ensure proper navigation functionality between tabs/pages/elements
+
+## Thumbnail Quality
++ Use fetch request to identify max thumbnail quality before downloading anything to save network resources
++ Use requestAnimationFrame for DOM writes
++ Use getElementsByTagName instead of querySelectorAll
++ Other optimizations to reduce CPU cycles
+
+## UI.js
++ Reduce file sizes of NB Logo and SponsorBlock logo
+
 ## [0.7.3] - 2026/02/27
 
 ## New Features

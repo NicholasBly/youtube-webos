@@ -7,8 +7,8 @@ import './return-dislike.js';
 // import { initYouTubeFixes } from './yt-fixes.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, SELECTORS } from './utils.js';
-import { initAdblock, destroyAdblock } from './adblock.js';
+import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS } from './utils.js';
+import { initAdblock, destroyAdblock, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
 import { getWebOSVersion } from './webos-utils.js';
 
 let lastSafeFocus = null;
@@ -36,6 +36,39 @@ let panelInitBlock = false;
 const shortcutCache = {};
 // Define keys including colors
 const shortcutKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'red', 'green', 'blue'];
+
+const COLOR_KEYS = new Set(['red', 'green', 'blue']);
+
+const cachedSelectors = {
+    comments: null,
+    description: null,
+    save: null
+};
+
+window.addEventListener('ytaf-page-update', (e) => {
+    if (e.detail.isWatch) {
+        cachedSelectors.comments = null;
+        cachedSelectors.description = null;
+        cachedSelectors.save = null;
+    }
+});
+
+const ACTION_SCOPES = {
+    config_menu: 'GLOBAL',
+    oled_toggle: 'GLOBAL',
+    refresh_page: 'NON_VIDEO',
+    chapter_skip: 'VIDEO',
+    chapter_skip_prev: 'VIDEO',
+    seek_15_fwd: 'VIDEO',
+    seek_15_back: 'VIDEO',
+    play_pause: 'VIDEO',
+    toggle_subs: 'VIDEO',
+    toggle_comments: 'VIDEO',
+    toggle_description: 'VIDEO',
+    save_to_playlist: 'VIDEO',
+    sb_skip_prev: 'VIDEO',
+    sb_manual_skip: 'VIDEO'
+};
 
 function updateShortcutCache(key) {
     shortcutCache[key] = configRead(`shortcut_key_${key}`);
@@ -135,22 +168,17 @@ function createConfigCheckbox(key) {
   return elmLabel;
 }
 
-function createSegmentControl(key) {
-  const isHighlight = key === 'sbMode_highlight';
-  const modesMap = isHighlight ? sbModesHighlight : sbModes;
-  const modes = Object.keys(modesMap);
-  const colorKey = isHighlight ? 'poi_highlightColor' : key.replace('sbMode_', '') + 'Color';
-  
+function createSection(title, elements) {
+  const legend = createElement('div', { text: title, style: { color: '#aaa', fontSize: '2.4vh', marginBottom: '0.4vh', fontWeight: 'bold', textTransform: 'uppercase' }});
+  const fieldset = createElement('div', { class: 'ytaf-settings-section', style: { marginTop: '1vh', marginBottom: '0.5vh', padding: '0vh', border: '2px solid #444', borderRadius: '5px' }}, legend, ...elements);
+  return fieldset;
+}
+
+// --- Generic UI Components Factory ---
+
+function createGenericControlRow(labelText, displayValueGetter, onLeft, onRight, onClick, extraElements = null) {
   const valueText = createElement('span', { class: 'current-value' });
-  const updateDisplay = () => valueText.textContent = modesMap[configRead(key)] || configRead(key);
-  
-  const cycle = (dir) => {
-    let idx = modes.indexOf(configRead(key));
-    if (idx === -1) idx = 0;
-    idx = dir === 'next' ? (idx + 1) % modes.length : (idx - 1 + modes.length) % modes.length;
-    configWrite(key, modes[idx]);
-    updateDisplay();
-  };
+  const updateDisplay = () => valueText.textContent = displayValueGetter();
 
   const container = createElement('div', { 
     class: 'shortcut-control-row',
@@ -158,21 +186,57 @@ function createSegmentControl(key) {
     tabIndex: 0,
     events: {
       keydown: (e) => {
-        if (e.keyCode === REMOTE_KEYS.LEFT.code) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
-        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
+        if (e.keyCode === REMOTE_KEYS.LEFT.code) { onLeft(); e.stopPropagation(); e.preventDefault(); }
+        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { onRight(); e.stopPropagation(); e.preventDefault(); }
       },
-      click: () => cycle('next')
+      click: () => onClick()
     }
   },
-    createElement('span', { text: configGetDesc(key), class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
+    createElement('span', { text: labelText, class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
     createElement('div', { class: 'shortcut-value-container' },
-      createElement('span', { text: '<', class: 'arrow-btn' }),
+      createElement('span', { text: '<', class: 'arrow-btn', events: { click: (e) => { e.stopPropagation(); onLeft(); } } }),
       valueText,
-      createElement('span', { text: '>', class: 'arrow-btn' })
+      createElement('span', { text: '>', class: 'arrow-btn', events: { click: (e) => { e.stopPropagation(); onRight(); } } })
     )
   );
 
+  if (extraElements) {
+     container.querySelector('.shortcut-value-container').appendChild(extraElements);
+  }
+
+  return { container, updateDisplay };
+}
+
+function createCycleControl(configKey, labelText, modesArray, displayMap = null, extraElements = null) {
+    const displayValueGetter = () => displayMap ? displayMap[configRead(configKey)] || configRead(configKey) : configRead(configKey);
+    const cycle = (dir) => {
+        let idx = modesArray.indexOf(configRead(configKey));
+        if (idx === -1) idx = 0;
+        idx = dir === 'next' ? (idx + 1) % modesArray.length : (idx - 1 + modesArray.length) % modesArray.length;
+        configWrite(configKey, modesArray[idx]);
+        updateDisplay();
+    };
+
+    const { container, updateDisplay } = createGenericControlRow(
+        labelText, displayValueGetter,
+        () => cycle('prev'), () => cycle('next'), () => cycle('next'),
+        extraElements
+    );
+
+    configAddChangeListener(configKey, updateDisplay);
+    updateDisplay();
+    return container;
+}
+
+function createSegmentControl(key) {
+  const isHighlight = key === 'sbMode_highlight';
+  const modesMap = isHighlight ? sbModesHighlight : sbModes;
+  const modes = Object.keys(modesMap);
+  const colorKey = isHighlight ? 'poi_highlightColor' : key.replace('sbMode_', '') + 'Color';
+
   const hasColorPicker = segmentTypes[key.replace('sbMode_', '')] || (isHighlight && segmentTypes['poi_highlight']);
+  let extraElements = null;
+
   if (hasColorPicker) {
       const resetButton = createElement('button', { 
           text: 'R', 
@@ -193,113 +257,34 @@ function createSegmentControl(key) {
       });
       
       configAddChangeListener(colorKey, (evt) => { colorInput.value = evt.detail.newValue; window.sponsorblock?.buildOverlay(); });
-      container.querySelector('.shortcut-value-container').appendChild(createElement('div', { style: { display: 'flex', marginLeft: '10px' } }, resetButton, colorInput));
+      extraElements = createElement('div', { style: { display: 'flex', marginLeft: '10px' } }, resetButton, colorInput);
   }
-  
-  configAddChangeListener(key, updateDisplay);
-  updateDisplay();
-  return container;
-}
 
-function createSection(title, elements) {
-  const legend = createElement('div', { text: title, style: { color: '#aaa', fontSize: '2.4vh', marginBottom: '0.4vh', fontWeight: 'bold', textTransform: 'uppercase' }});
-  const fieldset = createElement('div', { class: 'ytaf-settings-section', style: { marginTop: '1vh', marginBottom: '0.5vh', padding: '0vh', border: '2px solid #444', borderRadius: '5px' }}, legend, ...elements);
-  return fieldset;
+  return createCycleControl(key, configGetDesc(key), modes, modesMap, extraElements);
 }
 
 function createShortcutControl(keyIdentifier) {
   const configKey = `shortcut_key_${keyIdentifier}`;
   const actions = Object.keys(shortcutActions);
-  const isColor = ['red', 'green', 'blue'].includes(keyIdentifier);
+  const isColor = COLOR_KEYS.has(keyIdentifier);
   
   const labelText = isColor 
     ? `${keyIdentifier.charAt(0).toUpperCase() + keyIdentifier.slice(1)} Button` 
     : `Key ${keyIdentifier}`;
 
-  const valueText = createElement('span', { class: 'current-value' });
-  const updateDisplay = () => valueText.textContent = shortcutActions[configRead(configKey)] || configRead(configKey);
-  const cycle = (dir) => {
-    let idx = actions.indexOf(configRead(configKey));
-    if (idx === -1) idx = 0;
-    idx = dir === 'next' ? (idx + 1) % actions.length : (idx - 1 + actions.length) % actions.length;
-    configWrite(configKey, actions[idx]);
-    updateDisplay();
-  };
-
-  const container = createElement('div', { 
-    class: 'shortcut-control-row', 
-    style: { padding: '0.6vh 0', margin: '0.2vh 0' },
-    tabIndex: 0,
-    events: {
-      keydown: (e) => {
-        if (e.keyCode === REMOTE_KEYS.LEFT.code) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
-        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
-      },
-      click: () => cycle('next')
-    }
-  }, 
-    createElement('span', { text: labelText, class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
-    createElement('div', { class: 'shortcut-value-container' },
-      createElement('span', { text: '<', class: 'arrow-btn' }),
-      valueText,
-      createElement('span', { text: '>', class: 'arrow-btn' })
-    )
-  );
-  
-  configAddChangeListener(configKey, updateDisplay);
-  updateDisplay();
-  return container;
+  return createCycleControl(configKey, labelText, actions, shortcutActions);
 }
 
 function createPreviewControl(key) {
-  const modesMap = forcePreviewModes;
-  const modes = Object.keys(modesMap);
-  
-  const valueText = createElement('span', { class: 'current-value' });
-  const updateDisplay = () => valueText.textContent = modesMap[configRead(key)] || configRead(key);
-  
-  const cycle = (dir) => {
-    let idx = modes.indexOf(configRead(key));
-    if (idx === -1) idx = 0;
-    idx = dir === 'next' ? (idx + 1) % modes.length : (idx - 1 + modes.length) % modes.length;
-    configWrite(key, modes[idx]);
-    updateDisplay();
-  };
-
-  const container = createElement('div', { 
-    class: 'shortcut-control-row',
-    style: { padding: '0.6vh 0', margin: '0.2vh 0' }, 
-    tabIndex: 0,
-    events: {
-      keydown: (e) => {
-        if (e.keyCode === REMOTE_KEYS.LEFT.code) { cycle('prev'); e.stopPropagation(); e.preventDefault(); }
-        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { cycle('next'); e.stopPropagation(); e.preventDefault(); }
-      },
-      click: () => cycle('next')
-    }
-  },
-    createElement('span', { text: configGetDesc(key), class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
-    createElement('div', { class: 'shortcut-value-container' },
-      createElement('span', { text: '<', class: 'arrow-btn' }),
-      valueText,
-      createElement('span', { text: '>', class: 'arrow-btn' })
-    )
-  );
-  
-  configAddChangeListener(key, updateDisplay);
-  updateDisplay();
-  return container;
+  return createCycleControl(key, configGetDesc(key), Object.keys(forcePreviewModes), forcePreviewModes);
 }
-
-// --- Main Options Panel Logic ---
 
 function createOpacityControl(key) {
   const step = 5;
   const min = 0;
   const max = 100;
   
-  const valueText = createElement('span', { class: 'current-value' });
-  const updateDisplay = () => valueText.textContent = `${configRead(key)}%`;
+  const displayValueGetter = () => `${configRead(key)}%`;
   
   const changeValue = (delta) => {
     let val = configRead(key);
@@ -308,38 +293,17 @@ function createOpacityControl(key) {
     updateDisplay();
   };
 
-  const container = createElement('div', { 
-    class: 'shortcut-control-row',
-    style: { padding: '0.6vh 0', margin: '0.2vh 0' },
-    tabIndex: 0,
-    events: {
-      keydown: (e) => {
-        if (e.keyCode === REMOTE_KEYS.LEFT.code) { // Left
-          changeValue(-step); 
-          e.stopPropagation(); 
-          e.preventDefault(); 
-        }
-        else if (e.keyCode === REMOTE_KEYS.RIGHT.code || e.keyCode === REMOTE_KEYS.ENTER.code) { // Right or Enter
-          changeValue(step); 
-          e.stopPropagation(); 
-          e.preventDefault(); 
-        }
-      },
-      click: () => changeValue(step)
-    }
-  }, 
-    createElement('span', { text: configGetDesc(key), class: 'shortcut-label', style: { fontSize: '2.1vh' } }),
-    createElement('div', { class: 'shortcut-value-container' },
-      createElement('span', { text: '<', class: 'arrow-btn', events: { click: (e) => { e.stopPropagation(); changeValue(-step); } } }),
-      valueText,
-      createElement('span', { text: '>', class: 'arrow-btn', events: { click: (e) => { e.stopPropagation(); changeValue(step); } } })
-    )
+  const { container, updateDisplay } = createGenericControlRow(
+      configGetDesc(key), displayValueGetter,
+      () => changeValue(-step), () => changeValue(step), () => changeValue(step)
   );
   
   configAddChangeListener(key, updateDisplay);
   updateDisplay();
   return container;
 }
+
+// --- Main Options Panel Logic ---
 
 function createOptionsPanel() {
   const elmContainer = createElement('div', { 
@@ -356,24 +320,58 @@ function createOptionsPanel() {
   elmContainer.activePage = 0;
   let pageMain, pageSponsor, pageShortcuts, pageUITweaks;
 
-  const setActivePage = (pageIndex) => {
-    activePage = elmContainer.activePage = pageIndex;
-    [pageMain, pageSponsor, pageShortcuts, pageUITweaks].forEach(p => { if(p) p.style.display = 'none'; });
-    
-    const pages = [
-      { page: pageMain, selector: 'input', popup: false },
-      { page: pageSponsor, selector: '.shortcut-control-row', popup: (isWatchPage()) },
-      { page: pageShortcuts, selector: '.shortcut-control-row', popup: false },
-      { page: pageUITweaks, selector: '.shortcut-control-row', popup: false }
-    ];
-    
-    if (pages[pageIndex]) {
-      pages[pageIndex].page.style.display = 'block';
-      const focusTarget = pages[pageIndex].page.querySelector(pages[pageIndex].selector);
-      if(focusTarget) focusTarget.focus();
-      sponsorBlockUI.togglePopup(pages[pageIndex].popup);
+  const tabMenu = createElement('div', { 
+    class: 'ytaf-tab-menu',
+    events: {
+      mouseleave: () => {
+        const activeTabBtn = elmContainer.querySelector('.ytaf-tab-btn.active');
+        if (activeTabBtn && document.activeElement && document.activeElement.classList.contains('ytaf-tab-btn')) {
+            activeTabBtn.focus();
+        }
+      }
     }
-  };
+  });
+  const tabs = ['Main', 'SponsorBlock', 'Shortcuts', 'UI Tweaks'];
+  const tabBtns = tabs.map((name, index) => {
+    return createElement('button', {
+      class: index === 0 ? 'ytaf-tab-btn active' : 'ytaf-tab-btn',
+      text: name,
+      tabIndex: 0,
+      events: { 
+        click: () => setActivePage(index),
+        mouseenter: (e) => e.target.focus()
+      }
+    });
+  });
+  tabBtns.forEach(btn => tabMenu.appendChild(btn));
+
+	const setActivePage = (pageIndex) => {
+	  if (pageIndex === activePage) return; // Don't do work if we are already on this tab
+	  const pagesArray = [pageMain, pageSponsor, pageShortcuts, pageUITweaks];
+	  const focusSelectors = ['input', '.shortcut-control-row, input', '.shortcut-control-row', '.shortcut-control-row, input'];
+	  const hasPopups = [false, true, false, false];
+
+	  // 1. Deactivate old state
+	  pagesArray[activePage].style.display = 'none';
+	  tabBtns[activePage].classList.remove('active');
+
+	  // 2. Set new state
+	  activePage = elmContainer.activePage = pageIndex;
+	  pagesArray[activePage].style.display = 'block';
+	  tabBtns[activePage].classList.add('active');
+
+	  // 3. Focus management
+	  const activeEl = document.activeElement;
+	  const isTabFocused = activeEl && activeEl.classList.contains('ytaf-tab-btn');
+	  
+	  if (!isTabFocused) {
+		const focusTarget = pagesArray[activePage].querySelector(focusSelectors[activePage]);
+		if (focusTarget) focusTarget.focus();
+	  }
+	  
+	  // 4. Handle SponsorBlock popup state
+	  sponsorBlockUI.togglePopup(hasPopups[activePage] && isWatchPage());
+	};
 
   // Keyboard Navigation for the Options Panel
   elmContainer.addEventListener('keydown', (evt) => {
@@ -384,28 +382,42 @@ function createOptionsPanel() {
       const preFocus = document.activeElement;
 
       if (dir === 'left' || dir === 'right') {
-        // Prevent accidental page switch when modifying controls
+        // Prevent modifying row from navigating away
         if (preFocus.classList.contains('shortcut-control-row')) return;
-        if (activePage === 1) {
-          // Sponsor page now uses shortcut-control-row so this check is redundant but safe
-          if (preFocus.matches('blockquote input[type="checkbox"]')) { setActivePage(0); evt.preventDefault(); evt.stopPropagation(); return; }
-        }
 
         navigate(dir);
         
-        // If focus didn't move (hit edge), try changing pages
-        if (preFocus === document.activeElement) {
-          if (dir === 'right' && activePage < 3) setActivePage(activePage + 1);
-          else if (dir === 'left' && activePage > 0) setActivePage(activePage - 1);
-        }
+        // Tab menu wrap-around logic
+        if (preFocus === document.activeElement && preFocus.classList.contains('ytaf-tab-btn')) {
+			const idx = tabBtns.indexOf(preFocus);
+			if (dir === 'right' && idx === tabBtns.length - 1) tabBtns[0].focus();
+			else if (dir === 'left' && idx === 0) tabBtns[tabBtns.length - 1].focus();
+		}
+        
         evt.preventDefault(); evt.stopPropagation(); return;
       } else if (dir === 'up' || dir === 'down') {
         navigate(dir);
-        
-        // Wrap around logic if focus didn't move
-        if (preFocus === document.activeElement) {
-          const focusables = Array.from(elmContainer.querySelectorAll('input, .shortcut-control-row, .ytaf-nav-hint, button'))
-            .filter(el => el.offsetParent !== null && !el.disabled);
+        const postFocus = document.activeElement;
+
+        if (dir === 'up' && preFocus !== postFocus) {
+            if (preFocus.closest('.ytaf-settings-page') && postFocus.classList.contains('ytaf-tab-btn')) {
+                const activeTabBtn = elmContainer.querySelector('.ytaf-tab-btn.active');
+                if (activeTabBtn) activeTabBtn.focus();
+            }
+        }
+
+        if (preFocus === postFocus) {
+          const activeTabBtn = tabBtns[activePage];
+		  const pagesList = [pageMain, pageSponsor, pageShortcuts, pageUITweaks];
+		  const visiblePage = pagesList[activePage]; 
+		  let pageFocusables = [];
+
+		  if (visiblePage) {
+			  pageFocusables = Array.from(visiblePage.querySelectorAll('input:not([disabled]), .shortcut-control-row, button:not([disabled])'))
+				  .filter(el => el.tabIndex !== -1);
+		  }
+          
+          const focusables = [activeTabBtn, ...pageFocusables].filter(Boolean);
           
           if (focusables.length > 0) {
             if (dir === 'up') focusables[focusables.length - 1].focus();
@@ -422,8 +434,13 @@ function createOptionsPanel() {
     evt.preventDefault(); evt.stopPropagation();
   }, true);
 
-  // Logo creation with theme toggle
-  const toggleTheme = (evt) => { evt.preventDefault(); evt.stopPropagation(); configWrite('uiTheme', configRead('uiTheme') === 'blue-force-field' ? 'classic-red' : 'blue-force-field'); };
+  const toggleTheme = (evt) => { 
+      evt.preventDefault(); 
+      evt.stopPropagation(); 
+      configWrite('uiTheme', configRead('uiTheme') === 'blue-force-field' ? 'classic-red' : 'blue-force-field'); 
+      const activeTab = elmContainer.querySelector('.ytaf-tab-btn.active');
+      if (activeTab) activeTab.focus();
+  };
   const createLogo = (src, cls) => createElement('img', { src, alt: 'Logo', class: `ytaf-logo ${cls}`, title: 'Click to switch theme', style: cls !== 'logo-blue' ? { display: 'none' } : {}, events: { click: toggleTheme }});
   
   const elmHeading = createElement('h1', {},
@@ -433,12 +450,14 @@ function createOptionsPanel() {
     createLogo('https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/NB%20Logo-gigapixel4.png', 'logo-dark')
   );
   elmContainer.appendChild(elmHeading);
+  elmContainer.appendChild(tabMenu);
 
   // --- Page 1: Main ---
   pageMain = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-main' });
   
   const elAdBlock = createConfigCheckbox('enableAdBlock');
-  const cosmeticGroup = [elAdBlock];
+  const elTrackingBlock = createConfigCheckbox('enableTrackingBlock');
+  const cosmeticGroup = [elAdBlock, elTrackingBlock];
   let elRemoveGlobalShorts = null, elRemoveTopLiveGames = null, elGuestPrompts = null;
   
   elRemoveGlobalShorts = createConfigCheckbox('removeGlobalShorts');
@@ -466,14 +485,10 @@ function createOptionsPanel() {
 
   pageMain.appendChild(createSection('Video Player', [createConfigCheckbox('forceHighResVideo'), createConfigCheckbox('hideEndcards'), createConfigCheckbox('enableReturnYouTubeDislike')]));
   pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createConfigCheckbox('hideLogo'), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
-  
-  const navHintNextMain = createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(1) }}, 'SponsorBlock Settings ', createElement('span', { class: 'arrow', text: '→' }));
-  pageMain.appendChild(navHintNextMain);
   elmContainer.appendChild(pageMain);
 
   // --- Page 2: SponsorBlock ---
   pageSponsor = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-sponsor', style: { display: 'none' }});
-  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(0) }}, createElement('span', { class: 'arrow', text: '←' }), ' Main Settings'));
   pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
   
   const elmBlock = createElement('blockquote', {},
@@ -484,25 +499,22 @@ function createOptionsPanel() {
   );
   pageSponsor.appendChild(elmBlock);
   pageSponsor.appendChild(createElement('div', {}, createElement('small', { text: 'Sponsor segments skipping - https://sponsor.ajay.app' })));
-  pageSponsor.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(2) }}, 'Shortcuts ', createElement('span', { class: 'arrow', text: '→' })));
   elmContainer.appendChild(pageSponsor);
 
   // --- Page 3: Shortcuts ---
   pageShortcuts = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-shortcuts', style: { display: 'none' }});
-  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(1) }}, createElement('span', { class: 'arrow', text: '←' }), ' SponsorBlock Settings'));
   shortcutKeys.forEach(key => { pageShortcuts.appendChild(createShortcutControl(key)); });
-  pageShortcuts.appendChild(createElement('div', { class: 'ytaf-nav-hint right', tabIndex: 0, events: { click: () => setActivePage(3) }}, 'UI Tweaks ', createElement('span', { class: 'arrow', text: '→' })));
   elmContainer.appendChild(pageShortcuts);
   
   // --- Page 4: UI Tweaks ---
   pageUITweaks = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-ui-tweaks', style: { display: 'none' }});
-  pageUITweaks.appendChild(createElement('div', { class: 'ytaf-nav-hint left', tabIndex: 0, events: { click: () => setActivePage(2) }}, createElement('span', { class: 'arrow', text: '←' }), ' Shortcuts'));
   
   const playerUITweaks = [
       createOpacityControl('videoShelfOpacity'),
       createElement('div', { text: 'Adjusts opacity of black background underneath videos (Requires OLED-care mode)', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
-      createConfigCheckbox('fixMultilineTitles'),
-	  createPreviewControl('forcePreviews')
+	  createPreviewControl('forcePreviews'),
+	  createElement('div', { text: 'Forces the video thumbnail preview on/off on app load', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
+	  createConfigCheckbox('fixMultilineTitles')
   ];
 
   if (getWebOSVersion() <= 4) {
@@ -547,9 +559,17 @@ function showOptionsPanel(visible) {
     else sponsorBlockUI.togglePopup(false);
     
     // Find best initial focus
-    const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(el => el.offsetParent !== null && !el.disabled);
-    if (firstVisibleInput) { firstVisibleInput.focus(); lastSafeFocus = firstVisibleInput; }
-    else { optionsPanel.focus(); lastSafeFocus = optionsPanel; }
+    const activeTabBtn = optionsPanel.querySelector('.ytaf-tab-btn.active');
+    if (activeTabBtn) {
+        activeTabBtn.focus();
+        lastSafeFocus = activeTabBtn;
+    } else {
+        const activeTabBtn = optionsPanel.querySelector('.ytaf-tab-btn.active');
+		if (activeTabBtn) activeTabBtn.focus();
+			else optionsPanel.focus();
+        if (firstVisibleInput) { firstVisibleInput.focus(); lastSafeFocus = firstVisibleInput; }
+			else { optionsPanel.focus(); lastSafeFocus = optionsPanel; }
+    }
     optionsPanelVisible = true;
   } else if (!visible && optionsPanelVisible && optionsPanel) {
     console.info('Hiding options panel!');
@@ -572,7 +592,7 @@ document.addEventListener('focus', (e) => {
     e.preventDefault();
     if (lastSafeFocus && lastSafeFocus.isConnected) lastSafeFocus.focus();
     else {
-      const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row')).find(el => el.offsetParent !== null && !el.disabled);
+      const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row, .ytaf-tab-btn')).find(el => el.offsetParent !== null && !el.disabled);
       if (firstVisibleInput) firstVisibleInput.focus();
       else optionsPanel.focus();
     }
@@ -786,23 +806,34 @@ function toggleSubtitlesLogic(player) {
 }
 
 function toggleCommentsLogic() {
-    // 1. Try finding Comments Button
-    let target = document.querySelector('yt-button-container[aria-label="Comments"]');
+    let target = null;
+    if (cachedSelectors.comments) {
+        target = document.querySelector(cachedSelectors.comments);
+    }
 
     if (!target) {
-        target = document.querySelector('yt-icon.qHxFAf.ieYpu.nGYLgf') || 
-                 document.querySelector('yt-icon.qHxFAf.ieYpu.wFZPnb') ||
-                 document.querySelector('ytlr-button-renderer[idomkey="item-1"] ytlr-button') || 
-                 document.querySelector('[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button') || 
-                 document.querySelector('ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button');
+        const queryList = [
+            'yt-button-container[aria-label="Comments"]',
+            'yt-icon.qHxFAf.ieYpu.nGYLgf',
+            'yt-icon.qHxFAf.ieYpu.wFZPnb',
+            'ytlr-button-renderer[idomkey="item-1"] ytlr-button',
+            '[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button',
+            'ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button',
+            'ytlr-button-renderer[idomkey="1"] yt-button-container'
+        ];
+
+        for (let i = 0; i < queryList.length; i++) {
+            target = document.querySelector(queryList[i]);
+            if (target) {
+                cachedSelectors.comments = queryList[i];
+                break;
+            }
+        }
     }
-    if (!target) {
-          target = document.querySelector('ytlr-button-renderer[idomkey="1"] yt-button-container'); // Shorts
-    }
+
     let commBtn = target ? target.closest('yt-button-container, ytlr-button') : null;
     let isLiveChat = false;
 
-    // 2. Fallback: Live Chat (Only if comments not found)
     if (!commBtn) {
           const chatTarget = document.querySelector('ytlr-live-chat-toggle-button yt-button-container') ||
                              document.querySelector('yt-button-container[aria-label="Live chat"]');
@@ -812,7 +843,6 @@ function toggleCommentsLogic() {
           }
     }
 
-    // 3. Execution Logic
     const isBtnActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
     const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
     const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
@@ -832,19 +862,30 @@ function toggleCommentsLogic() {
 }
 
 function toggleDescriptionLogic() {
-    // 1. Try English text finding
-    let descText = Array.from(document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe'))
-        .find(el => el.textContent.trim() === 'Description');
-    let target = descText ? descText.closest('yt-button-container') : null;
+    let target = null;
 
-    // 2. Fallback: Structural finding for non-English (look for text-button in generic renderer, excluding subscribe/join which are usually different or have icons)
+    if (cachedSelectors.description) {
+        const cachedEl = document.querySelector(cachedSelectors.description);
+        target = cachedEl ? cachedEl.closest('yt-button-container') : null;
+    }
+
     if (!target) {
-        const genericTextBtn = document.querySelector('ytlr-button-renderer yt-formatted-string.XGffTd.OqGroe');
-        if (genericTextBtn) target = genericTextBtn.closest('yt-button-container');
+        let descText = Array.from(document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe'))
+            .find(el => el.textContent.trim() === 'Description');
+        
+        if (descText) {
+            target = descText.closest('yt-button-container');
+        } else {
+            const fallbackSelector = 'ytlr-button-renderer yt-formatted-string.XGffTd.OqGroe';
+            const genericTextBtn = document.querySelector(fallbackSelector);
+            if (genericTextBtn) {
+                target = genericTextBtn.closest('yt-button-container');
+                cachedSelectors.description = fallbackSelector;
+            }
+        }
     }
 
     const isDescActive = target && (target.getAttribute('aria-pressed') === 'true' || target.getAttribute('aria-selected') === 'true');
-    // Re-use panel detection from comments as they share the side panel space
     const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
     const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
 
@@ -861,13 +902,29 @@ function toggleDescriptionLogic() {
 }
 
 function saveToPlaylistLogic() {
-    // 1. Try English Aria Label
-    let target = document.querySelector('yt-button-container[aria-label="Save"]');
+    let target = null;
 
-    // 2. Fallback: Specific icon class (p9sZp) found in Save button
+    if (cachedSelectors.save) {
+        const el = document.querySelector(cachedSelectors.save);
+        if (el) {
+            target = cachedSelectors.save === 'yt-icon.p9sZp' ? el.closest('yt-button-container') : el;
+        }
+    }
+
     if (!target) {
-        const icon = document.querySelector('yt-icon.p9sZp');
-        if (icon) target = icon.closest('yt-button-container');
+        const queryList = [
+            'yt-button-container[aria-label="Save"]',
+            'yt-icon.p9sZp'
+        ];
+
+        for (let i = 0; i < queryList.length; i++) {
+            const el = document.querySelector(queryList[i]);
+            if (el) {
+                target = queryList[i] === 'yt-icon.p9sZp' ? el.closest('yt-button-container') : el;
+                cachedSelectors.save = queryList[i];
+                break;
+            }
+        }
     }
       
     const panel = document.querySelector('.AmQJbe');
@@ -1065,33 +1122,53 @@ const eventHandler = (evt) => {
   if (evt.repeat) return;
   // console.info('Key event:', evt.type, evt.charCode, evt.keyCode);
 
-  // 1. Identify Key (Name or Color)
+  // Identify Key (Name or Color)
   let keyName = null;
   const code = evt.keyCode || evt.charCode; 
   const keyColor = getKeyColor(code);
+  const isNumberKey = evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57;
   
   if (keyColor) {
       keyName = keyColor;
-  } else if (evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57) {
+  } else if (isNumberKey) {
+      if (isSearchPage()) return true; 
       keyName = String(evt.keyCode - 48);
   }
 
   if (!keyName) return true; // Not a managed key
 
-  // 2. Get Action
+  // Get Action
   const action = shortcutCache[keyName];
-  
-  // Fast boolean check to exit early
   if (!action || action === 'none') return true;
 
-  // 3. Debounce (only for non-burst)
-  // Check action type for Burst Seek logic
+  // Scope & Context Checking (O(1) Efficiency)
+  const isVideoPage = isWatchPage() || isShortsPage();
+  const actionScope = ACTION_SCOPES[action] || 'VIDEO'; // Default unknown actions to VIDEO for safety
+  
+  // If the user is typing in a native text box, let standard characters (like 0-9) pass through
+  if (!keyColor && (evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA')) {
+      console.log("We are typing!");
+	  return true;
+  }
+  if (!action || action === 'none') {
+      if (isVideoPage) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          return false;
+      } else {
+          return true;
+      }
+  }
+
+  // Release the key instantly if the action's required scope doesn't match the page
+  if (actionScope === 'VIDEO' && !isVideoPage) return true;
+
+  // --- Proceed to Debounce and Execution ---
+  
   const isBurstAction = action === 'seek_15_fwd' || action === 'seek_15_back';
   const now = Date.now();
 
-  // Distinct debounce per key index/name
   if (!isBurstAction && now - lastShortcutTime < shortcutDebounceTime && lastShortcutKey === keyName) {
-      console.log(`[Shortcut] Debounced duplicate key ${keyName}`);
       evt.preventDefault(); 
       evt.stopPropagation(); 
       return false;
@@ -1250,21 +1327,22 @@ function applyOledMode(enabled) {
       : '';
     
     const style = createElement('style', { id: 'style-gray-ui-oled-care', text: `
-        #container { background-color: black !important; } 
-        .ytLrGuideResponseMask { background-color: black !important; } 
-        .geClSe { background-color: black !important; } 
-        .hsdF6b { background-color: black !important; } 
+        #container { background-color: #000 !important; } 
+        .ytLrGuideResponseMask { background-color: #000 !important; } 
+        .geClSe { background-color: #000 !important; } 
+        .hsdF6b { background-color: #000 !important; } 
         .ytLrGuideResponseGradient { display: none; } 
-        .ytLrAnimatedOverlayContainer { background-color: black !important; } 
+        .ytLrAnimatedOverlayContainer { background-color: #000 !important; } 
         .iha0pc { color: #000 !important; } 
         .ZghAqf { background-color: #000 !important; } 
-        .A0acyf.RAE3Re .AmQJbe { background-color: black !important; } 
-        .tVp1L { background-color: black !important; } 
-        .app-quality-root .DnwJH { background-color: black !important; } 
-        .qRdzpd.stQChb .TYE3Ed { background-color: black !important; } 
+        .A0acyf.RAE3Re .AmQJbe { background-color: #000 !important; } 
+        .tVp1L { background-color: #000 !important; } 
+        .app-quality-root .DnwJH { background-color: #000 !important; } 
+        .qRdzpd.stQChb .TYE3Ed { background-color: #000 !important; } 
         .k82tDb { background-color: #000 !important; } 
+		.KzcwEe { background-color: #000 !important; } /* Video Time Label */
         .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } 
-        .p0DeOc { background-color: black !important; background-image: none !important; }
+        .p0DeOc { background-color: #000 !important; background-image: none !important; }
         ytlr-player-focus-ring { border: 0.375rem solid rgb(200, 200, 200) !important; }
         ${transparentBgRules}` 
     });
@@ -1305,8 +1383,14 @@ applyTheme(configRead('uiTheme'));
 configAddChangeListener('uiTheme', (evt) => applyTheme(evt.detail.newValue));
 
 configAddChangeListener('enableAdBlock', (evt) => {
-  if (evt.detail.newValue) { initAdblock(); showNotification('AdBlock Enabled'); }
-  else { destroyAdblock(); showNotification('AdBlock Disabled'); }
+  if (evt.detail.newValue) { initAdblock(); }
+  else { destroyAdblock(); }
+});
+
+// Add the listener for your new Tracking setting
+configAddChangeListener('enableTrackingBlock', (evt) => {
+  if (evt.detail.newValue) { initTrackingBlock(); }
+  else { destroyTrackingBlock(); }
 });
 
 configAddChangeListener('videoShelfOpacity', () => {
@@ -1315,6 +1399,8 @@ configAddChangeListener('videoShelfOpacity', () => {
   }
 });
 
+// Apply initial states on boot
 if (!configRead('enableAdBlock')) destroyAdblock();
+if (configRead('enableTrackingBlock')) initTrackingBlock();
 
 setTimeout(() => showNotification('Press [GREEN] to open SponsorBlock configuration screen'), 2000);

@@ -1,12 +1,26 @@
-import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
+import { configGetAll } from './config';
 import { isShortsPage } from './utils';
 import { getWebOSVersion } from './webos-utils';
+import { FetchRegistry } from './hooks';
 
 const DEBUG = false;
 const EMOJI_DEBUG = false; 
 const FORCE_FALLBACK = false;
 
+let isTelemetryHooked = false;
+let originalXHROpen = null;
+let originalXHRSend = null;
+
 // --- CONSTANTS & CONFIGURATION ---
+
+const BLOCKED_TELEMETRY_PATHS = [
+  '/youtubei/v1/log_event',
+  '/ptracking',
+  // '/api/stats/watchtime', probably don't filter this out as it affects watch time statistics
+  '/api/stats/atr',
+  '/api/stats/qoe',
+  '/pagead/viewthroughconversion'
+];
 
 const UI_STRINGS = {
   SHORTS_TITLE: 'Shorts',
@@ -23,6 +37,7 @@ const YT_CONSTANTS = {
 
 const CONFIG_KEYS = {
   ADBLOCK: 'enableAdBlock',
+  TRACKING: 'enableTrackingBlock',
   SHORTS: 'removeGlobalShorts',
   LIVE_GAMES: 'removeTopLiveGames',
   GUEST_PROMPTS: 'hideGuestSignInPrompts',
@@ -34,7 +49,7 @@ const EMOJI_RE_CAP = new RegExp(`(${EMOJI_RE.source})`, 'g');
 const EMOJI_RE_GLOBAL = new RegExp(EMOJI_RE.source, 'g');
 const CLEAN_TEXT_RE = /[\u2060\uFEFF]/g;
 
-const IGNORE_ON_SHORTS = ['SEARCH', 'PLAYER', 'ACTION'];
+const IGNORE_ON_SHORTS = new Set(['SEARCH', 'PLAYER', 'ACTION']);
 
 const SCHEMA_REGISTRY = {
   typeSignatures: [
@@ -67,34 +82,10 @@ const SCHEMA_REGISTRY = {
 let origParse = JSON.parse;
 let isHooked = false;
 
-let configCache = {
-  enableAdBlock: true,
-  removeGlobalShorts: false,
-  removeTopLiveGames: false,
-  hideGuestPrompts: false,
-  enableLegacyEmojiFix: false,
-  lastUpdate: 0
-};
-
 // --- CORE FUNCTIONS ---
 
 function debugLog(msg, ...args) {
   if (DEBUG) console.log(`[AdBlock] ${msg}`, ...args);
-}
-
-function updateConfigCache() {
-  configCache = {
-    enableAdBlock: configRead(CONFIG_KEYS.ADBLOCK),
-    removeGlobalShorts: configRead(CONFIG_KEYS.SHORTS),
-    removeTopLiveGames: configRead(CONFIG_KEYS.LIVE_GAMES),
-    hideGuestPrompts: configRead(CONFIG_KEYS.GUEST_PROMPTS),
-    enableLegacyEmojiFix: configRead(CONFIG_KEYS.EMOJI_FIX) && getWebOSVersion() <= 4,
-    lastUpdate: Date.now()
-  };
-}
-
-function getCachedConfig() {
-  return configCache;
 }
 
 function processEmojiString(str) {
@@ -188,6 +179,112 @@ function findAndProcessText(obj, maxDepth = 40, currentDepth = 0) {
   }
 }
 
+function stripTrackingParams(obj, maxDepth = 40, currentDepth = 0) {
+  if (!obj || typeof obj !== 'object' || currentDepth > maxDepth) return;
+
+  if (typeof obj.trackingParams === 'string') obj.trackingParams = '';
+  if (typeof obj.clickTrackingParams === 'string') obj.clickTrackingParams = '';
+
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) {
+      if (obj[i] && typeof obj[i] === 'object') {
+        stripTrackingParams(obj[i], maxDepth, currentDepth + 1);
+      }
+    }
+  } else {
+    const keys = Object.keys(obj);
+    for (let i = 0; i < keys.length; i++) {
+      const val = obj[keys[i]];
+      if (val && typeof val === 'object') {
+        stripTrackingParams(val, maxDepth, currentDepth + 1);
+      }
+    }
+  }
+}
+
+function isTelemetryUrl(urlStr) {
+  if (!urlStr) return false;
+  return BLOCKED_TELEMETRY_PATHS.some(path => urlStr.includes(path));
+}
+
+const telemetryFetchHandler = (evt) => {
+  const { url } = evt.detail;
+  if (isTelemetryUrl(url.pathname) || isTelemetryUrl(url.href)) {
+    if (DEBUG) console.info('[AdBlock] Blocked telemetry Fetch request:', url.href);
+    evt.preventDefault();
+  }
+};
+
+export function initTrackingBlock() {
+  if (isTelemetryHooked) return;
+
+  // 1. Hook Fetch (Wrapped separately so webOS 3 EventTarget failures don't break XHR)
+  try {
+    if (typeof FetchRegistry !== 'undefined' && FetchRegistry.getInstance) {
+      FetchRegistry.getInstance().addEventListener('request', telemetryFetchHandler);
+    }
+  } catch (e) {
+    console.warn('[AdBlock] Fetch hook failed (expected behavior on webOS 3):', e.message);
+  }
+
+  // 2. Hook XMLHttpRequest
+  try {
+    originalXHROpen = window.XMLHttpRequest.prototype.open;
+    originalXHRSend = window.XMLHttpRequest.prototype.send;
+
+    window.XMLHttpRequest.prototype.open = function(method, url) {
+      // Store the URL on the instance so we can read it during send()
+      // Fallback for older engines that might not support optional chaining properly
+      this._requestUrl = typeof url === 'string' ? url : (url && url.toString ? url.toString() : '');
+      
+      // Use standard 'arguments' instead of spread syntax (...args) for webOS 3 compatibility
+      return originalXHROpen.apply(this, arguments);
+    };
+
+    window.XMLHttpRequest.prototype.send = function(body) {
+      if (isTelemetryUrl(this._requestUrl)) {
+        if (DEBUG) console.info('[AdBlock] Blocked telemetry XHR request:', this._requestUrl);
+        // Silently drop the request
+        return; 
+      }
+      return originalXHRSend.apply(this, arguments);
+    };
+
+    isTelemetryHooked = true;
+    console.info('[AdBlock] Telemetry network hooks enabled (XHR)');
+  } catch (e) {
+    console.error('[AdBlock] Failed to initialize XHR telemetry blockers:', e);
+  }
+}
+
+export function destroyTrackingBlock() {
+  if (!isTelemetryHooked) return;
+
+  // 1. Unhook Fetch
+  try {
+    if (typeof FetchRegistry !== 'undefined' && FetchRegistry.getInstance) {
+      FetchRegistry.getInstance().removeEventListener('request', telemetryFetchHandler);
+    }
+  } catch (e) {
+    console.warn('[AdBlock] Fetch unhook failed (expected on older engines):', e.message);
+  }
+
+  // 2. Unhook XMLHttpRequest
+  try {
+    if (originalXHROpen && originalXHRSend) {
+      window.XMLHttpRequest.prototype.open = originalXHROpen;
+      window.XMLHttpRequest.prototype.send = originalXHRSend;
+      originalXHROpen = null;
+      originalXHRSend = null;
+    }
+
+    isTelemetryHooked = false;
+    console.info('[AdBlock] Telemetry network hooks disabled');
+  } catch (e) {
+    console.error('[AdBlock] Failed to remove XHR network blockers:', e);
+  }
+}
+
 function logSchemaMiss(data, textLength) {
   try {
     let info = '';
@@ -211,10 +308,18 @@ function hookedParse(text, reviver) {
       return data;
   }
    
-  const config = getCachedConfig();
-  const { enableAdBlock, removeGlobalShorts, removeTopLiveGames, hideGuestPrompts, enableLegacyEmojiFix } = config;
+  // Pull live configuration per-request
+  const globalCfg = configGetAll();
+  const config = {
+    enableAdBlock: globalCfg[CONFIG_KEYS.ADBLOCK],
+	enableTrackingBlock: globalCfg[CONFIG_KEYS.TRACKING],
+    removeGlobalShorts: globalCfg[CONFIG_KEYS.SHORTS],
+    removeTopLiveGames: globalCfg[CONFIG_KEYS.LIVE_GAMES],
+    hideGuestPrompts: globalCfg[CONFIG_KEYS.GUEST_PROMPTS],
+    enableLegacyEmojiFix: globalCfg[CONFIG_KEYS.EMOJI_FIX] && getWebOSVersion() <= 4
+  };
 
-  if (!enableAdBlock && !removeGlobalShorts && !removeTopLiveGames && !hideGuestPrompts && !enableLegacyEmojiFix) return data;
+  if (!config.enableAdBlock && !config.enableTrackingBlock && !config.removeGlobalShorts && !config.removeTopLiveGames && !config.hideGuestPrompts && !config.enableLegacyEmojiFix) return data;
   if (!data || typeof data !== 'object') return data;
   
   const isAPIResponse = !!(data.responseContext || data.playerResponse || data.onResponseReceivedActions || data.onResponseReceivedEndpoints || data.frameworkUpdates || data.sectionListRenderer || data.entries || data.continuationContents);
@@ -222,9 +327,9 @@ function hookedParse(text, reviver) {
 
   try {
     const responseType = detectResponseType(data);
-    const needsContentFiltering = enableAdBlock || hideGuestPrompts || enableLegacyEmojiFix;
+    const needsContentFiltering = config.enableAdBlock || config.hideGuestPrompts || config.enableLegacyEmojiFix;
 
-    if (isShortsPage() && responseType && IGNORE_ON_SHORTS.includes(responseType)) return data;
+    if (isShortsPage() && responseType && IGNORE_ON_SHORTS.has(responseType)) return data;
 
     if (FORCE_FALLBACK) {
       if (DEBUG) debugLog(`FORCE_FALLBACK active. Using fallback filters.`);
@@ -242,6 +347,11 @@ function hookedParse(text, reviver) {
     
     if (config.enableLegacyEmojiFix && data.frameworkUpdates) {
         findAndProcessText(data.frameworkUpdates, 50);
+    }
+    
+    if (config.enableTrackingBlock) {
+        stripTrackingParams(data, 50);
+        if (DEBUG) debugLog('Stripped trackingParams globally');
     }
     
   } catch (e) {
@@ -534,7 +644,21 @@ function clearArrayIfExists(obj, key) {
 
 function removePlayerAdsOptimized(data) {
   let cleared = 0;
-  cleared += clearArrayIfExists(data, 'adPlacements'); cleared += clearArrayIfExists(data, 'playerAds'); cleared += clearArrayIfExists(data, 'adSlots');
+  cleared += clearArrayIfExists(data, 'adPlacements'); 
+  cleared += clearArrayIfExists(data, 'playerAds'); 
+  cleared += clearArrayIfExists(data, 'adSlots');
+
+  // Strip attestation and telemetry mismatches
+  if (data.attestation) {
+      delete data.attestation;
+      cleared++;
+      if (DEBUG) debugLog('Cleaned Player Attestation Challenge');
+  }
+  if (data.adBreakHeartbeatParams) {
+      delete data.adBreakHeartbeatParams;
+      cleared++;
+      if (DEBUG) debugLog('Cleaned Ad Break Heartbeat');
+  }
   if (data.playerResponse) {
     cleared += clearArrayIfExists(data.playerResponse, 'adPlacements'); cleared += clearArrayIfExists(data.playerResponse, 'playerAds'); cleared += clearArrayIfExists(data.playerResponse, 'adSlots');
   }
@@ -576,16 +700,9 @@ export function initAdblock() {
   if (isHooked) return;
   console.info('[AdBlock] Initializing hybrid hook (Debug Mode: ' + DEBUG + ')');
   
-  updateConfigCache();
   origParse = JSON.parse;
   JSON.parse = function (text, reviver) { return hookedParse.call(this, text, reviver); };
   isHooked = true;
-  
-  configAddChangeListener(CONFIG_KEYS.ADBLOCK, updateConfigCache);
-  configAddChangeListener(CONFIG_KEYS.SHORTS, updateConfigCache);
-  configAddChangeListener(CONFIG_KEYS.LIVE_GAMES, updateConfigCache);
-  configAddChangeListener(CONFIG_KEYS.GUEST_PROMPTS, updateConfigCache);
-  configAddChangeListener(CONFIG_KEYS.EMOJI_FIX, updateConfigCache);
 }
 
 export function destroyAdblock() {
@@ -594,12 +711,6 @@ export function destroyAdblock() {
   
   JSON.parse = origParse;
   isHooked = false;
-  
-  configRemoveChangeListener(CONFIG_KEYS.ADBLOCK, updateConfigCache);
-  configRemoveChangeListener(CONFIG_KEYS.SHORTS, updateConfigCache);
-  configRemoveChangeListener(CONFIG_KEYS.LIVE_GAMES, updateConfigCache);
-  configRemoveChangeListener(CONFIG_KEYS.GUEST_PROMPTS, updateConfigCache);
-  configRemoveChangeListener(CONFIG_KEYS.EMOJI_FIX, updateConfigCache);
 }
 
 initAdblock();

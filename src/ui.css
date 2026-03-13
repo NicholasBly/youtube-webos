@@ -5,7 +5,7 @@
   transform: translateX(-50%);
   width: 95vw;
   max-width: 41.6vw;
-  max-height: 90vh;
+  max-height: 95vh;
   color: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 4.44vh;
@@ -165,6 +165,8 @@
   margin: 0 -0.75vh 0.4vh; 
   padding-left: 0.75vh;
   padding-right: 0.75vh;
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 0.1s ease-out, background 0.1s ease-out;
 }
 
 .ytaf-settings-section label {
@@ -210,10 +212,16 @@
 }
 
 .ytaf-ui-container.theme-classic-red .shortcut-control-row:focus,
-.ytaf-ui-container.theme-classic-red label:focus-within,
 .ytaf-ui-container.theme-classic-red label.focused {
   background: rgba(255, 0, 0, 0.1);
   box-shadow: 0 0 0 0.19vh rgba(255, 0, 0, 0.5);
+  outline: none;
+}
+
+.ytaf-ui-container.theme-classic-red label:focus-within {
+  background: rgba(255, 0, 0, 0.1);
+  box-shadow: 0 0 0 0.19vh rgba(255, 0, 0, 0.5);
+  outline: none;
 }
 
 .ytaf-ui-container blockquote {
@@ -338,63 +346,61 @@
   border-left-color: #ff4444;
 }
 
-/* Navigation Hints */
-.ytaf-nav-hint {
+/* Tab Menu */
+.ytaf-tab-menu {
   display: flex;
-  align-items: center;
-  padding: 1.5vh 0 0.75vh;
-  font-size: 2.22vh;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 0.19vh solid rgba(0, 212, 255, 0.3);
+  padding: 0.5vh 1vh;
+  flex-shrink: 0;
+  margin-bottom: 1vh;
+}
+
+.ytaf-ui-container.theme-classic-red .ytaf-tab-menu {
+  border-bottom-color: #3f3f3f;
+}
+
+.ytaf-tab-btn {
+  flex: 1;
+  margin: 0 0.5vh;
+  background: transparent;
+  border: none;
   color: #5599aa;
-  cursor: pointer;
-  border-top: 0.09vh solid rgba(0, 212, 255, 0.2);
-  margin-top: 1.5vh;
-}
-
-.ytaf-ui-container.theme-classic-red .ytaf-nav-hint {
-  color: #cccccc;
-  border-top-color: rgba(255, 255, 255, 0.1);
-}
-
-.ytaf-nav-hint:focus {
-  outline: none;
-  background: rgba(0, 212, 255, 0.2);
+  font-size: 2.1vh;
+  font-weight: 600;
+  padding: 1vh 2vh;
   border-radius: 0.75vh;
-  box-shadow: 0 0 0 0.19vh #00d4ff;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  font-family: inherit;
 }
 
-.ytaf-ui-container.theme-classic-red .ytaf-nav-hint:focus {
-  background: rgba(255, 0, 0, 0.1);
-  box-shadow: 0 0 0 0.19vh #ff0000;
+.ytaf-ui-container.theme-classic-red .ytaf-tab-btn {
+  color: #aaaaaa;
 }
 
-.ytaf-nav-hint.right { 
-  justify-content: flex-end; 
-  text-align: right; 
-}
-
-.ytaf-nav-hint.left { 
-  justify-content: flex-start; 
-  text-align: left; 
-  border-top: none; 
-  border-bottom: 0.09vh solid rgba(0, 212, 255, 0.2);
-  margin-top: 0.5vh; 
-  margin-bottom: 1.5vh; 
-  padding: 0.75vh 0 1.5vh;
-}
-
-.ytaf-ui-container.theme-classic-red .ytaf-nav-hint.left {
-  border-bottom-color: rgba(255, 255, 255, 0.1);
-}
-
-.ytaf-nav-hint span.arrow {
+.ytaf-tab-btn.active {
   color: #00d4ff;
-  font-weight: bold;
-  font-size: 2.6vh;
-  margin: 0 1.1vh;
+  background: rgba(0, 212, 255, 0.15);
 }
 
-.ytaf-ui-container.theme-classic-red .ytaf-nav-hint span.arrow {
+.ytaf-ui-container.theme-classic-red .ytaf-tab-btn.active {
   color: #ff4444;
+  background: rgba(255, 0, 0, 0.15);
+}
+
+.ytaf-tab-btn:focus {
+  background: rgba(0, 212, 255, 0.3);
+  box-shadow: 0 0 0 0.19vh #00d4ff;
+  color: #ffffff;
+}
+
+.ytaf-ui-container.theme-classic-red .ytaf-tab-btn:focus {
+  background: rgba(255, 0, 0, 0.3);
+  box-shadow: 0 0 0 0.19vh #ff0000;
+  color: #ffffff;
 }
 
 /* Shortcut Controls */
@@ -407,6 +413,8 @@
   border-radius: 0.75vh;
   font-size: 2.22vh;
   margin: 0 -0.75vh 0.4vh;
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 0.1s ease-out, background 0.1s ease-out;
 }
 
 .shortcut-label { 

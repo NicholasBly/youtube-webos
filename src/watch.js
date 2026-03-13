@@ -63,7 +63,7 @@ class Watch {
 
     const setTime = () => {
       if (this._watch) {
-        // textContent is faster than innerText (Optimization Kept)
+        // textContent is faster than innerText
         this._watch.textContent = formatter.format(new Date());
         
         // Safety check on the minute mark
@@ -110,16 +110,20 @@ class Watch {
   }
 
   setupGlobalListeners() {
+    this.boundStateChange = (e) => {
+      const state = e.detail.state;
+      if (state === 1 || state === 2 || state === -1) {
+          this.debouncedUpdate();
+      }
+    };
+    window.addEventListener('yt-player-state-change', this.boundStateChange);
+
     const addListener = (type, handler) => {
       document.addEventListener(type, handler, true);
       this._globalListeners.push({ type, fn: handler });
     };
 
     addListener('focusin', this.debouncedUpdate);
-    addListener('play', this.debouncedUpdate);
-    addListener('pause', this.debouncedUpdate);
-    addListener('loadeddata', this.debouncedUpdate);
-    // Added focusout to catch blur events just in case
     addListener('focusout', this.debouncedUpdate); 
   }
 
@@ -136,6 +140,10 @@ class Watch {
     // If strict cleanup is needed, update the shared debounce to return { run, cancel }.
 
     configRemoveChangeListener('enableOledCareMode', this.onOledChange);
+    
+    if (this.boundStateChange) {
+        window.removeEventListener('yt-player-state-change', this.boundStateChange);
+    }
     
     this._globalListeners.forEach(l => {
       document.removeEventListener(l.type, l.fn, true);

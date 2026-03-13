@@ -5,10 +5,14 @@ import './emoji-font.css';
 
 const DEBUG_EMOJI_DOM = false;
 
-// ONLY look for the invisible markers injected by adblock.js
-const WRAPPED_EMOJI_RE = /\u200B([^\u200C]+)\u200C/; // Note: Removed global 'g' flag for precise splitText matching
+const WRAPPED_EMOJI_RE = /\u200B([^\u200C]+)\u200C/; 
 const HAS_WRAPPED_EMOJI_RE = /\u200B[^\u200C]+\u200C/;
 const IMG_ALT_RE = /<img([^>]+)alt="([^"]+)"([^>]*)>/g;
+
+// Only process text nodes inside elements where emojis actually render
+const ALLOWED_EMOJI_TAGS = new Set([
+  'YT-FORMATTED-STRING', 'YT-CORE-ATTRIBUTED-STRING', 'SPAN', 'DIV', 'H1', 'H2', 'H3'
+]);
 
 const parsedTextCache = new Map();
 const MAX_CACHE_SIZE = 500;
@@ -30,7 +34,7 @@ function queueTextNode(node) {
   if (!val || !HAS_WRAPPED_EMOJI_RE.test(val)) return;
 
   const parent = node.parentElement;
-  if (!parent || parent.classList.contains('twemoji-injected')) return;
+  if (!parent || parent.classList.contains('twemoji-injected') || !ALLOWED_EMOJI_TAGS.has(parent.tagName)) return;
 
   textNodesToProcess.add(node);
 }
@@ -54,25 +58,19 @@ function processTextNode(textNode) {
   let currentNode = textNode;
   let match = WRAPPED_EMOJI_RE.exec(currentNode.nodeValue || '');
 
-  // Using splitText() prevents nuking the surrounding words. 
-  // It perfectly isolates the emoji into its own text node, keeping YouTube's Polymer math happy.
   while (match) {
     const startIndex = match.index;
     const emojiLength = match[0].length;
-    const cleanEmoji = match[1]; // The emoji without \u200B and \u200C
+    const cleanEmoji = match[1]; 
 
-    // 1. Slice off any normal text BEFORE the emoji
     if (startIndex > 0) {
       currentNode = currentNode.splitText(startIndex);
     }
 
-    // 2. Slice off any normal text AFTER the emoji
     let nextNode = null;
     if (currentNode.nodeValue.length > emojiLength) {
       nextNode = currentNode.splitText(emojiLength);
     }
-
-    // currentNode is now EXACTLY just "\u200B[EMOJI]\u200C"
     
     let parsedHTML = parsedTextCache.get(cleanEmoji);
     if (!parsedHTML) {
@@ -86,8 +84,8 @@ function processTextNode(textNode) {
         
         parsedTextCache.set(cleanEmoji, parsedHTML);
         if (parsedTextCache.size > MAX_CACHE_SIZE) {
-          const firstKey = parsedTextCache.keys().next().value;
-          if (firstKey) parsedTextCache.delete(firstKey);
+            // O(1) clear instead of Iterator churning for WebOS garbage collection
+            parsedTextCache.clear();
         }
       } else {
         parsedHTML = cleanEmoji;
@@ -107,24 +105,24 @@ function processTextNode(textNode) {
         existingSpan.className = 'twemoji-injected';
         existingSpan.innerHTML = parsedHTML;
         
-        // Insert right next to the zeroed-out text node
         parent.insertBefore(existingSpan, currentNode.nextSibling);
         nodeToSpan.set(currentNode, existingSpan);
         if (DEBUG_EMOJI_DOM) console.log('[Emoji-DOM-Debug] Injected new emoji-render span for:', cleanEmoji);
       }
     }
 
-    // Move to the next slice of text if there's more in the original string
     if (nextNode && HAS_WRAPPED_EMOJI_RE.test(nextNode.nodeValue || '')) {
       currentNode = nextNode;
       match = WRAPPED_EMOJI_RE.exec(currentNode.nodeValue || '');
     } else {
-      break; // No more emojis in this block
+      break; 
     }
   }
 }
 
 function scanElement(el) {
+    if (!ALLOWED_EMOJI_TAGS.has(el.tagName) && el.tagName !== 'BODY' && el.tagName !== 'YTLR-APP') return;
+    
     const textContent = el.textContent;
     if (!textContent || !HAS_WRAPPED_EMOJI_RE.test(textContent)) return;
     try {
@@ -146,43 +144,24 @@ function scanElement(el) {
 const emojiObs = new MutationObserver((mutations) => {
   if (isParsing) return;
 
-  let addedNodesCount = 0;
-
   for (let i = 0; i < mutations.length; i++) {
     const mut = mutations[i];
 
     if (mut.type === 'characterData') {
       queueTextNode(mut.target);
     } else if (mut.type === 'childList') {
-      const removedNodes = mut.removedNodes;
-      for (let j = 0; j < removedNodes.length; j++) {
-        const removed = removedNodes[j];
-        if (removed.nodeType === Node.TEXT_NODE) {
-          const orphanSpan = nodeToSpan.get(removed);
-          if (orphanSpan && orphanSpan.parentNode) {
-            orphanSpan.parentNode.removeChild(orphanSpan);
-          }
-        }
-      }
-
       const addedNodes = mut.addedNodes;
       for (let j = 0; j < addedNodes.length; j++) {
         const node = addedNodes[j];
-        addedNodesCount++;
         
         if (node.nodeType === Node.TEXT_NODE) {
           queueTextNode(node);
         } else if (node.nodeType === Node.ELEMENT_NODE) {
-          const el = node;
-          if (el.classList?.contains('twemoji-injected')) continue;
-          scanElement(el);
+          if (node.classList?.contains('twemoji-injected')) continue;
+          scanElement(node);
         }
       }
     }
-  }
-
-  if (DEBUG_EMOJI_DOM && addedNodesCount > 0 && textNodesToProcess.size > 0) {
-      console.log(`[Emoji-DOM-Debug] MutationObserver processed added nodes. Text nodes queued: ${textNodesToProcess.size}`);
   }
 
   if (textNodesToProcess.size > 0 && frameId === null) {
@@ -190,13 +169,40 @@ const emojiObs = new MutationObserver((mutations) => {
   }
 });
 
+let isObserving = false;
+
+function manageObserverState() {
+    // Only turn on if fixing is requested AND we're actively watching content
+    const shouldObserve = configRead('enableLegacyEmojiFix');
+    
+    if (shouldObserve && !isObserving) {
+        emojiObs.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+        scanElement(document.body);
+        if (textNodesToProcess.size > 0 && frameId === null) {
+            frameId = window.requestAnimationFrame(processQueue);
+        }
+        isObserving = true;
+        if (DEBUG_EMOJI_DOM) console.log('[Emoji-Debug] Legacy Emoji fix enabled.');
+    } else if (!shouldObserve && isObserving) {
+        emojiObs.disconnect();
+        textNodesToProcess.clear();
+        parsedTextCache.clear();
+        isObserving = false;
+        if (DEBUG_EMOJI_DOM) console.log('[Emoji-Debug] Legacy Emoji fix disabled.');
+    }
+}
+
 if (document.characterSet === 'UTF-8' && getWebOSVersion() <= 4) {
   const style = document.createElement('style');
   style.id = 'legacy-webos-font-fix';
   style.styleSheet ? (style.styleSheet.cssText = "") : (style.textContent = `
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic&family=Noto+Sans+Math&display=swap');
     
-    yt-formatted-string, .yt-tv-text, .video-title, .title, #title, .description, #description, .video-title-text, .badge-text {
+    yt-formatted-string, yt-core-attributed-string, .yt-tv-text, .video-title, .title, #title, .description, #description, .video-title-text, .badge-text {
         font-family: 'Roboto', 'YouTube Noto', 'YouTube Sans', 'Noto Sans Arabic', 'Arial', 'Noto Sans Math', sans-serif !important;
         text-rendering: optimizeLegibility !important;
     }
@@ -210,28 +216,14 @@ if (document.characterSet === 'UTF-8' && getWebOSVersion() <= 4) {
   `);
   document.head.appendChild(style);
 
-  const toggleEmojiObserver = () => {
-    if (configRead('enableLegacyEmojiFix')) {
-      emojiObs.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true
-      });
-      
-      scanElement(document.body);
-      if (textNodesToProcess.size > 0 && frameId === null) {
-        frameId = window.requestAnimationFrame(processQueue);
-      }
-      
-      if (DEBUG_EMOJI_DOM) console.log('[Emoji-Debug] Legacy Emoji fix enabled.');
-    } else {
-      emojiObs.disconnect();
-      textNodesToProcess.clear();
-      parsedTextCache.clear();
-      if (DEBUG_EMOJI_DOM) console.log('[Emoji-Debug] Legacy Emoji fix disabled.');
+  // Hook into configurations
+  manageObserverState();
+  configAddChangeListener('enableLegacyEmojiFix', manageObserverState);
+  
+  // Pause scanning immediately on heavy nav states
+  window.addEventListener('ytaf-page-update', (e) => {
+    if (e.detail.isAccountSelector && isObserving) {
+       textNodesToProcess.clear(); // Flush queue on big UI transitions
     }
-  };
-
-  toggleEmojiObserver();
-  configAddChangeListener('enableLegacyEmojiFix', toggleEmojiObserver);
+  });
 }
