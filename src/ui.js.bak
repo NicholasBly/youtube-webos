@@ -1339,7 +1339,8 @@ function applyOledMode(enabled) {
         .tVp1L { background-color: #000 !important; } 
         .app-quality-root .DnwJH { background-color: #000 !important; } 
         .qRdzpd.stQChb .TYE3Ed { background-color: #000 !important; } 
-        .k82tDb { background-color: #000 !important; }
+        .k82tDb { background-color: #000 !important; } 
+		.KzcwEe { background-color: #000 !important; } /* Video Time Label */
         .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } 
         .p0DeOc { background-color: #000 !important; background-image: none !important; }
         ytlr-player-focus-ring { border: 0.375rem solid rgb(200, 200, 200) !important; }

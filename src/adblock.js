@@ -10,7 +10,6 @@ const FORCE_FALLBACK = false;
 let isTelemetryHooked = false;
 let originalXHROpen = null;
 let originalXHRSend = null;
-let originalSendBeacon = null;
 
 // --- CONSTANTS & CONFIGURATION ---
 
@@ -218,18 +217,28 @@ const telemetryFetchHandler = (evt) => {
 
 export function initTrackingBlock() {
   if (isTelemetryHooked) return;
-  try {
-    // 1. Hook Fetch
-    FetchRegistry.getInstance().addEventListener('request', telemetryFetchHandler);
 
-    // 2. Hook XMLHttpRequest
+  // 1. Hook Fetch (Wrapped separately so webOS 3 EventTarget failures don't break XHR)
+  try {
+    if (typeof FetchRegistry !== 'undefined' && FetchRegistry.getInstance) {
+      FetchRegistry.getInstance().addEventListener('request', telemetryFetchHandler);
+    }
+  } catch (e) {
+    console.warn('[AdBlock] Fetch hook failed (expected behavior on webOS 3):', e.message);
+  }
+
+  // 2. Hook XMLHttpRequest
+  try {
     originalXHROpen = window.XMLHttpRequest.prototype.open;
     originalXHRSend = window.XMLHttpRequest.prototype.send;
 
-    window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
+    window.XMLHttpRequest.prototype.open = function(method, url) {
       // Store the URL on the instance so we can read it during send()
-      this._requestUrl = typeof url === 'string' ? url : url?.toString();
-      return originalXHROpen.apply(this, [method, url, ...args]);
+      // Fallback for older engines that might not support optional chaining properly
+      this._requestUrl = typeof url === 'string' ? url : (url && url.toString ? url.toString() : '');
+      
+      // Use standard 'arguments' instead of spread syntax (...args) for webOS 3 compatibility
+      return originalXHROpen.apply(this, arguments);
     };
 
     window.XMLHttpRequest.prototype.send = function(body) {
@@ -238,36 +247,30 @@ export function initTrackingBlock() {
         // Silently drop the request
         return; 
       }
-      return originalXHRSend.apply(this, [body]);
+      return originalXHRSend.apply(this, arguments);
     };
 
-    // 3. Hook sendBeacon (often used for page-unload analytics)
-    if (navigator.sendBeacon) {
-      originalSendBeacon = navigator.sendBeacon;
-      navigator.sendBeacon = function(url, data) {
-        const urlStr = typeof url === 'string' ? url : url?.toString();
-        if (isTelemetryUrl(urlStr)) {
-          if (DEBUG) console.info('[AdBlock] Blocked telemetry Beacon request:', urlStr);
-          return true; // Return true to trick the app into thinking it succeeded
-        }
-        return originalSendBeacon.apply(navigator, [url, data]);
-      };
-    }
-
     isTelemetryHooked = true;
-    console.info('[AdBlock] Telemetry network hooks enabled (Fetch, XHR, Beacon)');
+    console.info('[AdBlock] Telemetry network hooks enabled (XHR)');
   } catch (e) {
-    console.error('[AdBlock] Failed to initialize telemetry network blockers:', e);
+    console.error('[AdBlock] Failed to initialize XHR telemetry blockers:', e);
   }
 }
 
 export function destroyTrackingBlock() {
   if (!isTelemetryHooked) return;
-  try {
-    // 1. Unhook Fetch
-    FetchRegistry.getInstance().removeEventListener('request', telemetryFetchHandler);
 
-    // 2. Unhook XMLHttpRequest
+  // 1. Unhook Fetch
+  try {
+    if (typeof FetchRegistry !== 'undefined' && FetchRegistry.getInstance) {
+      FetchRegistry.getInstance().removeEventListener('request', telemetryFetchHandler);
+    }
+  } catch (e) {
+    console.warn('[AdBlock] Fetch unhook failed (expected on older engines):', e.message);
+  }
+
+  // 2. Unhook XMLHttpRequest
+  try {
     if (originalXHROpen && originalXHRSend) {
       window.XMLHttpRequest.prototype.open = originalXHROpen;
       window.XMLHttpRequest.prototype.send = originalXHRSend;
@@ -275,16 +278,10 @@ export function destroyTrackingBlock() {
       originalXHRSend = null;
     }
 
-    // 3. Unhook sendBeacon
-    if (originalSendBeacon) {
-      navigator.sendBeacon = originalSendBeacon;
-      originalSendBeacon = null;
-    }
-
     isTelemetryHooked = false;
     console.info('[AdBlock] Telemetry network hooks disabled');
   } catch (e) {
-    console.error('[AdBlock] Failed to remove telemetry network blockers:', e);
+    console.error('[AdBlock] Failed to remove XHR network blockers:', e);
   }
 }
 

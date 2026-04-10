@@ -332,7 +332,7 @@ class SponsorBlockHandler {
 
         this.log('info', `Executing chain skip: ${chain.chainDescription}`);
 
-        const originalMuteState = window.__sb_pending_unmute ? false : video.muted;
+        const originalMuteState = video.muted;
         window.__sb_pending_unmute = true;
         this.wasMutedBySB = true;
         video.muted = true;

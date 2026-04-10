@@ -55,7 +55,7 @@ export const forcePreviewModes = {
 const configOptions = new Map([
   ['uiTheme', { default: 'blue-force-field', desc: 'UI Theme' }],
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
-  ['enableTrackingBlock', { default: false, desc: 'Disable Telemetry & Tracking' }],
+  ['enableTrackingBlock', { default: false, desc: 'Reduce Telemetry & Tracking' }],
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
   ['upgradeThumbnails', { default: false, desc: 'Max Thumbnail Quality' }],
   ['removeGlobalShorts', { default: false, desc: 'Remove Shorts (Global)' }],

@@ -63,7 +63,7 @@ class Watch {
 
     const setTime = () => {
       if (this._watch) {
-        // textContent is faster than innerText (Optimization Kept)
+        // textContent is faster than innerText
         this._watch.textContent = formatter.format(new Date());
         
         // Safety check on the minute mark
