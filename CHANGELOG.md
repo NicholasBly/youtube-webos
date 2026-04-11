@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.7.5] 2026/04/11
+
+## Fixes
+
+Remove video time label pure black oled theme (changes red Live tag to pure black) - https://github.com/NicholasBly/youtube-webos/issues/77
+Fixed SponsorBlock segment overlays on progress bar for non-chaptered videos - https://github.com/NicholasBly/youtube-webos/issues/68
+Fixed auto mute bug - https://github.com/NicholasBly/youtube-webos/issues/71
+
 ## [0.7.4] - 2026/03/12
 
 ## Added

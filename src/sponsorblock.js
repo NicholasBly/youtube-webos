@@ -332,7 +332,7 @@ class SponsorBlockHandler {
 
         this.log('info', `Executing chain skip: ${chain.chainDescription}`);
 
-        const originalMuteState = video.muted;
+        const originalMuteState = window.__sb_pending_unmute ? false : video.muted;
         window.__sb_pending_unmute = true;
         this.wasMutedBySB = true;
         video.muted = true;
@@ -637,10 +637,78 @@ class SponsorBlockHandler {
         if (target) {
             this.progressBar = target;
             const style = window.getComputedStyle(target);
+            // For multi-markers bars these tweaks ensure segments are visible inside.
+            // For ytlr-progress-bar sliders the overlay is injected as a sibling
+            // (see _getProgressBarAnchor), so the position tweak here is a no-op for
+            // that case — but keep overflow:visible so storyboard/playhead are unclipped.
             if (style.position === 'static') target.style.position = 'relative';
             if (style.overflow !== 'visible') target.style.setProperty('overflow', 'visible', 'important');
             this.drawOverlay();
         }
+    }
+
+    // Returns where/how to inject the overlay.
+    // For ytlr-multi-markers-player-bar-renderer children, injection inside works fine.
+    // For the standard ytlr-progress-bar slider, YouTube's framework nukes foreign child
+    // nodes instantly — so we inject as a sibling of ytlr-progress-bar instead, positioned
+    // absolutely to cover the same visual area.
+    _getProgressBarAnchor() {
+        if (!this.progressBar) return { container: null, asSibling: false };
+
+        // Multi-markers bar: direct child injection is fine, keep existing behaviour.
+        if (this.progressBar.closest('ytlr-multi-markers-player-bar-renderer')) {
+            return { container: this.progressBar, asSibling: false };
+        }
+
+        // Standard progress bar: walk up to ytlr-progress-bar and inject after it.
+        const ytPB = this.progressBar.closest('ytlr-progress-bar') || this.progressBar;
+        const parent = ytPB.parentNode;
+        if (!parent) return { container: this.progressBar, asSibling: false };
+
+        // The parent becomes our positioning context.
+        const ps = window.getComputedStyle(parent);
+        if (ps.position === 'static') parent.style.position = 'relative';
+
+        return { container: ytPB, asSibling: true };
+    }
+
+    // Copies ytlr-progress-bar's offset rect onto the sibling overlay so they
+    // occupy exactly the same visual space.  offsetTop/Left are relative to the
+    // offsetParent, which is the parent we just made position:relative above.
+    // Positions the sibling overlay to exactly cover the inner progress track element
+    // (this.progressBar = [idomkey="slider"]), not the full ytlr-progress-bar wrapper
+    // which is taller and also contains the storyboard / time-label regions.
+    _syncOverlayPosition(ytPB) {
+        if (!this.overlay || !ytPB) return;
+        const parent = ytPB.parentNode;
+        if (!parent) return;
+
+        // Use the inner slider element for precise height/position.
+        // Fall back to ytPB itself only if progressBar is the same node or unset.
+        const trackEl = (this.progressBar && this.progressBar !== ytPB)
+            ? this.progressBar
+            : ytPB;
+
+        // injectCSS sets left/top/width/height with !important on #previewbar, so plain
+        // style assignments are silently ignored.  Use setProperty('important') to win.
+        const set = (prop, val) => this.overlay.style.setProperty(prop, val, 'important');
+
+        const parentRect = parent.getBoundingClientRect();
+        const trackRect  = trackEl.getBoundingClientRect();
+
+        // Element not yet laid out — fall back to offset values.
+        if (!trackRect.width && !trackRect.height) {
+            set('top',    `${ytPB.offsetTop}px`);
+            set('left',   `${ytPB.offsetLeft}px`);
+            set('width',  `${ytPB.offsetWidth}px`);
+            set('height', `${ytPB.offsetHeight}px`);
+            return;
+        }
+
+        set('top',    `${trackRect.top  - parentRect.top}px`);
+        set('left',   `${trackRect.left - parentRect.left}px`);
+        set('width',  `${trackRect.width}px`);
+        set('height', `${trackRect.height}px`);
     }
 
     drawOverlay() {
@@ -701,7 +769,16 @@ class SponsorBlockHandler {
         this.overlay = document.createElement('div');
         this.overlay.id = 'previewbar';
         this.overlay.appendChild(fragment);
-        this.progressBar.appendChild(this.overlay);
+
+        const { container, asSibling } = this._getProgressBarAnchor();
+        if (asSibling) {
+            // Insert after ytlr-progress-bar so YouTube's framework cannot touch it,
+            // then match its visual position so the segments appear over the bar.
+            container.insertAdjacentElement('afterend', this.overlay);
+            this._syncOverlayPosition(container);
+        } else {
+            container.appendChild(this.overlay);
+        }
     }
 
     processSegments(duration) {
@@ -894,9 +971,13 @@ class SponsorBlockHandler {
                 jumpTarget = Math.max(0, duration - 0.25);
                 if (!this.video.muted) {
                     this.video.muted = true;
+                    this.wasMutedBySB = true;
+                    window.__sb_pending_unmute = true;
                     setTimeout(() => {
                         if (this.video && !this.isDestroyed && (this.video.paused || this.video.currentTime < 5)) {
                             this.video.muted = false;
+                            this.wasMutedBySB = false;
+                            window.__sb_pending_unmute = false;
                         }
                     }, 1000);
                 }
