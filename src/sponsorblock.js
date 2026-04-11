@@ -332,7 +332,7 @@ class SponsorBlockHandler {
 
         this.log('info', `Executing chain skip: ${chain.chainDescription}`);
 
-        const originalMuteState = video.muted;
+        const originalMuteState = window.__sb_pending_unmute ? false : video.muted;
         window.__sb_pending_unmute = true;
         this.wasMutedBySB = true;
         video.muted = true;
@@ -603,13 +603,8 @@ class SponsorBlockHandler {
     checkForProgressBar() {
         if (this.isDestroyed) return;
 
-        // If the overlay is already in the DOM, just sync its visibility in case
-        // YouTube toggled the progress bar's display/class since we last ran.
+        // Don't re-query if we have a valid progress bar in DOM
         if (this.overlay && this.overlay.parentNode && this.overlay.parentNode.isConnected) {
-            var ytPB = this.progressBar && this.progressBar.closest
-                ? (this.progressBar.closest('ytlr-progress-bar') || this.progressBar)
-                : this.progressBar;
-            this._syncOverlayVisibility(ytPB);
             return;
         }
 
@@ -683,7 +678,7 @@ class SponsorBlockHandler {
     // offsetParent, which is the parent we just made position:relative above.
     // Positions the sibling overlay to exactly cover the inner progress track element
     _offsetRelativeTo(el, ancestor) {
-        var top = 0, left = 0, cur = el;
+        let top = 0, left = 0, cur = el;
         while (cur && cur !== ancestor) {
             top  += cur.offsetTop;
             left += cur.offsetLeft;
@@ -694,35 +689,27 @@ class SponsorBlockHandler {
 
     _syncOverlayPosition(ytPB) {
         if (!this.overlay || !ytPB) return;
-        var parent = ytPB.parentNode;
+        const parent = ytPB.parentNode;
         if (!parent) return;
 
         // Use the inner slider element for precise height/position.
         // Fall back to ytPB itself only if progressBar is the same node or unset.
-        var trackEl = (this.progressBar && this.progressBar !== ytPB)
+        const trackEl = (this.progressBar && this.progressBar !== ytPB)
             ? this.progressBar
             : ytPB;
 
         // injectCSS sets these properties with !important on #previewbar, so plain
         // style assignments are silently ignored. Must use setProperty with 'important'.
-        var ov = this.overlay;
+        const ov = this.overlay;
         function set(prop, val) { ov.style.setProperty(prop, val, 'important'); }
 
-        var pos = this._offsetRelativeTo(trackEl, parent);
+        const pos = this._offsetRelativeTo(trackEl, parent);
         set('top',    pos.top  + 'px');
         set('left',   pos.left + 'px');
         set('width',  trackEl.offsetWidth  + 'px');
         set('height', trackEl.offsetHeight + 'px');
     }
 
-    // Mirror ytlr-progress-bar's visibility onto the sibling overlay.
-    _syncOverlayVisibility(ytPB) {
-        if (!this.overlay || !ytPB) return;
-        var cs = window.getComputedStyle(ytPB);
-        var hidden = cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0';
-        this.overlay.style.setProperty('display',    hidden ? 'none'    : 'block',   'important');
-        this.overlay.style.setProperty('visibility', hidden ? 'hidden'  : 'visible', 'important');
-    }
 
     drawOverlay() {
         if (!this.progressBar || !this.segments.length || this.isDestroyed) return;
@@ -787,14 +774,13 @@ class SponsorBlockHandler {
         if (asSibling) {
             // insertAdjacentElement('afterend') requires Chrome 41+, not available on
             // WebOS 3 (Chrome 38). Use insertBefore with nextSibling instead.
-            var nextSib = container.nextSibling;
+            const nextSib = container.nextSibling;
             if (nextSib) {
                 container.parentNode.insertBefore(this.overlay, nextSib);
             } else {
                 container.parentNode.appendChild(this.overlay);
             }
             this._syncOverlayPosition(container);
-            this._syncOverlayVisibility(container);
         } else {
             container.appendChild(this.overlay);
         }
@@ -990,9 +976,13 @@ class SponsorBlockHandler {
                 jumpTarget = Math.max(0, duration - 0.25);
                 if (!this.video.muted) {
                     this.video.muted = true;
+					this.wasMutedBySB = true;
+                    window.__sb_pending_unmute = true;
                     setTimeout(() => {
                         if (this.video && !this.isDestroyed && (this.video.paused || this.video.currentTime < 5)) {
                             this.video.muted = false;
+							this.wasMutedBySB = false;
+                            window.__sb_pending_unmute = false;
                         }
                     }, 1000);
                 }
