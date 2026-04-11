@@ -602,8 +602,14 @@ class SponsorBlockHandler {
 
     checkForProgressBar() {
         if (this.isDestroyed) return;
-        // Don't re-query if we have a valid progress bar in DOM
+
+        // If the overlay is already in the DOM, just sync its visibility in case
+        // YouTube toggled the progress bar's display/class since we last ran.
         if (this.overlay && this.overlay.parentNode && this.overlay.parentNode.isConnected) {
+            var ytPB = this.progressBar && this.progressBar.closest
+                ? (this.progressBar.closest('ytlr-progress-bar') || this.progressBar)
+                : this.progressBar;
+            this._syncOverlayVisibility(ytPB);
             return;
         }
 
@@ -678,37 +684,51 @@ class SponsorBlockHandler {
     // Positions the sibling overlay to exactly cover the inner progress track element
     // (this.progressBar = [idomkey="slider"]), not the full ytlr-progress-bar wrapper
     // which is taller and also contains the storyboard / time-label regions.
+    // Returns the cumulative offsetTop/Left of `el` relative to `ancestor`.
+    // Pure offset math — no getBoundingClientRect, no viewport coords, no transform
+    // sensitivity. Works correctly on Chrome 38 / WebOS 3.
+    _offsetRelativeTo(el, ancestor) {
+        var top = 0, left = 0, cur = el;
+        while (cur && cur !== ancestor) {
+            top  += cur.offsetTop;
+            left += cur.offsetLeft;
+            cur   = cur.offsetParent;
+        }
+        return { top: top, left: left };
+    }
+
     _syncOverlayPosition(ytPB) {
         if (!this.overlay || !ytPB) return;
-        const parent = ytPB.parentNode;
+        var parent = ytPB.parentNode;
         if (!parent) return;
 
         // Use the inner slider element for precise height/position.
         // Fall back to ytPB itself only if progressBar is the same node or unset.
-        const trackEl = (this.progressBar && this.progressBar !== ytPB)
+        var trackEl = (this.progressBar && this.progressBar !== ytPB)
             ? this.progressBar
             : ytPB;
 
-        // injectCSS sets left/top/width/height with !important on #previewbar, so plain
-        // style assignments are silently ignored.  Use setProperty('important') to win.
-        const set = (prop, val) => this.overlay.style.setProperty(prop, val, 'important');
+        // injectCSS sets these properties with !important on #previewbar, so plain
+        // style assignments are silently ignored. Must use setProperty with 'important'.
+        var ov = this.overlay;
+        function set(prop, val) { ov.style.setProperty(prop, val, 'important'); }
 
-        const parentRect = parent.getBoundingClientRect();
-        const trackRect  = trackEl.getBoundingClientRect();
+        var pos = this._offsetRelativeTo(trackEl, parent);
+        set('top',    pos.top  + 'px');
+        set('left',   pos.left + 'px');
+        set('width',  trackEl.offsetWidth  + 'px');
+        set('height', trackEl.offsetHeight + 'px');
+    }
 
-        // Element not yet laid out — fall back to offset values.
-        if (!trackRect.width && !trackRect.height) {
-            set('top',    `${ytPB.offsetTop}px`);
-            set('left',   `${ytPB.offsetLeft}px`);
-            set('width',  `${ytPB.offsetWidth}px`);
-            set('height', `${ytPB.offsetHeight}px`);
-            return;
-        }
-
-        set('top',    `${trackRect.top  - parentRect.top}px`);
-        set('left',   `${trackRect.left - parentRect.left}px`);
-        set('width',  `${trackRect.width}px`);
-        set('height', `${trackRect.height}px`);
+    // Mirror ytlr-progress-bar's visibility onto the sibling overlay.
+    // YouTube hides the bar by toggling classes/display — the sibling won't
+    // automatically follow, so we check computed style and copy it across.
+    _syncOverlayVisibility(ytPB) {
+        if (!this.overlay || !ytPB) return;
+        var cs = window.getComputedStyle(ytPB);
+        var hidden = cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0';
+        this.overlay.style.setProperty('display',    hidden ? 'none'    : 'block',   'important');
+        this.overlay.style.setProperty('visibility', hidden ? 'hidden'  : 'visible', 'important');
     }
 
     drawOverlay() {
@@ -772,10 +792,16 @@ class SponsorBlockHandler {
 
         const { container, asSibling } = this._getProgressBarAnchor();
         if (asSibling) {
-            // Insert after ytlr-progress-bar so YouTube's framework cannot touch it,
-            // then match its visual position so the segments appear over the bar.
-            container.insertAdjacentElement('afterend', this.overlay);
+            // insertAdjacentElement('afterend') requires Chrome 41+, not available on
+            // WebOS 3 (Chrome 38). Use insertBefore with nextSibling instead.
+            var nextSib = container.nextSibling;
+            if (nextSib) {
+                container.parentNode.insertBefore(this.overlay, nextSib);
+            } else {
+                container.parentNode.appendChild(this.overlay);
+            }
             this._syncOverlayPosition(container);
+            this._syncOverlayVisibility(container);
         } else {
             container.appendChild(this.overlay);
         }
@@ -971,13 +997,9 @@ class SponsorBlockHandler {
                 jumpTarget = Math.max(0, duration - 0.25);
                 if (!this.video.muted) {
                     this.video.muted = true;
-                    this.wasMutedBySB = true;
-                    window.__sb_pending_unmute = true;
                     setTimeout(() => {
                         if (this.video && !this.isDestroyed && (this.video.paused || this.video.currentTime < 5)) {
                             this.video.muted = false;
-                            this.wasMutedBySB = false;
-                            window.__sb_pending_unmute = false;
                         }
                     }, 1000);
                 }
