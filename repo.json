@@ -13,16 +13,16 @@
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4",
-        "version": "0.7.4",
+        "version": "0.7.5",
         "type": "web",
         "title": "YouTube AdFree",
         "appDescription": "YouTube AdFree",
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.4/youtube.leanback.v4_0.7.4_all.ipk",
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.5/youtube.leanback.v4_0.7.5_all.ipk",
         "ipkHash": {
-          "sha256": "31a3077b1cf6c2e03fcafb05fa2b132aa9b73e2649d8e63c6ada7d9f95362a53"
+          "sha256": "081d4dc98633669c3175f3698be2a66b05f9d8fe9d4757224e57c96b88fdfc4c"
         }
       }
     },
@@ -33,16 +33,16 @@
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4.webos22",
-        "version": "0.7.4",
+        "version": "0.7.5",
         "type": "web",
         "title": "YouTube AdFree (webOS 22+)",
         "appDescription": "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware.",
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.4/youtube.leanback.v4_0.7.4_all_webOS22%2B.ipk",
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.7.5/youtube.leanback.v4_0.7.5_all_webOS22%2B.ipk",
         "ipkHash": {
-          "sha256": "705655cc83139476cdde02fd957f44bce11e9d38104a179154ff632a643917cb"
+          "sha256": "de12022cd6397fa2bf3caa794ff535fd77b27e9fb1616f973ff2752eadeff1b7"
         }
       }
     }
