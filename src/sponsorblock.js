@@ -605,6 +605,11 @@ class SponsorBlockHandler {
 
         // Don't re-query if we have a valid progress bar in DOM
         if (this.overlay && this.overlay.parentNode && this.overlay.parentNode.isConnected) {
+            // Ensure the sibling overlay syncs visibility when attributes mutate
+            const { container, asSibling } = this._getProgressBarAnchor();
+            if (asSibling && container) {
+                this._syncOverlayPosition(container);
+            }
             return;
         }
 
@@ -698,10 +703,12 @@ class SponsorBlockHandler {
             ? this.progressBar
             : ytPB;
 
-        // injectCSS sets these properties with !important on #previewbar, so plain
-        // style assignments are silently ignored. Must use setProperty with 'important'.
         const ov = this.overlay;
         function set(prop, val) { ov.style.setProperty(prop, val, 'important'); }
+
+        // Sync visibility to mirror YouTube's UI state
+        const isHidden = ytPB.classList.contains('zylon-hidden') || window.getComputedStyle(ytPB).opacity === '0';
+        set('opacity', isHidden ? '0' : '1');
 
         const pos = this._offsetRelativeTo(trackEl, parent);
         set('top',    pos.top  + 'px');
@@ -1135,9 +1142,10 @@ class SponsorBlockHandler {
         if (document.getElementById('sb-css')) return;
 
         const css = `
-            #previewbar { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; pointer-events: none !important; z-index: 2000 !important; overflow: visible !important; }
+            #previewbar { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; pointer-events: none !important; z-index: 2000 !important; overflow: visible !important; transition: opacity 0.2s ease !important; }
             .previewbar { position: absolute !important; list-style: none !important; height: 100% !important; top: 0 !important; display: block !important; z-index: 2001 !important; }
             .previewbar.highlight { min-width: 5.47px !important; max-width: 5.47px !important; height: 100% !important; top: 0 !important; background-color: #ff0000; }
+            ytlr-progress-bar.zylon-hidden ~ #previewbar { opacity: 0 !important; visibility: hidden !important; }
         `;
         const style = document.createElement('style');
         style.id = 'sb-css';
