@@ -28,7 +28,6 @@ const EXTRA_CONFIG_KEYS = ['enableMutedSegments', 'sbMode_highlight', 'skipSegme
 const CHAIN_SKIP_CONSTANTS = {
     START_THRESHOLD: 0.5,
     OVERLAP_TOLERANCE: 0.2,
-    UNMUTE_DELAY: 600,
     MIN_PLAYBACK_TIME: 0.1
 };
 
@@ -61,7 +60,6 @@ class SponsorBlockHandler {
         this.activeCategories = new Set();
         this.isProcessing = false;
         this.isSkipping = false;
-        this.wasMutedBySB = false;
         this.isDestroyed = false;
         this.skippedSegmentIndices = new Set();
         this.tempWhitelistIndex = -1; // Whitelist segment when using shortcut
@@ -77,7 +75,6 @@ class SponsorBlockHandler {
         this.rafIds = new Set();
 
         this.abortController = null;
-        this.unmuteTimeoutId = null;
 
         // High Frequency Polling
         this.pollingRafId = null;
@@ -93,6 +90,103 @@ class SponsorBlockHandler {
 
         this.log('info', `Created handler for ${this.videoID}`);
     }
+
+    // ==========================================
+    // WebOS 3 DOM Helper Methods
+    // ==========================================
+
+    _isNodeConnected(node) {
+        if (!node) return false;
+        return node.isConnected !== undefined ? node.isConnected : document.body.contains(node);
+    }
+
+    _getClosest(el, selector) {
+        if (!el || el.nodeType !== 1) return null;
+        if (el.closest) return el.closest(selector);
+        
+        const matches = el.matches || el.webkitMatchesSelector || el.mozMatchesSelector || el.msMatchesSelector;
+        let current = el;
+        while (current && current.nodeType === 1) {
+            if (matches && matches.call(current, selector)) return current;
+            current = current.parentNode;
+        }
+        return null;
+    }
+
+    // Returns where/how to inject the overlay.
+    // For ytlr-multi-markers-player-bar-renderer children, injection inside works fine.
+    // For the standard ytlr-progress-bar slider, YouTube's framework nukes foreign child
+    // nodes instantly — so we inject as a sibling of ytlr-progress-bar instead, positioned
+    // absolutely to cover the same visual area.
+    _getProgressBarAnchor() {
+        if (!this.progressBar) return { container: null, asSibling: false };
+
+        // Multi-markers bar: direct child injection is fine, keep existing behaviour.
+        if (this._getClosest(this.progressBar, 'ytlr-multi-markers-player-bar-renderer')) {
+            return { container: this.progressBar, asSibling: false };
+        }
+
+        // Standard progress bar: walk up to ytlr-progress-bar and inject after it.
+        const ytPB = this._getClosest(this.progressBar, 'ytlr-progress-bar') || this.progressBar;
+        const parent = ytPB.parentNode;
+        if (!parent) return { container: this.progressBar, asSibling: false };
+
+        // The parent becomes our positioning context.
+        const ps = window.getComputedStyle(parent);
+        if (ps.position === 'static') parent.style.setProperty('position', 'relative', 'important');
+        
+        // CRITICAL FIX: Custom elements on WebOS 3 default to display: inline.
+        // Inline elements with position: relative DO NOT act as absolute containing blocks,
+        // causing the overlay to detach and anchor to the screen edges instead.
+        if (ps.display === 'inline' || ps.display === '') {
+            parent.style.setProperty('display', 'block', 'important');
+        }
+
+        return { container: ytPB, asSibling: true };
+    }
+
+    // Copies ytlr-progress-bar's offset rect onto the sibling overlay so they
+    // occupy exactly the same visual space.
+    // Positions the sibling overlay to exactly cover the inner progress track element
+    _offsetRelativeTo(el, ancestor) {
+        if (!el || !ancestor) return { top: 0, left: 0 };
+        // getBoundingClientRect gives the exact pixel coordinates relative to the viewport
+        const rectEl = el.getBoundingClientRect();
+        const rectAncestor = ancestor.getBoundingClientRect();
+        return {
+            top: rectEl.top - rectAncestor.top,
+            left: rectEl.left - rectAncestor.left
+        };
+    }
+
+    _syncOverlayPosition(ytPB) {
+        if (!this.overlay || !ytPB) return;
+        const parent = ytPB.parentNode;
+        if (!parent) return;
+
+        // Use the inner slider element for precise height/position.
+        // Fall back to ytPB itself only if progressBar is the same node or unset.
+        const trackEl = (this.progressBar && this.progressBar !== ytPB)
+            ? this.progressBar
+            : ytPB;
+
+        const ov = this.overlay;
+        function set(prop, val) { ov.style.setProperty(prop, val, 'important'); }
+
+        // Sync visibility to mirror YouTube's UI state
+        const isHidden = ytPB.classList.contains('zylon-hidden') || window.getComputedStyle(ytPB).opacity === '0';
+        set('opacity', isHidden ? '0' : '1');
+
+        const pos = this._offsetRelativeTo(trackEl, parent);
+        set('top',    pos.top  + 'px');
+        set('left',   pos.left + 'px');
+        set('width',  trackEl.offsetWidth  + 'px');
+        set('height', trackEl.offsetHeight + 'px');
+    }
+
+    // ==========================================
+    // Core Engine
+    // ==========================================
 
     requestAF(callback) {
         if (this.isDestroyed) return;
@@ -332,55 +426,7 @@ class SponsorBlockHandler {
 
         this.log('info', `Executing chain skip: ${chain.chainDescription}`);
 
-        const originalMuteState = window.__sb_pending_unmute ? false : video.muted;
-        window.__sb_pending_unmute = true;
-        this.wasMutedBySB = true;
-        video.muted = true;
-
-        this.chainSkipVideo = video;
-        this.boundChainSkipSeeked = () => {
-            video.removeEventListener('seeked', this.boundChainSkipSeeked);
-            this.boundChainSkipSeeked = null;
-            this.chainSkipVideo = null;
-
-            if (this.isDestroyed) return;
-
-            const checkReady = () => {
-                if (this.isDestroyed) return;
-                if (video.readyState >= 3) {
-                    video.muted = originalMuteState;
-                    window.__sb_pending_unmute = false;
-                    this.wasMutedBySB = false;
-                    if (this.unmuteTimeoutId) {
-                        clearTimeout(this.unmuteTimeoutId);
-                        this.unmuteTimeoutId = null;
-                    }
-                } else {
-                    this.unmuteTimeoutId = setTimeout(checkReady, 50);
-                }
-            };
-            checkReady();
-        };
-
-        video.addEventListener('seeked', this.boundChainSkipSeeked);
-
-        this.unmuteTimeoutId = setTimeout(() => {
-            if (this.isDestroyed) return;
-
-            if (this.boundChainSkipSeeked) {
-                video.removeEventListener('seeked', this.boundChainSkipSeeked);
-                this.boundChainSkipSeeked = null;
-                this.chainSkipVideo = null;
-            }
-
-            if (video.readyState >= 2) {
-                video.muted = originalMuteState;
-                window.__sb_pending_unmute = false;
-                this.wasMutedBySB = false;
-            }
-            this.unmuteTimeoutId = null;
-        }, CHAIN_SKIP_CONSTANTS.UNMUTE_DELAY);
-
+        // Perform the skip immediately without muting
         video.currentTime = chain.endTime;
         this.lastSkipTime = chain.endTime;
         this.hasPerformedChainSkip = true;
@@ -409,12 +455,6 @@ class SponsorBlockHandler {
     }
 
     async init() {
-        if (window.__sb_pending_unmute) {
-            const v = document.querySelector('video');
-            if (v) v.muted = false;
-            window.__sb_pending_unmute = false;
-        }
-
         if (!this.videoID || this.isDestroyed) return;
 
         this.start();
@@ -482,6 +522,7 @@ class SponsorBlockHandler {
         if (!this.video) return;
 
         this.injectCSS();
+        // Initial tracking setup
         this.resetSegmentTracking();
 
         this.boundStateChange = (e) => {
@@ -492,7 +533,9 @@ class SponsorBlockHandler {
                 this.clearLongDistanceTimer();
                 this.toggleTimeListener(false);
             } else if (state === 1) { // PLAYING
+                // Check for progress bar existence on play in case UI was destroyed (e.g. after side-panel interaction)
                 this.checkForProgressBar();
+                // Re-evaluate tracking (re-enables time listener if needed)
                 this.resetSegmentTracking();
                 this.hasPerformedChainSkip = false;
                 this.executeChainSkip(this.video);
@@ -515,6 +558,7 @@ class SponsorBlockHandler {
                 this.lastSkippedSegmentIndex = -1;
                 this.lastNotifiedSegmentIndex = -1;
                 this.resetSegmentTracking();
+                // Only handle time update immediately if not paused
                 if (!this.video.paused) this.handleTimeUpdate(); 
             }
             this.isSkipping = false;
@@ -602,8 +646,14 @@ class SponsorBlockHandler {
 
     checkForProgressBar() {
         if (this.isDestroyed) return;
+
         // Don't re-query if we have a valid progress bar in DOM
-        if (this.overlay && this.overlay.parentNode && this.overlay.parentNode.isConnected) {
+        if (this.overlay && this.overlay.parentNode && this._isNodeConnected(this.overlay.parentNode)) {
+            // Ensure the sibling overlay syncs visibility when attributes mutate
+            const { container, asSibling } = this._getProgressBarAnchor();
+            if (asSibling && container) {
+                this._syncOverlayPosition(container);
+            }
             return;
         }
 
@@ -647,70 +697,6 @@ class SponsorBlockHandler {
         }
     }
 
-    // Returns where/how to inject the overlay.
-    // For ytlr-multi-markers-player-bar-renderer children, injection inside works fine.
-    // For the standard ytlr-progress-bar slider, YouTube's framework nukes foreign child
-    // nodes instantly — so we inject as a sibling of ytlr-progress-bar instead, positioned
-    // absolutely to cover the same visual area.
-    _getProgressBarAnchor() {
-        if (!this.progressBar) return { container: null, asSibling: false };
-
-        // Multi-markers bar: direct child injection is fine, keep existing behaviour.
-        if (this.progressBar.closest('ytlr-multi-markers-player-bar-renderer')) {
-            return { container: this.progressBar, asSibling: false };
-        }
-
-        // Standard progress bar: walk up to ytlr-progress-bar and inject after it.
-        const ytPB = this.progressBar.closest('ytlr-progress-bar') || this.progressBar;
-        const parent = ytPB.parentNode;
-        if (!parent) return { container: this.progressBar, asSibling: false };
-
-        // The parent becomes our positioning context.
-        const ps = window.getComputedStyle(parent);
-        if (ps.position === 'static') parent.style.position = 'relative';
-
-        return { container: ytPB, asSibling: true };
-    }
-
-    // Copies ytlr-progress-bar's offset rect onto the sibling overlay so they
-    // occupy exactly the same visual space.  offsetTop/Left are relative to the
-    // offsetParent, which is the parent we just made position:relative above.
-    // Positions the sibling overlay to exactly cover the inner progress track element
-    // (this.progressBar = [idomkey="slider"]), not the full ytlr-progress-bar wrapper
-    // which is taller and also contains the storyboard / time-label regions.
-    _syncOverlayPosition(ytPB) {
-        if (!this.overlay || !ytPB) return;
-        const parent = ytPB.parentNode;
-        if (!parent) return;
-
-        // Use the inner slider element for precise height/position.
-        // Fall back to ytPB itself only if progressBar is the same node or unset.
-        const trackEl = (this.progressBar && this.progressBar !== ytPB)
-            ? this.progressBar
-            : ytPB;
-
-        // injectCSS sets left/top/width/height with !important on #previewbar, so plain
-        // style assignments are silently ignored.  Use setProperty('important') to win.
-        const set = (prop, val) => this.overlay.style.setProperty(prop, val, 'important');
-
-        const parentRect = parent.getBoundingClientRect();
-        const trackRect  = trackEl.getBoundingClientRect();
-
-        // Element not yet laid out — fall back to offset values.
-        if (!trackRect.width && !trackRect.height) {
-            set('top',    `${ytPB.offsetTop}px`);
-            set('left',   `${ytPB.offsetLeft}px`);
-            set('width',  `${ytPB.offsetWidth}px`);
-            set('height', `${ytPB.offsetHeight}px`);
-            return;
-        }
-
-        set('top',    `${trackRect.top  - parentRect.top}px`);
-        set('left',   `${trackRect.left - parentRect.left}px`);
-        set('width',  `${trackRect.width}px`);
-        set('height', `${trackRect.height}px`);
-    }
-
     drawOverlay() {
         if (!this.progressBar || !this.segments.length || this.isDestroyed) return;
 
@@ -719,7 +705,7 @@ class SponsorBlockHandler {
 
         const config = configGetAll();
         const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${config.sbMode_highlight}`;
-        if (overlayHash === this.lastOverlayHash && this.overlay && this.overlay.isConnected) {
+        if (overlayHash === this.lastOverlayHash && this.overlay && this._isNodeConnected(this.overlay)) {
             return;
         }
         this.lastOverlayHash = overlayHash;
@@ -772,9 +758,14 @@ class SponsorBlockHandler {
 
         const { container, asSibling } = this._getProgressBarAnchor();
         if (asSibling) {
-            // Insert after ytlr-progress-bar so YouTube's framework cannot touch it,
-            // then match its visual position so the segments appear over the bar.
-            container.insertAdjacentElement('afterend', this.overlay);
+            // insertAdjacentElement('afterend') requires Chrome 41+, not available on
+            // WebOS 3 (Chrome 38). Use insertBefore with nextSibling instead.
+            const nextSib = container.nextSibling;
+            if (nextSib) {
+                container.parentNode.insertBefore(this.overlay, nextSib);
+            } else {
+                container.parentNode.appendChild(this.overlay);
+            }
             this._syncOverlayPosition(container);
         } else {
             container.appendChild(this.overlay);
@@ -831,6 +822,15 @@ class SponsorBlockHandler {
 
     handleTimeUpdate() {
         if (this.isSkipping) return;
+
+        // Force overlay positioning sync during playback to handle layout changes dynamically
+        if (this.overlay && this.progressBar) {
+            const { container, asSibling } = this._getProgressBarAnchor();
+            if (asSibling && container) {
+                this._syncOverlayPosition(container);
+            }
+        }
+
         if (this.skipSegments.length === 0) {
             this.toggleTimeListener(false);
             return;
@@ -969,18 +969,6 @@ class SponsorBlockHandler {
             const duration = this.video.duration;
             if (jumpTarget >= duration - 0.5) {
                 jumpTarget = Math.max(0, duration - 0.25);
-                if (!this.video.muted) {
-                    this.video.muted = true;
-                    this.wasMutedBySB = true;
-                    window.__sb_pending_unmute = true;
-                    setTimeout(() => {
-                        if (this.video && !this.isDestroyed && (this.video.paused || this.video.currentTime < 5)) {
-                            this.video.muted = false;
-                            this.wasMutedBySB = false;
-                            window.__sb_pending_unmute = false;
-                        }
-                    }, 1000);
-                }
             }
         }
 
@@ -1130,9 +1118,10 @@ class SponsorBlockHandler {
         if (document.getElementById('sb-css')) return;
 
         const css = `
-            #previewbar { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; pointer-events: none !important; z-index: 2000 !important; overflow: visible !important; }
+            #previewbar { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; pointer-events: none !important; z-index: 2000 !important; overflow: visible !important; transition: opacity 0.2s ease !important; }
             .previewbar { position: absolute !important; list-style: none !important; height: 100% !important; top: 0 !important; display: block !important; z-index: 2001 !important; }
             .previewbar.highlight { min-width: 5.47px !important; max-width: 5.47px !important; height: 100% !important; top: 0 !important; background-color: #ff0000; }
+            ytlr-progress-bar.zylon-hidden ~ #previewbar { opacity: 0 !important; visibility: hidden !important; }
         `;
         const style = document.createElement('style');
         style.id = 'sb-css';
@@ -1153,8 +1142,8 @@ class SponsorBlockHandler {
 
         this.toggleTimeListener(false);
         this.clearLongDistanceTimer();
-		
-		if (this.boundStateChange) {
+        
+        if (this.boundStateChange) {
             window.removeEventListener('yt-player-state-change', this.boundStateChange);
             this.boundStateChange = null;
         }
@@ -1163,26 +1152,14 @@ class SponsorBlockHandler {
         this.rafIds.clear();
         this.stopHighFreqLoop();
 
-        if (this.unmuteTimeoutId) {
-            clearTimeout(this.unmuteTimeoutId);
-            this.unmuteTimeoutId = null;
-        }
-
         if (this.chainSkipVideo) {
             if (this.boundChainSkipRetry) {
                 this.chainSkipVideo.removeEventListener('loadedmetadata', this.boundChainSkipRetry);
             }
-            if (this.boundChainSkipSeeked) {
-                this.chainSkipVideo.removeEventListener('seeked', this.boundChainSkipSeeked);
-            }
         }
         this.boundChainSkipRetry = null;
-        this.boundChainSkipSeeked = null;
         this.chainSkipVideo = null;
 
-        if (this.wasMutedBySB && this.video) {
-            this.video.muted = false;
-        }
         window.__sb_pending_unmute = false;
 
         if (this.abortController) {

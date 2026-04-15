@@ -10,7 +10,7 @@ const HAS_INTERSECTION_OBSERVER = typeof IntersectionObserver !== 'undefined';
 
 const SELECTORS = {
     panel: 'ytlr-structured-description-content-renderer',
-    mainContainer: 'zylon-provider-6',
+    mainContainer: 'zylon-provider-7',
     standardContainer: '.ytLrVideoDescriptionHeaderRendererFactoidContainer',
     compactContainer: '.rznqCe',
     stdFactoid: '.ytLrVideoDescriptionHeaderRendererFactoid',

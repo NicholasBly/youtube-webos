@@ -41,7 +41,8 @@ const CONFIG_KEYS = {
   SHORTS: 'removeGlobalShorts',
   LIVE_GAMES: 'removeTopLiveGames',
   GUEST_PROMPTS: 'hideGuestSignInPrompts',
-  EMOJI_FIX: 'enableLegacyEmojiFix'
+  EMOJI_FIX: 'enableLegacyEmojiFix',
+  ENDCARDS: 'hideEndcards'
 };
 
 const EMOJI_RE = /[\u00A9\u00AE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23E9-\u23F3\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB-\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u261D\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692-\u2697\u2699\u269B\u269C\u26A0\u26A1\u26AA\u26AB\u26B0\u26B1\u26BD\u26BE\u26C4\u26C5\u26CE\u26CF\u26D1\u26D3\u26D4\u26E9\u26EA\u26F0-\u26F5\u26F7-\u26FA\u26FD\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B50\u2B55\u3030\u303D\u3297\u3299]|[\uD83C-\uDBFF][\uDC00-\uDFFF]/;
@@ -183,7 +184,7 @@ function stripTrackingParams(obj, maxDepth = 40, currentDepth = 0) {
   if (!obj || typeof obj !== 'object' || currentDepth > maxDepth) return;
 
   if (typeof obj.trackingParams === 'string') obj.trackingParams = '';
-  if (typeof obj.clickTrackingParams === 'string') obj.clickTrackingParams = '';
+  // if (typeof obj.clickTrackingParams === 'string') obj.clickTrackingParams = ''; Do Not Strip. Breaks clicking endcards
 
   if (Array.isArray(obj)) {
     for (let i = 0; i < obj.length; i++) {
@@ -316,10 +317,11 @@ function hookedParse(text, reviver) {
     removeGlobalShorts: globalCfg[CONFIG_KEYS.SHORTS],
     removeTopLiveGames: globalCfg[CONFIG_KEYS.LIVE_GAMES],
     hideGuestPrompts: globalCfg[CONFIG_KEYS.GUEST_PROMPTS],
-    enableLegacyEmojiFix: globalCfg[CONFIG_KEYS.EMOJI_FIX] && getWebOSVersion() <= 4
+    enableLegacyEmojiFix: globalCfg[CONFIG_KEYS.EMOJI_FIX] && getWebOSVersion() <= 4,
+	hideEndcards: globalCfg[CONFIG_KEYS.ENDCARDS]
   };
 
-  if (!config.enableAdBlock && !config.enableTrackingBlock && !config.removeGlobalShorts && !config.removeTopLiveGames && !config.hideGuestPrompts && !config.enableLegacyEmojiFix) return data;
+  if (!config.enableAdBlock && !config.enableTrackingBlock && !config.removeGlobalShorts && !config.removeTopLiveGames && !config.hideGuestPrompts && !config.enableLegacyEmojiFix && !config.hideEndcards) return data;
   if (!data || typeof data !== 'object') return data;
   
   const isAPIResponse = !!(data.responseContext || data.playerResponse || data.onResponseReceivedActions || data.onResponseReceivedEndpoints || data.frameworkUpdates || data.sectionListRenderer || data.entries || data.continuationContents);
@@ -469,6 +471,9 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
             if (DEBUG) debugLog(`${responseType}: Removed timelyActionRenderers (QR Code)`);
         }
       }
+	  if (config.hideEndcards) {
+          removeEndcardsOptimized(data);
+      }
       if (config.hideGuestPrompts) {
          let pivotContents = getByPath(data, schema?.pivotPath);
          if (!pivotContents) {
@@ -492,6 +497,7 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
 
 function applyFallbackFilters(data, config, needsContentFiltering) {
   if (config.enableAdBlock) removePlayerAdsOptimized(data);
+  if (config.hideEndcards) removeEndcardsOptimized(data);
   const needles = ['playerOverlayRenderer', 'pivot', 'sectionListRenderer', 'gridRenderer', 'gridContinuation', 'sectionListContinuation', 'entries'];
   const found = findObjects(data, needles, 10);
   
@@ -640,6 +646,19 @@ function getByPath(obj, parts) {
 function clearArrayIfExists(obj, key) {
   if (obj[key]?.length) { obj[key].length = 0; return 1; }
   return 0;
+}
+
+function removeEndcardsOptimized(data) {
+  let cleared = 0;
+  if (data.endscreen) {
+      delete data.endscreen;
+      cleared++;
+  }
+  if (data.playerResponse && data.playerResponse.endscreen) {
+      delete data.playerResponse.endscreen;
+      cleared++;
+  }
+  if (DEBUG && cleared > 0) debugLog('Cleaned Player Endcards');
 }
 
 function removePlayerAdsOptimized(data) {

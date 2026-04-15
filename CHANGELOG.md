@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.7.6] - 2026/04/15
+
+## Changes
+
+### AdBlock
++ Hide Endcards: Now filtered out during json adblock filtering engine - fixes ghost elements that are selectable while hidden
+
+### General
++ Updated oled black theme in description panel (YouTube UI update)
+
+## Optimizations
+
+### Thumbnail Quality
++ Implemented improvements to max thumbnail quality for navigation performance issues - https://github.com/NicholasBly/youtube-webos/issues/85
+
+## Fixes
+
+### AdBlock
++ Remove filtering ClickTrackingParams - fixes unclickable endcards - https://github.com/NicholasBly/youtube-webos/issues/96
+
+### SponsorBlock
++ Fix sponsorblock segments on progress bar for webOS3 - https://github.com/NicholasBly/youtube-webos/issues/68
++ Remove audio mute/unmute to fix bug - https://github.com/NicholasBly/youtube-webos/issues/92
+
+### Return YouTube Dislike
++ Updated observer from zylon-provider-6 to zylon-provider-7
+
 ## [0.7.5] 2026/04/11
 
 ## Fixes
