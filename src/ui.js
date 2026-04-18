@@ -1261,19 +1261,11 @@ function initGlobalStyles() {
     // Configurable styles updater
     const updateStyles = () => {
         const hideLogo = configRead('hideLogo');
-        const hideEnd = configRead('hideEndcards');
-		const fixTitles = configRead('fixMultilineTitles');
-        const endDisplay = hideEnd ? 'none' : 'block';
+        const fixTitles = configRead('fixMultilineTitles');
         
         style.textContent = `
             /* Hide Logo */
             ytlr-redux-connect-ytlr-logo-entity { visibility: ${hideLogo ? 'hidden' : 'visible'}; }
-            
-            /* Hide Endcards */
-            ytlr-endscreen-renderer, 
-            .ytLrEndscreenElementRendererElementContainer, 
-            .ytLrEndscreenElementRendererVideo, 
-            .ytLrEndscreenElementRendererHost { display: ${endDisplay} !important; }
             
             /* UI Controls Hiding Class */
             body.ytaf-hide-controls .GLc3cc { opacity: 0 !important; }
@@ -1286,7 +1278,6 @@ function initGlobalStyles() {
 
     updateStyles();
     configAddChangeListener('hideLogo', updateStyles);
-    configAddChangeListener('hideEndcards', updateStyles);
 	configAddChangeListener('fixMultilineTitles', updateStyles);
 }
 
@@ -1335,7 +1326,7 @@ function applyOledMode(enabled) {
         .ytLrAnimatedOverlayContainer { background-color: #000 !important; } 
         .iha0pc { color: #000 !important; } 
         .ZghAqf { background-color: #000 !important; } 
-        .A0acyf.RAE3Re .AmQJbe { background-color: #000 !important; } 
+        .RAE3Re .AmQJbe { background-color: #000 !important; } 
         .tVp1L { background-color: #000 !important; } 
         .app-quality-root .DnwJH { background-color: #000 !important; } 
         .qRdzpd.stQChb .TYE3Ed { background-color: #000 !important; } 

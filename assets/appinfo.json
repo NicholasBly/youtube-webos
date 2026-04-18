@@ -1,23 +1,32 @@
 {
   "id": "youtube.leanback.v4",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "vendor": "webosbrew.org",
   "type": "web",
   "main": "index.html",
+  "bgImage":"9262051282473701_youtube_leanback_preview.png",
   "title": "YouTube AdFree",
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",
   "iconColor": "#FFFFFF",
+  "resolution": "1920x1080",
+  "splashBackground":"9262051307371701_youtube_leanback_splash.png",
   "support360Content": true,
   "checkUpdateOnLaunch": false,
   "accessibility": {
     "supportsAudioGuidance": true
   },
+  "volumeRatioOnTTS": 50,
   "vendorExtension": {
-    "userAgent": "$browserName$/$browserVersion$ ($platformName$-$platformVersion$), _TV_O18/$firmwareVersion$ (LG, $modelName$, $networkMode$)",
-    "allowCrossDomain": true
+    "userAgent": "$browserName$/$browserVersion$ ($platformName$-$platformVersion$), _TV_$chipSetName$/$firmwareVersion$ (LG, $modelName$, $networkMode$)",
+    "allowCrossDomain": true,
+    "reloadAtLanguageChanged": true,
+    "backgroundColor": "0xFF212121",
+    "enableMouse": true,
+    "mouseMoveForMouseOff": false,
+    "enableKeyboard": false
   },
-  "deeplinkingParams": "{\"contentTarget\":\"v=$CONTENTID\"}",
+  "deeplinkingParams": "{\"contentTarget\":\"https://www.youtube.com/tv?v=$CONTENTID\"}",
   "inAppSearchParams": "{\"target\":\"q=$SEARCH_KEYWORD\"}",
   "inAppVoiceIntent": "{\"target\":{\"intent\":\"$INTENT\",\"intentParam\":\"$INTENT_PARAM\",\"languageCode\":\"$LANG_CODE\"}}",
   "supportQueryRouting": "{\"amazonAlexa\":true,\"googleAssistant\":true}",

@@ -10,10 +10,10 @@ const PLACEHOLDER_MAX_BYTES = 5000;
 const YT_TARGET_THUMBNAIL_NAMES = new Set(['maxresdefault', 'sddefault', 'hqdefault', 'mqdefault', 'default']);
 
 // --- Pre-compiled Regular Expressions ---
-const YT_THUMBNAIL_PATHNAME_REGEX = /vi(?:_webp)?(\/.*?\/)([a-z0-9]+)(_\w*)?\.[a-z]+$/;
+// Updated regex to properly match video IDs which can contain uppercase, dashes, and underscores.
+const YT_THUMBNAIL_PATHNAME_REGEX = /vi(?:_webp)?(\/.*?\/)([a-zA-Z0-9_-]+)(_\w*)?\.[a-zA-Z0-9]+$/;
 const CSS_URL_REGEX = /url\(['"]?([^'"]+?)['"]?\)/;
 const AMPERSAND_REGEX = /&amp;/g;
-const VIDEO_ID_EXTRACT_REGEX = /\/vi(?:_webp)?\/([^/]+)\//;
 const I_DOMAIN_REGEX = /^i\d/;
 
 const YT_THUMBNAIL_ELEMENT_TAG = 'ytlr-thumbnail-details';
@@ -58,14 +58,15 @@ const VisibilityObserverClass = window.IntersectionObserver || class {
   }
 
   _check() {
-    if (this.elements.size === 0) return;
+    // Guard against document.hidden and forced reflows for empty lists
+    if (this.elements.size === 0 || document.hidden) return;
     
     const vh = (window.innerHeight || document.documentElement.clientHeight) + this.margin;
     const vw = (window.innerWidth || document.documentElement.clientWidth) + this.margin;
     const entries = [];
     
     this.elements.forEach(el => {
-      const rect = el.getBoundingClientRect();
+      const rect = el.getBoundingClientRect(); 
       const isIntersecting = (
         rect.width > 0 && rect.height > 0 &&
         rect.top < vh && 
@@ -120,13 +121,11 @@ function ensureWebpDetection() {
 }
 
 // --- Helpers ---
-function getThumbnailUrl(originalUrl, targetQuality) {
+function getThumbnailUrl(originalUrl, targetQuality, pathMatch) {
   if (I_DOMAIN_REGEX.test(originalUrl.hostname)) return null;
+  if (!pathMatch) return null;
 
-  const match = originalUrl.pathname.match(YT_THUMBNAIL_PATHNAME_REGEX);
-  if (!match) return null;
-
-  const [, pathPrefix, videoId] = match;
+  const [, pathPrefix, videoId] = pathMatch;
   if (!YT_TARGET_THUMBNAIL_NAMES.has(videoId)) return null;
 
   const extension = webpSupported ? 'webp' : 'jpg';
@@ -175,38 +174,30 @@ function parseCSSUrl(value) {
 }
 
 // --- Image Loading ---
-async function probeImage(url) {
+// Use HEAD request to cut memory/bandwidth overhead
+async function testAndLoadImage(url) {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
-    let timeoutId;
-
     xhr.open('HEAD', url, true);
-
+    xhr.timeout = IMAGE_LOAD_TIMEOUT;
+    
     xhr.onload = () => {
-      clearTimeout(timeoutId);
       if (xhr.status >= 200 && xhr.status < 300) {
-        const contentLength = xhr.getResponseHeader('Content-Length');
-        if (contentLength && parseInt(contentLength, 10) < PLACEHOLDER_MAX_BYTES) {
-          resolve(null);
+        const contentLength = parseInt(xhr.getResponseHeader('Content-Length'), 10);
+        // Fallback placeholders have very small payloads
+        if (!isNaN(contentLength) && contentLength <= PLACEHOLDER_MAX_BYTES) {
+          resolve(false); 
         } else {
-          resolve({ success: true });
+          resolve(true); 
         }
       } else {
-        resolve(null); 
+        resolve(false);
       }
     };
-
-    xhr.onerror = () => {
-      clearTimeout(timeoutId);
-      resolve(null); 
-    };
-
+    
+    xhr.onerror = () => resolve(false);
+    xhr.ontimeout = () => resolve(false);
     xhr.send();
-
-    timeoutId = setTimeout(() => {
-      xhr.abort();
-      resolve(null);
-    }, IMAGE_LOAD_TIMEOUT);
   });
 }
 
@@ -220,11 +211,10 @@ function processRequestQueue() {
   requestQueue.delete(element);
   activeRequests++;
 
-  job()
-    .finally(() => {
-      activeRequests--;
-      processRequestQueue();
-    });
+  job().finally(() => {
+    activeRequests--; // Cleanly handled via lifecycle natural drain
+    processRequestQueue();
+  });
 }
 
 async function processUpgrade(element, generationId) {
@@ -235,17 +225,20 @@ async function processUpgrade(element, generationId) {
 
   const oldBackgroundStyle = element.style.backgroundImage;
   const currentUrl = parseCSSUrl(oldBackgroundStyle);
-  
   if (!currentUrl) return;
 
-  const videoIdMatch = currentUrl.pathname.match(VIDEO_ID_EXTRACT_REGEX);
-  if (!videoIdMatch) return;
-  const videoId = videoIdMatch[1];
+  // Consolidate Video ID extraction
+  const pathMatch = currentUrl.pathname.match(YT_THUMBNAIL_PATHNAME_REGEX);
+  if (!pathMatch) return;
+  const videoId = pathMatch[2];
+
+  // Cache dataset accesses to prevent garbage generation in Chrome 38
+  const ds = element.dataset;
 
   if (
-    element.dataset.thumbVideoId === videoId &&
-    element.dataset.thumbBestQuality &&
-    currentUrl.href.indexOf(element.dataset.thumbBestQuality) !== -1
+    ds.thumbVideoId === videoId &&
+    ds.thumbBestQuality &&
+    currentUrl.href.indexOf(ds.thumbBestQuality) !== -1
   ) {
     return;
   }
@@ -253,29 +246,23 @@ async function processUpgrade(element, generationId) {
   await ensureWebpDetection();
   
   const applyUpgrade = (targetUrl, quality) => {
-    const img = new Image();
-    
-    img.onload = () => {
-      requestAnimationFrame(() => {
-        const freshState = elementState.get(element);
-        if (
-          document.contains(element) && 
-          freshState && freshState.generationId === generationId
-        ) {
-          element.dataset.isUpgrading = "true"; 
-          element.style.backgroundImage = `url("${targetUrl.href}")`;
-          element.dataset.thumbVideoId = videoId;
-          element.dataset.thumbBestQuality = quality;
-        }
-      });
-    };
-    img.src = targetUrl.href; 
+    requestAnimationFrame(() => {
+      const freshState = elementState.get(element);
+      if (document.contains(element) && freshState && freshState.generationId === generationId) {
+        ds.thumbVideoId = videoId;
+        ds.thumbBestQuality = quality;
+
+        // Register explicit URL applied to avoid mutation loop and 150ms setTimeout
+        freshState.lastAppliedUrl = targetUrl.href; 
+        element.style.backgroundImage = `url("${targetUrl.href}")`;
+      }
+    });
   };
 
   if (qualityCache.has(videoId)) {
     const knownQuality = qualityCache.get(videoId);
     if (knownQuality) {
-      const targetUrl = getThumbnailUrl(currentUrl, knownQuality);
+      const targetUrl = getThumbnailUrl(currentUrl, knownQuality, pathMatch);
       if (targetUrl && currentUrl.href !== targetUrl.href) {
         applyUpgrade(targetUrl, knownQuality);
       }
@@ -285,19 +272,19 @@ async function processUpgrade(element, generationId) {
 
   const candidateQualities = ['maxresdefault', 'sddefault', 'hqdefault'];
 
-  // Array length cached for older engines
   for (let i = 0, len = candidateQualities.length; i < len; i++) {
     const quality = candidateQualities[i];
     const currentState = elementState.get(element);
     if (!currentState || currentState.generationId !== generationId) return;
     if (document.hidden) return;
 
-    const targetUrl = getThumbnailUrl(currentUrl, quality);
+    const targetUrl = getThumbnailUrl(currentUrl, quality, pathMatch);
     if (!targetUrl) continue;
 
-    const result = await probeImage(targetUrl.href);
+    const isValid = await testAndLoadImage(targetUrl.href);
 
-    if (result && result.success) {
+    if (isValid) {
+      // Target FIFO deletion rather than full wipe
       if (qualityCache.size >= CACHE_SIZE_LIMIT) qualityCache.delete(qualityCache.keys().next().value);
       qualityCache.set(videoId, quality);
       applyUpgrade(targetUrl, quality);
@@ -305,28 +292,27 @@ async function processUpgrade(element, generationId) {
     }
   }
   
-  if (qualityCache.size >= CACHE_SIZE_LIMIT) qualityCache.clear();
+  if (qualityCache.size >= CACHE_SIZE_LIMIT) qualityCache.delete(qualityCache.keys().next().value);
   qualityCache.set(videoId, null);
 }
 
 // --- Scoped Observers ---
-
 const styleObserver = new MutationObserver(mutations => {
-  // Array length cached
   for (let i = 0, len = mutations.length; i < len; i++) {
     const mut = mutations[i];
     if (mut.type === 'attributes') {
       const node = mut.target;
-      
-      if (node.dataset.isUpgrading === "true") {
-         node.dataset.isUpgrading = "false";
-         continue; 
-      }
-
       const currentBg = node.style.backgroundImage;
       if (!currentBg) continue;
 
       const s = elementState.get(node);
+
+      // Skip our exact programmatic update
+      if (s && s.lastAppliedUrl && currentBg.indexOf(s.lastAppliedUrl) !== -1) {
+        s.lastAppliedUrl = null; 
+        continue; 
+      }
+
       const currentGen = s ? s.generationId : 0;
       elementState.set(node, { generationId: currentGen + 1 });
       
@@ -350,18 +336,38 @@ const visibilityObserver = new VisibilityObserverClass((entries) => {
       requestQueue.delete(node);
     }
   });
-}, { rootMargin: '300px' }); 
+}, { rootMargin: '100px' }); // Tightened rootMargin
 
 const domObserver = new MutationObserver(mutations => {
-  // Array length cached
   for (let i = 0, len = mutations.length; i < len; i++) {
     const mut = mutations[i];
+
+    // Disconnect strong refs to offloaded nodes
+    if (mut.removedNodes.length > 0) {
+      for (let j = 0, jLen = mut.removedNodes.length; j < jLen; j++) {
+        const node = mut.removedNodes[j];
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const matchesFn = node.matches || node.webkitMatchesSelector || node.mozMatchesSelector || node.msMatchesSelector;
+          
+          if (matchesFn && matchesFn.call(node, YT_THUMBNAIL_ELEMENT_TAG)) {
+            visibilityObserver.unobserve(node);
+            requestQueue.delete(node);
+          }
+          
+          const nested = node.getElementsByTagName(YT_THUMBNAIL_ELEMENT_TAG);
+          for (let k = 0, kLen = nested.length; k < kLen; k++) {
+            visibilityObserver.unobserve(nested[k]);
+            requestQueue.delete(nested[k]);
+          }
+        }
+      }
+    }
+
     if (mut.type === 'childList') {
       const addedNodes = mut.addedNodes;
       for (let j = 0, jLen = addedNodes.length; j < jLen; j++) {
         const node = addedNodes[j];
         if (node.nodeType === Node.ELEMENT_NODE) {
-          
           const matchesFn = node.matches || node.webkitMatchesSelector || node.mozMatchesSelector || node.msMatchesSelector;
           
           if (matchesFn && matchesFn.call(node, YT_THUMBNAIL_ELEMENT_TAG)) {
@@ -389,9 +395,7 @@ const domObserver = new MutationObserver(mutations => {
 // --- Visibility & App State Handling ---
 
 function handleVisibilityChange() {
-  if (!document.hidden) {
-    processRequestQueue();
-  }
+  if (!document.hidden) processRequestQueue();
 }
 
 function handlePageUpdate(e) {
@@ -443,14 +447,21 @@ export function cleanup() {
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   
   isObserving = false;
-  activeRequests = 0; 
+  // Remove abrupt zeroing of activeRequests here
   requestQueue.clear();
   urlCache.clear();
   qualityCache.clear(); 
   elementState = new WeakMap();
 }
 
-if (configRead('upgradeThumbnails')) enableObserver();
+if (configRead('upgradeThumbnails')) {
+  // Defer boot cost
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    enableObserver();
+  } else {
+    window.addEventListener('load', enableObserver);
+  }
+}
 
 configAddChangeListener('upgradeThumbnails', evt => {
   evt.detail.newValue ? enableObserver() : cleanup();

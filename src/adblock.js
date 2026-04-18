@@ -10,6 +10,7 @@ const FORCE_FALLBACK = false;
 let isTelemetryHooked = false;
 let originalXHROpen = null;
 let originalXHRSend = null;
+let cachedWebOSVersion = null;
 
 // --- CONSTANTS & CONFIGURATION ---
 
@@ -21,6 +22,8 @@ const BLOCKED_TELEMETRY_PATHS = [
   '/api/stats/qoe',
   '/pagead/viewthroughconversion'
 ];
+
+const TELEMETRY_REGEX = /\/youtubei\/v1\/log_event|\/ptracking|\/api\/stats\/atr|\/api\/stats\/qoe|\/pagead\/viewthroughconversion/;
 
 const UI_STRINGS = {
   SHORTS_TITLE: 'Shorts',
@@ -41,7 +44,8 @@ const CONFIG_KEYS = {
   SHORTS: 'removeGlobalShorts',
   LIVE_GAMES: 'removeTopLiveGames',
   GUEST_PROMPTS: 'hideGuestSignInPrompts',
-  EMOJI_FIX: 'enableLegacyEmojiFix'
+  EMOJI_FIX: 'enableLegacyEmojiFix',
+  ENDCARDS: 'hideEndcards'
 };
 
 const EMOJI_RE = /[\u00A9\u00AE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23E9-\u23F3\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB-\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u261D\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692-\u2697\u2699\u269B\u269C\u26A0\u26A1\u26AA\u26AB\u26B0\u26B1\u26BD\u26BE\u26C4\u26C5\u26CE\u26CF\u26D1\u26D3\u26D4\u26E9\u26EA\u26F0-\u26F5\u26F7-\u26FA\u26FD\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B50\u2B55\u3030\u303D\u3297\u3299]|[\uD83C-\uDBFF][\uDC00-\uDFFF]/;
@@ -53,6 +57,7 @@ const IGNORE_ON_SHORTS = new Set(['SEARCH', 'PLAYER', 'ACTION']);
 
 const SCHEMA_REGISTRY = {
   typeSignatures: [
+    // Prioritize highly specific structural layouts first to prevent generic wrappers from hijacking the detection
     { type: 'SHORTS_SEQUENCE', detectionPath: ['entries'], matchFn: (data) => Array.isArray(data.entries) },
     { type: 'PLAYER', detectionPath: ['streamingData'] },
     { type: 'NEXT', detectionPath: ['contents', 'singleColumnWatchNextResults'] },
@@ -61,7 +66,7 @@ const SCHEMA_REGISTRY = {
     { type: 'SEARCH', detectionPath: ['contents', 'sectionListRenderer'], excludePath: ['contents', 'tvBrowseRenderer'] },
     { type: 'CONTINUATION', detectionPath: ['continuationContents'] },
     { type: 'ACTION', detectionPath: ['onResponseReceivedActions'] },
-    { type: 'ACTION', detectionPath: ['onResponseReceivedEndpoints'] } 
+    { type: 'ACTION', detectionPath: ['onResponseReceivedEndpoints'] }
   ],
   paths: {
     PLAYER: { overlayPath: ['playerOverlays', 'playerOverlayRenderer'] },
@@ -120,7 +125,7 @@ function splitIntoRuns(text, originalRun = {}) {
     return newRuns;
 }
 
-function findAndProcessText(obj, maxDepth = 40, currentDepth = 0) {
+function findAndProcessText(obj, maxDepth = 20, currentDepth = 0) {
   if (!obj || typeof obj !== 'object' || currentDepth > maxDepth) return;
   
   if (typeof obj.simpleText === 'string') {
@@ -179,11 +184,11 @@ function findAndProcessText(obj, maxDepth = 40, currentDepth = 0) {
   }
 }
 
-function stripTrackingParams(obj, maxDepth = 40, currentDepth = 0) {
+function stripTrackingParams(obj, maxDepth = 15, currentDepth = 0) {
   if (!obj || typeof obj !== 'object' || currentDepth > maxDepth) return;
 
   if (typeof obj.trackingParams === 'string') obj.trackingParams = '';
-  if (typeof obj.clickTrackingParams === 'string') obj.clickTrackingParams = '';
+  // if (typeof obj.clickTrackingParams === 'string') obj.clickTrackingParams = ''; Do Not Strip. Breaks clicking endcards
 
   if (Array.isArray(obj)) {
     for (let i = 0; i < obj.length; i++) {
@@ -204,12 +209,12 @@ function stripTrackingParams(obj, maxDepth = 40, currentDepth = 0) {
 
 function isTelemetryUrl(urlStr) {
   if (!urlStr) return false;
-  return BLOCKED_TELEMETRY_PATHS.some(path => urlStr.includes(path));
+  return TELEMETRY_REGEX.test(urlStr);
 }
 
 const telemetryFetchHandler = (evt) => {
   const { url } = evt.detail;
-  if (isTelemetryUrl(url.pathname) || isTelemetryUrl(url.href)) {
+  if (isTelemetryUrl(url.href)) {
     if (DEBUG) console.info('[AdBlock] Blocked telemetry Fetch request:', url.href);
     evt.preventDefault();
   }
@@ -235,15 +240,15 @@ export function initTrackingBlock() {
     window.XMLHttpRequest.prototype.open = function(method, url) {
       // Store the URL on the instance so we can read it during send()
       // Fallback for older engines that might not support optional chaining properly
-      this._requestUrl = typeof url === 'string' ? url : (url && url.toString ? url.toString() : '');
+      this.__adblockRequestUrl = typeof url === 'string' ? url : (url && url.toString ? url.toString() : '');
       
       // Use standard 'arguments' instead of spread syntax (...args) for webOS 3 compatibility
       return originalXHROpen.apply(this, arguments);
     };
 
     window.XMLHttpRequest.prototype.send = function(body) {
-      if (isTelemetryUrl(this._requestUrl)) {
-        if (DEBUG) console.info('[AdBlock] Blocked telemetry XHR request:', this._requestUrl);
+      if (isTelemetryUrl(this.__adblockRequestUrl)) {
+        if (DEBUG) console.info('[AdBlock] Blocked telemetry XHR request:', this.__adblockRequestUrl);
         // Silently drop the request
         return; 
       }
@@ -277,11 +282,11 @@ export function destroyTrackingBlock() {
       originalXHROpen = null;
       originalXHRSend = null;
     }
-
-    isTelemetryHooked = false;
-    console.info('[AdBlock] Telemetry network hooks disabled');
   } catch (e) {
     console.error('[AdBlock] Failed to remove XHR network blockers:', e);
+  } finally {
+    isTelemetryHooked = false;
+    if (DEBUG) console.info('[AdBlock] Telemetry network hooks disabled');
   }
 }
 
@@ -316,10 +321,11 @@ function hookedParse(text, reviver) {
     removeGlobalShorts: globalCfg[CONFIG_KEYS.SHORTS],
     removeTopLiveGames: globalCfg[CONFIG_KEYS.LIVE_GAMES],
     hideGuestPrompts: globalCfg[CONFIG_KEYS.GUEST_PROMPTS],
-    enableLegacyEmojiFix: globalCfg[CONFIG_KEYS.EMOJI_FIX] && getWebOSVersion() <= 4
+    enableLegacyEmojiFix: globalCfg[CONFIG_KEYS.EMOJI_FIX] && cachedWebOSVersion <= 4,
+	hideEndcards: globalCfg[CONFIG_KEYS.ENDCARDS]
   };
 
-  if (!config.enableAdBlock && !config.enableTrackingBlock && !config.removeGlobalShorts && !config.removeTopLiveGames && !config.hideGuestPrompts && !config.enableLegacyEmojiFix) return data;
+  if (!config.enableAdBlock && !config.enableTrackingBlock && !config.removeGlobalShorts && !config.removeTopLiveGames && !config.hideGuestPrompts && !config.enableLegacyEmojiFix && !config.hideEndcards) return data;
   if (!data || typeof data !== 'object') return data;
   
   const isAPIResponse = !!(data.responseContext || data.playerResponse || data.onResponseReceivedActions || data.onResponseReceivedEndpoints || data.frameworkUpdates || data.sectionListRenderer || data.entries || data.continuationContents);
@@ -346,11 +352,11 @@ function hookedParse(text, reviver) {
     }
     
     if (config.enableLegacyEmojiFix && data.frameworkUpdates) {
-        findAndProcessText(data.frameworkUpdates, 50);
+        findAndProcessText(data.frameworkUpdates, 20);
     }
     
     if (config.enableTrackingBlock) {
-        stripTrackingParams(data, 50);
+        stripTrackingParams(data, 15);
         if (DEBUG) debugLog('Stripped trackingParams globally');
     }
     
@@ -443,18 +449,19 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
         }
       }
       if (config.enableLegacyEmojiFix && data.continuationContents) {
-          findAndProcessText(data.continuationContents, 50);
+          findAndProcessText(data.continuationContents, 20);
       }
       break;
-    case 'ACTION':
+    case 'ACTION': {
       const actions = data.onResponseReceivedActions || data.onResponseReceivedEndpoints;
       if (Array.isArray(actions)) {
         processActions(actions, config, needsContentFiltering);
         if (config.enableLegacyEmojiFix) {
-            findAndProcessText(actions, 50);
+            findAndProcessText(actions, 20);
         }
       }
       break;
+    }
     case 'PLAYER':
     case 'NEXT':
       if (config.enableAdBlock) {
@@ -469,6 +476,9 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
             if (DEBUG) debugLog(`${responseType}: Removed timelyActionRenderers (QR Code)`);
         }
       }
+	  if (config.hideEndcards) {
+          removeEndcardsOptimized(data);
+      }
       if (config.hideGuestPrompts) {
          let pivotContents = getByPath(data, schema?.pivotPath);
          if (!pivotContents) {
@@ -481,7 +491,7 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
         if (responseType === 'NEXT') {
           findAndProcessText(getByPath(data, ['contents', 'singleColumnWatchNextResults']));
           findAndProcessText(getByPath(data, ['playerOverlays']));
-          findAndProcessText(getByPath(data, ['engagementPanels']), 40); 
+          findAndProcessText(getByPath(data, ['engagementPanels']), 20); 
         } else if (responseType === 'PLAYER') {
           findAndProcessText(getByPath(data, ['videoDetails']));
         }
@@ -492,6 +502,7 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
 
 function applyFallbackFilters(data, config, needsContentFiltering) {
   if (config.enableAdBlock) removePlayerAdsOptimized(data);
+  if (config.hideEndcards) removeEndcardsOptimized(data);
   const needles = ['playerOverlayRenderer', 'pivot', 'sectionListRenderer', 'gridRenderer', 'gridContinuation', 'sectionListContinuation', 'entries'];
   const found = findObjects(data, needles, 10);
   
@@ -583,7 +594,7 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
     }
 
     if (keepItem) {
-      if (enableLegacyEmojiFix) findAndProcessText(item);
+      if (enableLegacyEmojiFix) findAndProcessText(item, 20);
       if (writeIdx !== i) contents[writeIdx] = item;
       writeIdx++;
     }
@@ -618,7 +629,7 @@ function filterItemsOptimized(items, config, needsContentFiltering) {
     }
 
     if (keep) {
-      if (enableLegacyEmojiFix) findAndProcessText(item);
+      if (enableLegacyEmojiFix) findAndProcessText(item, 20);
       if (writeIdx !== i) items[writeIdx] = item;
       writeIdx++;
     }
@@ -640,6 +651,19 @@ function getByPath(obj, parts) {
 function clearArrayIfExists(obj, key) {
   if (obj[key]?.length) { obj[key].length = 0; return 1; }
   return 0;
+}
+
+function removeEndcardsOptimized(data) {
+  let cleared = 0;
+  if (data.endscreen) {
+      delete data.endscreen;
+      cleared++;
+  }
+  if (data.playerResponse && data.playerResponse.endscreen) {
+      delete data.playerResponse.endscreen;
+      cleared++;
+  }
+  if (DEBUG && cleared > 0) debugLog('Cleaned Player Endcards');
 }
 
 function removePlayerAdsOptimized(data) {
@@ -670,26 +694,30 @@ function findObjects(haystack, needlesArray, maxDepth = 10) {
   const results = {};
   let foundCount = 0;
   const targetCount = needlesArray.length;
-  const queue = [{ obj: haystack, depth: 0 }];
+  // Flat queue to reduce GC pressure: [obj, depth, obj, depth, ...]
+  const queue = [haystack, 0];
   let idx = 0;
 
   while (idx < queue.length && foundCount < targetCount) {
-    const current = queue[idx++];
-    if (current.depth > maxDepth) continue;
+    const currentObj = queue[idx++];
+    const currentDepth = queue[idx++];
+    
+    if (currentDepth > maxDepth) continue;
 
     for (let i = 0; i < targetCount; i++) {
       const needle = needlesArray[i];
-      if (!results[needle] && current.obj[needle] !== undefined) {
-        results[needle] = current.obj[needle];
+      if (!results[needle] && currentObj[needle] !== undefined) {
+        results[needle] = currentObj[needle];
         foundCount++;
       }
     }
     if (foundCount === targetCount) break;
 
-    const keys = Object.keys(current.obj);
+    const keys = Object.keys(currentObj);
     for (let i = 0; i < keys.length; i++) {
-      if (current.obj[keys[i]] && typeof current.obj[keys[i]] === 'object') {
-        queue.push({ obj: current.obj[keys[i]], depth: current.depth + 1 });
+      const val = currentObj[keys[i]];
+      if (val && typeof val === 'object') {
+        queue.push(val, currentDepth + 1);
       }
     }
   }
@@ -698,7 +726,8 @@ function findObjects(haystack, needlesArray, maxDepth = 10) {
 
 export function initAdblock() {
   if (isHooked) return;
-  console.info('[AdBlock] Initializing hybrid hook (Debug Mode: ' + DEBUG + ')');
+  if (DEBUG) console.info('[AdBlock] Initializing hybrid hook (Debug Mode: ' + DEBUG + ')');
+  if (cachedWebOSVersion === null) cachedWebOSVersion = getWebOSVersion();
   
   origParse = JSON.parse;
   JSON.parse = function (text, reviver) { return hookedParse.call(this, text, reviver); };
@@ -707,7 +736,7 @@ export function initAdblock() {
 
 export function destroyAdblock() {
   if (!isHooked) return;
-  console.info('[AdBlock] Restoring JSON.parse');
+  if (DEBUG) console.info('[AdBlock] Restoring JSON.parse');
   
   JSON.parse = origParse;
   isHooked = false;

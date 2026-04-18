@@ -1,5 +1,5 @@
 import sha256 from 'tiny-sha256';
-import { configRead, configAddChangeListener, configRemoveChangeListener, segmentTypes } from './config';
+import { configAddChangeListener, configRemoveChangeListener, segmentTypes, configGetAll } from './config';
 import { showNotification } from './ui';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { isLegacyWebOS } from './webos-utils.js';
@@ -28,7 +28,6 @@ const EXTRA_CONFIG_KEYS = ['enableMutedSegments', 'sbMode_highlight', 'skipSegme
 const CHAIN_SKIP_CONSTANTS = {
     START_THRESHOLD: 0.5,
     OVERLAP_TOLERANCE: 0.2,
-    UNMUTE_DELAY: 600,
     MIN_PLAYBACK_TIME: 0.1
 };
 
@@ -61,10 +60,9 @@ class SponsorBlockHandler {
         this.activeCategories = new Set();
         this.isProcessing = false;
         this.isSkipping = false;
-        this.wasMutedBySB = false;
         this.isDestroyed = false;
         this.skippedSegmentIndices = new Set();
-        this.tempWhitelistIndex = -1;
+        this.tempWhitelistIndex = -1; // Whitelist segment when using shortcut
 
         // Manual skip tracking
         this.activeManualNotification = null;
@@ -77,7 +75,6 @@ class SponsorBlockHandler {
         this.rafIds = new Set();
 
         this.abortController = null;
-        this.unmuteTimeoutId = null;
 
         // High Frequency Polling
         this.pollingRafId = null;
@@ -87,10 +84,8 @@ class SponsorBlockHandler {
         this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
         this.longDistanceTimer = null;
 
-        this.configCache = {};
         this.lastOverlayHash = null;
 
-        this.updateConfigCache();
         this.setupConfigListeners();
 
         this.log('info', `Created handler for ${this.videoID}`);
@@ -118,20 +113,31 @@ class SponsorBlockHandler {
         return null;
     }
 
+    // Returns where/how to inject the overlay.
+    // For ytlr-multi-markers-player-bar-renderer children, injection inside works fine.
+    // For the standard ytlr-progress-bar slider, YouTube's framework nukes foreign child
+    // nodes instantly — so we inject as a sibling of ytlr-progress-bar instead, positioned
+    // absolutely to cover the same visual area.
     _getProgressBarAnchor() {
         if (!this.progressBar) return { container: null, asSibling: false };
 
+        // Multi-markers bar: direct child injection is fine, keep existing behaviour.
         if (this._getClosest(this.progressBar, 'ytlr-multi-markers-player-bar-renderer')) {
             return { container: this.progressBar, asSibling: false };
         }
 
+        // Standard progress bar: walk up to ytlr-progress-bar and inject after it.
         const ytPB = this._getClosest(this.progressBar, 'ytlr-progress-bar') || this.progressBar;
         const parent = ytPB.parentNode;
         if (!parent) return { container: this.progressBar, asSibling: false };
 
+        // The parent becomes our positioning context.
         const ps = window.getComputedStyle(parent);
         if (ps.position === 'static') parent.style.setProperty('position', 'relative', 'important');
         
+        // CRITICAL FIX: Custom elements on WebOS 3 default to display: inline.
+        // Inline elements with position: relative DO NOT act as absolute containing blocks,
+        // causing the overlay to detach and anchor to the screen edges instead.
         if (ps.display === 'inline' || ps.display === '') {
             parent.style.setProperty('display', 'block', 'important');
         }
@@ -139,12 +145,14 @@ class SponsorBlockHandler {
         return { container: ytPB, asSibling: true };
     }
 
+    // Copies ytlr-progress-bar's offset rect onto the sibling overlay so they
+    // occupy exactly the same visual space.
+    // Positions the sibling overlay to exactly cover the inner progress track element
     _offsetRelativeTo(el, ancestor) {
         if (!el || !ancestor) return { top: 0, left: 0 };
-
+        // getBoundingClientRect gives the exact pixel coordinates relative to the viewport
         const rectEl = el.getBoundingClientRect();
         const rectAncestor = ancestor.getBoundingClientRect();
-        
         return {
             top: rectEl.top - rectAncestor.top,
             left: rectEl.left - rectAncestor.left
@@ -156,10 +164,16 @@ class SponsorBlockHandler {
         const parent = ytPB.parentNode;
         if (!parent) return;
 
-        const trackEl = (this.progressBar && this.progressBar !== ytPB) ? this.progressBar : ytPB;
+        // Use the inner slider element for precise height/position.
+        // Fall back to ytPB itself only if progressBar is the same node or unset.
+        const trackEl = (this.progressBar && this.progressBar !== ytPB)
+            ? this.progressBar
+            : ytPB;
+
         const ov = this.overlay;
         function set(prop, val) { ov.style.setProperty(prop, val, 'important'); }
 
+        // Sync visibility to mirror YouTube's UI state
         const isHidden = ytPB.classList.contains('zylon-hidden') || window.getComputedStyle(ytPB).opacity === '0';
         set('opacity', isHidden ? '0' : '1');
 
@@ -189,23 +203,6 @@ class SponsorBlockHandler {
         console[level === 'warn' ? 'warn' : 'log'](this.logPrefix, message, ...args);
     }
 
-    updateConfigCache() {
-        this.activeCategories.clear();
-        this.configCache = {};
-
-        for (const [cat, configKey] of Object.entries(CONFIG_MAPPING)) {
-            const mode = configRead(configKey);
-            this.configCache[cat] = mode;
-            if (mode !== 'disable') this.activeCategories.add(cat);
-        }
-
-        EXTRA_CONFIG_KEYS.forEach(key => {
-            this.configCache[key] = configRead(key);
-        });
-
-        this.rebuildSkipSegments();
-    }
-
     rebuildSkipSegments() {
         this.stopHighFreqLoop();
 
@@ -216,6 +213,7 @@ class SponsorBlockHandler {
         }
 
         this.skipSegments = [];
+        const config = configGetAll();
 
         const len = this.segments.length;
         for (let i = 0; i < len; i++) {
@@ -223,7 +221,7 @@ class SponsorBlockHandler {
 
             if (seg.category === 'poi_highlight') continue;
 
-            const mode = this.configCache[seg.category];
+            const mode = config[CONFIG_MAPPING[seg.category]];
             if (!mode || mode === 'disable' || mode === 'seek_bar') continue;
             if (seg.actionType && seg.actionType !== 'skip') continue;
 
@@ -243,6 +241,7 @@ class SponsorBlockHandler {
 
         if (enable) {
             if (this.video.paused) return;
+
             if (!this.isTimeListenerActive) {
                 this.video.addEventListener('timeupdate', this.boundTimeUpdate);
                 this.isTimeListenerActive = true;
@@ -265,17 +264,22 @@ class SponsorBlockHandler {
     resetSegmentTracking() {
         this.clearLongDistanceTimer();
         
+        // Default state
         this.nextSegmentIndex = 0;
         this.nextSegmentStart = this.skipSegments.length > 0 ? this.skipSegments[0].start : Infinity;
 
+        // Find the first segment that starts AFTER the current time, or contains current time.
         if (this.video && !isNaN(this.video.currentTime) && this.skipSegments.length > 0) {
             const time = this.video.currentTime;
+            
+            // Check if we are currently inside a segment
             const currentIdx = this.findSegmentAtTime(time);
             
             if (currentIdx !== -1) {
                 this.nextSegmentIndex = currentIdx;
                 this.nextSegmentStart = this.skipSegments[currentIdx].start;
             } else {
+                // Not in a segment, find the next one
                 this.nextSegmentIndex = this.findNextSegmentIndex(time);
                 if (this.nextSegmentIndex < this.skipSegments.length) {
                     this.nextSegmentStart = this.skipSegments[this.nextSegmentIndex].start;
@@ -297,8 +301,10 @@ class SponsorBlockHandler {
         this.currentManualSegment = null;
     }
 
+    // O(log N) - Finds segment containing time
     findSegmentAtTime(time) {
         if (this.skipSegments.length === 0) return -1;
+
         let left = 0;
         let right = this.skipSegments.length - 1;
 
@@ -317,6 +323,7 @@ class SponsorBlockHandler {
         return -1;
     }
 
+    // O(log N) - Finds first segment starting after or at time
     findNextSegmentIndex(time) {
         let left = 0;
         let right = this.skipSegments.length - 1;
@@ -335,13 +342,25 @@ class SponsorBlockHandler {
     }
 
     setupConfigListeners() {
-        this.boundConfigUpdate = this.updateConfigCache.bind(this);
+        this.boundConfigUpdate = () => {
+            this.activeCategories.clear();
+            const config = configGetAll();
+            for (const [cat, configKey] of Object.entries(CONFIG_MAPPING)) {
+                if (config[configKey] !== 'disable') this.activeCategories.add(cat);
+            }
+            this.rebuildSkipSegments();
+            this.drawOverlay();
+        };
+        
         const configKeys = [...Object.values(CONFIG_MAPPING), ...EXTRA_CONFIG_KEYS];
 
         for (const key of configKeys) {
             configAddChangeListener(key, this.boundConfigUpdate);
             this.configListeners.push({ key, callback: this.boundConfigUpdate });
         }
+        
+        // Initial setup run
+        this.boundConfigUpdate();
     }
 
     buildSkipChain(segments) {
@@ -377,6 +396,7 @@ class SponsorBlockHandler {
         if (!video || this.hasPerformedChainSkip || this.isDestroyed) return false;
 
         if (video.readyState === 0) {
+            // Clean up existing listener if exists to prevent dupe
             if (this.boundChainSkipRetry) {
                 this.chainSkipVideo.removeEventListener('loadedmetadata', this.boundChainSkipRetry);
             }
@@ -393,8 +413,9 @@ class SponsorBlockHandler {
 
         if (video.currentTime > CHAIN_SKIP_CONSTANTS.START_THRESHOLD) return false;
 
+        const config = configGetAll();
         const enabledSegs = this.segments.filter(s =>
-            s.category !== 'poi_highlight' && this.configCache[s.category] === 'auto_skip'
+            s.category !== 'poi_highlight' && config[CONFIG_MAPPING[s.category]] === 'auto_skip'
         );
 
         if (enabledSegs.length === 0) return false;
@@ -405,55 +426,7 @@ class SponsorBlockHandler {
 
         this.log('info', `Executing chain skip: ${chain.chainDescription}`);
 
-        const originalMuteState = video.muted;
-        window.__sb_pending_unmute = true;
-        this.wasMutedBySB = true;
-        video.muted = true;
-
-        this.chainSkipVideo = video;
-        this.boundChainSkipSeeked = () => {
-            video.removeEventListener('seeked', this.boundChainSkipSeeked);
-            this.boundChainSkipSeeked = null;
-            this.chainSkipVideo = null;
-
-            if (this.isDestroyed) return;
-
-            const checkReady = () => {
-                if (this.isDestroyed) return;
-                if (video.readyState >= 3) {
-                    video.muted = originalMuteState;
-                    window.__sb_pending_unmute = false;
-                    this.wasMutedBySB = false;
-                    if (this.unmuteTimeoutId) {
-                        clearTimeout(this.unmuteTimeoutId);
-                        this.unmuteTimeoutId = null;
-                    }
-                } else {
-                    this.unmuteTimeoutId = setTimeout(checkReady, 50);
-                }
-            };
-            checkReady();
-        };
-
-        video.addEventListener('seeked', this.boundChainSkipSeeked);
-
-        this.unmuteTimeoutId = setTimeout(() => {
-            if (this.isDestroyed) return;
-
-            if (this.boundChainSkipSeeked) {
-                video.removeEventListener('seeked', this.boundChainSkipSeeked);
-                this.boundChainSkipSeeked = null;
-                this.chainSkipVideo = null;
-            }
-
-            if (video.readyState >= 2) {
-                video.muted = originalMuteState;
-                window.__sb_pending_unmute = false;
-                this.wasMutedBySB = false;
-            }
-            this.unmuteTimeoutId = null;
-        }, CHAIN_SKIP_CONSTANTS.UNMUTE_DELAY);
-
+        // Perform the skip immediately without muting
         video.currentTime = chain.endTime;
         this.lastSkipTime = chain.endTime;
         this.hasPerformedChainSkip = true;
@@ -482,12 +455,6 @@ class SponsorBlockHandler {
     }
 
     async init() {
-        if (window.__sb_pending_unmute) {
-            const v = document.querySelector('video');
-            if (v) v.muted = false;
-            window.__sb_pending_unmute = false;
-        }
-
         if (!this.videoID || this.isDestroyed) return;
 
         this.start();
@@ -510,9 +477,11 @@ class SponsorBlockHandler {
                 return;
             }
 
+            // sort in place is fine
             this.segments = videoData.segments.sort((a, b) => a.segment[0] - b.segment[0]);
             this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
 
+            // Use 'this.video' if start() already found it, or re-query
             const video = this.video || document.querySelector('video');
             if (video && video.duration && !isNaN(video.duration)) {
                 this.processSegments(video.duration);
@@ -524,11 +493,16 @@ class SponsorBlockHandler {
                 this.executeChainSkip(video);
             }
 
+            // UI was already started, so now we just update the data
             sponsorBlockUI.updateSegments(this.segments);
+            
+            // Explicitly draw overlay now that data is ready
+            // (checkForProgressBar might have run when segments were empty)
             this.drawOverlay();
 
             if (this.highlightSegment) {
-                const hlMode = this.configCache.sbMode_highlight;
+                const config = configGetAll();
+                const hlMode = config.sbMode_highlight;
                 if (hlMode === 'auto_skip') {
                     this.jumpToNextHighlight();
                 } else if (hlMode === 'ask') {
@@ -548,29 +522,33 @@ class SponsorBlockHandler {
         if (!this.video) return;
 
         this.injectCSS();
+        // Initial tracking setup
         this.resetSegmentTracking();
 
-        this.addEvent(this.video, 'ended', () => {
-            this.hasPerformedChainSkip = false;
-            this.clearLongDistanceTimer();
-            this.toggleTimeListener(false);
-        });
-
-        this.addEvent(this.video, 'play', () => {
-            this.checkForProgressBar();
-            this.resetSegmentTracking();
-            this.hasPerformedChainSkip = false;
-            this.executeChainSkip(this.video);
-        });
-
-        this.addEvent(this.video, 'pause', () => {
-            this.stopHighFreqLoop();
-            this.toggleTimeListener(false);
-        });
+        this.boundStateChange = (e) => {
+            const state = e.detail.state;
+            
+            if (state === 0) { // ENDED
+                this.hasPerformedChainSkip = false;
+                this.clearLongDistanceTimer();
+                this.toggleTimeListener(false);
+            } else if (state === 1) { // PLAYING
+                // Check for progress bar existence on play in case UI was destroyed (e.g. after side-panel interaction)
+                this.checkForProgressBar();
+                // Re-evaluate tracking (re-enables time listener if needed)
+                this.resetSegmentTracking();
+                this.hasPerformedChainSkip = false;
+                this.executeChainSkip(this.video);
+            } else if (state === 2) { // PAUSED
+                this.stopHighFreqLoop();
+                this.toggleTimeListener(false);
+            }
+        };
+        
+        window.addEventListener('yt-player-state-change', this.boundStateChange);
 
         this.addEvent(this.video, 'seeked', () => {
             if (this.isDestroyed) return;
-
             this.stopHighFreqLoop();
             this.hasPerformedChainSkip = false;
             this.executeChainSkip(this.video);
@@ -580,12 +558,9 @@ class SponsorBlockHandler {
                 this.lastSkippedSegmentIndex = -1;
                 this.lastNotifiedSegmentIndex = -1;
                 this.resetSegmentTracking();
-                
-                if (!this.video.paused) {
-                    this.handleTimeUpdate(); 
-                }
+                // Only handle time update immediately if not paused
+                if (!this.video.paused) this.handleTimeUpdate(); 
             }
-
             this.isSkipping = false;
         });
 
@@ -596,9 +571,7 @@ class SponsorBlockHandler {
             }
         });
 
-        if (this.video.duration) {
-            this.processSegments(this.video.duration);
-        }
+        if (this.video.duration) this.processSegments(this.video.duration);
 
         this.observePlayerUI();
         this.checkForProgressBar();
@@ -613,6 +586,7 @@ class SponsorBlockHandler {
         const OPTIMAL_SELECTOR = 'ytlr-progress-bar';
 
         const startOptimizedObserver = (targetNode) => {
+            // Observe parent to catch if the bar itself is destroyed/recreated by the framework
             const observeTarget = targetNode.parentNode || targetNode;
             this.log('info', 'Attaching optimized observer to:', observeTarget.tagName);
             
@@ -624,6 +598,7 @@ class SponsorBlockHandler {
                     if (m.type === 'attributes') {
                         if (m.target === this.progressBar) shouldCheck = true;
                     } else if (m.type === 'childList') {
+                        // If observing parent, childList changes mean the bar might be replaced
                         shouldCheck = true;
                     }
                     if (shouldCheck) break;
@@ -672,8 +647,9 @@ class SponsorBlockHandler {
     checkForProgressBar() {
         if (this.isDestroyed) return;
 
-        // Use safe polyfill connection check for legacy browsers
+        // Don't re-query if we have a valid progress bar in DOM
         if (this.overlay && this.overlay.parentNode && this._isNodeConnected(this.overlay.parentNode)) {
+            // Ensure the sibling overlay syncs visibility when attributes mutate
             const { container, asSibling } = this._getProgressBarAnchor();
             if (asSibling && container) {
                 this._syncOverlayPosition(container);
@@ -683,10 +659,12 @@ class SponsorBlockHandler {
 
         let target = null;
 
+        // Try the cached selector first
         if (this.activeBarSelector) {
             target = document.querySelector(this.activeBarSelector);
         }
 
+        // Iterate list only if cache missed
         if (!target) {
             const selectors = [
                 'ytlr-multi-markers-player-bar-renderer [idomkey="segment"]',
@@ -709,6 +687,10 @@ class SponsorBlockHandler {
         if (target) {
             this.progressBar = target;
             const style = window.getComputedStyle(target);
+            // For multi-markers bars these tweaks ensure segments are visible inside.
+            // For ytlr-progress-bar sliders the overlay is injected as a sibling
+            // (see _getProgressBarAnchor), so the position tweak here is a no-op for
+            // that case — but keep overflow:visible so storyboard/playhead are unclipped.
             if (style.position === 'static') target.style.position = 'relative';
             if (style.overflow !== 'visible') target.style.setProperty('overflow', 'visible', 'important');
             this.drawOverlay();
@@ -721,8 +703,8 @@ class SponsorBlockHandler {
         const duration = this.video ? this.video.duration : 0;
         if (!duration || isNaN(duration)) return;
 
-        const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${this.configCache.sbMode_highlight}`;
-        
+        const config = configGetAll();
+        const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${config.sbMode_highlight}`;
         if (overlayHash === this.lastOverlayHash && this.overlay && this._isNodeConnected(this.overlay)) {
             return;
         }
@@ -731,7 +713,7 @@ class SponsorBlockHandler {
         if (this.overlay) this.overlay.remove();
 
         const fragment = document.createDocumentFragment();
-        const highlightMode = this.configCache.sbMode_highlight;
+        const highlightMode = config.sbMode_highlight;
 
         const len = this.segments.length;
         for (let i = 0; i < len; i++) {
@@ -741,7 +723,7 @@ class SponsorBlockHandler {
             if (isHighlight) {
                 if (!highlightMode || highlightMode === 'disable') continue;
             } else {
-                const mode = this.configCache[segment.category];
+                const mode = config[CONFIG_MAPPING[segment.category]];
                 if (!mode || mode === 'disable') continue;
             }
 
@@ -749,7 +731,7 @@ class SponsorBlockHandler {
             const div = document.createElement('div');
 
             const colorKey = isHighlight ? 'poi_highlightColor' : `${segment.category}Color`;
-            const color = configRead(colorKey) || segmentTypes[segment.category]?.color || '#00d400';
+            const color = config[colorKey] || segmentTypes[segment.category]?.color || '#00d400';
 
             div.style.backgroundColor = color;
             div.style.position = 'absolute';
@@ -776,6 +758,8 @@ class SponsorBlockHandler {
 
         const { container, asSibling } = this._getProgressBarAnchor();
         if (asSibling) {
+            // insertAdjacentElement('afterend') requires Chrome 41+, not available on
+            // WebOS 3 (Chrome 38). Use insertBefore with nextSibling instead.
             const nextSib = container.nextSibling;
             if (nextSib) {
                 container.parentNode.insertBefore(this.overlay, nextSib);
@@ -827,6 +811,7 @@ class SponsorBlockHandler {
             return;
         }
 
+        // Only process time update if we are close to the target
         if (this.video.currentTime >= this.nextSegmentStart) {
             this.handleTimeUpdate();
             this.stopHighFreqLoop();
@@ -850,7 +835,6 @@ class SponsorBlockHandler {
             this.toggleTimeListener(false);
             return;
         }
-        
         if (this.isDestroyed || !this.video || this.video.seeking || this.video.readyState === 0) return;
 
         const currentTime = this.video.currentTime;
@@ -861,6 +845,7 @@ class SponsorBlockHandler {
             }
         }
 
+        // Trust nextSegmentStart to avoid unnecessary searches
         const timeToNext = this.nextSegmentStart - currentTime;
 
         if (timeToNext > 3.0 && !this.currentManualSegment) {
@@ -879,19 +864,26 @@ class SponsorBlockHandler {
             if (timeToNext < 1.0 && !this.pollingRafId) {
                 this.startHighFreqLoop();
             }
+            // Early exit if we are not yet at the segment start
             return;
         }
 
+        // Check the predicted segment index first (O(1)) before Binary Search (O(log N))
         let segmentIdx = -1;
         const expectedSeg = this.skipSegments[this.nextSegmentIndex];
 
         if (expectedSeg && currentTime >= expectedSeg.start && currentTime < expectedSeg.end) {
             segmentIdx = this.nextSegmentIndex;
         } else {
+            // Fallback to Binary Search
             segmentIdx = this.findSegmentAtTime(currentTime);
         }
 
         if (segmentIdx === -1) {
+            // We aren't in a segment. Since resetSegmentTracking was correct, 
+            // and we checked timeToNext, we are just between segments or past the last one.
+            
+            // Re-sync next segment just in case (e.g. slight drift)
             if (currentTime >= this.nextSegmentStart) {
                  this.nextSegmentIndex = this.findNextSegmentIndex(currentTime);
                  if (this.nextSegmentIndex < this.skipSegments.length) {
@@ -905,6 +897,7 @@ class SponsorBlockHandler {
             return;
         }
 
+        // We are inside a segment
         const seg = this.skipSegments[segmentIdx];
         
         if (this.tempWhitelistIndex !== -1 && seg.originalIndex !== this.tempWhitelistIndex) {
@@ -936,7 +929,8 @@ class SponsorBlockHandler {
             return;
         }
 
-        if (this.configCache.skipSegmentsOnce && this.skippedSegmentIndices.has(seg.originalIndex)) {
+        const config = configGetAll();
+        if (config.skipSegmentsOnce && this.skippedSegmentIndices.has(seg.originalIndex)) {
             return;
         }
 
@@ -975,14 +969,6 @@ class SponsorBlockHandler {
             const duration = this.video.duration;
             if (jumpTarget >= duration - 0.5) {
                 jumpTarget = Math.max(0, duration - 0.25);
-                if (!this.video.muted) {
-                    this.video.muted = true;
-                    setTimeout(() => {
-                        if (this.video && !this.isDestroyed && (this.video.paused || this.video.currentTime < 5)) {
-                            this.video.muted = false;
-                        }
-                    }, 1000);
-                }
             }
         }
 
@@ -996,6 +982,7 @@ class SponsorBlockHandler {
         }
 
         this.nextSegmentIndex = segmentIdx + 1;
+        // Re-find next index properly via binary search just to be safe after a skip
         const nextIdx = this.findNextSegmentIndex(jumpTarget);
         this.nextSegmentIndex = nextIdx;
         
@@ -1023,7 +1010,8 @@ class SponsorBlockHandler {
     jumpToNextHighlight() {
         if (!this.video || !this.highlightSegment) return false;
 
-        const mode = this.configCache.sbMode_highlight;
+        const config = configGetAll();
+        const mode = config.sbMode_highlight;
         if (!mode || mode === 'disable') return false;
 
         this.video.currentTime = this.highlightSegment.segment[0];
@@ -1032,28 +1020,28 @@ class SponsorBlockHandler {
     }
     
     skipToPreviousSegment() {
-        if (!this.video || !this.skipSegments.length) return false;
+    if (!this.video || !this.skipSegments.length) return false;
 
-        const currentTime = this.video.currentTime;
-        let targetSeg = null;
+    const currentTime = this.video.currentTime;
+    let targetSeg = null;
 
-        for (let i = this.skipSegments.length - 1; i >= 0; i--) {
-            if (this.skipSegments[i].start < currentTime - 2) {
-                targetSeg = this.skipSegments[i];
-                break;
-            }
+    for (let i = this.skipSegments.length - 1; i >= 0; i--) {
+        if (this.skipSegments[i].start < currentTime - 2) {
+            targetSeg = this.skipSegments[i];
+            break;
         }
+    }
 
-        if (!targetSeg) return false;
-        
-        this.tempWhitelistIndex = targetSeg.originalIndex;
-        this.video.currentTime = targetSeg.start;
-        
-        const categoryName = this.getCategoryName(targetSeg.category);
-        const title = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
-        
-        this.requestAF(() => showNotification(`Seeked to ${title}`));
-        return true;
+    if (!targetSeg) return false;
+    
+    this.tempWhitelistIndex = targetSeg.originalIndex;
+    this.video.currentTime = targetSeg.start;
+    
+    const categoryName = this.getCategoryName(targetSeg.category);
+    const title = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
+    
+    this.requestAF(() => showNotification(`Seeked to ${title}`));
+    return true;
     }
 
     handleBlueButton() {
@@ -1154,31 +1142,24 @@ class SponsorBlockHandler {
 
         this.toggleTimeListener(false);
         this.clearLongDistanceTimer();
+        
+        if (this.boundStateChange) {
+            window.removeEventListener('yt-player-state-change', this.boundStateChange);
+            this.boundStateChange = null;
+        }
 
         this.rafIds.forEach(id => cancelAnimationFrame(id));
         this.rafIds.clear();
         this.stopHighFreqLoop();
 
-        if (this.unmuteTimeoutId) {
-            clearTimeout(this.unmuteTimeoutId);
-            this.unmuteTimeoutId = null;
-        }
-
         if (this.chainSkipVideo) {
             if (this.boundChainSkipRetry) {
                 this.chainSkipVideo.removeEventListener('loadedmetadata', this.boundChainSkipRetry);
             }
-            if (this.boundChainSkipSeeked) {
-                this.chainSkipVideo.removeEventListener('seeked', this.boundChainSkipSeeked);
-            }
         }
         this.boundChainSkipRetry = null;
-        this.boundChainSkipSeeked = null;
         this.chainSkipVideo = null;
 
-        if (this.wasMutedBySB && this.video) {
-            this.video.muted = false;
-        }
         window.__sb_pending_unmute = false;
 
         if (this.abortController) {
@@ -1221,8 +1202,6 @@ class SponsorBlockHandler {
             this.skippedSegmentIndices.clear();
             this.skippedSegmentIndices = null;
         }
-
-        this.configCache = {};
     }
 }
 
@@ -1259,7 +1238,8 @@ if (typeof window !== 'undefined') {
                 }
             } catch (e) { /* ignore */ }
 
-            if (videoID && configRead('enableSponsorBlock')) {
+            const config = configGetAll();
+            if (videoID && config.enableSponsorBlock) {
                 window.sponsorblock = new SponsorBlockHandler(videoID);
                 window.sponsorblock.init();
             }
