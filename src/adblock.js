@@ -28,6 +28,7 @@ const TELEMETRY_REGEX = /\/youtubei\/v1\/log_event|\/ptracking|\/api\/stats\/atr
 const UI_STRINGS = {
   SHORTS_TITLE: 'Shorts',
   TOP_LIVE_GAMES_TITLE: 'Top live games',
+  MOST_RELEVANT_TITLE: 'Most relevant',
   GUEST_PROMPT_TEXT: 'Sign in for better recommendations'
 };
 
@@ -43,6 +44,7 @@ const CONFIG_KEYS = {
   TRACKING: 'enableTrackingBlock',
   SHORTS: 'removeGlobalShorts',
   LIVE_GAMES: 'removeTopLiveGames',
+  MOST_RELEVANT: 'removeMostRelevant',
   GUEST_PROMPTS: 'hideGuestSignInPrompts',
   EMOJI_FIX: 'enableLegacyEmojiFix',
   ENDCARDS: 'hideEndcards'
@@ -319,12 +321,13 @@ function hookedParse(text, reviver) {
 	enableTrackingBlock: globalCfg[CONFIG_KEYS.TRACKING],
     removeGlobalShorts: globalCfg[CONFIG_KEYS.SHORTS],
     removeTopLiveGames: globalCfg[CONFIG_KEYS.LIVE_GAMES],
+	removeMostRelevant: globalCfg[CONFIG_KEYS.MOST_RELEVANT],
     hideGuestPrompts: globalCfg[CONFIG_KEYS.GUEST_PROMPTS],
     enableLegacyEmojiFix: globalCfg[CONFIG_KEYS.EMOJI_FIX] && cachedWebOSVersion <= 4,
 	hideEndcards: globalCfg[CONFIG_KEYS.ENDCARDS]
   };
 
-  if (!config.enableAdBlock && !config.enableTrackingBlock && !config.removeGlobalShorts && !config.removeTopLiveGames && !config.hideGuestPrompts && !config.enableLegacyEmojiFix && !config.hideEndcards) return data;
+  if (!config.enableAdBlock && !config.enableTrackingBlock && !config.removeGlobalShorts && !config.removeTopLiveGames && !config.removeMostRelevant && !config.hideGuestPrompts && !config.enableLegacyEmojiFix && !config.hideEndcards) return data;
   if (!data || typeof data !== 'object') return data;
   
   const isAPIResponse = !!(data.responseContext || data.playerResponse || data.onResponseReceivedActions || data.onResponseReceivedEndpoints || data.frameworkUpdates || data.sectionListRenderer || data.entries || data.continuationContents);
@@ -567,7 +570,7 @@ function hasGuestPromptRenderer(item, hideGuestPrompts) {
 
 function processSectionListOptimized(contents, config, needsContentFiltering, contextName = '') {
   if (!Array.isArray(contents) || contents.length === 0) return;
-  const { enableAdBlock, removeGlobalShorts, removeTopLiveGames, hideGuestPrompts, enableLegacyEmojiFix } = config;
+  const { enableAdBlock, removeGlobalShorts, removeTopLiveGames, removeMostRelevant, hideGuestPrompts, enableLegacyEmojiFix } = config;
   const initialCount = contents.length;
   let writeIdx = 0;
 
@@ -578,10 +581,11 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
     if (item.shelfRenderer) {
       const shelf = item.shelfRenderer;
       if (removeGlobalShorts && shelf.tvhtml5ShelfRendererType === YT_CONSTANTS.SHELF_TYPE_SHORTS) keepItem = false;
-      else if (removeGlobalShorts || removeTopLiveGames) {
+      else if (removeGlobalShorts || removeTopLiveGames || removeMostRelevant) {
         const title = getShelfTitleOptimized(shelf);
         if (removeGlobalShorts && title === UI_STRINGS.SHORTS_TITLE) keepItem = false;
         else if (removeTopLiveGames && title === UI_STRINGS.TOP_LIVE_GAMES_TITLE) keepItem = false;
+        else if (removeMostRelevant && title === UI_STRINGS.MOST_RELEVANT_TITLE) keepItem = false;
       }
       if (keepItem && shelf.content) {
         if (shelf.content.horizontalListRenderer?.items) filterItemsOptimized(shelf.content.horizontalListRenderer.items, config, needsContentFiltering);

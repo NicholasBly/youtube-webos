@@ -458,11 +458,12 @@ function createOptionsPanel() {
   const elAdBlock = createConfigCheckbox('enableAdBlock');
   const elTrackingBlock = createConfigCheckbox('enableTrackingBlock');
   const cosmeticGroup = [elAdBlock, elTrackingBlock];
-  let elRemoveGlobalShorts = null, elRemoveTopLiveGames = null, elGuestPrompts = null;
+  let elRemoveGlobalShorts = null, elRemoveTopLiveGames = null, elRemoveMostRelevant = null, elGuestPrompts = null;
   
   elRemoveGlobalShorts = createConfigCheckbox('removeGlobalShorts');
   elRemoveTopLiveGames = createConfigCheckbox('removeTopLiveGames');
-  cosmeticGroup.push(elRemoveGlobalShorts, elRemoveTopLiveGames);
+  elRemoveMostRelevant = createConfigCheckbox('removeMostRelevant');
+  cosmeticGroup.push(elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant);
   if (isGuestMode()) { elGuestPrompts = createConfigCheckbox('hideGuestSignInPrompts'); cosmeticGroup.push(elGuestPrompts); }
 
   pageMain.appendChild(createSection('Cosmetic Filtering', cosmeticGroup));
@@ -471,8 +472,8 @@ function createOptionsPanel() {
   const setState = (el, enabled) => { if (!el) return; const input = el.querySelector('input'); if (input) { input.disabled = !enabled; el.style.opacity = enabled ? '1' : '0.5'; }};
   const updateDependencyState = () => {
     const isAdBlockOn = configRead('enableAdBlock');
-    if (!isAdBlockOn) { [elRemoveGlobalShorts, elRemoveTopLiveGames, elGuestPrompts].forEach(el => { setState(el, false); }); return; }
-	[elRemoveGlobalShorts, elRemoveTopLiveGames, elGuestPrompts].forEach(el => { setState(el, true); });
+    if (!isAdBlockOn) { [elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant, elGuestPrompts].forEach(el => { setState(el, false); }); return; }
+	[elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant, elGuestPrompts].forEach(el => { setState(el, true); });
   };
   
   elAdBlock.querySelector('input').addEventListener('change', updateDependencyState);

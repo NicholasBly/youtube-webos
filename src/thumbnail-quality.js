@@ -252,9 +252,8 @@ async function processUpgrade(element, generationId) {
         ds.thumbVideoId = videoId;
         ds.thumbBestQuality = quality;
 
-        // Register explicit URL applied to avoid mutation loop and 150ms setTimeout
         freshState.lastAppliedUrl = targetUrl.href; 
-        element.style.backgroundImage = `url("${targetUrl.href}")`;
+        element.style.backgroundImage = `url("${targetUrl.href}"), ${oldBackgroundStyle}`;
       }
     });
   };
