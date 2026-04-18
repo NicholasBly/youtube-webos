@@ -57,7 +57,6 @@ const IGNORE_ON_SHORTS = new Set(['SEARCH', 'PLAYER', 'ACTION']);
 
 const SCHEMA_REGISTRY = {
   typeSignatures: [
-    // Prioritize highly specific structural layouts first to prevent generic wrappers from hijacking the detection
     { type: 'SHORTS_SEQUENCE', detectionPath: ['entries'], matchFn: (data) => Array.isArray(data.entries) },
     { type: 'PLAYER', detectionPath: ['streamingData'] },
     { type: 'NEXT', detectionPath: ['contents', 'singleColumnWatchNextResults'] },
