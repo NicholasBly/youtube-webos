@@ -1,5 +1,6 @@
 import 'whatwg-fetch';
 import './domrect-polyfill';
+import './adblock.js';
 
 if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
     Object.defineProperty(Node.prototype, 'isConnected', {
@@ -16,7 +17,6 @@ import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';
 import { isWebOS25, simulatorMode } from './webos-utils.js';
 import { initBlockWebOSCast } from './block-webos-cast';
 import './app_api/index';
-import './adblock.js';
 import './sponsorblock.js';
 import './emoji-font.js';
 import './thumbnail-quality.js';

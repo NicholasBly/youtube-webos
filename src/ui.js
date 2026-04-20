@@ -515,7 +515,8 @@ function createOptionsPanel() {
       createElement('div', { text: 'Adjusts opacity of black background underneath videos (Requires OLED-care mode)', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
 	  createPreviewControl('forcePreviews'),
 	  createElement('div', { text: 'Forces the video thumbnail preview on/off on app load', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
-	  createConfigCheckbox('fixMultilineTitles')
+	  createConfigCheckbox('fixMultilineTitles'),
+	  createConfigCheckbox('removeBlackBorders')
   ];
 
   if (getWebOSVersion() <= 4) {
@@ -1263,6 +1264,7 @@ function initGlobalStyles() {
     const updateStyles = () => {
         const hideLogo = configRead('hideLogo');
         const fixTitles = configRead('fixMultilineTitles');
+        const removeBorders = configRead('removeBlackBorders');
         
         style.textContent = `
             /* Hide Logo */
@@ -1274,12 +1276,41 @@ function initGlobalStyles() {
 			
 			/* Fix Multiline Titles */
             ${fixTitles ? '.app-quality-root .SK1srf .WVWtef, .app-quality-root .SK1srf .niS3yd { padding-bottom: 0.37vh !important; padding-top: 0.37vh !important; }' : ''}
+            
+            /* Remove Black Borders */
+            ${removeBorders ? `
+            yt-formatted-string, 
+            .style-scope.ytd-rich-grid-media, 
+            #video-title,
+            #metadata-line,
+            .ytd-video-meta-block {
+                background-color: transparent !important;
+                background: none !important;
+                box-shadow: none !important;
+            }
+            #details.ytd-rich-grid-media {
+                background-color: transparent !important;
+                margin-top: 4px !important;
+            }
+            ytd-thumbnail {
+                background-color: transparent !important;
+            }
+            .ytd-searchbox, .ytp-videowall-still-info-bg {
+                background-color: transparent !important;
+            }
+            /* WebOS App Specific Background Overrides */
+            .app-quality-root .boSXqb .QFqCxd:before,
+            .app-quality-root .V7jTHe, 
+            .app-quality-root .g6XRz {
+                background-color: transparent !important;
+            }` : ''}
         `;
     };
 
     updateStyles();
     configAddChangeListener('hideLogo', updateStyles);
 	configAddChangeListener('fixMultilineTitles', updateStyles);
+    configAddChangeListener('removeBlackBorders', updateStyles);
 }
 
 function updateLogoState() {
