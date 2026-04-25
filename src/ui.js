@@ -1303,6 +1303,12 @@ function initGlobalStyles() {
             .app-quality-root .V7jTHe, 
             .app-quality-root .g6XRz {
                 background-color: transparent !important;
+            }
+            /* Liquid Glass Player UI Overrides */
+            .MIiKQd.CgA6bd, .clJQEe, .dySudf {
+                background-color: rgba(45, 45, 45, 0.45) !important;
+                background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%) !important;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
             }` : ''}
         `;
     };
