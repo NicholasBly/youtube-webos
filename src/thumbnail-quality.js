@@ -16,7 +16,7 @@ const CSS_URL_REGEX = /url\(['"]?([^'"]+?)['"]?\)/;
 const AMPERSAND_REGEX = /&amp;/g;
 const I_DOMAIN_REGEX = /^i\d/;
 
-const YT_THUMBNAIL_ELEMENT_TAG = 'ytlr-thumbnail-details';
+const YT_THUMBNAIL_SELECTOR = 'ytlr-thumbnail-details, ytlr-surface-page';
 
 const webpTestImgs = {
   lossy: 'UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA'
@@ -349,12 +349,12 @@ const domObserver = new MutationObserver(mutations => {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const matchesFn = node.matches || node.webkitMatchesSelector || node.mozMatchesSelector || node.msMatchesSelector;
           
-          if (matchesFn && matchesFn.call(node, YT_THUMBNAIL_ELEMENT_TAG)) {
+          if (matchesFn && matchesFn.call(node, YT_THUMBNAIL_SELECTOR)) {
             visibilityObserver.unobserve(node);
             requestQueue.delete(node);
           }
           
-          const nested = node.getElementsByTagName(YT_THUMBNAIL_ELEMENT_TAG);
+          const nested = node.querySelectorAll(YT_THUMBNAIL_SELECTOR);
           for (let k = 0, kLen = nested.length; k < kLen; k++) {
             visibilityObserver.unobserve(nested[k]);
             requestQueue.delete(nested[k]);
@@ -370,13 +370,13 @@ const domObserver = new MutationObserver(mutations => {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const matchesFn = node.matches || node.webkitMatchesSelector || node.mozMatchesSelector || node.msMatchesSelector;
           
-          if (matchesFn && matchesFn.call(node, YT_THUMBNAIL_ELEMENT_TAG)) {
+          if (matchesFn && matchesFn.call(node, YT_THUMBNAIL_SELECTOR)) {
             elementState.set(node, { generationId: 1 });
             styleObserver.observe(node, { attributes: true, attributeFilter: ['style'] });
             visibilityObserver.observe(node);
             
           } else if (node.firstElementChild) {
-            const nested = node.getElementsByTagName(YT_THUMBNAIL_ELEMENT_TAG);
+            const nested = node.querySelectorAll(YT_THUMBNAIL_SELECTOR);
             for(let k = 0, kLen = nested.length; k < kLen; k++) {
                const targetNode = nested[k];
                if (elementState.has(targetNode)) continue;
@@ -438,7 +438,7 @@ async function enableObserver() {
 
   isObserving = true;
   
-  const existingThumbnails = appContainer.querySelectorAll(YT_THUMBNAIL_ELEMENT_TAG);
+  const existingThumbnails = appContainer.querySelectorAll(YT_THUMBNAIL_SELECTOR);
   for (let i = 0, len = existingThumbnails.length; i < len; i++) {
     const node = existingThumbnails[i];
     if (!elementState.has(node)) {

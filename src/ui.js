@@ -1372,6 +1372,7 @@ function applyOledMode(enabled) {
         .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } 
         .p0DeOc { background-color: #000 !important; background-image: none !important; }
         ytlr-player-focus-ring { border: 0.375rem solid rgb(200, 200, 200) !important; }
+		ytlr-surface-page { background-image: none !important; background-color: #000 !important; }
         ${transparentBgRules}` 
     });
     document.head.appendChild(style);
