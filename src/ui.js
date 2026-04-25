@@ -1268,7 +1268,7 @@ function initGlobalStyles() {
         
         style.textContent = `
             /* Hide Logo */
-            ytlr-redux-connect-ytlr-logo-entity { visibility: ${hideLogo ? 'hidden' : 'visible'}; }
+            ytlr-redux-connect-ytlr-logo-entity, ytlr-logo-entity { visibility: ${hideLogo ? 'hidden' : 'visible'} !important; }
             
             /* UI Controls Hiding Class */
             body.ytaf-hide-controls .GLc3cc { opacity: 0 !important; }

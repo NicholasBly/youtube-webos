@@ -125,8 +125,8 @@ function getThumbnailUrl(originalUrl, targetQuality, pathMatch) {
   if (I_DOMAIN_REGEX.test(originalUrl.hostname)) return null;
   if (!pathMatch) return null;
 
-  const [, pathPrefix, videoId] = pathMatch;
-  if (!YT_TARGET_THUMBNAIL_NAMES.has(videoId)) return null;
+  const [, pathPrefix, thumbName] = pathMatch;
+  if (!YT_TARGET_THUMBNAIL_NAMES.has(thumbName)) return null;
 
   const extension = webpSupported ? 'webp' : 'jpg';
   const newPathPrefix = webpSupported ? 'vi_webp' : 'vi';
@@ -230,7 +230,8 @@ async function processUpgrade(element, generationId) {
   // Consolidate Video ID extraction
   const pathMatch = currentUrl.pathname.match(YT_THUMBNAIL_PATHNAME_REGEX);
   if (!pathMatch) return;
-  const videoId = pathMatch[2];
+  const videoId = pathMatch[1].replace(/\//g, ''); 
+  const thumbName = pathMatch[2];
 
   // Cache dataset accesses to prevent garbage generation in Chrome 38
   const ds = element.dataset;
@@ -436,6 +437,16 @@ async function enableObserver() {
   });
 
   isObserving = true;
+  
+  const existingThumbnails = appContainer.querySelectorAll(YT_THUMBNAIL_ELEMENT_TAG);
+  for (let i = 0, len = existingThumbnails.length; i < len; i++) {
+    const node = existingThumbnails[i];
+    if (!elementState.has(node)) {
+      elementState.set(node, { generationId: 1 });
+      styleObserver.observe(node, { attributes: true, attributeFilter: ['style'] });
+      visibilityObserver.observe(node);
+    }
+  }
 }
 
 export function cleanup() {
