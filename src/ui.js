@@ -1301,11 +1301,15 @@ function initGlobalStyles() {
             /* WebOS App Specific Background Overrides */
             .app-quality-root .boSXqb .QFqCxd:before,
             .app-quality-root .V7jTHe, 
-            .app-quality-root .g6XRz {
+            .app-quality-root .g6XRz,
+            .app-quality-root .UGcxnc .sjENQb {
                 background-color: transparent !important;
             }
             /* Liquid Glass Player UI Overrides */
-            .MIiKQd.CgA6bd, .clJQEe, .dySudf {
+			.ltewod.BZ345e {
+				background-color: #f1f1f1 !important;
+			}
+            .MIiKQd.CgA6bd, .clJQEe, .dySudf, .ltewod {
                 background-color: rgba(45, 45, 45, 0.45) !important;
                 background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%) !important;
                 box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
