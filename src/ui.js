@@ -1260,7 +1260,6 @@ function initGlobalStyles() {
     const style = createElement('style');
     document.head.appendChild(style);
     
-    // Configurable styles updater
     const updateStyles = () => {
         const hideLogo = configRead('hideLogo');
         const fixTitles = configRead('fixMultilineTitles');
@@ -1274,7 +1273,7 @@ function initGlobalStyles() {
             body.ytaf-hide-controls .GLc3cc { opacity: 0 !important; }
             body.ytaf-hide-controls .webOs-watch { opacity: 0 !important; }
 			
-			/* Fix Multiline Titles */
+            /* Fix Multiline Titles */
             ${fixTitles ? '.app-quality-root .SK1srf .WVWtef, .app-quality-root .SK1srf .niS3yd { padding-bottom: 0.37vh !important; padding-top: 0.37vh !important; }' : ''}
             
             /* Remove Black Borders */
@@ -1306,20 +1305,37 @@ function initGlobalStyles() {
                 background-color: transparent !important;
             }
             /* Liquid Glass Player UI Overrides */
-			.ltewod.BZ345e {
-				background-color: #f1f1f1 !important;
-			}
+            .ltewod.BZ345e {
+                background-color: #f1f1f1 !important;
+            }
             .MIiKQd.CgA6bd, .clJQEe, .dySudf, .ltewod {
                 background-color: rgba(45, 45, 45, 0.45) !important;
                 background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%) !important;
                 box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
             }` : ''}
+
+            /* * Video player shadows
+             */
+            body .ytLrWatchDefaultShadow,
+            body [idomkey='shadow'] {
+                display: block !important;
+                height: 100% !important;
+                width: 100% !important;
+                pointer-events: none !important;
+                position: absolute !important;
+                background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0.8) 90%) !important;
+                background-color: rgba(0, 0, 0, 0.3) !important;
+            }
+
+            body .ytLrWatchDefault2025Shadow {
+                background-color: rgba(11, 11, 11, 0.5) !important;
+            }
         `;
     };
 
     updateStyles();
     configAddChangeListener('hideLogo', updateStyles);
-	configAddChangeListener('fixMultilineTitles', updateStyles);
+    configAddChangeListener('fixMultilineTitles', updateStyles);
     configAddChangeListener('removeBlackBorders', updateStyles);
 }
 
@@ -1350,6 +1366,7 @@ function applyOledMode(enabled) {
   }
   
   if (enabled) {
+	document.body.classList.add('oled-theme-active');
     if(notificationContainer) notificationContainer.classList.add(oledClass);
     
     const opacityVal = configRead('videoShelfOpacity');
@@ -1380,7 +1397,10 @@ function applyOledMode(enabled) {
         ${transparentBgRules}` 
     });
     document.head.appendChild(style);
-  } else if(notificationContainer) notificationContainer.classList.remove(oledClass);
+  } else {
+	  document.body.classList.remove('oled-theme-active');
+	  if(notificationContainer) notificationContainer.classList.remove(oledClass);
+  }
   updateLogoState();
 }
 

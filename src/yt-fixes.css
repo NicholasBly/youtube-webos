@@ -1,16 +1,39 @@
+/* Fixes transparency effect for the video player */
+.ytLrWatchDefaultShadow {
+  display: block !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  width: 100% !important;
+}
+
+.ytLrWatchDefaultShadow,
+[idomkey='shadow'] {
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0.8) 90%
+  ) !important;
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+.ytLrWatchDefault2025Shadow {
+  background-color: rgba(11, 11, 11, 0.5) !important;
+}
+
 /* Fixes shorts thumbnails */
 .ytLrTileHeaderRendererShorts {
   z-index: -1;
 }
 
-/* Makes black control underneath video player transparent. Set to 0 to remove it */
-/* Feb 1 2026 Note: older YouTube layout no longer exists so these aren't needed anymore */
-/* .ytLrWatchDefaultControlsBackground { /* webOS 24 */
-  /* opacity: 0.6; */
-/* } */
-/* .judYce { /* webOS 23 */
-  /* opacity: 0.6; */
-/* } */
+ytlr-tile-renderer[style*='width: 12.75rem; height: 21.25rem;']
+  ytlr-tile-header-renderer {
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(0, 0, 0, 0) 50%
+  ) !important;
+}
 
 /* move stats for nerds UI to the left side of the screen so it's not blocked by the settings panel */
 .iLKnN .html5-video-info-panel {
