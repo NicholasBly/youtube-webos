@@ -135,9 +135,6 @@ class SponsorBlockHandler {
         const ps = window.getComputedStyle(parent);
         if (ps.position === 'static') parent.style.setProperty('position', 'relative', 'important');
         
-        // CRITICAL FIX: Custom elements on WebOS 3 default to display: inline.
-        // Inline elements with position: relative DO NOT act as absolute containing blocks,
-        // causing the overlay to detach and anchor to the screen edges instead.
         if (ps.display === 'inline' || ps.display === '') {
             parent.style.setProperty('display', 'block', 'important');
         }
@@ -366,25 +363,50 @@ class SponsorBlockHandler {
     buildSkipChain(segments) {
         if (!segments || segments.length === 0) return null;
 
-        const firstSeg = segments[0];
-        if (firstSeg.segment[0] >= CHAIN_SKIP_CONSTANTS.START_THRESHOLD) return null;
+        // Find the first auto_skip segment that starts at the beginning
+        let firstSegIdx = -1;
+        for (let i = 0; i < segments.length; i++) {
+            if (segments[i].start < CHAIN_SKIP_CONSTANTS.START_THRESHOLD) {
+                if (segments[i].mode === 'auto_skip') {
+                    firstSegIdx = i;
+                    break;
+                } else {
+                    // If the very first segment is a manual skip at 0.0s, we shouldn't chain auto skips
+                    return null;
+                }
+            } else {
+                break;
+            }
+        }
+        
+        if (firstSegIdx === -1) return null;
 
-        let finalSeekTime = firstSeg.segment[1];
-        const chainParts = [`${firstSeg.category}[${firstSeg.segment[0].toFixed(1)}s-${firstSeg.segment[1].toFixed(1)}s]`];
+        const firstSeg = segments[firstSegIdx];
+        let finalSeekTime = firstSeg.end;
+        const chainParts = [`${firstSeg.category}[${firstSeg.start.toFixed(1)}s-${firstSeg.end.toFixed(1)}s]`];
 
-        for (let i = 1; i < segments.length; i++) {
+        for (let i = firstSegIdx + 1; i < segments.length; i++) {
             const current = segments[i];
-            const gapToNext = current.segment[0] - finalSeekTime;
 
+            // If we hit a manual_skip that starts before our chain ends, truncate the chain
+            if (current.mode !== 'auto_skip') {
+                if (current.start <= finalSeekTime) {
+                    finalSeekTime = Math.min(finalSeekTime, current.start);
+                    break;
+                }
+                continue; 
+            }
+
+            const gapToNext = current.start - finalSeekTime;
             if (gapToNext > CHAIN_SKIP_CONSTANTS.OVERLAP_TOLERANCE) break;
 
-            if (current.segment[1] > finalSeekTime) {
-                chainParts.push(`${current.category}[${current.segment[0].toFixed(1)}s-${current.segment[1].toFixed(1)}s]`);
-                finalSeekTime = current.segment[1];
+            if (current.end > finalSeekTime) {
+                chainParts.push(`${current.category}[${current.start.toFixed(1)}s-${current.end.toFixed(1)}s]`);
+                finalSeekTime = current.end;
             }
         }
 
-        if (chainParts.length === 1 && finalSeekTime - firstSeg.segment[0] < 1) return null;
+        if (chainParts.length === 1 && finalSeekTime - firstSeg.start < 1) return null;
 
         return {
             endTime: finalSeekTime,
@@ -396,7 +418,6 @@ class SponsorBlockHandler {
         if (!video || this.hasPerformedChainSkip || this.isDestroyed) return false;
 
         if (video.readyState === 0) {
-            // Clean up existing listener if exists to prevent dupe
             if (this.boundChainSkipRetry) {
                 this.chainSkipVideo.removeEventListener('loadedmetadata', this.boundChainSkipRetry);
             }
@@ -413,28 +434,23 @@ class SponsorBlockHandler {
 
         if (video.currentTime > CHAIN_SKIP_CONSTANTS.START_THRESHOLD) return false;
 
-        const config = configGetAll();
-        const enabledSegs = this.segments.filter(s =>
-            s.category !== 'poi_highlight' && config[CONFIG_MAPPING[s.category]] === 'auto_skip'
-        );
+        // Use this.skipSegments instead of filtering out manual skips so buildSkipChain can evaluate them
+        if (this.skipSegments.length === 0) return false;
 
-        if (enabledSegs.length === 0) return false;
-
-        const chain = this.buildSkipChain(enabledSegs);
+        const chain = this.buildSkipChain(this.skipSegments);
         if (!chain) return false;
         if (chain.endTime >= video.duration) return false;
 
         this.log('info', `Executing chain skip: ${chain.chainDescription}`);
 
-        // Perform the skip immediately without muting
         video.currentTime = chain.endTime;
         this.lastSkipTime = chain.endTime;
         this.hasPerformedChainSkip = true;
         
-        enabledSegs.forEach(seg => {
-            if (seg.segment[1] <= chain.endTime + 0.1) {
-                const idx = this.segments.indexOf(seg);
-                if (idx !== -1) this.skippedSegmentIndices.add(idx);
+        // Mark all auto_skip segments that were successfully bypassed as skipped
+        this.skipSegments.forEach(seg => {
+            if (seg.mode === 'auto_skip' && seg.start < chain.endTime && seg.end <= chain.endTime + 0.1) {
+                this.skippedSegmentIndices.add(seg.originalIndex);
             }
         });
 
@@ -947,7 +963,12 @@ class SponsorBlockHandler {
         for (let i = segmentIdx + 1; i < this.skipSegments.length; i++) {
             const next = this.skipSegments[i];
 
-            if (next.mode !== 'auto_skip') break;
+            if (next.mode !== 'auto_skip') {
+                if (next.start < jumpTarget) {
+                    jumpTarget = next.start;
+                }
+                break;
+            }
             if (next.start > jumpTarget + 0.2) break;
 
             jumpTarget = Math.max(jumpTarget, next.end);
