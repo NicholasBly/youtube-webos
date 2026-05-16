@@ -1,6 +1,6 @@
 {
   "id": "youtube.leanback.v4",
-  "version": "0.7.7",
+  "version": "0.7.9",
   "vendor": "webosbrew.org",
   "type": "web",
   "main": "index.html",
@@ -9,7 +9,6 @@
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",
   "iconColor": "#FFFFFF",
-  "resolution": "1920x1080",
   "splashBackground":"9262051307371701_youtube_leanback_splash.png",
   "support360Content": true,
   "checkUpdateOnLaunch": false,

@@ -328,7 +328,7 @@ class SponsorBlockHandler {
 
         while (left <= right) {
             const mid = (left + right) >>> 1;
-            if (this.skipSegments[mid].start > time) {
+            if (this.skipSegments[mid].start >= time) {
                 res = mid;
                 right = mid - 1;
             } else {
@@ -1004,14 +1004,21 @@ class SponsorBlockHandler {
 
         this.nextSegmentIndex = segmentIdx + 1;
         // Re-find next index properly via binary search just to be safe after a skip
-        const nextIdx = this.findNextSegmentIndex(jumpTarget);
-        this.nextSegmentIndex = nextIdx;
+        const targetSegIdx = this.findSegmentAtTime(jumpTarget);
         
-        if (this.nextSegmentIndex < this.skipSegments.length) {
-            this.nextSegmentStart = this.skipSegments[this.nextSegmentIndex].start;
+        if (targetSegIdx !== -1) {
+            // We landed exactly inside a manual segment (or another adjacent segment)
+            this.nextSegmentIndex = targetSegIdx;
+            this.nextSegmentStart = this.skipSegments[targetSegIdx].start;
         } else {
-            this.nextSegmentStart = Infinity;
-            this.toggleTimeListener(false);
+            // No immediate segment, look for the next upcoming one
+            this.nextSegmentIndex = this.findNextSegmentIndex(jumpTarget);
+            if (this.nextSegmentIndex < this.skipSegments.length) {
+                this.nextSegmentStart = this.skipSegments[this.nextSegmentIndex].start;
+            } else {
+                this.nextSegmentStart = Infinity;
+                this.toggleTimeListener(false);
+            }
         }
 
         this.requestAF(() => {

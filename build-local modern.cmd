@@ -6,7 +6,7 @@ echo.
 
 :: Check if node_modules exists. If not, run npm install (faster than ci)
 if not exist "node_modules\" (
-    echo [1/4] Installing dependencies...
+    echo [1/5] Installing dependencies...
     call npm install
     if !errorlevel! neq 0 (
         echo ERROR: npm install failed
@@ -14,10 +14,10 @@ if not exist "node_modules\" (
         exit /b 1
     )
 ) else (
-    echo [1/4] Dependencies already installed. Skipping...
+    echo [1/5] Dependencies already installed. Skipping...
 )
 
-echo [2/4] Building project...
+echo [2/5] Building project...
 call npm run build:modern
 if !errorlevel! neq 0 (
     echo ERROR: npm run build failed
@@ -26,7 +26,7 @@ if !errorlevel! neq 0 (
     exit /b 1
 )
 
-echo [3/4] Creating .ipk package...
+echo [3/5] Creating .ipk package...
 call npm run package
 if !errorlevel! neq 0 (
     echo ERROR: npm run package failed
@@ -35,7 +35,17 @@ if !errorlevel! neq 0 (
     exit /b 1
 )
 
-echo [4/4] Copying userScript.js to clipboard...
+echo [4/5] Renaming .ipk file for modern build...
+:: 'dir /b /a-d /o-d' lists files sorted by newest first.
+:: We grab the first (newest) one, rename it, and use 'goto' to immediately break the loop so it ignores any older files.
+for /f "delims=" %%f in ('dir /b /a-d /o-d "youtube.leanback.v4_*_all.ipk" 2^>nul') do (
+    ren "%%f" "%%~nf_webOS22+.ipk"
+    echo Renamed newest build: "%%f" -^> "%%~nf_webOS22+.ipk"
+    goto :rename_done
+)
+:rename_done
+
+echo [5/5] Copying userScript.js to clipboard...
 
 SET "SOURCE_FILE=dist\webOSUserScripts\userScript.js"
 
