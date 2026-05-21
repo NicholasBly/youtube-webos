@@ -242,6 +242,12 @@ export function handleLaunch(params) {
       if (voiceContentIntent === 'search') search.append('launch', 'search');
       search.set('vq', intentParam);
   }
+  
+  if (ytURL.searchParams.get('theme') === 'k') {
+      ytURL.searchParams.delete('env_forceFullAnimation');
+      ytURL.searchParams.delete('env_enableWebSpeech');
+      ytURL.searchParams.delete('env_enableVoice');
+  }
 
   window.location.href = ytURL.toString();
 }
