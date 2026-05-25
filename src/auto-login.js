@@ -1,5 +1,5 @@
 import { configRead, configAddChangeListener } from './config.js';
-import { SELECTORS, REMOTE_KEYS, isGuestMode, sendKey, extractLaunchParams } from './utils';
+import { SELECTORS, REMOTE_KEYS, isGuestMode, sendKey, extractLaunchParams, invalidateGuestModeCache } from './utils';
 
 const STORAGE_KEY = 'yt.leanback.default::recurring_actions';
 const TARGET_ACTIONS = [
@@ -122,6 +122,8 @@ export function attemptActiveBypass(force = false) {
 
 export function resetActiveBypass() {
     hasBypassed = false;
+    // Identity may have changed between launches (sign-in/out); drop the cached guest flag.
+    invalidateGuestModeCache();
 }
 
 function setupActiveBypassListener() {

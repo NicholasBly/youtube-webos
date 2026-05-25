@@ -149,12 +149,11 @@ class SponsorBlockUI {
             outro: '#0202ed',
             interaction: '#cc00ff',
             selfpromo: '#ffff00',
-            music_offtopic: '#ff9900',
+            musicofftopic: '#ff9900',
             preview: '#008fd6',
-            poi: '#ff1684',
             filler: '#7300FF',
             poi_highlight: '#ff1684',
-			hook: '#395699'
+            hook: '#395699'
         };
         return colors[category] || '#777';
     }
@@ -166,11 +165,11 @@ class SponsorBlockUI {
             outro: 'Endcards/Credits',
             interaction: 'Interaction',
             selfpromo: 'Unpaid/Self Promotion',
-            music_offtopic: 'Non-Music Section',
+            musicofftopic: 'Non-Music Section',
             preview: 'Preview/Recap',
-            poi: 'Highlight',
             poi_highlight: 'Highlight',
-            filler: 'Filler/Tangents'
+            filler: 'Filler/Tangents',
+            hook: 'Hook/Greetings'
         };
         return names[category] || category.charAt(0).toUpperCase() + category.slice(1);
     }

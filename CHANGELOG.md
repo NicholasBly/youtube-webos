@@ -4,6 +4,71 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.0] - 2026/05/21
+
+## Summary
+
+Codebase-wide audit pass focused on **webOS 3 performance**, correctness bugs, and code-quality cleanup. Settings panel reliability, SponsorBlock UI labels, and overall CPU usage on older TVs all improved.
+
+## Optimizations
+
+### AdBlock
++ JSON.parse hook: combined three `.includes()` content scans into a single regex pass. Saves ~2 full-string scans per API response
++ Replaced per-request `configGetAll()` allocation with a live config snapshot reference. Filter flags (`anyFilterEnabled`, `cfgNeedsContentFiltering`) are now precomputed via config change listeners instead of recalculating 8 booleans per request
++ Added a top-level `anyFilterEnabled` fast-path — if every filter is off, the hook bails immediately with no further work
+
+### SponsorBlock
++ Overlay position sync in `handleTimeUpdate()` throttled to 500ms (timeupdate fires ~4Hz and the viewport rarely changes — old code did 2 forced layouts per frame on webOS 3)
++ Added window resize listener that forces immediate overlay re-sync, bypassing the throttle so layout changes still snap into place
++ Init guard relaxed from `readyState === 'complete'` to `readyState !== 'loading'` — SponsorBlock now starts as soon as the document is interactive instead of waiting for full load on slow boots
+
+### Return YouTube Dislike
++ Body MutationObserver no longer watches `attributes` (childList/subtree only). Body attribute mutations fire constantly during focus animations — we only care about panel adds/removes
+
+### Screensaver Fix
++ Style mutation handler is now coalesced into a single `requestAnimationFrame` per burst. Multiple style mutations in the same tick collapse into one DOM write instead of N separate reflows
+
+### Thumbnail Quality
++ IntersectionObserver polyfill poll interval raised from 300ms to 600ms on webOS 3. Halves the per-tile `getBoundingClientRect()` reflow cost on populated grids with no perceptible change to upgrade timing
+
+### Utils.js
++ Body class MutationObserver now skips mutations that don't touch a `WEB_PAGE_TYPE_*` class. YouTube flips body classes constantly for focus/animation state — we only care when the actual page type changes
+
+### UI.js
++ `initGlobalStyles()` rewritten with static CSS and body-class toggles (`ytaf-hide-logo`, `ytaf-fix-titles`, `ytaf-remove-borders`) instead of rebuilding `<style>.textContent` on every config change. Toggling any of these no longer forces a full stylesheet reparse
+
+### Config.js
++ localStorage writes now debounced 200ms. Color picker drags and other rapid-input paths were stringifying the entire ~50-key config object on every event. A `beforeunload`/`pagehide` flush guarantees the final value is persisted
+
+## Changes
+
+### Code Structure
++ Extracted `showNotification` and notification container management into a new `notifications.js` module. SponsorBlock and Video Quality now import from it directly, reducing the boot-time dependency footprint
++ `userScript.js` now explicitly imports `ui.js` (previously it was loaded transitively through SponsorBlock — moving the import makes the boot graph explicit)
++ Standardized `HAS_ABORT_CONTROLLER` feature-detect constant across `sponsorblock.js` and `return-dislike.js`
+
+### Utils.js
++ Exported `invalidateGuestModeCache()` so Guest Mode detection can be refreshed when identity changes between sessions
+
+## Fixes
+
+### Options Panel
++ Fixed `ReferenceError` thrown when the settings panel tried to fall back to a focus path that referenced an undefined variable. Opening the panel cold no longer risks throwing
++ Fixed shortcut keys pressed while the panel is open corrupting the global debounce timer. The panel-open check now runs before the debounce state mutates, so closing the panel doesn't leave shortcuts stuck for ~100ms
+
+### SponsorBlock
++ Fixed `TypeError` in `executeChainSkip()` when retry cleanup ran after a destroyed video instance was already cleared (rapid navigation race)
+
+### SponsorBlock UI
++ Fixed segment list category keys — `musicofftopic` and `hook` rows now show the correct color and label (previously fell through to gray with raw category text)
++ Removed dead `poi` key alias that never matched what the API returns
+
+### Auto Login
++ Guest Mode cache is now invalidated on `webOSRelaunch` via `resetActiveBypass()`. Signing in/out between launches will be reflected correctly in the panel layout and bypass logic
+
+### AdBlock
++ `cachedWebOSVersion` is now initialized at module load via `getWebOSVersion()` rather than lazily inside `initAdblock()`. Removes a subtle ordering ambiguity around the legacy-emoji-fix gating
+
 ## [0.7.9] - 2026/05/15
 
 ## Fixes

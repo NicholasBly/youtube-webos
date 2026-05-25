@@ -35,7 +35,9 @@ const VisibilityObserverClass = window.IntersectionObserver || class {
   observe(target) {
     this.elements.add(target);
     if (!this.interval) {
-      this.interval = setInterval(() => this._check(), 300);
+      // Polled fallback (used on webOS 3 / Chrome 38). 600ms keeps perceived
+      // responsiveness while halving the per-tile getBoundingClientRect() reflow cost.
+      this.interval = setInterval(() => this._check(), 600);
     }
     setTimeout(() => this._check(), 0);
   }

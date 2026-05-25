@@ -50,53 +50,57 @@ function updatePageState() {
     const cl = _body.classList;
     const newWatch = cl.contains(SELECTORS.WATCH_PAGE_CLASS);
     const newShorts = cl.contains(SELECTORS.SHORTS_PAGE_CLASS);
-	const newAccountSelector = cl.contains(SELECTORS.ACCOUNT_SELECTOR);
-	const newSearch = cl.contains(SELECTORS.SEARCH_PAGE_CLASS);
-    
-    if (newWatch === _isWatchPage && 
-        newShorts === _isShortsPage && 
+    const newAccountSelector = cl.contains(SELECTORS.ACCOUNT_SELECTOR);
+    const newSearch = cl.contains(SELECTORS.SEARCH_PAGE_CLASS);
+
+    if (newWatch === _isWatchPage &&
+        newShorts === _isShortsPage &&
         newAccountSelector === _isAccountSelectorPage &&
         newSearch === _isSearchPage) return;
 
     _isWatchPage = newWatch;
     _isShortsPage = newShorts;
     _isAccountSelectorPage = newAccountSelector;
-	_isSearchPage = newSearch;
-    
-    window.dispatchEvent(new CustomEvent('ytaf-page-update', { 
-        detail: { 
-            isWatch: _isWatchPage, 
+    _isSearchPage = newSearch;
+
+    window.dispatchEvent(new CustomEvent('ytaf-page-update', {
+        detail: {
+            isWatch: _isWatchPage,
             isShorts: _isShortsPage,
             isAccountSelector: _isAccountSelectorPage,
-			isSearch: _isSearchPage
-        } 
+            isSearch: _isSearchPage
+        }
     }));
 }
 
 if (typeof document !== 'undefined') {
-	const initObserver = () => {
-		_body = document.body;
-		const pageObserver = new MutationObserver((mutations) => {
-			for (let m of mutations) {
-				if (m.target.className !== m.oldValue) {
-					updatePageState();
-					break;
-				}
-			}
-		});
-		pageObserver.observe(_body, { 
-			attributes: true, 
-			attributeFilter: ['class'],
-			attributeOldValue: true 
-		});
-		updatePageState();
-	};
+    const initObserver = () => {
+        _body = document.body;
+        const pageObserver = new MutationObserver((mutations) => {
+            for (let m of mutations) {
+                // Cheap pre-filter: only care if a WEB_PAGE_TYPE_ class actually changed.
+                // Body classes flip constantly for focus/animation state.
+                const oldV = m.oldValue || '';
+                const newV = m.target.className || '';
+                if (newV === oldV) continue;
+                if (oldV.indexOf('WEB_PAGE_TYPE_') === -1 && newV.indexOf('WEB_PAGE_TYPE_') === -1) continue;
+                updatePageState();
+                break;
+            }
+        });
+        pageObserver.observe(_body, {
+            attributes: true,
+            attributeFilter: ['class'],
+            attributeOldValue: true
+        });
+        updatePageState();
+    };
 
-	if (document.body) {
-		initObserver();
-	} else {
-		document.addEventListener('DOMContentLoaded', initObserver);
-	}
+    if (document.body) {
+        initObserver();
+    } else {
+        document.addEventListener('DOMContentLoaded', initObserver);
+    }
 }
 
 export const isWatchPage = () => _isWatchPage;
@@ -113,6 +117,10 @@ export function debounce(func, wait) {
 }
 
 let cachedGuestMode = null;
+
+export function invalidateGuestModeCache() {
+  cachedGuestMode = null;
+}
 
 export function isGuestMode() {
   if (cachedGuestMode !== null) return cachedGuestMode;

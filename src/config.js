@@ -120,6 +120,29 @@ function loadStoredConfig() {
 
 let localConfig = Object.assign({}, defaultConfig, loadStoredConfig() || {});
 
+// Debounce localStorage writes — rapid input (e.g. color picker drag) was
+// stringifying the entire ~50-key config object on every event.
+let pendingWriteTimer = null;
+function flushPendingWrite() {
+  if (pendingWriteTimer === null) return;
+  clearTimeout(pendingWriteTimer);
+  pendingWriteTimer = null;
+  try { window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig); }
+  catch (e) { /* quota / SecurityError on private mode */ }
+}
+function scheduleWrite() {
+  if (pendingWriteTimer !== null) return;
+  pendingWriteTimer = setTimeout(() => {
+    pendingWriteTimer = null;
+    try { window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig); }
+    catch (e) { /* ignore */ }
+  }, 200);
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', flushPendingWrite);
+  window.addEventListener('pagehide', flushPendingWrite);
+}
+
 function configExists(key) { return configOptions.has(key); }
 
 export function configGetDesc(key) {
@@ -139,7 +162,7 @@ export function configWrite(key, value) {
 
   console.info('Changing key', key, 'from', oldValue, 'to', value);
   localConfig[key] = value;
-  window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
+  scheduleWrite();
 
   const listeners = changeListeners.get(key);
   if (listeners) {

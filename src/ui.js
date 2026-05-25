@@ -10,6 +10,10 @@ import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS } from './utils.js';
 import { initAdblock, destroyAdblock, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
 import { getWebOSVersion } from './webos-utils.js';
+import { showNotification as _showNotification, setNotificationOled, setNotificationTheme } from './notifications.js';
+
+// Re-export so existing `import { showNotification } from './ui'` sites keep working.
+export const showNotification = _showNotification;
 
 let lastSafeFocus = null;
 let oledKeepAliveTimer = null;
@@ -566,11 +570,8 @@ function showOptionsPanel(visible) {
         activeTabBtn.focus();
         lastSafeFocus = activeTabBtn;
     } else {
-        const activeTabBtn = optionsPanel.querySelector('.ytaf-tab-btn.active');
-		if (activeTabBtn) activeTabBtn.focus();
-			else optionsPanel.focus();
-        if (firstVisibleInput) { firstVisibleInput.focus(); lastSafeFocus = firstVisibleInput; }
-			else { optionsPanel.focus(); lastSafeFocus = optionsPanel; }
+        optionsPanel.focus();
+        lastSafeFocus = optionsPanel;
     }
     optionsPanelVisible = true;
   } else if (!visible && optionsPanelVisible && optionsPanel) {
@@ -1171,16 +1172,16 @@ const eventHandler = (evt) => {
   const now = Date.now();
 
   if (!isBurstAction && now - lastShortcutTime < shortcutDebounceTime && lastShortcutKey === keyName) {
-      evt.preventDefault(); 
-      evt.stopPropagation(); 
+      evt.preventDefault();
+      evt.stopPropagation();
       return false;
   }
-  
+
+  if (optionsPanelVisible && action !== 'config_menu') { evt.preventDefault(); evt.stopPropagation(); return false; }
+
   shortcutDebounceTime = 100;
   lastShortcutTime = now;
   lastShortcutKey = keyName;
-  
-  if (optionsPanelVisible && action !== 'config_menu') { evt.preventDefault(); evt.stopPropagation(); return false; }
   
   evt.preventDefault();
   evt.stopPropagation();
@@ -1191,157 +1192,90 @@ const eventHandler = (evt) => {
 
 document.addEventListener('keydown', eventHandler, true);
 
-let notificationContainer = null;
-
-export function showNotification(text, time = 3000) {
-  if (configRead('disableNotifications')) return { remove: () => {}, update: () => {} };
-  
-  if (!notificationContainer) {
-    notificationContainer = createElement('div', { class: 'ytaf-notification-container' });
-    if (configRead('enableOledCareMode')) notificationContainer.classList.add('oled-care');
-    if (configRead('uiTheme') === 'classic-red') notificationContainer.classList.add('theme-classic-red');
-    document.body.appendChild(notificationContainer);
-  }
-
-  // Check for existing notification with same text to prevent stacking
-  const existing = Array.from(notificationContainer.querySelectorAll('.message'))
-    .find(el => el.textContent === text && !el.classList.contains('message-hidden'));
-
-  if (existing) {
-      if (existing._removeTimer) clearTimeout(existing._removeTimer);
-      if (time > 0) {
-          existing._removeTimer = setTimeout(() => {
-              existing.classList.add('message-hidden');
-              setTimeout(() => existing.parentElement.remove(), 1000);
-          }, time);
-      }
-      return { remove: () => {}, update: () => {} };
-  }
-
-  const elmInner = createElement('div', { text, class: 'message message-hidden' });
-  const elm = createElement('div', {}, elmInner);
-  notificationContainer.appendChild(elm);
-
-  requestAnimationFrame(() => requestAnimationFrame(() => elmInner.classList.remove('message-hidden')));
-
-  const remove = () => {
-      if (elmInner._removeTimer) clearTimeout(elmInner._removeTimer);
-      elmInner._removeTimer = null;
-      
-      elmInner.classList.add('message-hidden');
-      setTimeout(() => elm.remove(), 1000);
-  };
-
-  if (time > 0) {
-    elmInner._removeTimer = setTimeout(remove, time);
-  }
-  
-  const update = (newText, newTime = 3000) => {
-      if (elmInner.textContent === newText) {
-          if (newTime > 0) {
-              if (elmInner._removeTimer) clearTimeout(elmInner._removeTimer);
-              elmInner._removeTimer = setTimeout(remove, newTime);
-          }
-          return;
-      }
-      
-      elmInner.textContent = newText;
-      elmInner.classList.remove('message-hidden');
-      if (elmInner._removeTimer) clearTimeout(elmInner._removeTimer);
-      if (newTime > 0) elmInner._removeTimer = setTimeout(remove, newTime);
-  };
-
-  return { remove, update };
-}
-
 // --- Initialization & CSS Injection ---
 
 function initGlobalStyles() {
+    // Static stylesheet — written once, never rebuilt. Toggling a class on the
+    // <html> element activates/deactivates each section. We use documentElement
+    // rather than body because YouTube's leanback app rewrites body.className
+    // on tab navigation (Home → Gaming, etc.) and would wipe our toggles.
+    // .ytaf-hide-controls stays on body because it's owned by play/pause logic,
+    // not config — YouTube never touches it.
     const style = createElement('style');
+    style.textContent = `
+        html.ytaf-hide-logo ytlr-redux-connect-ytlr-logo-entity,
+        html.ytaf-hide-logo ytlr-logo-entity { visibility: hidden !important; }
+
+        body.ytaf-hide-controls .GLc3cc,
+        body.ytaf-hide-controls .webOs-watch,
+        body.ytaf-hide-controls .ytLrWatchDefaultShadow,
+        body.ytaf-hide-controls [idomkey='shadow'],
+        body.ytaf-hide-controls .ytLrWatchDefault2025Shadow { opacity: 0 !important; }
+
+        html.ytaf-fix-titles .app-quality-root .SK1srf .WVWtef,
+        html.ytaf-fix-titles .app-quality-root .SK1srf .niS3yd {
+            padding-bottom: 0.37vh !important;
+            padding-top: 0.37vh !important;
+        }
+
+        html.ytaf-remove-borders yt-formatted-string,
+        html.ytaf-remove-borders .style-scope.ytd-rich-grid-media,
+        html.ytaf-remove-borders #video-title,
+        html.ytaf-remove-borders #metadata-line,
+        html.ytaf-remove-borders .ytd-video-meta-block {
+            background-color: transparent !important;
+            background: none !important;
+            box-shadow: none !important;
+        }
+        html.ytaf-remove-borders #details.ytd-rich-grid-media {
+            background-color: transparent !important;
+            margin-top: 4px !important;
+        }
+        html.ytaf-remove-borders ytd-thumbnail,
+        html.ytaf-remove-borders .ytd-searchbox,
+        html.ytaf-remove-borders .ytp-videowall-still-info-bg {
+            background-color: transparent !important;
+        }
+        html.ytaf-remove-borders .app-quality-root .boSXqb .QFqCxd:before,
+        html.ytaf-remove-borders .app-quality-root .V7jTHe,
+        html.ytaf-remove-borders .app-quality-root .g6XRz,
+        html.ytaf-remove-borders .app-quality-root .UGcxnc .sjENQb {
+            background-color: transparent !important;
+        }
+        html.ytaf-remove-borders .ltewod.BZ345e { background-color: #f1f1f1 !important; }
+        html.ytaf-remove-borders .MIiKQd.CgA6bd,
+        html.ytaf-remove-borders .clJQEe,
+        html.ytaf-remove-borders .dySudf,
+        html.ytaf-remove-borders .ltewod {
+            background-color: rgba(45, 45, 45, 0.45) !important;
+            background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%) !important;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        body .ytLrWatchDefaultShadow,
+        body [idomkey='shadow'] {
+            display: block !important;
+            height: 100% !important;
+            width: 100% !important;
+            pointer-events: none !important;
+            position: absolute !important;
+            background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0.8) 90%) !important;
+            background-color: rgba(0, 0, 0, 0.3) !important;
+        }
+        body .ytLrWatchDefault2025Shadow { background-color: rgba(11, 11, 11, 0.5) !important; }
+    `;
     document.head.appendChild(style);
-    
-    const updateStyles = () => {
-        const hideLogo = configRead('hideLogo');
-        const fixTitles = configRead('fixMultilineTitles');
-        const removeBorders = configRead('removeBlackBorders');
-        
-        style.textContent = `
-            /* Hide Logo */
-            ytlr-redux-connect-ytlr-logo-entity, ytlr-logo-entity { visibility: ${hideLogo ? 'hidden' : 'visible'} !important; }
-            
-            /* UI Controls Hiding Class */
-            body.ytaf-hide-controls .GLc3cc,
-            body.ytaf-hide-controls .webOs-watch,
-            body.ytaf-hide-controls .ytLrWatchDefaultShadow,
-            body.ytaf-hide-controls [idomkey='shadow'],
-            body.ytaf-hide-controls .ytLrWatchDefault2025Shadow { 
-                opacity: 0 !important; 
-            }
-			
-            /* Fix Multiline Titles */
-            ${fixTitles ? '.app-quality-root .SK1srf .WVWtef, .app-quality-root .SK1srf .niS3yd { padding-bottom: 0.37vh !important; padding-top: 0.37vh !important; }' : ''}
-            
-            /* Remove Black Borders */
-            ${removeBorders ? `
-            yt-formatted-string, 
-            .style-scope.ytd-rich-grid-media, 
-            #video-title,
-            #metadata-line,
-            .ytd-video-meta-block {
-                background-color: transparent !important;
-                background: none !important;
-                box-shadow: none !important;
-            }
-            #details.ytd-rich-grid-media {
-                background-color: transparent !important;
-                margin-top: 4px !important;
-            }
-            ytd-thumbnail {
-                background-color: transparent !important;
-            }
-            .ytd-searchbox, .ytp-videowall-still-info-bg {
-                background-color: transparent !important;
-            }
-            /* WebOS App Specific Background Overrides */
-            .app-quality-root .boSXqb .QFqCxd:before,
-            .app-quality-root .V7jTHe, 
-            .app-quality-root .g6XRz,
-            .app-quality-root .UGcxnc .sjENQb {
-                background-color: transparent !important;
-            }
-            /* Liquid Glass Player UI Overrides */
-            .ltewod.BZ345e {
-                background-color: #f1f1f1 !important;
-            }
-            .MIiKQd.CgA6bd, .clJQEe, .dySudf, .ltewod {
-                background-color: rgba(45, 45, 45, 0.45) !important;
-                background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%) !important;
-                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
-            }` : ''}
 
-            /* * Video player shadows
-             */
-            body .ytLrWatchDefaultShadow,
-            body [idomkey='shadow'] {
-                display: block !important;
-                height: 100% !important;
-                width: 100% !important;
-                pointer-events: none !important;
-                position: absolute !important;
-                background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0.8) 90%) !important;
-                background-color: rgba(0, 0, 0, 0.3) !important;
-            }
-
-            body .ytLrWatchDefault2025Shadow {
-                background-color: rgba(11, 11, 11, 0.5) !important;
-            }
-        `;
+    const syncClass = (cls, key) => document.documentElement.classList.toggle(cls, !!configRead(key));
+    const apply = () => {
+        syncClass('ytaf-hide-logo', 'hideLogo');
+        syncClass('ytaf-fix-titles', 'fixMultilineTitles');
+        syncClass('ytaf-remove-borders', 'removeBlackBorders');
     };
-
-    updateStyles();
-    configAddChangeListener('hideLogo', updateStyles);
-    configAddChangeListener('fixMultilineTitles', updateStyles);
-    configAddChangeListener('removeBlackBorders', updateStyles);
+    apply();
+    configAddChangeListener('hideLogo', () => syncClass('ytaf-hide-logo', 'hideLogo'));
+    configAddChangeListener('fixMultilineTitles', () => syncClass('ytaf-fix-titles', 'fixMultilineTitles'));
+    configAddChangeListener('removeBlackBorders', () => syncClass('ytaf-remove-borders', 'removeBlackBorders'));
 }
 
 function updateLogoState() {
@@ -1359,20 +1293,18 @@ function updateLogoState() {
 }
 
 function applyOledMode(enabled) {
-  const notificationContainer = document.querySelector('.ytaf-notification-container');
   const oledClass = 'oled-care';
 
   document.getElementById('style-gray-ui-oled-care')?.remove();
 
   // Lazy Load Support: optionsPanel might be null
   if (optionsPanel) {
-      if (enabled) optionsPanel.classList.add(oledClass);
-      else optionsPanel.classList.remove(oledClass);
+      optionsPanel.classList.toggle(oledClass, enabled);
   }
-  
+  setNotificationOled(enabled);
+
   if (enabled) {
-	document.body.classList.add('oled-theme-active');
-    if(notificationContainer) notificationContainer.classList.add(oledClass);
+    document.body.classList.add('oled-theme-active');
     
     const opacityVal = configRead('videoShelfOpacity');
     const opacity = opacityVal / 100;
@@ -1403,22 +1335,16 @@ function applyOledMode(enabled) {
     });
     document.head.appendChild(style);
   } else {
-	  document.body.classList.remove('oled-theme-active');
-	  if(notificationContainer) notificationContainer.classList.remove(oledClass);
+    document.body.classList.remove('oled-theme-active');
   }
   updateLogoState();
 }
 
 function applyTheme(theme) {
-  const notificationContainer = document.querySelector('.ytaf-notification-container');
-  // Lazy Load Support: optionsPanel might be null
   if (optionsPanel) {
-      if (theme === 'classic-red') optionsPanel.classList.add('theme-classic-red');
-      else optionsPanel.classList.remove('theme-classic-red');
+      optionsPanel.classList.toggle('theme-classic-red', theme === 'classic-red');
   }
-  
-  if (theme === 'classic-red') { notificationContainer?.classList.add('theme-classic-red'); }
-  else { notificationContainer?.classList.remove('theme-classic-red'); }
+  setNotificationTheme(theme);
   updateLogoState();
 }
 

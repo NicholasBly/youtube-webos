@@ -1,5 +1,5 @@
 import { configRead, configAddChangeListener, configRemoveChangeListener } from './config.js';
-import { showNotification } from './ui';
+import { showNotification } from './notifications.js';
 import { isWebOS25 } from './webos-utils.js';
 import { sendKey, REMOTE_KEYS, SELECTORS, isWatchPage } from './utils.js';
 

@@ -87,50 +87,57 @@ function setShortsKeepAlive(enable) {
   }
 }
 
-const playerCtrlObs = new MutationObserver((mutations, obs) => {
+let rafPending = false;
+let rafTargetVideo = null;
+
+const playerCtrlObs = new MutationObserver((mutations) => {
   // Only watch page has a full-screen player fix logic.
   if (lastPageType !== 'WATCH') {
-    obs.disconnect();
+    playerCtrlObs.disconnect();
     return;
   }
 
   const video = mutations[0]?.target;
-  
   if (!video || !(video instanceof HTMLVideoElement)) {
     console.warn('[ScreensaverFix] Invalid video element in mutation, disconnecting observer');
-    obs.disconnect();
+    playerCtrlObs.disconnect();
     return;
   }
-  
   if (!video.isConnected) {
     console.warn('[ScreensaverFix] Video element disconnected, stopping observer');
-    obs.disconnect();
+    playerCtrlObs.disconnect();
     return;
   }
-  
-  const style = video.style;
 
-  // Not sure if there will be a race condition so just in case.
-  if (isPlayerHidden(video)) return;
+  // Coalesce bursts of style mutations into one rAF — Chrome 38 on webOS 3
+  // pays a heavy reflow cost per write, so we read window dimensions and
+  // diff against current style.* only once per frame.
+  rafTargetVideo = video;
+  if (rafPending) return;
+  rafPending = true;
 
-  const targetWidth = `${window.innerWidth}px`;
-  const targetHeight = `${window.innerHeight}px`;
-  const targetLeft = '0px';
-  const targetTop = '0px';
+  requestAnimationFrame(() => {
+    rafPending = false;
+    const v = rafTargetVideo;
+    rafTargetVideo = null;
+    if (!v || !v.isConnected || lastPageType !== 'WATCH') return;
+    if (isPlayerHidden(v)) return;
 
-  try {
-    /**
-     * Check to see if identical before assignment as some webOS versions will trigger a mutation
-     * event even if the assignment effectively does nothing, leading to an infinite loop.
-     */
-    style.width !== targetWidth && (style.width = targetWidth);
-    style.height !== targetHeight && (style.height = targetHeight);
-    style.left !== targetLeft && (style.left = targetLeft);
-    style.top !== targetTop && (style.top = targetTop);
-  } catch (e) {
-    console.warn('[ScreensaverFix] Error updating video styles:', e);
-    obs.disconnect();
-  }
+    const style = v.style;
+    const tw = `${window.innerWidth}px`;
+    const th = `${window.innerHeight}px`;
+    try {
+      // Some webOS versions fire a mutation even when assignment is a no-op,
+      // causing an infinite loop — only write when the value actually differs.
+      if (style.width !== tw) style.width = tw;
+      if (style.height !== th) style.height = th;
+      if (style.left !== '0px') style.left = '0px';
+      if (style.top !== '0px') style.top = '0px';
+    } catch (e) {
+      console.warn('[ScreensaverFix] Error updating video styles:', e);
+      playerCtrlObs.disconnect();
+    }
+  });
 });
 
 let currentVideoElement = null;
