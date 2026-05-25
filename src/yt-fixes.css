@@ -8,7 +8,7 @@
 }
 
 /* Removes duplicated panel on UI partially blocking video tiles */
-.RYo6Fb .hsdF6b { width: 0rem; }
+.RYo6Fb .hsdF6b { width: 0rem !important; }
 
 .ytLrWatchDefaultShadow,
 [idomkey='shadow'] {
