@@ -7,6 +7,9 @@
   width: 100% !important;
 }
 
+/* Removes duplicated panel on UI partially blocking video tiles */
+.RYo6Fb .hsdF6b { width: 0rem; }
+
 .ytLrWatchDefaultShadow,
 [idomkey='shadow'] {
   background-image: linear-gradient(
