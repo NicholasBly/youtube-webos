@@ -296,12 +296,26 @@ class ReturnYouTubeDislike {
   }
 
   handleFocusIn(e) {
-      if (!this.active || !this.panelElement || this.isProgrammaticFocus) return;
-      
+      if (!this.active || this.isProgrammaticFocus) return;
+
+      // Fallback panel detection: the bodyObserver is rooted at
+      // SELECTORS.mainContainer ('zylon-provider-7'), but the description
+      // dialog (role="dialog") is appended to a sibling overlay container,
+      // so its addition does not fire our childList mutations. When focus
+      // crosses into something matching the panel selector, wire the panel
+      // up right here — this is the difference between "RYD knows about the
+      // panel" and "dislike+nav silently dead" for the D-pad Enter path.
+      if (!this.panelElement) {
+          const found = e.target.closest && e.target.closest(SELECTORS.panel);
+          if (!found) return;
+          this.setupPanel(found);
+          if (!this.panelElement) return; // setup bailed for some reason
+      }
+
       // PERF: fast DOM check only on focus change
       if (this.panelElement.contains(e.target)) {
           this.isPanelFocused = true;
-          
+
           const targetItem = e.target.closest(SELECTORS.menuItem);
           if (targetItem && !targetItem.querySelector(SELECTORS.menuItem)) {
               this.updateVisualState(targetItem);
@@ -425,13 +439,20 @@ class ReturnYouTubeDislike {
 
       if (isEnter) {
           const current = this.menuItemsCache[this.focusedIndex];
-          // Double check current is actually focused/valid
-          if (current && (current === document.activeElement || current.contains(document.activeElement))) {
+          // Only intercept Enter when the menuitem container is *itself* the
+          // active element. If focus is on a focusable descendant (e.g. the
+          // Description chip's inner <yt-button-container role="button">),
+          // the real Enter must reach YouTube's native handler — dispatching
+          // a synthetic keydown on the parent menuitem targets the wrong node
+          // and, being isTrusted=false, is rejected by YT's nav handlers
+          // anyway. Net effect of the old `contains` branch: real Enter was
+          // swallowed and the panel never opened.
+          if (current && current === document.activeElement) {
               e.preventDefault();
               e.stopPropagation();
               this.dispatching = true;
               try { this.triggerEnter(current); } finally { this.dispatching = false; }
-              
+
               // Cleanup visuals after click
               setTimeout(() => {
                   this.clearAllHighlights(); // Use optimized clear
