@@ -1,5 +1,6 @@
 import { configRead, configAddChangeListener } from './config.js';
 import { SELECTORS, REMOTE_KEYS, isGuestMode, sendKey, extractLaunchParams, invalidateGuestModeCache } from './utils';
+import './auto-login.css';
 
 const STORAGE_KEY = 'yt.leanback.default::recurring_actions';
 const TARGET_ACTIONS = [
@@ -8,7 +9,7 @@ const TARGET_ACTIONS = [
   'startup-screen-signed-out-welcome-back'
 ];
 
-const BYPASS_STYLE_ID = 'login-bypass-css';
+const BYPASS_BODY_CLASS = 'ytaf-bypassing-login';
 let hasBypassed = false;
 let pageObserverAttached = false;
 
@@ -68,30 +69,17 @@ export function initPreviews() {
   }, 2500); 
 }
 
+// CSS rules live in auto-login.css and are scoped by body.ytaf-bypassing-login,
+// so toggling the body class activates/deactivates the page-hide instantly with
+// no <style> element churn.
 function injectBypassCSS() {
-    if (document.head && !document.getElementById(BYPASS_STYLE_ID)) {
-        const style = document.createElement('style');
-        style.id = BYPASS_STYLE_ID;
-        style.textContent = `
-            .${SELECTORS.ACCOUNT_SELECTOR},
-            ytlr-account-selector,
-            .ytlr-account-selector,
-            [class*="account-selector"] {
-                opacity: 0 !important;
-                visibility: hidden !important;
-                display: none !important;
-            }
-        `;
-        document.head.appendChild(style);
-    }
+    if (document.body) document.body.classList.add(BYPASS_BODY_CLASS);
 }
 
 function finalizeBypass() {
     console.info('[Auto Login] Bypass: Done. Cleaning up...');
     setTimeout(() => {
-        const style = document.getElementById(BYPASS_STYLE_ID);
-        if (style) style.remove();
-        // hasBypassed = false; 
+        if (document.body) document.body.classList.remove(BYPASS_BODY_CLASS);
     }, 2000);
 }
 

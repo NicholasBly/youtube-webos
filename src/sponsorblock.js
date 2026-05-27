@@ -3,6 +3,7 @@ import { configAddChangeListener, configRemoveChangeListener, segmentTypes, conf
 import { showNotification } from './notifications.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { isLegacyWebOS } from './webos-utils.js';
+import './sponsorblock.css';
 
 const SPONSORBLOCK_CONFIG = {
     primaryAPI: 'https://sponsorblock.inf.re/api',
@@ -539,8 +540,8 @@ class SponsorBlockHandler {
         this.video = document.querySelector('video');
         if (!this.video) return;
 
-        this.injectCSS();
-        // Initial tracking setup
+        // CSS is loaded via static import (./sponsorblock.css) — no runtime
+        // <style> injection needed.
         this.resetSegmentTracking();
 
         this.boundStateChange = (e) => {
@@ -1159,21 +1160,6 @@ class SponsorBlockHandler {
         return res;
     }
 
-    injectCSS() {
-        if (document.getElementById('sb-css')) return;
-
-        const css = `
-            #previewbar { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; pointer-events: none !important; z-index: 2000 !important; overflow: visible !important; transition: opacity 0.2s ease !important; }
-            .previewbar { position: absolute !important; list-style: none !important; height: 100% !important; top: 0 !important; display: block !important; z-index: 2001 !important; }
-            .previewbar.highlight { min-width: 5.47px !important; max-width: 5.47px !important; height: 100% !important; top: 0 !important; background-color: #ff0000; }
-            ytlr-progress-bar.zylon-hidden ~ #previewbar { opacity: 0 !important; visibility: hidden !important; }
-        `;
-        const style = document.createElement('style');
-        style.id = 'sb-css';
-        style.textContent = css;
-        document.head.appendChild(style);
-    }
-
     addEvent(elem, type, handler) {
         if (!elem) return;
         elem.addEventListener(type, handler);
@@ -1226,8 +1212,8 @@ class SponsorBlockHandler {
             this.overlay = null;
         }
 
-        const style = document.getElementById('sb-css');
-        if (style) style.remove();
+        // sponsorblock.css stays in the page (static import) — nothing to
+        // remove. It only styles elements that exist while SB is active.
 
         this.listeners.forEach((events, elem) => {
             events.forEach((handler, type) => elem.removeEventListener(type, handler));

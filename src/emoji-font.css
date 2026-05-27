@@ -14,3 +14,32 @@ img.emoji {
   user-select: none;
   vertical-align: baseline;
 }
+
+/* Legacy-webOS (≤4) font fix — was injected as <style id="legacy-webos-font-fix">.
+   Gated by html.ytaf-legacy-emoji so the rules only apply when emoji-font.js
+   activates on a legacy webOS device (the modern build aliases emoji-font.js
+   away entirely, so this rule set is also absent from that bundle). */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic&family=Noto+Sans+Math&display=swap');
+
+html.ytaf-legacy-emoji yt-formatted-string,
+html.ytaf-legacy-emoji yt-core-attributed-string,
+html.ytaf-legacy-emoji .yt-tv-text,
+html.ytaf-legacy-emoji .video-title,
+html.ytaf-legacy-emoji .title,
+html.ytaf-legacy-emoji #title,
+html.ytaf-legacy-emoji .description,
+html.ytaf-legacy-emoji #description,
+html.ytaf-legacy-emoji .video-title-text,
+html.ytaf-legacy-emoji .badge-text {
+  font-family: 'Roboto', 'YouTube Noto', 'YouTube Sans', 'Noto Sans Arabic', 'Arial',
+    'Noto Sans Math', sans-serif !important;
+  text-rendering: optimizeLegibility !important;
+}
+
+emoji-render.twemoji-injected {
+  display: inline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  vertical-align: baseline !important;
+}

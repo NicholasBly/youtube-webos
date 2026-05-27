@@ -33,8 +33,6 @@ function isPlayerHidden(video) {
 let lastPageType = null;
 let shortsKeepAliveTimer = null;
 let shortsBufferTimer = null;
-const REMOTE_KEY_YELLOW_1 = { ...REMOTE_KEYS.YELLOW, charCode: 0 }; 
-const REMOTE_KEY_YELLOW_2 = { code: 170, key: 'Yellow', charCode: 170 };
 const STATE_PLAYING = 1;
 
 function setShortsKeepAlive(enable) {
@@ -61,15 +59,15 @@ function setShortsKeepAlive(enable) {
             }
 
             console.log(`[ScreensaverFix] Target picked: ${source}`, target);
-            console.log(`[ScreensaverFix] Sending YELLOW_1 (${REMOTE_KEY_YELLOW_1.code})`);
+            console.log(`[ScreensaverFix] Sending YELLOW (${REMOTE_KEYS.YELLOW.code})`);
 
-            sendKey(REMOTE_KEY_YELLOW_1, target);
-            
+            sendKey(REMOTE_KEYS.YELLOW, target);
+
             if (shortsBufferTimer) clearTimeout(shortsBufferTimer);
 
             shortsBufferTimer = window.setTimeout(() => {
-                console.log(`[ScreensaverFix] Sending YELLOW_2 (${REMOTE_KEY_YELLOW_2.code})`);
-                sendKey(REMOTE_KEY_YELLOW_2, target);
+                console.log(`[ScreensaverFix] Sending YELLOW_ALT (${REMOTE_KEYS.YELLOW_ALT.code})`);
+                sendKey(REMOTE_KEYS.YELLOW_ALT, target);
                 shortsBufferTimer = null;
             }, 250);
         }

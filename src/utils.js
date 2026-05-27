@@ -19,6 +19,9 @@ export const REMOTE_KEYS = {
   RED:    { code: 403, key: 'Red' },
   GREEN:  { code: 404, key: 'Green' },
   YELLOW: { code: 405, key: 'Yellow' },
+  // Secondary yellow keycode emitted by some webOS remotes alongside 405.
+  // Used by screensaver-fix.js to send both halves of the keep-alive burst.
+  YELLOW_ALT: { code: 170, key: 'Yellow', charCode: 170 },
   BLUE:   { code: 406, key: 'Blue' },
 
   0: { code: 48, key: '0' },
@@ -106,6 +109,23 @@ if (typeof document !== 'undefined') {
 export const isWatchPage = () => _isWatchPage;
 export const isShortsPage = () => _isShortsPage;
 export const isSearchPage = () => _isSearchPage;
+
+// Cached <video> lookup. Several shortcut handlers re-query
+// document.querySelector('video') per keypress; cache it for the lifetime of
+// a watch/shorts session and invalidate when the page state changes.
+let _cachedVideo = null;
+export function getVideo() {
+  if (_cachedVideo && _cachedVideo.isConnected) return _cachedVideo;
+  _cachedVideo = document.querySelector('video');
+  return _cachedVideo;
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('ytaf-page-update', (e) => {
+    // Drop the cache whenever we leave a video page; the next getVideo() call
+    // will re-query on demand.
+    if (!e.detail.isWatch && !e.detail.isShorts) _cachedVideo = null;
+  });
+}
 
 export function debounce(func, wait) {
   let timeout;

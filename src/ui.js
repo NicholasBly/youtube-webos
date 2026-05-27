@@ -7,7 +7,7 @@ import './return-dislike.js';
 // import { initYouTubeFixes } from './yt-fixes.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS } from './utils.js';
+import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo } from './utils.js';
 import { initAdblock, destroyAdblock, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
 import { getWebOSVersion } from './webos-utils.js';
 import { showNotification as _showNotification, setNotificationOled, setNotificationTheme } from './notifications.js';
@@ -105,6 +105,18 @@ if (!Element.prototype.closest) {
 }
 
 const simulateBack = () => { console.log('[Shortcut] Simulating Back/Escape...'); sendKey(REMOTE_KEYS.BACK); };
+
+// Engagement panel detection. The two renderers are alternative shells YouTube
+// uses depending on the panel type (comments/description vs. title-header
+// panels); we query both and return whichever exists. Centralized here because
+// the same chain was inlined in three shortcut handlers.
+const ENGAGEMENT_PANEL_SELECTOR =
+    'ytlr-engagement-panel-section-list-renderer, ytlr-engagement-panel-title-header-renderer';
+const getEngagementPanel = () => document.querySelector(ENGAGEMENT_PANEL_SELECTOR);
+const isEngagementPanelVisible = () => {
+    const panel = getEngagementPanel();
+    return !!(panel && window.getComputedStyle(panel).display !== 'none');
+};
 
 window.__spatialNavigation__.keyMode = 'NONE';
 const ARROW_KEY_CODE = { 
@@ -608,7 +620,7 @@ window.ytaf_showOptionsPanel = showOptionsPanel;
 
 async function skipChapter(direction = 'next') {
   if(isShortsPage()) return;
-  const video = document.querySelector('video');
+  const video = getVideo();
   if (!video || !video.duration) return;
 
   skipChapter.lastSrc = skipChapter.lastSrc || '';
@@ -707,7 +719,7 @@ async function skipChapter(direction = 'next') {
 }
 
 function performBurstSeek(seconds, video) {
-    if (!video) video = document.querySelector('video');
+    if (!video) video = getVideo();
     if (!video) return;
 	
     // Reset accumulators if direction changes (e.g. going from +15 to -15)
@@ -847,9 +859,8 @@ function toggleCommentsLogic() {
     }
 
     const isBtnActive = commBtn && (commBtn.getAttribute('aria-pressed') === 'true' || commBtn.getAttribute('aria-selected') === 'true');
-    const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
-    const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
-      
+    const isPanelVisible = isEngagementPanelVisible();
+
     if ((isBtnActive || isPanelVisible) && !isLiveChat) simulateBack();
     else if (triggerInternal(commBtn, isLiveChat ? 'Live Chat' : 'Comments')) {
             if (isLiveChat) {
@@ -889,8 +900,7 @@ function toggleDescriptionLogic() {
     }
 
     const isDescActive = target && (target.getAttribute('aria-pressed') === 'true' || target.getAttribute('aria-selected') === 'true');
-    const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
-    const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
+    const isPanelVisible = isEngagementPanelVisible();
 
     if (isDescActive || isPanelVisible) simulateBack();
     else if (triggerInternal(target, 'Description')) {
@@ -993,8 +1003,7 @@ function playPauseLogic(video) {
     } else {
         const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
         const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
-        const panel = document.querySelector('ytlr-engagement-panel-section-list-renderer') || document.querySelector('ytlr-engagement-panel-title-header-renderer');
-        const isPanelVisible = panel && window.getComputedStyle(panel).display !== 'none';
+        const isPanelVisible = isEngagementPanelVisible();
         const watchOverlay = document.querySelector('.webOs-watch');
         let needsHide = false;
         if(!isControlsVisible) {
@@ -1065,8 +1074,8 @@ function handleShortcutAction(action) {
   // Player Actions - Require Video/Context
   // Check context for player actions (same check as used previously for keys 0-9)
   if (!isWatchPage() && !isShortsPage()) return;
-  
-  const video = document.querySelector('video');
+
+  const video = getVideo();
   const player = document.getElementById(SELECTORS.PLAYER_ID) || document.querySelector('.html5-video-player');
   if (!video) return;
 
@@ -1203,6 +1212,8 @@ function initGlobalStyles() {
     // not config — YouTube never touches it.
     const style = createElement('style');
     style.textContent = `
+        :root { --ytaf-oled-opacity: 1; }
+
         html.ytaf-hide-logo ytlr-redux-connect-ytlr-logo-entity,
         html.ytaf-hide-logo ytlr-logo-entity { visibility: hidden !important; }
 
@@ -1211,6 +1222,37 @@ function initGlobalStyles() {
         body.ytaf-hide-controls .ytLrWatchDefaultShadow,
         body.ytaf-hide-controls [idomkey='shadow'],
         body.ytaf-hide-controls .ytLrWatchDefault2025Shadow { opacity: 0 !important; }
+
+        /* OLED-care mode — written once, toggled by html.oled-theme-active.
+           Gated on <html> rather than <body> because YouTube's leanback app
+           rewrites body.className on tab navigation and panel dialogs, which
+           would wipe a body-class gate and silently disable these rules.
+           Same reason ytaf-hide-logo / ytaf-fix-titles / ytaf-remove-borders
+           already live on documentElement.
+
+           Previously this whole block was rebuilt as an inline <style> on every
+           videoShelfOpacity slider tick. Opacity now flows through the CSS
+           custom property --ytaf-oled-opacity; the conditional shelf-transparent
+           rules sit under html.oled-transparent-shelf. */
+        html.oled-theme-active #container,
+        html.oled-theme-active .ytLrGuideResponseMask,
+        html.oled-theme-active .geClSe,
+        html.oled-theme-active .hsdF6b,
+        html.oled-theme-active .ytLrAnimatedOverlayContainer,
+        html.oled-theme-active .ZghAqf,
+        html.oled-theme-active .RAE3Re .AmQJbe,
+        html.oled-theme-active .tVp1L,
+        html.oled-theme-active .app-quality-root .DnwJH,
+        html.oled-theme-active .qRdzpd.stQChb .TYE3Ed,
+        html.oled-theme-active .k82tDb { background-color: #000 !important; }
+        html.oled-theme-active .ytLrGuideResponseGradient { display: none; }
+        html.oled-theme-active .iha0pc { color: #000 !important; }
+        html.oled-theme-active .Jx9xPc { background-color: rgba(0, 0, 0, var(--ytaf-oled-opacity)) !important; }
+        html.oled-theme-active .p0DeOc { background-color: #000 !important; background-image: none !important; }
+        html.oled-theme-active ytlr-player-focus-ring { border: 0.375rem solid rgb(200, 200, 200) !important; }
+        html.oled-theme-active ytlr-surface-page { background-image: none !important; background-color: #000 !important; }
+        html.oled-theme-active.oled-transparent-shelf .app-quality-root .UGcxnc .dxLAmd,
+        html.oled-theme-active.oled-transparent-shelf .app-quality-root .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }
 
         html.ytaf-fix-titles .app-quality-root .SK1srf .WVWtef,
         html.ytaf-fix-titles .app-quality-root .SK1srf .niS3yd {
@@ -1292,51 +1334,24 @@ function updateLogoState() {
   }
 }
 
+function syncOledShelfOpacity() {
+  const opacityVal = configRead('videoShelfOpacity');
+  document.documentElement.style.setProperty('--ytaf-oled-opacity', String(opacityVal / 100));
+  document.documentElement.classList.toggle('oled-transparent-shelf', opacityVal > 50);
+}
+
 function applyOledMode(enabled) {
-  const oledClass = 'oled-care';
-
-  document.getElementById('style-gray-ui-oled-care')?.remove();
-
-  // Lazy Load Support: optionsPanel might be null
-  if (optionsPanel) {
-      optionsPanel.classList.toggle(oledClass, enabled);
-  }
+  // All the OLED rules now live in initGlobalStyles() as static CSS gated by
+  // html.oled-theme-active. We toggle on documentElement (not body) because
+  // YouTube rewrites body.className on navigation/panel transitions — a body
+  // gate would silently drop OLED whenever YT touched the class string.
+  if (optionsPanel) optionsPanel.classList.toggle('oled-care', enabled);
   setNotificationOled(enabled);
 
-  if (enabled) {
-    document.body.classList.add('oled-theme-active');
-    
-    const opacityVal = configRead('videoShelfOpacity');
-    const opacity = opacityVal / 100;
-    
-    const transparentBgRules = opacityVal > 50 
-      ? '.app-quality-root .UGcxnc .dxLAmd { background-color: rgba(0, 0, 0, 0) !important; } .app-quality-root .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }' 
-      : '';
-    
-    const style = createElement('style', { id: 'style-gray-ui-oled-care', text: `
-        #container { background-color: #000 !important; } 
-        .ytLrGuideResponseMask { background-color: #000 !important; } 
-        .geClSe { background-color: #000 !important; } 
-        .hsdF6b { background-color: #000 !important; } 
-        .ytLrGuideResponseGradient { display: none; } 
-        .ytLrAnimatedOverlayContainer { background-color: #000 !important; } 
-        .iha0pc { color: #000 !important; } 
-        .ZghAqf { background-color: #000 !important; } 
-        .RAE3Re .AmQJbe { background-color: #000 !important; } 
-        .tVp1L { background-color: #000 !important; } 
-        .app-quality-root .DnwJH { background-color: #000 !important; } 
-        .qRdzpd.stQChb .TYE3Ed { background-color: #000 !important; } 
-        .k82tDb { background-color: #000 !important; }
-        .Jx9xPc { background-color: rgba(0, 0, 0, ${opacity}) !important; } 
-        .p0DeOc { background-color: #000 !important; background-image: none !important; }
-        ytlr-player-focus-ring { border: 0.375rem solid rgb(200, 200, 200) !important; }
-		ytlr-surface-page { background-image: none !important; background-color: #000 !important; }
-        ${transparentBgRules}` 
-    });
-    document.head.appendChild(style);
-  } else {
-    document.body.classList.remove('oled-theme-active');
-  }
+  document.documentElement.classList.toggle('oled-theme-active', !!enabled);
+  if (enabled) syncOledShelfOpacity();
+  else document.documentElement.classList.remove('oled-transparent-shelf');
+
   updateLogoState();
 }
 
@@ -1378,9 +1393,9 @@ configAddChangeListener('enableTrackingBlock', (evt) => {
 });
 
 configAddChangeListener('videoShelfOpacity', () => {
-  if (configRead('enableOledCareMode')) {
-    applyOledMode(true);
-  }
+  // Cheap update — just retargets the CSS custom property and toggles the
+  // transparent-shelf class. No <style> rebuild.
+  if (configRead('enableOledCareMode')) syncOledShelfOpacity();
 });
 
 // Apply initial states on boot

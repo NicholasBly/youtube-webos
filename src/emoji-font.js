@@ -84,8 +84,14 @@ function processTextNode(textNode) {
         
         parsedTextCache.set(cleanEmoji, parsedHTML);
         if (parsedTextCache.size > MAX_CACHE_SIZE) {
-            // O(1) clear instead of Iterator churning for WebOS garbage collection
-            parsedTextCache.clear();
+            // Trim oldest half rather than .clear() — Map iteration is insertion
+            // order, so dropping the first 250 keeps the most-recently-parsed
+            // emojis hot for the page the user is actually scrolling.
+            const keysIter = parsedTextCache.keys();
+            const trimCount = MAX_CACHE_SIZE >> 1;
+            for (let i = 0; i < trimCount; i++) {
+                parsedTextCache.delete(keysIter.next().value);
+            }
         }
       } else {
         parsedHTML = cleanEmoji;
@@ -197,24 +203,10 @@ function manageObserverState() {
 }
 
 if (document.characterSet === 'UTF-8' && getWebOSVersion() <= 4) {
-  const style = document.createElement('style');
-  style.id = 'legacy-webos-font-fix';
-  style.styleSheet ? (style.styleSheet.cssText = "") : (style.textContent = `
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic&family=Noto+Sans+Math&display=swap');
-    
-    yt-formatted-string, yt-core-attributed-string, .yt-tv-text, .video-title, .title, #title, .description, #description, .video-title-text, .badge-text {
-        font-family: 'Roboto', 'YouTube Noto', 'YouTube Sans', 'Noto Sans Arabic', 'Arial', 'Noto Sans Math', sans-serif !important;
-        text-rendering: optimizeLegibility !important;
-    }
-    
-    emoji-render.twemoji-injected {
-        display: inline !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        vertical-align: baseline !important;
-    }
-  `);
-  document.head.appendChild(style);
+  // Rules for the legacy font + emoji-render styling live in emoji-font.css
+  // (already imported above) and are gated by html.ytaf-legacy-emoji so they
+  // only apply on legacy webOS where this module actually loads.
+  document.documentElement.classList.add('ytaf-legacy-emoji');
 
   // Hook into configurations
   manageObserverState();
