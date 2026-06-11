@@ -2,6 +2,10 @@ import { waitForChildAdd } from './utils.js';
 import { configRead, configAddChangeListener } from './config.js';
 
 // --- Configuration & Constants ---
+// Gates concurrent upgrade JOBS (not XHRs). Each job now fires up to 3 HEAD
+// probes in parallel (see processUpgrade), so this is kept at 3 to bound total
+// in-flight connections on memory-/socket-starved webOS 3 hardware. Raising it
+// to ~6 trades more parallelism for more concurrent sockets.
 const MAX_CONCURRENT_REQUESTS = 3;
 const IMAGE_LOAD_TIMEOUT = 5000;
 const CACHE_SIZE_LIMIT = 200;
@@ -278,26 +282,37 @@ async function processUpgrade(element, generationId) {
 
   const candidateQualities = ['maxresdefault', 'sddefault', 'hqdefault'];
 
-  for (let i = 0, len = candidateQualities.length; i < len; i++) {
-    const quality = candidateQualities[i];
-    const currentState = elementState.get(element);
-    if (!currentState || currentState.generationId !== generationId) return;
-    if (document.hidden) return;
+  // Probe candidates in parallel: total latency becomes max(probe) instead of
+  // sum(probes), so the common "no maxres" case no longer waits a full
+  // sequential round trip before trying sddefault. Costs up to 3 HEADs per
+  // element — see the MAX_CONCURRENT_REQUESTS note at the top of the file.
+  const candidates = [];
+  for (let i = 0; i < candidateQualities.length; i++) {
+    const targetUrl = getThumbnailUrl(currentUrl, candidateQualities[i], pathMatch);
+    if (targetUrl) candidates.push({ quality: candidateQualities[i], url: targetUrl });
+  }
+  if (candidates.length === 0) return;
 
-    const targetUrl = getThumbnailUrl(currentUrl, quality, pathMatch);
-    if (!targetUrl) continue;
+  const results = await Promise.all(
+    candidates.map(c => testAndLoadImage(c.url.href))
+  );
 
-    const isValid = await testAndLoadImage(targetUrl.href);
+  // Element may have been recycled while the probes were in flight.
+  const currentState = elementState.get(element);
+  if (!currentState || currentState.generationId !== generationId) return;
+  if (document.hidden) return;
 
-    if (isValid) {
+  // candidates are ordered best-quality-first, so the first success wins.
+  for (let i = 0; i < candidates.length; i++) {
+    if (results[i]) {
       // Target FIFO deletion rather than full wipe
       if (qualityCache.size >= CACHE_SIZE_LIMIT) qualityCache.delete(qualityCache.keys().next().value);
-      qualityCache.set(videoId, quality);
-      applyUpgrade(targetUrl, quality);
-      return; 
+      qualityCache.set(videoId, candidates[i].quality);
+      applyUpgrade(candidates[i].url, candidates[i].quality);
+      return;
     }
   }
-  
+
   if (qualityCache.size >= CACHE_SIZE_LIMIT) qualityCache.delete(qualityCache.keys().next().value);
   qualityCache.set(videoId, null);
 }

@@ -183,8 +183,11 @@ function splitIntoRuns(text, originalRun = {}) {
     return newRuns;
 }
 
-function findAndProcessText(obj, maxDepth = 20, currentDepth = 0) {
-  if (!obj || typeof obj !== 'object' || currentDepth > maxDepth) return;
+// Non-recursive: process the emoji/text fields of a single node in place.
+// Extracted from the old findAndProcessText so walkAndProcess can apply it
+// per node without a recursive walk of its own. Callers (walkAndProcess)
+// guarantee obj is a non-null object before invoking this.
+function processTextFieldsInPlace(obj) {
   
   if (typeof obj.simpleText === 'string') {
     const runs = splitIntoRuns(obj.simpleText);
@@ -224,45 +227,40 @@ function findAndProcessText(obj, maxDepth = 20, currentDepth = 0) {
     }
     if (changed) obj.runs = newRuns;
   }
+}
+
+// Combined depth-limited walk: emoji text processing (doEmoji) and/or
+// trackingParams stripping (doTracking) in a single traversal. Replaces the
+// two structurally identical recursive walkers (the old findAndProcessText
+// recursion and stripTrackingParams) so large JSON.parse responses are walked
+// once instead of twice.
+function walkAndProcess(obj, doEmoji, doTracking, maxDepth, currentDepth = 0) {
+  if (!obj || typeof obj !== 'object' || currentDepth > maxDepth) return;
+
+  if (doTracking && typeof obj.trackingParams === 'string') obj.trackingParams = '';
+  // NOTE: do NOT strip clickTrackingParams here — that breaks clicking endcards.
+
+  if (doEmoji) processTextFieldsInPlace(obj);
 
   if (Array.isArray(obj)) {
     for (let i = 0; i < obj.length; i++) {
-      if (obj[i] && typeof obj[i] === 'object') {
-        findAndProcessText(obj[i], maxDepth, currentDepth + 1);
-      }
+      const v = obj[i];
+      if (v && typeof v === 'object') walkAndProcess(v, doEmoji, doTracking, maxDepth, currentDepth + 1);
     }
   } else {
     const keys = Object.keys(obj);
     for (let i = 0; i < keys.length; i++) {
-      const val = obj[keys[i]];
-      if (val && typeof val === 'object') {
-        findAndProcessText(val, maxDepth, currentDepth + 1);
-      }
+      const v = obj[keys[i]];
+      if (v && typeof v === 'object') walkAndProcess(v, doEmoji, doTracking, maxDepth, currentDepth + 1);
     }
   }
 }
 
-function stripTrackingParams(obj, maxDepth = 15, currentDepth = 0) {
-  if (!obj || typeof obj !== 'object' || currentDepth > maxDepth) return;
-
-  if (typeof obj.trackingParams === 'string') obj.trackingParams = '';
-  // if (typeof obj.clickTrackingParams === 'string') obj.clickTrackingParams = ''; Do Not Strip. Breaks clicking endcards
-
-  if (Array.isArray(obj)) {
-    for (let i = 0; i < obj.length; i++) {
-      if (obj[i] && typeof obj[i] === 'object') {
-        stripTrackingParams(obj[i], maxDepth, currentDepth + 1);
-      }
-    }
-  } else {
-    const keys = Object.keys(obj);
-    for (let i = 0; i < keys.length; i++) {
-      const val = obj[keys[i]];
-      if (val && typeof val === 'object') {
-        stripTrackingParams(val, maxDepth, currentDepth + 1);
-      }
-    }
-  }
+// Thin wrapper preserving the old signature so per-item call sites in
+// filterItemsOptimized / processSectionListOptimized / applySchemaFilters are
+// untouched.
+function findAndProcessText(obj, maxDepth = 20) {
+  walkAndProcess(obj, true, false, maxDepth);
 }
 
 const telemetryFetchHandler = (evt) => {
@@ -305,7 +303,13 @@ export function initTrackingBlock() {
       const reqUrl = this.__adblockRequestUrl;
       if (reqUrl && TELEMETRY_REGEX.test(reqUrl)) {
         if (DEBUG) console.info('[AdBlock] Blocked telemetry XHR request:', reqUrl);
-        // Silently drop the request
+        // Abort asynchronously so readystatechange/abort/loadend fire and the
+        // caller's request queue settles, instead of leaving the XHR pending
+        // forever (which can cause YT's telemetry queue to grow/retry).
+        const xhr = this;
+        setTimeout(function() {
+          try { xhr.abort(); } catch { /* already done/aborted */ }
+        }, 0);
         return;
       }
       return originalXHRSend.apply(this, arguments);
@@ -388,13 +392,18 @@ function hookedParse(text, reviver) {
       applyFallbackFilters(data, cfgFlags, needsContentFiltering);
     }
 
-    if (cfgFlags.enableLegacyEmojiFix && data.frameworkUpdates) {
-        findAndProcessText(data.frameworkUpdates, 20);
-    }
-
     if (cfgFlags.enableTrackingBlock) {
-        stripTrackingParams(data, 15);
+        // Single combined pass: strip trackingParams across the whole tree,
+        // then (if enabled) wrap emoji on frameworkUpdates as a small targeted
+        // walk on top. Preserves the original depths (15 tracking / 20 emoji)
+        // and replaces the old separate stripTrackingParams + emoji traversals.
+        walkAndProcess(data, false, true, 15);
         if (DEBUG) debugLog('Stripped trackingParams globally');
+        if (cfgFlags.enableLegacyEmojiFix && data.frameworkUpdates) {
+            walkAndProcess(data.frameworkUpdates, true, false, 20);
+        }
+    } else if (cfgFlags.enableLegacyEmojiFix && data.frameworkUpdates) {
+        walkAndProcess(data.frameworkUpdates, true, false, 20);
     }
 
   } catch (e) {

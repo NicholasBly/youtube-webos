@@ -24,7 +24,11 @@ const CONFIG_MAPPING = {
     hook: 'sbMode_hook'
 };
 
-const EXTRA_CONFIG_KEYS = ['enableMutedSegments', 'sbMode_highlight', 'skipSegmentsOnce'];
+const EXTRA_CONFIG_KEYS = [
+    'enableMutedSegments', 'sbMode_highlight', 'skipSegmentsOnce',
+    // Color keys so the overlay redraws when the user changes a segment color
+    ...Object.keys(segmentTypes).map(k => `${k}Color`)
+];
 
 const CHAIN_SKIP_CONSTANTS = {
     START_THRESHOLD: 0.5,
@@ -89,6 +93,10 @@ class SponsorBlockHandler {
 
         this.lastOverlayHash = null;
 
+        // Cached _getProgressBarAnchor() result, keyed on progressBar identity.
+        this._anchorCache = null;
+        this._anchorCacheBar = null;
+
         this.setupConfigListeners();
 
         this.log('info', `Created handler for ${this.videoID}`);
@@ -124,25 +132,38 @@ class SponsorBlockHandler {
     _getProgressBarAnchor() {
         if (!this.progressBar) return { container: null, asSibling: false };
 
+        // Cached per progress-bar identity. handleTimeUpdate calls this every
+        // 500ms; the answer only changes when the bar element is replaced,
+        // which checkForProgressBar handles by clearing the cache.
+        if (this._anchorCache && this._anchorCacheBar === this.progressBar) {
+            return this._anchorCache;
+        }
+
+        let result;
         // Multi-markers bar: direct child injection is fine, keep existing behaviour.
         if (this._getClosest(this.progressBar, 'ytlr-multi-markers-player-bar-renderer')) {
-            return { container: this.progressBar, asSibling: false };
+            result = { container: this.progressBar, asSibling: false };
+        } else {
+            // Standard progress bar: walk up to ytlr-progress-bar and inject after it.
+            const ytPB = this._getClosest(this.progressBar, 'ytlr-progress-bar') || this.progressBar;
+            const parent = ytPB.parentNode;
+            if (!parent) {
+                result = { container: this.progressBar, asSibling: false };
+            } else {
+                // The parent becomes our positioning context. The computed-style
+                // read now happens once per bar instead of on every 500ms sync.
+                const ps = window.getComputedStyle(parent);
+                if (ps.position === 'static') parent.style.setProperty('position', 'relative', 'important');
+                if (ps.display === 'inline' || ps.display === '') {
+                    parent.style.setProperty('display', 'block', 'important');
+                }
+                result = { container: ytPB, asSibling: true };
+            }
         }
 
-        // Standard progress bar: walk up to ytlr-progress-bar and inject after it.
-        const ytPB = this._getClosest(this.progressBar, 'ytlr-progress-bar') || this.progressBar;
-        const parent = ytPB.parentNode;
-        if (!parent) return { container: this.progressBar, asSibling: false };
-
-        // The parent becomes our positioning context.
-        const ps = window.getComputedStyle(parent);
-        if (ps.position === 'static') parent.style.setProperty('position', 'relative', 'important');
-        
-        if (ps.display === 'inline' || ps.display === '') {
-            parent.style.setProperty('display', 'block', 'important');
-        }
-
-        return { container: ytPB, asSibling: true };
+        this._anchorCache = result;
+        this._anchorCacheBar = this.progressBar;
+        return result;
     }
 
     // Copies ytlr-progress-bar's offset rect onto the sibling overlay so they
@@ -173,8 +194,11 @@ class SponsorBlockHandler {
         const ov = this.overlay;
         function set(prop, val) { ov.style.setProperty(prop, val, 'important'); }
 
-        // Sync visibility to mirror YouTube's UI state
-        const isHidden = ytPB.classList.contains('zylon-hidden') || window.getComputedStyle(ytPB).opacity === '0';
+        // Sync visibility to mirror YouTube's UI state. classList.contains and
+        // the inline-style read are both recalc-free, unlike the previous
+        // getComputedStyle(ytPB).opacity poll; the inline check still catches UI
+        // builds that hide via inline opacity without the zylon-hidden class.
+        const isHidden = ytPB.classList.contains('zylon-hidden') || ytPB.style.opacity === '0';
         set('opacity', isHidden ? '0' : '1');
 
         const pos = this._offsetRelativeTo(trackEl, parent);
@@ -715,6 +739,10 @@ class SponsorBlockHandler {
 
         if (target) {
             this.progressBar = target;
+            // Bar (re)acquired — drop the cached anchor so _getProgressBarAnchor
+            // recomputes the positioning context for the new element.
+            this._anchorCache = null;
+            this._anchorCacheBar = null;
             const style = window.getComputedStyle(target);
             // For multi-markers bars these tweaks ensure segments are visible inside.
             // For ytlr-progress-bar sliders the overlay is injected as a sibling
@@ -733,7 +761,11 @@ class SponsorBlockHandler {
         if (!duration || isNaN(duration)) return;
 
         const config = configGetAll();
-        const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${config.sbMode_highlight}`;
+        // Include a signature of every segment color so changing a color
+        // mid-video invalidates the hash and forces a redraw (§5b fix).
+        let colorSig = '';
+        for (const k in segmentTypes) colorSig += config[`${k}Color`] || '';
+        const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${config.sbMode_highlight}_${colorSig}`;
         if (overlayHash === this.lastOverlayHash && this.overlay && this._isNodeConnected(this.overlay)) {
             return;
         }
@@ -1128,7 +1160,11 @@ class SponsorBlockHandler {
             if (this.isDestroyed) return null;
 
             try {
-                const fetchURL = `${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&actionTypes=${encodeURIComponent(actionTypes)}&videoID=${this.videoID}`;
+                // Do NOT send videoID with the hash-prefix endpoint — that
+                // defeats the k-anonymity the prefix hashing provides. We
+                // already select our video client-side via
+                // data.find(x => x.videoID === this.videoID) in init().
+                const fetchURL = `${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&actionTypes=${encodeURIComponent(actionTypes)}`;
 
                 let res;
                 if (HAS_ABORT_CONTROLLER) {
