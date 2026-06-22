@@ -55,7 +55,6 @@ class ReturnYouTubeDislike {
     this.handleNavigation = this.handleNavigation.bind(this);
     this.handleFocusIn = this.handleFocusIn.bind(this);
     this.handleFocusOut = this.handleFocusOut.bind(this);
-    this.handleBodyMutation = this.handleBodyMutation.bind(this);
     this.handlePanelMutation = this.handlePanelMutation.bind(this);
 
     this.modeConfigs = {
@@ -152,47 +151,40 @@ class ReturnYouTubeDislike {
   }
 
   // --- Observer Logic ---
-  // Two-layer detection: a MutationObserver on the main container catches
-  // panel additions for the cursor-click and shortcut-triggered paths
-  // (where focus may stay on the Description button and never enter the
-  // panel). The focusin fallback in handleFocusIn catches the D-pad Enter
-  // dialog case — that dialog is appended to a sibling overlay container
-  // outside SELECTORS.mainContainer, so the bodyObserver never sees it.
-  // Removing either layer creates a regression for one of the entry paths.
   observeBodyForPanel() {
     if (!this.active) return;
-    if (this.bodyObserver) this.bodyObserver.disconnect();
-    const mainContainer = document.querySelector(SELECTORS.mainContainer) || document.body;
+    
+    // Clear existing interval or legacy observer if any
+    if (this.bodyPollInterval) clearInterval(this.bodyPollInterval);
+    if (this.bodyObserver) { this.bodyObserver.disconnect(); this.bodyObserver = null; }
 
-    this.bodyObserver = new MutationObserver(this.handleBodyMutation);
-    // Only childList — attribute mutations on body/descendants fire constantly
-    // (focus animations etc.) and we only care about panel add/remove.
-    this.bodyObserver.observe(mainContainer, { childList: true, subtree: true });
-    this.observers.add(this.bodyObserver);
+    this.bodyPollInterval = setInterval(() => {
+      if (!this.active) {
+          clearInterval(this.bodyPollInterval);
+          return;
+      }
 
+      if (this.panelElement) {
+        if (!this.panelElement.isConnected) {
+          this.panelElement = null;
+          this.isPanelFocused = false;
+          this.menuItemsCache = [];
+          this.menuItemsMap.clear();
+          this.lastFocusedElement = null;
+          this.focusedIndex = -1;
+          this.cachedMode = null;
+        } else {
+          return; // Panel is active and connected
+        }
+      }
+
+      const panel = document.querySelector(SELECTORS.panel);
+      if (panel) this.setupPanel(panel);
+    }, 500);
+
+    // Immediate check on load
     const existingPanel = document.querySelector(SELECTORS.panel);
     if (existingPanel) this.setupPanel(existingPanel);
-  }
-
-  handleBodyMutation() {
-    if (!this.active) return;
-    if (this.panelElement) {
-      if (!this.panelElement.isConnected) {
-        // Panel removed — clear refs so the next setupPanel can re-bind.
-        this.panelElement = null;
-        this.isPanelFocused = false;
-        this.menuItemsCache = [];
-        this.menuItemsMap.clear();
-        this.lastFocusedElement = null;
-        this.focusedIndex = -1;
-        this.cachedMode = null;
-      } else {
-        return; // Still connected, no need to re-query.
-      }
-    }
-
-    const panel = document.querySelector(SELECTORS.panel);
-    if (panel) this.setupPanel(panel);
   }
 
   setupPanel(panel) {
@@ -609,6 +601,10 @@ class ReturnYouTubeDislike {
     this.observers.forEach(obs => obs.disconnect());
     this.observers.clear();
     
+    // Clean up the new interval
+    if (this.bodyPollInterval) clearInterval(this.bodyPollInterval);
+    if (this.bodyMutationRaf) cancelAnimationFrame(this.bodyMutationRaf);
+    
     if (this.navigationActive) {
         window.removeEventListener('keydown', this.handleNavigation, { capture: true });
         document.removeEventListener('focusin', this.handleFocusIn, { capture: true });
@@ -628,7 +624,7 @@ class ReturnYouTubeDislike {
     this.menuItemsMap.clear();
     this.lastFocusedElement = null;
     this.panelElement = null;
-	this.cachedMode = null;
+    this.cachedMode = null;
   }
 }
 
