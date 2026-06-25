@@ -1,6 +1,7 @@
 import 'whatwg-fetch';
 import './domrect-polyfill';
 import './adblock.js';
+import './hooks/json-stringify';
 
 if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
     Object.defineProperty(Node.prototype, 'isConnected', {
