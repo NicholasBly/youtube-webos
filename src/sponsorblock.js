@@ -89,7 +89,6 @@ class SponsorBlockHandler {
 
         this.isTimeListenerActive = false;
         this.boundTimeUpdate = this.handleTimeUpdate.bind(this);
-        this.longDistanceTimer = null;
 
         this.lastOverlayHash = null;
 
@@ -253,6 +252,7 @@ class SponsorBlockHandler {
                 start: seg.segment[0],
                 end: seg.segment[1],
                 category: seg.category,
+                categoryName: this.getCategoryName(seg.category),
                 mode: mode,
                 originalIndex: i
             });
@@ -278,16 +278,7 @@ class SponsorBlockHandler {
         }
     }
 
-    clearLongDistanceTimer() {
-        if (this.longDistanceTimer) {
-            clearTimeout(this.longDistanceTimer);
-            this.longDistanceTimer = null;
-        }
-    }
-
     resetSegmentTracking() {
-        this.clearLongDistanceTimer();
-        
         // Default state
         this.nextSegmentIndex = 0;
         this.nextSegmentStart = this.skipSegments.length > 0 ? this.skipSegments[0].start : Infinity;
@@ -573,7 +564,6 @@ class SponsorBlockHandler {
             
             if (state === 0) { // ENDED
                 this.hasPerformedChainSkip = false;
-                this.clearLongDistanceTimer();
                 this.toggleTimeListener(false);
             } else if (state === 1) { // PLAYING
                 // Check for progress bar existence on play in case UI was destroyed (e.g. after side-panel interaction)
@@ -915,17 +905,18 @@ class SponsorBlockHandler {
         // Trust nextSegmentStart to avoid unnecessary searches
         const timeToNext = this.nextSegmentStart - currentTime;
 
-        if (timeToNext > 3.0 && !this.currentManualSegment) {
-            const sleepTime = timeToNext - 1.0;
-            if (sleepTime > 1.0) {
-                this.toggleTimeListener(false);
-                this.longDistanceTimer = setTimeout(() => {
-                    this.longDistanceTimer = null;
-                    this.toggleTimeListener(true);
-                }, sleepTime * 1000);
-                return;
-            }
-        }
+		// Removed sleep timer due to possible bugs with buffering/frame drops
+        // if (timeToNext > 3.0 && !this.currentManualSegment) {
+            // const sleepTime = timeToNext - 1.0;
+            // if (sleepTime > 1.0) {
+                // this.toggleTimeListener(false);
+                // this.longDistanceTimer = setTimeout(() => {
+                    // this.longDistanceTimer = null;
+                    // this.toggleTimeListener(true);
+                // }, sleepTime * 1000);
+                // return;
+            // }
+        // }
 
         if (timeToNext > 0 && !this.currentManualSegment) {
             if (timeToNext < 1.0 && !this.pollingRafId) {
@@ -939,8 +930,14 @@ class SponsorBlockHandler {
         let segmentIdx = -1;
         const expectedSeg = this.skipSegments[this.nextSegmentIndex];
 
-        if (expectedSeg && currentTime >= expectedSeg.start && currentTime < expectedSeg.end) {
-            segmentIdx = this.nextSegmentIndex;
+        if (expectedSeg && currentTime >= expectedSeg.start) {
+            // Check if we are inside it, OR if we overshot it due to WebOS frame drops (< 1.5s gap)
+            if (currentTime < expectedSeg.end || (currentTime - expectedSeg.end) < 1.5) {
+                segmentIdx = this.nextSegmentIndex;
+            } else {
+                // Fallback to Binary Search
+                segmentIdx = this.findSegmentAtTime(currentTime);
+            }
         } else {
             // Fallback to Binary Search
             segmentIdx = this.findSegmentAtTime(currentTime);
@@ -974,7 +971,7 @@ class SponsorBlockHandler {
         if (seg.mode === 'manual_skip') {
             if (this.currentManualSegment !== seg) {
                 this.currentManualSegment = seg;
-                const categoryName = this.getCategoryName(seg.category);
+                const categoryName = seg.categoryName;
                 const title = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
 
                 if (this.activeManualNotification) this.activeManualNotification.remove();
@@ -986,7 +983,7 @@ class SponsorBlockHandler {
         if (seg.mode !== 'auto_skip') {
             if (segmentIdx !== this.lastNotifiedSegmentIndex) {
                 this.lastNotifiedSegmentIndex = segmentIdx;
-                const categoryName = this.getCategoryName(seg.category);
+                const categoryName = seg.categoryName;
                 showNotification(`${categoryName.charAt(0).toUpperCase() + categoryName.slice(1)} segment`);
             }
             return;
@@ -1008,7 +1005,8 @@ class SponsorBlockHandler {
         }
 
         let jumpTarget = seg.end;
-        const skippedCategories = [this.getCategoryName(seg.category)];
+		const categoryName = seg.categoryName;
+        const skippedCategories = [categoryName];
         const segmentsToMark = [seg.originalIndex];
 
         for (let i = segmentIdx + 1; i < this.skipSegments.length; i++) {
@@ -1023,7 +1021,7 @@ class SponsorBlockHandler {
             if (next.start > jumpTarget + 0.2) break;
 
             jumpTarget = Math.max(jumpTarget, next.end);
-            skippedCategories.push(this.getCategoryName(next.category));
+            skippedCategories.push(next.categoryName);
             segmentsToMark.push(next.originalIndex);
         }
 
@@ -1044,7 +1042,8 @@ class SponsorBlockHandler {
             }
         }
 
-        this.video.currentTime = jumpTarget;
+        // Prevents a micro-rewind if a frame drop caused us to overshoot the jump target
+        this.video.currentTime = Math.max(jumpTarget, currentTime);
 
         if (!this.isLegacyWebOSVer) {
             const timeRemaining = this.video.duration - this.video.currentTime;
@@ -1208,7 +1207,6 @@ class SponsorBlockHandler {
         this.log('info', 'Destroying instance.');
 
         this.toggleTimeListener(false);
-        this.clearLongDistanceTimer();
         
         if (this.boundStateChange) {
             window.removeEventListener('yt-player-state-change', this.boundStateChange);
