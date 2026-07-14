@@ -20,7 +20,7 @@
     "lint:prettier": "prettier --check .",
     "lint:all": "pnpm run \"/^lint:(?!all)/\""
   },
-  "repository": "github:webosbrew/youtube-webos",
+  "repository": "github:NicholasBly/youtube-webos",
   "license": "GPL-3.0-only",
   "bugs": "https://github.com/NicholasBly/youtube-webos/issues",
   "homepage": "https://github.com/NicholasBly/youtube-webos#readme",
