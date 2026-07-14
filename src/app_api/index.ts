@@ -102,7 +102,7 @@ export class ResolveCommandRegistry {
         if (hook) {
           resolve(hook);
         } else {
-          setTimeout(poll, 0);
+          setTimeout(poll, 50);
         }
       };
       poll();

@@ -130,9 +130,12 @@ const obs = new MutationObserver((mutations) => {
     .filter((mut) => mut.type === 'childList')
     .flatMap((mut) => Array.from(mut.addedNodes))
     .filter((node) => node instanceof HTMLElement)
-    .flatMap((elem) =>
-      Array.from(elem.querySelectorAll<HTMLElement>(YT_THUMBNAIL_ELEMENT_TAG))
-    )
+    .flatMap((elem) => [
+      ...(elem.matches(YT_THUMBNAIL_ELEMENT_TAG) ? [elem] : []),
+      ...Array.from(
+        elem.querySelectorAll<HTMLElement>(YT_THUMBNAIL_ELEMENT_TAG)
+      )
+    ])
     .filter((elem) => elem.style.backgroundImage !== '')
     .forEach(upgradeBgImg);
 });

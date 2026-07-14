@@ -60,8 +60,9 @@ class PlayerManager
 
     const currentVideoID = this.currentVideoID;
     if (this.#lastVideoID !== currentVideoID) {
-      if (!currentVideoID) throw new Error('unexpected `null` video ID');
-      this.#handleNewVideo(currentVideoID);
+      if (currentVideoID) {
+        this.#handleNewVideo(currentVideoID);
+      }
       this.#lastVideoID = currentVideoID;
     }
 

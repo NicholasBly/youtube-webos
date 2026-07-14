@@ -1722,7 +1722,7 @@ function initGlobalStyles() {
         html.oled-theme-active .ZghAqf,
         html.oled-theme-active .RAE3Re .AmQJbe,
         html.oled-theme-active .tVp1L,
-        html.oled-theme-active .app-quality-root .DnwJH,
+        html.oled-theme-active .DnwJH,
         html.oled-theme-active .qRdzpd.stQChb .TYE3Ed,
         html.oled-theme-active .k82tDb { background-color: #000 !important; }
         html.oled-theme-active .ytLrGuideResponseGradient { display: none; }
@@ -1731,11 +1731,11 @@ function initGlobalStyles() {
         html.oled-theme-active .p0DeOc { background-color: #000 !important; background-image: none !important; }
         html.oled-theme-active ytlr-player-focus-ring { border: 0.375rem solid rgb(200, 200, 200) !important; }
         html.oled-theme-active ytlr-surface-page { background-image: none !important; background-color: #000 !important; }
-        html.oled-theme-active.oled-transparent-shelf .app-quality-root .UGcxnc .dxLAmd,
-        html.oled-theme-active.oled-transparent-shelf .app-quality-root .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }
+        html.oled-theme-active.oled-transparent-shelf .UGcxnc .dxLAmd,
+        html.oled-theme-active.oled-transparent-shelf .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }
 
-        html.ytaf-fix-titles .app-quality-root .SK1srf .WVWtef,
-        html.ytaf-fix-titles .app-quality-root .SK1srf .niS3yd {
+        html.ytaf-fix-titles .SK1srf .WVWtef,
+        html.ytaf-fix-titles .SK1srf .niS3yd {
             padding-bottom: 0.37vh !important;
             padding-top: 0.37vh !important;
         }
@@ -1758,10 +1758,10 @@ function initGlobalStyles() {
         html.ytaf-remove-borders .ytp-videowall-still-info-bg {
             background-color: transparent !important;
         }
-        html.ytaf-remove-borders .app-quality-root .boSXqb .QFqCxd:before,
-        html.ytaf-remove-borders .app-quality-root .V7jTHe,
-        html.ytaf-remove-borders .app-quality-root .g6XRz,
-        html.ytaf-remove-borders .app-quality-root .UGcxnc .sjENQb {
+        html.ytaf-remove-borders .boSXqb .QFqCxd:before,
+        html.ytaf-remove-borders .V7jTHe,
+        html.ytaf-remove-borders .g6XRz,
+        html.ytaf-remove-borders .UGcxnc .sjENQb {
             background-color: transparent !important;
         }
         html.ytaf-remove-borders .ltewod.BZ345e { background-color: #f1f1f1 !important; }

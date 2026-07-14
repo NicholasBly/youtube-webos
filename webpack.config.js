@@ -1,6 +1,7 @@
 import CopyPlugin from 'copy-webpack-plugin';
 import { TransformAsyncModulesPlugin } from 'transform-async-modules-webpack-plugin';
 import pkgJson from './package.json' with { type: 'json' };
+import babelRuntimePkgJson from '@babel/runtime-corejs3/package.json' with { type: 'json' };
 import TerserPlugin from 'terser-webpack-plugin';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -187,7 +188,7 @@ const makeConfig = (env, argv) => {
           : [
               new TransformAsyncModulesPlugin({
                 runtime: {
-                  version: pkgJson.dependencies['@babel/runtime-corejs3'],
+                  version: babelRuntimePkgJson.version,
                   absoluteRuntime: './node_modules/@babel/runtime-corejs3'
                 }
               })

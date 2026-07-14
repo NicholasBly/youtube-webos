@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
 ## [0.8.0] - 2026/05/27
 
 ## Summary
@@ -11,47 +13,55 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This update features a codebase-wide audit focused on **performance and efficiency**. Consolidated resources across files resulting in lower CPU usage across all TVs.
 
 **Key Highlights:**
-+ **Performance:** Core systems like AdBlock, SponsorBlock, and shortcuts were improved to use less memory and CPU cycles for better responsiveness across the YouTube app.
-+ **Visual & UI Fixes:** [YouTube homescreen UI](https://github.com/NicholasBly/youtube-webos/issues/129) and [YouTube Kids debug overlay](https://github.com/NicholasBly/youtube-webos/issues/127).
-+ **Snappier UI:** OLED-Care sliders, remote shortcuts, and scrolling through thumbnails are now significantly more responsive when toggled.
-+ **Build Fix:** Fixed typo in webpack causing modern build to include emoji fix from the legacy version. 
+
+- **Performance:** Core systems like AdBlock, SponsorBlock, and shortcuts were improved to use less memory and CPU cycles for better responsiveness across the YouTube app.
+- **Visual & UI Fixes:** [YouTube homescreen UI](https://github.com/NicholasBly/youtube-webos/issues/129) and [YouTube Kids debug overlay](https://github.com/NicholasBly/youtube-webos/issues/127).
+- **Snappier UI:** OLED-Care sliders, remote shortcuts, and scrolling through thumbnails are now significantly more responsive when toggled.
+- **Build Fix:** Fixed typo in webpack causing modern build to include emoji fix from the legacy version.
 
 ## Optimizations & Improvements
 
 ### AdBlock
-+ **Faster JSON Filtering:** Populated configuration flags once per session and removed redundant API checks -> eliminates unnecessary boolean checks on every single network response.
-+ **Streamlined Telemetry Blocking:** Switched from `url.href` to `url.pathname` and pre-compiled regex -> skips full URL serialization, saving CPU cycles on outgoing requests.
-+ **Early Exit Logic:** The engine now bails immediately if all filters are disabled.
+
+- **Faster JSON Filtering:** Populated configuration flags once per session and removed redundant API checks -> eliminates unnecessary boolean checks on every single network response.
+- **Streamlined Telemetry Blocking:** Switched from `url.href` to `url.pathname` and pre-compiled regex -> skips full URL serialization, saving CPU cycles on outgoing requests.
+- **Early Exit Logic:** The engine now bails immediately if all filters are disabled.
 
 ### Interface & OLED-Care Mode
-+ **CSS Opacity Rules:** Replaced dynamic style rebuilds with pure CSS custom properties (`--ytaf-oled-opacity`) -> completely eliminates lag/stuttering when quickly changing the Video Shelf Opacity.
-+ **Bundled Styling:** Moved runtime CSS injections for SponsorBlock, Auto-Login, and Emoji-Font into dedicated `.css` files -> removes runtime string parsing and speeds up initial app boot time. 
-+ **Event Listener Consolidation:** Chained `toggleComments`, `toggleDescription`, and `playPause` into a single helper and merged three separate keydown listeners into one -> saves 4 queries per shortcut press for instant remote response.
-+ **ui.js:** Cached document.querySelector('video') in utils.js
+
+- **CSS Opacity Rules:** Replaced dynamic style rebuilds with pure CSS custom properties (`--ytaf-oled-opacity`) -> completely eliminates lag/stuttering when quickly changing the Video Shelf Opacity.
+- **Bundled Styling:** Moved runtime CSS injections for SponsorBlock, Auto-Login, and Emoji-Font into dedicated `.css` files -> removes runtime string parsing and speeds up initial app boot time.
+- **Event Listener Consolidation:** Chained `toggleComments`, `toggleDescription`, and `playPause` into a single helper and merged three separate keydown listeners into one -> saves 4 queries per shortcut press for instant remote response.
+- **ui.js:** Cached document.querySelector('video') in utils.js
 
 ### Thumbnail Quality & Emojis
-+ **Smart Queueing:** Capped the thumbnail request queue to 50 and increased polling intervals -> prevents runaway memory growth and stuttering during fast scrolling.
-+ **Cache Trimming:** `parsedTextCache` now trims the oldest half of its data instead of completely clearing -> keeps recently viewed emojis loaded to prevent visual pop-in during long scroll sessions.
+
+- **Smart Queueing:** Capped the thumbnail request queue to 50 and increased polling intervals -> prevents runaway memory growth and stuttering during fast scrolling.
+- **Cache Trimming:** `parsedTextCache` now trims the oldest half of its data instead of completely clearing -> keeps recently viewed emojis loaded to prevent visual pop-in during long scroll sessions.
 
 ### SponsorBlock
-+ **Throttle UI Sync:** Overlay position syncing is now throttled to 500ms -> prevents forced layout recalculations, eliminating frame drops on older webOS 3 TVs.
-+ **Load:** SponsorBlock segments inject and are shown immediately on video load. Eliminates flicker of colored segments in some scenarios.
-+ **SponsorBlock UI:** Fixed segment list category keys - musicofftopic and hook rows now show the correct color and label (previously fell through to gray with raw category text)
+
+- **Throttle UI Sync:** Overlay position syncing is now throttled to 500ms -> prevents forced layout recalculations, eliminating frame drops on older webOS 3 TVs.
+- **Load:** SponsorBlock segments inject and are shown immediately on video load. Eliminates flicker of colored segments in some scenarios.
+- **SponsorBlock UI:** Fixed segment list category keys - musicofftopic and hook rows now show the correct color and label (previously fell through to gray with raw category text)
 
 ## Fixes
 
 ### General UI
-+ **Homescreen Fix:** Fixed an issue where the YouTube homescreen was cutting off certain UI elements (https://github.com/NicholasBly/youtube-webos/issues/129).
-+ **YouTube Kids:** Fixed and removed the debug overlay appearing in the YouTube Kids app (https://github.com/NicholasBly/youtube-webos/issues/127).
-+ **Config Saves:** Debounced `localStorage` writes -> prevents the TV from stuttering when quickly dragging color pickers or sliders.
+
+- **Homescreen Fix:** Fixed an issue where the YouTube homescreen was cutting off certain UI elements (https://github.com/NicholasBly/youtube-webos/issues/129).
+- **YouTube Kids:** Fixed and removed the debug overlay appearing in the YouTube Kids app (https://github.com/NicholasBly/youtube-webos/issues/127).
+- **Config Saves:** Debounced `localStorage` writes -> prevents the TV from stuttering when quickly dragging color pickers or sliders.
 
 ### Return YouTube Dislike
-+ **Description Button Fix:** Fixed a bug where highlighting and selecting the description button with the LG remote (Arrow Keys/Enter) failed to apply the dislike value and navigation fix.
-+ **Observer Efficiency:** Eliminated the `bodyObserver` and replaced it with a targeted `focusin` fallback -> reduces background DOM scanning.
+
+- **Description Button Fix:** Fixed a bug where highlighting and selecting the description button with the LG remote (Arrow Keys/Enter) failed to apply the dislike value and navigation fix.
+- **Observer Efficiency:** Eliminated the `bodyObserver` and replaced it with a targeted `focusin` fallback -> reduces background DOM scanning.
 
 ### Modern Build (webOS 22+)
-+ **Emoji-Font Typo:** Fixed a webpack alias typo (`emoji-font.ts` instead of `.js`) -> successfully strips out a useless legacy mutation observer, fixing font inconsistencies and shrinking the modern bundle file size.
-+ **Auto Login:** Fixed Guest Mode cache invalidation on `webOSRelaunch` -> signing in and out between app launches is now reflected correctly.
+
+- **Emoji-Font Typo:** Fixed a webpack alias typo (`emoji-font.ts` instead of `.js`) -> successfully strips out a useless legacy mutation observer, fixing font inconsistencies and shrinking the modern bundle file size.
+- **Auto Login:** Fixed Guest Mode cache invalidation on `webOSRelaunch` -> signing in and out between app launches is now reflected correctly.
 
 ## [0.7.9] - 2026/05/15
 
@@ -70,73 +80,89 @@ Fixed shadowed overlay appearing when using play/pause shortcut - https://github
 ## Added
 
 ### UI Tweaks / Video Player
-+ Added "Liquid Glass UI" toggle in UI Tweaks to replicate the default YouTube app's UI by removing black borders
-+ Added liquid glass design to the video player UI, including the "Up Next" label and "Repeat" button
-+ Added shadow rules to video player UI (from webosbrew)
+
+- Added "Liquid Glass UI" toggle in UI Tweaks to replicate the default YouTube app's UI by removing black borders
+- Added liquid glass design to the video player UI, including the "Up Next" label and "Repeat" button
+- Added shadow rules to video player UI (from webosbrew)
 
 ### AdBlock
-+ Add filtering for "Most relevant" shelf - https://github.com/NicholasBly/youtube-webos/issues/101
+
+- Add filtering for "Most relevant" shelf - https://github.com/NicholasBly/youtube-webos/issues/101
 
 ### Thumbnail Quality
-+ Upgrade thumbnail quality on the background image of playlists - https://github.com/NicholasBly/youtube-webos/issues/112
+
+- Upgrade thumbnail quality on the background image of playlists - https://github.com/NicholasBly/youtube-webos/issues/112
 
 ## Changes
 
 ### General
-+ Updated appinfo.json from the latest LG Content Store YouTube app (replaced useragent string with the newest string, added missing splashscreen images, and added missing config settings)
+
+- Updated appinfo.json from the latest LG Content Store YouTube app (replaced useragent string with the newest string, added missing splashscreen images, and added missing config settings)
 
 ### OLED-Care Mode
-+ Replace background image of playlist with a pure black screen - https://github.com/NicholasBly/youtube-webos/issues/112
+
+- Replace background image of playlist with a pure black screen - https://github.com/NicholasBly/youtube-webos/issues/112
 
 ## Optimizations
 
 ### Performance
-+ Implemented performance improvements to the max thumbnail quality and adblock engines
-+ Reduced recursion depths to prevent CPU stalls at startup
+
+- Implemented performance improvements to the max thumbnail quality and adblock engines
+- Reduced recursion depths to prevent CPU stalls at startup
 
 ## Fixes
 
 ### AdBlock
-+ Move adblock import up higher to improve/fix filtering on initial app load - https://github.com/NicholasBly/youtube-webos/issues/105
+
+- Move adblock import up higher to improve/fix filtering on initial app load - https://github.com/NicholasBly/youtube-webos/issues/105
 
 ### SponsorBlock
-+ Fix SponsorBlock segment chain skip ignoring manual skip segments - https://github.com/NicholasBly/youtube-webos/issues/120
+
+- Fix SponsorBlock segment chain skip ignoring manual skip segments - https://github.com/NicholasBly/youtube-webos/issues/120
 
 ### Thumbnail Quality
-+ Fix pop-in effect on max thumbnail quality
-+ Fix thumbnails sometimes not loading or showing a generic grey thumbnail
-+ Fix thumbnails not being upgraded immediately - https://github.com/NicholasBly/youtube-webos/issues/111
+
+- Fix pop-in effect on max thumbnail quality
+- Fix thumbnails sometimes not loading or showing a generic grey thumbnail
+- Fix thumbnails not being upgraded immediately - https://github.com/NicholasBly/youtube-webos/issues/111
 
 ### General
-+ Fix language switching (from webosbrew#316)
-+ Fix "Hide YouTube Logo" not working on some webOS versions
+
+- Fix language switching (from webosbrew#316)
+- Fix "Hide YouTube Logo" not working on some webOS versions
 
 ## [0.7.6] - 2026/04/15
 
 ## Changes
 
 ### AdBlock
-+ Hide Endcards: Now filtered out during json adblock filtering engine - fixes ghost elements that are selectable while hidden
+
+- Hide Endcards: Now filtered out during json adblock filtering engine - fixes ghost elements that are selectable while hidden
 
 ### General
-+ Updated oled black theme in description panel (YouTube UI update)
+
+- Updated oled black theme in description panel (YouTube UI update)
 
 ## Optimizations
 
 ### Thumbnail Quality
-+ Implemented improvements to max thumbnail quality for navigation performance issues - https://github.com/NicholasBly/youtube-webos/issues/85
+
+- Implemented improvements to max thumbnail quality for navigation performance issues - https://github.com/NicholasBly/youtube-webos/issues/85
 
 ## Fixes
 
 ### AdBlock
-+ Remove filtering ClickTrackingParams - fixes unclickable endcards - https://github.com/NicholasBly/youtube-webos/issues/96
+
+- Remove filtering ClickTrackingParams - fixes unclickable endcards - https://github.com/NicholasBly/youtube-webos/issues/96
 
 ### SponsorBlock
-+ Fix sponsorblock segments on progress bar for webOS3 - https://github.com/NicholasBly/youtube-webos/issues/68
-+ Remove audio mute/unmute to fix bug - https://github.com/NicholasBly/youtube-webos/issues/92
+
+- Fix sponsorblock segments on progress bar for webOS3 - https://github.com/NicholasBly/youtube-webos/issues/68
+- Remove audio mute/unmute to fix bug - https://github.com/NicholasBly/youtube-webos/issues/92
 
 ### Return YouTube Dislike
-+ Updated observer from zylon-provider-6 to zylon-provider-7
+
+- Updated observer from zylon-provider-6 to zylon-provider-7
 
 ## [0.7.5] 2026/04/11
 
@@ -149,88 +175,105 @@ Fixed auto mute bug - https://github.com/NicholasBly/youtube-webos/issues/71
 ## [0.7.4] - 2026/03/12
 
 ## Added
-+ Added "Reduce Telemetry & Tracking"
-+ Strips "trackingParams" and "clickTrackingParams" from every JSON request
-+ Hooks Fetch/XHR to filter out outgoing network requests to:
-/youtubei/v1/log_event
-/ptracking
-/api/stats/atr
-/api/stats/qoe
-/pagead/viewthroughconversion
-Note: watchtime stats are not filtered as that would likely affect your playback history
+
+- Added "Reduce Telemetry & Tracking"
+- Strips "trackingParams" and "clickTrackingParams" from every JSON request
+- Hooks Fetch/XHR to filter out outgoing network requests to:
+  /youtubei/v1/log_event
+  /ptracking
+  /api/stats/atr
+  /api/stats/qoe
+  /pagead/viewthroughconversion
+  Note: watchtime stats are not filtered as that would likely affect your playback history
 
 ## AdBlock
-+ Clean out player attestation challenge and ad break heartbeat keys when filtering out ads
+
+- Clean out player attestation challenge and ad break heartbeat keys when filtering out ads
 
 ## Fixes
-+ Fixed inability to type numbers with a keyboard into the YouTube search bar
-+ Fixed SponsorBlock segments not appearing on non-chapter video's progress bars - https://github.com/NicholasBly/youtube-webos/issues/68
+
+- Fixed inability to type numbers with a keyboard into the YouTube search bar
+- Fixed SponsorBlock segments not appearing on non-chapter video's progress bars - https://github.com/NicholasBly/youtube-webos/issues/68
 
 ## General / Optimizations
 
-+ Consolidated UI.js UI component generation
-+ Centralized config caching across config.js, sponsorblock.js, and adblock.js
-+ Removed unused packages - jiti, baseline-browser-mapping
-+ Converted some constants to sets for O(1) lookups
+- Consolidated UI.js UI component generation
+- Centralized config caching across config.js, sponsorblock.js, and adblock.js
+- Removed unused packages - jiti, baseline-browser-mapping
+- Converted some constants to sets for O(1) lookups
 
 ## Thumbnail Quality
-+ Removed intersection observer and scroll observer for legacy webOS
-+ Thumbnails are now queued from the order they appear via requestQueue Set
-+ Added qualityCache map to store videoID and the max quality for that video, so if the thumbnail gets destroyed/removed we can check the cache later for faster lookup
+
+- Removed intersection observer and scroll observer for legacy webOS
+- Thumbnails are now queued from the order they appear via requestQueue Set
+- Added qualityCache map to store videoID and the max quality for that video, so if the thumbnail gets destroyed/removed we can check the cache later for faster lookup
 
 ## Performance & Memory Optimizations (webOS)
 
 ### Event Bus Integration (sponsorblock.js, watch.js)
-+ New yt-player-state-change custom event: created a single event dispatcher inside video-quality.js to synchronize video elements/queries across SponsorBlock and watch (clock UI)
+
+- New yt-player-state-change custom event: created a single event dispatcher inside video-quality.js to synchronize video elements/queries across SponsorBlock and watch (clock UI)
 
 ### Garbage Collection — O(1) (thumbnail-quality.js, emoji-font.js)
-+ Cache Clearing Enhancements 
+
+- Cache Clearing Enhancements
 
 ### Smart UI Pausing (thumbnail-quality.js, emoji-font.js)
-+ Thumbnail quality and emoji replacement logic now pauses when not actively viewing the home / video page
+
+- Thumbnail quality and emoji replacement logic now pauses when not actively viewing the home / video page
 
 ### Scoped Mutation Observers (thumbnail-quality.js)
-+ Split the global observer into two lightweight ones — a structural observer for new elements, and a targeted style observer scoped strictly to individual thumbnail nodes
+
+- Split the global observer into two lightweight ones — a structural observer for new elements, and a targeted style observer scoped strictly to individual thumbnail nodes
 
 ### O(1) Selector Caching (ui.js)
-+ Cache successful selector for shortcut elements
+
+- Cache successful selector for shortcut elements
 
 ### Document Tag Filtering (emoji-font.js)
-+ Added ALLOWED_EMOJI_TAGS Set to skip unnecessary emoji replacement
+
+- Added ALLOWED_EMOJI_TAGS Set to skip unnecessary emoji replacement
 
 ## OLED-Care Mode
-+ Updated Video Time Label to pure black from #060606
+
+- Updated Video Time Label to pure black from #060606
 
 ## Config UI
-+ Updated Config UI to use page tabs at the top
-+ Fixed navigation logic to ensure proper navigation functionality between tabs/pages/elements
+
+- Updated Config UI to use page tabs at the top
+- Fixed navigation logic to ensure proper navigation functionality between tabs/pages/elements
 
 ## Thumbnail Quality
-+ Use fetch request to identify max thumbnail quality before downloading anything to save network resources
-+ Use requestAnimationFrame for DOM writes
-+ Use getElementsByTagName instead of querySelectorAll
-+ Other optimizations to reduce CPU cycles
+
+- Use fetch request to identify max thumbnail quality before downloading anything to save network resources
+- Use requestAnimationFrame for DOM writes
+- Use getElementsByTagName instead of querySelectorAll
+- Other optimizations to reduce CPU cycles
 
 ## UI.js
-+ Reduce file sizes of NB Logo and SponsorBlock logo
+
+- Reduce file sizes of NB Logo and SponsorBlock logo
 
 ## [0.7.3] - 2026/02/27
 
 ## New Features
-+ Added "Reload Page" shortcut -> performs a soft reload, the same as pressing the "Refresh" button at the bottom of the page. Only works on the home screen - https://github.com/NicholasBly/youtube-webos/issues/59
 
-+ Added "Force Previews" -> On startup, ensures this setting is enabled/disabled to your preference. "Disabled", "Force On", and "Force Off" will be selectable options, "Disabled" by default. Will force the key to enabled/disabled on startup
+- Added "Reload Page" shortcut -> performs a soft reload, the same as pressing the "Refresh" button at the bottom of the page. Only works on the home screen - https://github.com/NicholasBly/youtube-webos/issues/59
 
-+ Added "Emoji + Character Fix" option to config UI for WebOS 3 and 4. Enables emoji support and support for additional mathematical characters. Applies to video titles on the home screen, video titles during playback, description panel, comments, and full description. Zero-width space characters are also filtered out
-- Processed strings are cached to eliminate pop-in effect
-- Several optimizations and improvements to emoji replacement logic
-- Twemoji updated to 16.0.1 from 15.1.0
+- Added "Force Previews" -> On startup, ensures this setting is enabled/disabled to your preference. "Disabled", "Force On", and "Force Off" will be selectable options, "Disabled" by default. Will force the key to enabled/disabled on startup
+
+- Added "Emoji + Character Fix" option to config UI for WebOS 3 and 4. Enables emoji support and support for additional mathematical characters. Applies to video titles on the home screen, video titles during playback, description panel, comments, and full description. Zero-width space characters are also filtered out
+
+* Processed strings are cached to eliminate pop-in effect
+* Several optimizations and improvements to emoji replacement logic
+* Twemoji updated to 16.0.1 from 15.1.0
 
 ## Bug Fixes
-+ Fixed Arabic characters - https://github.com/NicholasBly/youtube-webos/issues/56
-+ Fixed shorts shelf appearing in Subscriptions tab - https://github.com/NicholasBly/youtube-webos/issues/58
-+ Fixed back button on home screen causing auto login to kick in, preventing app closure
-+ Auto Login: Reset recurring actions to Date.now when disabling Auto Login (Removes 7 day login screen nag delay) - https://github.com/NicholasBly/youtube-webos/issues/57
+
+- Fixed Arabic characters - https://github.com/NicholasBly/youtube-webos/issues/56
+- Fixed shorts shelf appearing in Subscriptions tab - https://github.com/NicholasBly/youtube-webos/issues/58
+- Fixed back button on home screen causing auto login to kick in, preventing app closure
+- Auto Login: Reset recurring actions to Date.now when disabling Auto Login (Removes 7 day login screen nag delay) - https://github.com/NicholasBly/youtube-webos/issues/57
 
 ## AdBlock
 
@@ -243,33 +286,39 @@ Extracted array-looping logic for continuation items into a shared processAction
 Faster filtering if using fallback filtering logic: Replaced multiple deep-search passes with a single sweep that can target multiple elements. The filter can now locate and remove multiple items in large data chunks much faster
 
 ### Fixes - Fallback logic
+
 Note: The fallback option is a more expensive way to recursively filter, this kicks in if YouTube updates their JSON object paths as a way to keep functionality after an update
-+ Fixed "Sign in for better recommendations" button removal on continuation paths
-+ Fixed Shorts sponsored ads
+
+- Fixed "Sign in for better recommendations" button removal on continuation paths
+- Fixed Shorts sponsored ads
 
 ## Spatial Navigation
 
 Added spatial-navigation.modern.js
-+ A version of spatial navigation for the modern build (webOS 22+ and ES6+)
-+ Strips out the unnecessary polyfills
-+ Webpack selects the correct spatial navigation file when building the .ipk per legacy/modern build
-+ Lowered file size on modern build
+
+- A version of spatial navigation for the modern build (webOS 22+ and ES6+)
+- Strips out the unnecessary polyfills
+- Webpack selects the correct spatial navigation file when building the .ipk per legacy/modern build
+- Lowered file size on modern build
 
 ### Optimizations
 
-+ Several optimizations for spatial-navigation.modern.js (O(1))
-+ Improved scrolling performance
-+ Cached screen resolution and getComputedStyle for performance
+- Several optimizations for spatial-navigation.modern.js (O(1))
+- Improved scrolling performance
+- Cached screen resolution and getComputedStyle for performance
 
 ## Watch.js
-+ Cache dom elements for updateVisibility()
+
+- Cache dom elements for updateVisibility()
 
 ## Utils.js
-+ updatePageState() - check mutation's old value before updating page state. Reduces unnecessary DOM evaluations and event dispatches on irrelevant body class changes
+
+- updatePageState() - check mutation's old value before updating page state. Reduces unnecessary DOM evaluations and event dispatches on irrelevant body class changes
 
 ## [0.7.2] - 2026/02/18
 
 ## Summary
+
 1. Emoji / Characters / Symbols support for legacy webOS versions
 2. Auto login - bypass login screen when opening YouTube app via SSH/SSAP
 3. Fast Forward / Rewind Shortcut improvements
@@ -278,75 +327,88 @@ Added spatial-navigation.modern.js
 ## Added
 
 ### Emoji / Characters / Symbols Fix for legacy webOS
-+ Implemented emojis into YouTube app via twemoji for legacy webOS - https://github.com/NicholasBly/youtube-webos/issues/42
-+ Implemented fix for mathematical symbols/characters
-+ Text/emoji fixes only run on webOS 3 - 5 and is excluded from modern build
-+ Removed font-fix.css and applied new rules injected via style ID legacy-webos-font-fix in emoji-font.ts
+
+- Implemented emojis into YouTube app via twemoji for legacy webOS - https://github.com/NicholasBly/youtube-webos/issues/42
+- Implemented fix for mathematical symbols/characters
+- Text/emoji fixes only run on webOS 3 - 5 and is excluded from modern build
+- Removed font-fix.css and applied new rules injected via style ID legacy-webos-font-fix in emoji-font.ts
 
 ### General
-+ Add vertical wrap-around navigation in config UI - https://github.com/NicholasBly/youtube-webos/discussions/50
+
+- Add vertical wrap-around navigation in config UI - https://github.com/NicholasBly/youtube-webos/discussions/50
 
 ## Fixes
 
 ### Launching App with Video - Auto Login
-+ Handle sending URLs to TV via luna/ssap - https://github.com/NicholasBly/youtube-webos/issues/52
-+ Bypasses login screen in guest mode and normal mode - checks whether you are in guest mode or logged in to properly select the right login screen element
-+ Hides login screen until it is successfully bypassed, allowing clean load right into video
+
+- Handle sending URLs to TV via luna/ssap - https://github.com/NicholasBly/youtube-webos/issues/52
+- Bypasses login screen in guest mode and normal mode - checks whether you are in guest mode or logged in to properly select the right login screen element
+- Hides login screen until it is successfully bypassed, allowing clean load right into video
 
 ### SponsorBlock
-+ Fixed SponsorBlock segments not appearing on progress bar for 5 seconds on video load if Return YouTube Dislike was disabled
-+ Fixed segment sleep timer continuing if video was paused (timer now syncs with YouTube play/pause events to track time)
+
+- Fixed SponsorBlock segments not appearing on progress bar for 5 seconds on video load if Return YouTube Dislike was disabled
+- Fixed segment sleep timer continuing if video was paused (timer now syncs with YouTube play/pause events to track time)
 
 ### General
-+ Fix first config menu open key press sometimes not working on fresh app load
-+ Changed "Upgrade Thumbnail Quality" to "Max Thumbnail Quality" text in config UI
-+ Exclude Google Cast Block from running on webOS 25 simulator
-+ Resolved "This document requires TrustedHTML assignment" error + crash
+
+- Fix first config menu open key press sometimes not working on fresh app load
+- Changed "Upgrade Thumbnail Quality" to "Max Thumbnail Quality" text in config UI
+- Exclude Google Cast Block from running on webOS 25 simulator
+- Resolved "This document requires TrustedHTML assignment" error + crash
 
 ## Changes
 
 ### Shortcuts
-+ Fast Forward / Rewind Burst: Only set video time after 200ms, so quick key presses don't trigger video seek events multiple times, causing lag
+
+- Fast Forward / Rewind Burst: Only set video time after 200ms, so quick key presses don't trigger video seek events multiple times, causing lag
 
 ## Optimizations
 
 ### video-quality.js
 
 CPU Hot Path Optimization (handleStateChange):
-+ Config Caching: Replaced the expensive configRead call in every state change with a cached _shouldForce boolean that updates via listener
-+ Static Constants: Moved WebOSVersion() check to a top-level constant IS_WEBOS_25 to avoid function call overhead on every check
-+ Execution Guard: Added a kickstartInProgress guard to ensurePlaybackStarts to prevent multiple concurrent recursive loops/promises from spawning during rapid state changes
+
+- Config Caching: Replaced the expensive configRead call in every state change with a cached \_shouldForce boolean that updates via listener
+- Static Constants: Moved WebOSVersion() check to a top-level constant IS_WEBOS_25 to avoid function call overhead on every check
+- Execution Guard: Added a kickstartInProgress guard to ensurePlaybackStarts to prevent multiple concurrent recursive loops/promises from spawning during rapid state changes
 
 Memory & Allocation:
-+ Object Reuse: Cached the localStorage qualityObj structure to reduce garbage collection pressure
-+ Reduced Parsing: Optimized setLocalStorageQuality to avoid unnecessary JSON parsing if the cache is already valid
+
+- Object Reuse: Cached the localStorage qualityObj structure to reduce garbage collection pressure
+- Reduced Parsing: Optimized setLocalStorageQuality to avoid unnecessary JSON parsing if the cache is already valid
 
 Algorithmic Improvements:
-+ Fail-Fast Logic: Reordered checks in hot functions to exit immediately (e.g., checking isDestroyed or !_shouldForce before doing any work)
-+ Event Loop Efficiency: Used requestAnimationFrame for DOM updates to align with the browser's refresh rate and prevent layout thrashing
+
+- Fail-Fast Logic: Reordered checks in hot functions to exit immediately (e.g., checking isDestroyed or !\_shouldForce before doing any work)
+- Event Loop Efficiency: Used requestAnimationFrame for DOM updates to align with the browser's refresh rate and prevent layout thrashing
 
 Code Updates:
-+ Combined variable declarations
-+ Utilized short-circuit evaluation for logging (DEBUG && console.log) to prevent argument evaluation in production
+
+- Combined variable declarations
+- Utilized short-circuit evaluation for logging (DEBUG && console.log) to prevent argument evaluation in production
 
 ### adblock.js
-+ Small code optimizations and redundant code removal
+
+- Small code optimizations and redundant code removal
 
 ### auto-login.js
-+ O(1) Operations: Replaced multiple sequential if checks with a constant-time array iteration over predefined keys. This scales better and improves cache locality
-+ Dead Code Removal: Removed the enable logic inside disableWhosWatching since it's never called
-+ Performance: Replaced Date object instantiation and manipulation (which involves overhead) with direct integer arithmetic using Date.now()
-+ Code Reduction: Reduced lines by ~50% while maintaining readability and original functionality
-+ Consistency: Standardized variable naming and error handling
+
+- O(1) Operations: Replaced multiple sequential if checks with a constant-time array iteration over predefined keys. This scales better and improves cache locality
+- Dead Code Removal: Removed the enable logic inside disableWhosWatching since it's never called
+- Performance: Replaced Date object instantiation and manipulation (which involves overhead) with direct integer arithmetic using Date.now()
+- Code Reduction: Reduced lines by ~50% while maintaining readability and original functionality
+- Consistency: Standardized variable naming and error handling
 
 ### SponsorBlock
-+ After no segments are found on the server, run destroy() to clean up SponsorBlock so no observers are running unnecessarily
-+ Tighten sleep timer thresholds (5s -> 3s before segment and 2s -> 1s buffer)
-+ Prioritize nextSegmentIndex instead of handleTimeUpdate to check the predicted segment index first (O(1)) before binary search (O(log N))
-+ Move additional config keys to the top of the file and map them along with existing CONFIG_MAPPING
-+ checkForProgressBar() -> Cache successful selector for progress bar and try that first when called
-+ Remove duplicated logic in play and seeked events which is already handled in executeChainSkip
-+ handleTimeUpdate() additional early exit optimization
+
+- After no segments are found on the server, run destroy() to clean up SponsorBlock so no observers are running unnecessarily
+- Tighten sleep timer thresholds (5s -> 3s before segment and 2s -> 1s buffer)
+- Prioritize nextSegmentIndex instead of handleTimeUpdate to check the predicted segment index first (O(1)) before binary search (O(log N))
+- Move additional config keys to the top of the file and map them along with existing CONFIG_MAPPING
+- checkForProgressBar() -> Cache successful selector for progress bar and try that first when called
+- Remove duplicated logic in play and seeked events which is already handled in executeChainSkip
+- handleTimeUpdate() additional early exit optimization
 
 ## [0.7.1] - 2026/02/04
 
@@ -362,21 +424,22 @@ New features include smart shortcut chaining (skip 5s, 10s, 15s... smoothly with
 
 **Smart Skip Chaining**
 
-+ Skip Forward/Backward now moves in **5-second increments*+ (previously fixed at 15s)
-+ Pressing the key multiple times will "chain" the skip distance
-+ The on-screen notification now updates dynamically (e.g., "Skipping +10s", "Skipping +15s") instead of spamming multiple notifications
-+ Removed debounce delay for instant responsiveness
+- Skip Forward/Backward now moves in \*_5-second increments_+ (previously fixed at 15s)
+- Pressing the key multiple times will "chain" the skip distance
+- The on-screen notification now updates dynamically (e.g., "Skipping +10s", "Skipping +15s") instead of spamming multiple notifications
+- Removed debounce delay for instant responsiveness
 
 **Skip to Last SponsorBlock Segment**
 
-+ Added new shortcut to jump immediately to the start of the previous SponsorBlock segment in the video
-+ SponsorBlock segment will be temporarily whitelisted so you can watch it without the auto skip kicking in (if "Skip Segments Once" is disabled)
+- Added new shortcut to jump immediately to the start of the previous SponsorBlock segment in the video
+- SponsorBlock segment will be temporarily whitelisted so you can watch it without the auto skip kicking in (if "Skip Segments Once" is disabled)
 
-+ Added red, green, and blue buttons to shortcuts
-+ + If open/close config shortcut is unbound and YouTube is force closed, a startup check will ensure it is bound to green on startup
+- Added red, green, and blue buttons to shortcuts
+- - If open/close config shortcut is unbound and YouTube is force closed, a startup check will ensure it is bound to green on startup
 
 ### AdBlock
-+ Added guest mode filtering of "Sign in for better recommendations" button on home screen
+
+- Added guest mode filtering of "Sign in for better recommendations" button on home screen
 
 ## Optimizations
 
@@ -384,47 +447,48 @@ New features include smart shortcut chaining (skip 5s, 10s, 15s... smoothly with
 
 **Centralized State Management**
 
-+ Implemented `PageManager`: A single system that tracks "Watch" vs "Shorts" state for the entire app
-+ Replaced multiple CPU-intensive `MutationObservers` scattered across different files with a single, efficient observer
-+ Added `isWatchPage()` and `isShortsPage()` exports for O(1) instant state access
-+ **Impact:*+ significantly reduces CPU and memory usage
+- Implemented `PageManager`: A single system that tracks "Watch" vs "Shorts" state for the entire app
+- Replaced multiple CPU-intensive `MutationObservers` scattered across different files with a single, efficient observer
+- Added `isWatchPage()` and `isShortsPage()` exports for O(1) instant state access
+- \*_Impact:_+ significantly reduces CPU and memory usage
 
-+ Predetermine sendKey support at launch via browser compatibility check and not every time during each sendKey call
-+ Cached launch params to ensure JSON.parse only happens once per session
-+ Early exit optimizations
+- Predetermine sendKey support at launch via browser compatibility check and not every time during each sendKey call
+- Cached launch params to ensure JSON.parse only happens once per session
+- Early exit optimizations
 
 ### Configuration System (config.js)
 
 **Pure JS Callback System**
 
-+ Replaced the old DOM-based event messaging (DocumentFragment/CustomEvent) with a lightweight Map/Set callback system
-+ Eliminates the memory and CPU overhead of creating ~50 DOM nodes just to handle settings
-+ **I/O Debouncing:*+ Added "dirty checking" to write operations—prevents blocking I/O and expensive JSON serialization if values haven't actually changed
-+ Optimized config reads to O(1) speed
+- Replaced the old DOM-based event messaging (DocumentFragment/CustomEvent) with a lightweight Map/Set callback system
+- Eliminates the memory and CPU overhead of creating ~50 DOM nodes just to handle settings
+- \*_I/O Debouncing:_+ Added "dirty checking" to write operations—prevents blocking I/O and expensive JSON serialization if values haven't actually changed
+- Optimized config reads to O(1) speed
 
 ### SponsorBlock
 
 **Smart Sleep Logic**
 
-+ Added logic to "sleep" segment checking for (x - 2) seconds until the next segment appears
-+ Stops the loop from unnecessarily checking for segments every frame when none are nearby
-+ Dynamic Listeners: Automatically disconnects time listeners when the last segment is passed and reconnects if you seek back
-+ **Caching:*+ `checkForProgressBar` now caches the element and only re-queries the DOM if it disconnects
+- Added logic to "sleep" segment checking for (x - 2) seconds until the next segment appears
+- Stops the loop from unnecessarily checking for segments every frame when none are nearby
+- Dynamic Listeners: Automatically disconnects time listeners when the last segment is passed and reconnects if you seek back
+- \*_Caching:_+ `checkForProgressBar` now caches the element and only re-queries the DOM if it disconnects
 
 ### UI & Shortcuts
 
 **Lazy Loading & Caching**
 
-+ Config UI is now lazy-loaded (only initializes when opened)
-+ **Shortcut Caching:*+ `handleShortcutAction` no longer creates ~13 objects/functions per keypress
-+ Refactored hot paths to use `switch` statements for maximum JavaScript engine efficiency
-+ Reduced DOM Thrashing: Passed the video element from handleShortcutAction into helper functions (performBurstSeek, playPauseLogic) to avoid querying document.querySelector('video') multiple times per keypress
+- Config UI is now lazy-loaded (only initializes when opened)
+- \*_Shortcut Caching:_+ `handleShortcutAction` no longer creates ~13 objects/functions per keypress
+- Refactored hot paths to use `switch` statements for maximum JavaScript engine efficiency
+- Reduced DOM Thrashing: Passed the video element from handleShortcutAction into helper functions (performBurstSeek, playPauseLogic) to avoid querying document.querySelector('video') multiple times per keypress
 
 ### AdBlock
-+ Performance: Replaced O(N) string scanning in detectResponseType with O(1) object path lookups to reduce latency on large requests
-+ Memory: Refactored filterItemsOptimized to use in-place array modification, significantly reducing Garbage Collection (GC) pressure
-+ Optimization: Pre-compiled all registry paths into arrays to eliminate runtime string splitting and caching
-+ Cleanup: Removed pathCache and legacy text-based detection patterns
+
+- Performance: Replaced O(N) string scanning in detectResponseType with O(1) object path lookups to reduce latency on large requests
+- Memory: Refactored filterItemsOptimized to use in-place array modification, significantly reducing Garbage Collection (GC) pressure
+- Optimization: Pre-compiled all registry paths into arrays to eliminate runtime string splitting and caching
+- Cleanup: Removed pathCache and legacy text-based detection patterns
 
 ## Fixes
 
@@ -432,181 +496,211 @@ New features include smart shortcut chaining (skip 5s, 10s, 15s... smoothly with
 
 **Shorts Support**
 
-+ Attempted fix for screensaver activating while watching Shorts (needs further testing)
-+ Implemented a "keepalive" mechanism that sends a simulated Yellow Button press every 30 seconds only when video is playing/active
+- Attempted fix for screensaver activating while watching Shorts (needs further testing)
+- Implemented a "keepalive" mechanism that sends a simulated Yellow Button press every 30 seconds only when video is playing/active
 
 **Legacy Support**
 
-+ webOS 3: Refactored sendKey command to improve simulated key presses
+- webOS 3: Refactored sendKey command to improve simulated key presses
 
 ### Play / Pause Shortcut
 
-+ Improved logic: Sends the "Back" key instead of multiple "Up" presses to dismiss player controls
-+ Bug Fix: Automatically blurs the active element (like the play button) before dismissing UI to prevent accidental activation on webOS 3.x
-+ Fixed bug where the shortcut would close the Description Panel if it was open
+- Improved logic: Sends the "Back" key instead of multiple "Up" presses to dismiss player controls
+- Bug Fix: Automatically blurs the active element (like the play button) before dismissing UI to prevent accidental activation on webOS 3.x
+- Fixed bug where the shortcut would close the Description Panel if it was open
 
 ### General
 
-+ **Guest Mode:*+ Updated schema paths to fix the "Hide Sign-in Button"
-+ **OLED Keepalive:*+ Enhanced `sendKey` command logic (cancelable: false) to ensure keepalive signals reach the system
+- \*_Guest Mode:_+ Updated schema paths to fix the "Hide Sign-in Button"
+- \*_OLED Keepalive:_+ Enhanced `sendKey` command logic (cancelable: false) to ensure keepalive signals reach the system
 
 ## Changes
 
 ### OLED-Care Mode
 
-+ Shorts background is now set to **Pure Black**
-+ Focus ring on Shorts is set to a dimmer white to reduce screen burn-in risk
+- Shorts background is now set to **Pure Black**
+- Focus ring on Shorts is set to a dimmer white to reduce screen burn-in risk
 
 ### General
-+ Notifications won't appear if the previous one was the same text and is already on screen (timer will just be extended)
-+ Converted remaining pixel values to viewport units in ui.css
-+ Play / Pause toggle updates the existing notification if still on screen
+
+- Notifications won't appear if the previous one was the same text and is already on screen (timer will just be extended)
+- Converted remaining pixel values to viewport units in ui.css
+- Play / Pause toggle updates the existing notification if still on screen
 
 ## [0.7.0] - 2026/01/27
 
 ## New Features
 
 ### SponsorBlock
+
 New settings available per segment type
-+ Segment Types: Option of Auto Skip, Manual Skip, Show in Seek Bar, and Disable (Mimicking official SponsorBlock desktop settings)
-+ Manual Skip: Shows a notification at the start of and for the duration of the segment. Press the blue button to skip the segment
-+ Highlight: New options "Show in Seek Bar", "Auto Skip to Start", "Ask when video loads", and "Disable"
-+ Note: You will likely need to re-adjust skip settings to your preferences after updating
+
+- Segment Types: Option of Auto Skip, Manual Skip, Show in Seek Bar, and Disable (Mimicking official SponsorBlock desktop settings)
+- Manual Skip: Shows a notification at the start of and for the duration of the segment. Press the blue button to skip the segment
+- Highlight: New options "Show in Seek Bar", "Auto Skip to Start", "Ask when video loads", and "Disable"
+- Note: You will likely need to re-adjust skip settings to your preferences after updating
 
 Added "Skip Segments Once"
-+ Only skips each segment in the video once, so that you can skip back to watch it if you want to
+
+- Only skips each segment in the video once, so that you can skip back to watch it if you want to
 
 ### AdBlock
-+ Filter out "Shop" button and QR Code overlay on videos
+
+- Filter out "Shop" button and QR Code overlay on videos
 
 ### Shortcuts
-+ Added "Save/Watch Later" and "Description" shortcuts
+
+- Added "Save/Watch Later" and "Description" shortcuts
 
 ### Video Description Panel
-+ Added full navigation hack to Description panel using LG up/down arrows
-+ + Note: on the stock YouTube app, this functionality is and has been broken for a long time
+
+- Added full navigation hack to Description panel using LG up/down arrows
+- - Note: on the stock YouTube app, this functionality is and has been broken for a long time
 
 ## Fixes
 
 ### Return Dislike
-+ Update observer from zylon-provider-3 to zylon-provider-6 (YouTube page element change)
-+ Updated comments shortcut selector (YouTube page element change) - https://github.com/NicholasBly/youtube-webos/issues/39
-+ Fixed selector logic not targeting comment button element on some detection methods
-+ Apply description panel layout fix always regardless of Return YouTube Dislike setting
+
+- Update observer from zylon-provider-3 to zylon-provider-6 (YouTube page element change)
+- Updated comments shortcut selector (YouTube page element change) - https://github.com/NicholasBly/youtube-webos/issues/39
+- Fixed selector logic not targeting comment button element on some detection methods
+- Apply description panel layout fix always regardless of Return YouTube Dislike setting
 
 Fixed video description jumbled text if there is a button element inside it
-+ Note: some descriptions are cut off at the bottom and can't be scrolled, while some videos have working scroll bars and navigation. Another YouTube bug.
 
-+ Updated comments shortcut selector (YouTube page element changed) - https://github.com/NicholasBly/youtube-webos/issues/39
-+ Fixed selector logic not targeting comment button element on some detection methods
-+ Fixed cleanup of transient event listener from executeChainSkip()
+- Note: some descriptions are cut off at the bottom and can't be scrolled, while some videos have working scroll bars and navigation. Another YouTube bug.
+
+- Updated comments shortcut selector (YouTube page element changed) - https://github.com/NicholasBly/youtube-webos/issues/39
+- Fixed selector logic not targeting comment button element on some detection methods
+- Fixed cleanup of transient event listener from executeChainSkip()
 
 ### Shorts
-+ Disable shortcuts for chapter skip
-+ Fixed comments shortcut not working on Shorts
+
+- Disable shortcuts for chapter skip
+- Fixed comments shortcut not working on Shorts
 
 Fixed Toggle Subtitles shortcut pressing the subscribe button on Shorts
-+ Note: This shortcut won't work on Shorts as there's no page element to enable subtitles. You have to press the three dots and then go to subtitles menu
+
+- Note: This shortcut won't work on Shorts as there's no page element to enable subtitles. You have to press the three dots and then go to subtitles menu
 
 ### General
-+ Live videos: toggle comments shortcut will now toggle live chat on/off if available
+
+- Live videos: toggle comments shortcut will now toggle live chat on/off if available
 
 ## UI Updates
 
 ### Config UI
 
-+ Converted fixed pixel sizes to viewport units to resolve scaling issues across different screen sizes
-+ Adjusted sizing rules to make it more compact to fix scaling/truncated options
+- Converted fixed pixel sizes to viewport units to resolve scaling issues across different screen sizes
+- Adjusted sizing rules to make it more compact to fix scaling/truncated options
 
 ### General
 
-+ Video Shelf Opacity: When set at 50% or below, the black borders around text returns for better visibility
-+ Multiline video titles: change rules from pixels to viewport units
-+ Config UI: css performance/efficiency improvements
-+ Added additional line of text on SponsorBlock settings page explaining blue button functionality
+- Video Shelf Opacity: When set at 50% or below, the black borders around text returns for better visibility
+- Multiline video titles: change rules from pixels to viewport units
+- Config UI: css performance/efficiency improvements
+- Added additional line of text on SponsorBlock settings page explaining blue button functionality
 
 ### OLED mode - pure black element additions
-+ Description panel
-+ "Includes Paid Promotion" label
-+ Movies & TV tab header
-+ "More" tab menu
+
+- Description panel
+- "Includes Paid Promotion" label
+- Movies & TV tab header
+- "More" tab menu
 
 ### Assets
-+ Update app icons - https://github.com/NicholasBly/youtube-webos/pull/43
+
+- Update app icons - https://github.com/NicholasBly/youtube-webos/pull/43
 
 webOS 22 version .ipk now available in Homebrew channel
-+ Reminder: app is available via repo link: https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/repo.json
+
+- Reminder: app is available via repo link: https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/repo.json
 
 ## [0.6.9] - 2026/01/15
 
 ## Fixes
 
 ### Force Max Quality
+
 Implemented black screen/infinite loading mitigation for webOS 25 TVs only
 On webOS 25 TVs, the first video loaded while using Force Max Quality usually gets stuck on a black buffering loading screen
 
-+ Fix: Detect webOS 25 TV -> force video to play
-+ When it starts to play successfully, the player UI (controls) will be hidden and appear to load like a normal video
-+ Subsequent videos for the remainder of the session are unaffected and will load normally
+- Fix: Detect webOS 25 TV -> force video to play
+- When it starts to play successfully, the player UI (controls) will be hidden and appear to load like a normal video
+- Subsequent videos for the remainder of the session are unaffected and will load normally
 
 Additional improvements to redundant quality checks and race conditions
 
 ### Show Time in UI
-+ Fix clock not appearing properly during video playback
-+ Fix clock not appearing at all on webOS 3 - 5 (css style issue)
-+ Hide clock when description panel is open on video
-+ Code redundancy fixes + general optimizations
+
+- Fix clock not appearing properly during video playback
+- Fix clock not appearing at all on webOS 3 - 5 (css style issue)
+- Hide clock when description panel is open on video
+- Code redundancy fixes + general optimizations
 
 ### Thumbnail Quality
-+ Complete rewrite fixing memory leaks, performance issues, and race conditions - https://github.com/NicholasBly/youtube-webos/issues/36
-+ webOS 3 legacy code fallback added for full functionality
-+ Thumbnail Quality now stops upgrading thumbnails when the setting is disabled
+
+- Complete rewrite fixing memory leaks, performance issues, and race conditions - https://github.com/NicholasBly/youtube-webos/issues/36
+- webOS 3 legacy code fallback added for full functionality
+- Thumbnail Quality now stops upgrading thumbnails when the setting is disabled
 
 ### Shortcuts
-+ Added 400ms cooldown on shortcuts to prevent accidental duplicate key presses / key spam
+
+- Added 400ms cooldown on shortcuts to prevent accidental duplicate key presses / key spam
 
 ### Return Dislike
-+ Fix race condition causing console log spam / multiple injection attempts when opening description panel
+
+- Fix race condition causing console log spam / multiple injection attempts when opening description panel
 
 ## Updates
 
 ### AdBlock
-+ Filter sponsored videos/ads from Shorts
+
+- Filter sponsored videos/ads from Shorts
 
 ### Force Max Quality
-+ When quality is upgraded, a notification will appear showing the updated quality
-+ Optimized Lookups: Replaced array checks with a static Set (TARGET_QUALITIES) for O(1) quality level validation
-+ Storage Caching: Implemented in-memory caching (cachedQualitySettings) for localStorage to reduce read/write frequency and overhead
-+ Smart Quality Check: Added logic to skip processing if isQualityAlreadyMax() returns true
+
+- When quality is upgraded, a notification will appear showing the updated quality
+- Optimized Lookups: Replaced array checks with a static Set (TARGET_QUALITIES) for O(1) quality level validation
+- Storage Caching: Implemented in-memory caching (cachedQualitySettings) for localStorage to reduce read/write frequency and overhead
+- Smart Quality Check: Added logic to skip processing if isQualityAlreadyMax() returns true
 
 ### Shortcuts
+
 Play / Pause shortcut no longer shows YouTube player UI
-+ When running shortcut in fullscreen, the player UI (controls) and clock UI (if enabled) is hidden temporarily and dismissed automatically
-+ When running shortcut with player UI visible, the player UI will not be affected
-+ Perfect functionality after pause -> controls and clock will be visible as normal
+
+- When running shortcut in fullscreen, the player UI (controls) and clock UI (if enabled) is hidden temporarily and dismissed automatically
+- When running shortcut with player UI visible, the player UI will not be affected
+- Perfect functionality after pause -> controls and clock will be visible as normal
 
 ### OLED-care mode
-+ "Up next" screen now has a black background
-+ Black background re-applied to the video selector underneath videos at 100% opacity by default
-+ + 4th page added called "UI Tweaks" to allow you to adjust the opacity to your liking
-+ Black background on text removed
+
+- "Up next" screen now has a black background
+- Black background re-applied to the video selector underneath videos at 100% opacity by default
+- - 4th page added called "UI Tweaks" to allow you to adjust the opacity to your liking
+- Black background on text removed
 
 ## Changes
-+ Moved multi-line video title fix to 4th page "UI Tweaks" section as a toggleable option
+
+- Moved multi-line video title fix to 4th page "UI Tweaks" section as a toggleable option
 
 ## Optimizations
 
 ### AdBlock
-+ Reduced code complexity and improved code reuse
+
+- Reduced code complexity and improved code reuse
 
 ### SponsorBlock
-+ Cache legacy webOS version check
-+ General optimizations and improvements 
+
+- Cache legacy webOS version check
+- General optimizations and improvements
 
 ### Show Time in UI
-+ Code redundancy fixes
+
+- Code redundancy fixes
 
 ### ui.js
+
 Performance: Replaced expensive <style> tag injections with efficient CSS class toggling for the Play/Pause shortcut
 Refactor: Consolidated scattered CSS injections (Logo, Endcards, UI hacks) into a single initGlobalStyles() function
 
@@ -616,47 +710,56 @@ Refactor: Consolidated scattered CSS injections (Logo, Endcards, UI hacks) into 
 
 ### Observer Logic Optimizations
 
-+ SponsorBlock: Observe ytlr-progress-bar from ytlr-app
-+ Screensaver Fix: Observe ytlr-player__player-container from querying document.body to find the video element
-+ Force Max Quality: Observe ytlr-player__player-container from querying document.body to find .html5-video-player
+- SponsorBlock: Observe ytlr-progress-bar from ytlr-app
+- Screensaver Fix: Observe ytlr-player\_\_player-container from querying document.body to find the video element
+- Force Max Quality: Observe ytlr-player\_\_player-container from querying document.body to find .html5-video-player
 
 ### AdBlock.js
-+ Added additional early exit optimization
+
+- Added additional early exit optimization
 
 ### General
-+ Added additional code safety checks
-+ Code cleanup/removal of unused functions and objects
+
+- Added additional code safety checks
+- Code cleanup/removal of unused functions and objects
 
 ### Force Max Quality
-+ Cache last time value when modifying local storage to not spam multiple times during video playback state
+
+- Cache last time value when modifying local storage to not spam multiple times during video playback state
 
 ## Fixes
 
 ### Show Time in UI
-+ Fixed overlay sometimes not hiding on video fullscreen
+
+- Fixed overlay sometimes not hiding on video fullscreen
 
 ### General
-+ OLED Care Mode: Added additional YouTube UI elements to pure black theme
-+ Config UI visual adjustments/fixes
+
+- OLED Care Mode: Added additional YouTube UI elements to pure black theme
+- Config UI visual adjustments/fixes
 
 ### Force Max Quality
-+ Change video state to STATE_PLAYING from STATE_BUFFERING to further improve black screen issue on first video load
-++ On first video load, it might take up to 15 seconds for max quality to kick in
+
+- Change video state to STATE_PLAYING from STATE_BUFFERING to further improve black screen issue on first video load
+  ++ On first video load, it might take up to 15 seconds for max quality to kick in
 
 ### Upgrade Thumbnail Quality
-+ Fix max thumbnail quality - webosbrew's original code
-+ Waterfall detection: Picks the highest quality thumbnail available for each thumbnail (maxres → sd → hq)
-+ Optimize body observer - observe ytlr-app by default, document.body as fallback
-+ Many improvements for race conditions, memory leaks, error handling, object creation, type safety, mutation observer, early returns, and cleanup function
-+ Overlays higher resolution thumbnail on top of existing to prevent pop-in effect for seamless visuals
-+ Converted from TypeScript to JavaScript
+
+- Fix max thumbnail quality - webosbrew's original code
+- Waterfall detection: Picks the highest quality thumbnail available for each thumbnail (maxres → sd → hq)
+- Optimize body observer - observe ytlr-app by default, document.body as fallback
+- Many improvements for race conditions, memory leaks, error handling, object creation, type safety, mutation observer, early returns, and cleanup function
+- Overlays higher resolution thumbnail on top of existing to prevent pop-in effect for seamless visuals
+- Converted from TypeScript to JavaScript
 
 ### webOS 3
-+ Fix Force Max Quality
-+ Fix additional incompatible css rules on SponsorBlock UI panel
+
+- Fix Force Max Quality
+- Fix additional incompatible css rules on SponsorBlock UI panel
 
 ## Removed
-+ Removed search history injection for the time being due to bugs
+
+- Removed search history injection for the time being due to bugs
 
 ## [0.6.7] - 2026/01/02
 
@@ -664,12 +767,14 @@ Refactor: Consolidated scattered CSS injections (Logo, Endcards, UI hacks) into 
 
 Added new theme to config UI: Blueprint
 Added logo to config UI header
-+ Click the logo to toggle between themes
+
+- Click the logo to toggle between themes
 
 Force Max Quality now sets the local storage key yt-player-quality to 4320 (max) on load/video changes
 
 Added "Display Time in UI" from https://github.com/webosbrew/youtube-webos - https://github.com/NicholasBly/youtube-webos/issues/32
-+ Improvement: Time UI background now matches background color based on OLED mode toggle
+
+- Improvement: Time UI background now matches background color based on OLED mode toggle
 
 ## Changes
 
@@ -678,16 +783,18 @@ Added code to ensure config UI is closed when activating OLED mode so the persis
 ## Fixes
 
 Attempted fix to black screen on first video load using Force Max Quality
-+ Only sets max quality on buffering state instead of buffering and unstarted state
-Fixed shortcut keys activating on the search page
-Fixed shortcut keys with no action assigned toggling the player UI when pressed
-Fixed config UI css rules that weren't compatible with webOS 3
+
+- Only sets max quality on buffering state instead of buffering and unstarted state
+  Fixed shortcut keys activating on the search page
+  Fixed shortcut keys with no action assigned toggling the player UI when pressed
+  Fixed config UI css rules that weren't compatible with webOS 3
 
 ### SponsorBlock.js
 
 Clamp segments that are outside the bounds of the video duration
 If segments start after the video's duration, they won't show on the progress bar
-+ Sometimes SponsorBlock segments are submitted and the video creator edits something out of the video making it shorter, causing segments to start after the video ends
+
+- Sometimes SponsorBlock segments are submitted and the video creator edits something out of the video making it shorter, causing segments to start after the video ends
 
 ## YouTube UI Updates - yt-fixes.css
 
@@ -696,59 +803,67 @@ Video player: multiline video titles closes gap between lines, making it easier 
 ## [0.6.6] - 2025/12/29
 
 ## Added
+
 Feature request - OLED black screen keepalive to keep videos playing indefinitely - https://github.com/NicholasBly/youtube-webos/issues/30
 Feature request - added css override rules for fixing YouTube's stats for nerds panel - https://github.com/NicholasBly/youtube-webos/issues/28
 
 ## SponsorBlock.js
 
 Implemented skip chaining
-+ Recognizes when multiple segments run parallel and only skips to the end of the chain, making one clean skip
-+ Each segment in the chain will be listed in the notification
+
+- Recognizes when multiple segments run parallel and only skips to the end of the chain, making one clean skip
+- Each segment in the chain will be listed in the notification
 
 Implemented high precision skipping
-+ When within 1 second from a segment, a high precision animationFrame waits for the exact frame to skip
-+ + Fixes skipping taking too long where you might see a few frames within the segment
+
+- When within 1 second from a segment, a high precision animationFrame waits for the exact frame to skip
+- - Fixes skipping taking too long where you might see a few frames within the segment
 
 ## AdBlock.js
+
 ### Cosmetic Filtering
+
 Added "Top Live Games" and "Remove Shorts (Global)"
-+ "Remove Shorts Global" replaces "Remove Shorts From Subscriptions" and simply removes shorts on every navigation page
+
+- "Remove Shorts Global" replaces "Remove Shorts From Subscriptions" and simply removes shorts on every navigation page
 
 ### Performance
 
 Rewrote adblock + cosmetic filtering engine
-+ 15-20x faster filtering through schema path optimization
-+ + Direct scan to known locations in JSON instead of blindly searching 100,000+ lines on every page reload
-+ + If the direct path search fails due to YouTube server-side changes, it falls back to the original method, which ensures full functionality
-+ + Saves 200-400ms per page load and reduces CPU cycles significantly
+
+- 15-20x faster filtering through schema path optimization
+- - Direct scan to known locations in JSON instead of blindly searching 100,000+ lines on every page reload
+- - If the direct path search fails due to YouTube server-side changes, it falls back to the original method, which ensures full functionality
+- - Saves 200-400ms per page load and reduces CPU cycles significantly
 
 ### Optimizations
 
-+ Early Exit - added logic to instantly skip processing for irrelevant network responses (logging, metrics, etc.).
-+ Optimized path access with caching - eliminates repeated .split() calls
-+ Replaced includes() with indexOf() for better string comparison performance
-+ Added comprehensive error handling with try-catch throughout filtering pipeline
-+ Implemented fallback deep search when schema patterns don't match
+- Early Exit - added logic to instantly skip processing for irrelevant network responses (logging, metrics, etc.).
+- Optimized path access with caching - eliminates repeated .split() calls
+- Replaced includes() with indexOf() for better string comparison performance
+- Added comprehensive error handling with try-catch throughout filtering pipeline
+- Implemented fallback deep search when schema patterns don't match
 
 ### Bug Fixes
 
-+ Fixed inefficient title checking that called getShelfTitleOptimized() 2-3x per shelf
-+ Added missing parse error handling to prevent crashes on malformed JSON
-+ Fixed config cache to properly update on configuration changes
-+ Added fallback mechanism for unknown/new YouTube API response types
+- Fixed inefficient title checking that called getShelfTitleOptimized() 2-3x per shelf
+- Added missing parse error handling to prevent crashes on malformed JSON
+- Fixed config cache to properly update on configuration changes
+- Added fallback mechanism for unknown/new YouTube API response types
 
-+ Added webOS 3, 4, and 6 to the existing webOS 5 SponsorBlock logic fixing skipping infinite loop/restart bug - https://github.com/NicholasBly/youtube-webos/issues/26#issuecomment-3693879890
+- Added webOS 3, 4, and 6 to the existing webOS 5 SponsorBlock logic fixing skipping infinite loop/restart bug - https://github.com/NicholasBly/youtube-webos/issues/26#issuecomment-3693879890
 
 ## Webpack / Building
 
 Added dual build capability
-+ Build modern version (no polyfills, supports webOS 22 + via command: npm run build:modern)
-+ Build legacy version (webOS 3.0 + with npm run build)
+
+- Build modern version (no polyfills, supports webOS 22 + via command: npm run build:modern)
+- Build legacy version (webOS 3.0 + with npm run build)
 
 Shortcuts via build-local modern.cmd and build-local.cmd
 
-+ Fixed .cmd shortcuts always performing a clean install, leading to slow build times
-+ + Checks if node_modules folder exists already, if not, perform a clean install
+- Fixed .cmd shortcuts always performing a clean install, leading to slow build times
+- - Checks if node_modules folder exists already, if not, perform a clean install
 
 ## [0.6.5] - 2025/12/23
 
@@ -757,15 +872,17 @@ Shortcuts via build-local modern.cmd and build-local.cmd
 Starting with this build, there are two versions available:
 
 **webOS 22+ (Optimized)**
-+ Runs native ES6+ code with no transpilation (translated code) for maximum performance
-+ Removes 130kb+ of polyfills and compatibility layers from the compiled script: ~100kb vs. ~230kb
-+ Requires webOS 22 or newer
+
+- Runs native ES6+ code with no transpilation (translated code) for maximum performance
+- Removes 130kb+ of polyfills and compatibility layers from the compiled script: ~100kb vs. ~230kb
+- Requires webOS 22 or newer
 
 **Legacy (All Devices)**
-+ ES5-transpiled code with polyfills for compatibility
-+ Works on webOS 3.0 and newer
-+ Same functionality as all previous releases
-+ ~230kb file size to stay under 250kb performance target
+
+- ES5-transpiled code with polyfills for compatibility
+- Works on webOS 3.0 and newer
+- Same functionality as all previous releases
+- ~230kb file size to stay under 250kb performance target
 
 ## Code Optimizations
 
@@ -777,12 +894,14 @@ Optimization: Added debouncing to initialization and cached muted segment value 
 ### Return YouTube Dislike
 
 Modern code improvements: Abort controller and intersection observer functions available on webOS 22 +
-+  Instead of adding polyfills to support webOS 3, kept it simple and just added fallback functionality to keep the bundle light and efficient
+
+- Instead of adding polyfills to support webOS 3, kept it simple and just added fallback functionality to keep the bundle light and efficient
 
 Switched mutation observer from document.body to zylon-provider-3 to reduce an optimize CPU usage
 
 Fixed pop in of dislike value when opening description panel
-+  Implemented css builder for building/deploying description panel - more efficient and instantaneous when opening
+
+- Implemented css builder for building/deploying description panel - more efficient and instantaneous when opening
 
 Fixed panelContentObserver memory leak
 Fixed race condition on cleanup
@@ -807,11 +926,13 @@ Updated OLED mode - Uses cached notification container
 ## Fixes
 
 Fix to Subtitles toggle / comments toggle
-+  Fixed webOS 3 missing polyfill for toggle comments
-+  Depending on webOS you might need to toggle the YouTube player UI once for subtitles/comments to work
+
+- Fixed webOS 3 missing polyfill for toggle comments
+- Depending on webOS you might need to toggle the YouTube player UI once for subtitles/comments to work
 
 Fixed outro segments on webOS 5 and 6 potentially setting video playback to a time longer than the video length, causing the video to loop - https://github.com/NicholasBly/youtube-webos/issues/26
-+ For webOS 5, the last segment skip within 0.5s of video duration will temporarily mute the video to not cause an audio blip
+
+- For webOS 5, the last segment skip within 0.5s of video duration will temporarily mute the video to not cause an audio blip
 
 Fixed config UI sometimes losing focus if YouTube is loading something in the background
 
@@ -830,12 +951,14 @@ Removed notifications for shortcut toggling comments in video
 ## Added
 
 ### Debug Menu
+
 - Triggered by pressing the 0 key 5 times in a row while config UI menu is open
--- Added "qrious" dependency to generate QR codes
+  -- Added "qrious" dependency to generate QR codes
 
 #### Features:
+
 - Generate QR code of last 50 lines of console logs
--- Must enable checkbox "Enable console log collection" before console log data can be captured for collection
+  -- Must enable checkbox "Enable console log collection" before console log data can be captured for collection
 
 - Generate QR code of localStorage saved configuration
 
@@ -897,11 +1020,12 @@ Bump Dependencies
 
 Thank you for supporting my YouTube webOS extension. To those providing bug reports, feature requests, and feedback, I greatly appreciate it!
 
-New builds will be more thoroughly tested than before thanks to your feedback. If you'd like to test the latest updated builds before release, check the test branch. I will be uploading new builds there frequently. So far this 0.6.2 build has produced 8 test builds published there. 
+New builds will be more thoroughly tested than before thanks to your feedback. If you'd like to test the latest updated builds before release, check the test branch. I will be uploading new builds there frequently. So far this 0.6.2 build has produced 8 test builds published there.
 
 ## Added
 
 Added third page to config UI - "Shortcuts"
+
 - Allows programming custom shortcuts to the 0-9 keys on the LG remote during video playback
 
 Options:
@@ -918,6 +1042,7 @@ Added "Disable Notifications"
 ## Performance Optimizations
 
 config.js: Added configRemoveChangeListener API
+
 - Previously there was no way to stop listening to setting changes, causing memory leaks when components were destroyed
 
 ### AdBlock
@@ -927,6 +1052,7 @@ Refactored to support safe initialization and destruction
 Added protection against "double-hooking" JSON.parse (preventing stack overflows on script reloads)
 
 Implemented a smarter JSON parsing system:
+
 - Instead of intercepting and processing every single JSON, it will only parse JSON when necessary
 
 - Player Ads: Only search for playerAds if playerResponse or videoDetails exists
@@ -938,6 +1064,7 @@ Removed "Remove Shorts From Subscriptions" toggle if the user is in guest mode. 
 ### SponsorBlock
 
 Fixed multiple memory leaks in the SponsorBlockHandler
+
 - Now correctly tracks and removes configuration change listeners in destroy()
 - Cleaned up injected CSS styles (<style id="sb-css">) when the instance is destroyed
 - Centralized listener management to ensure no old event handlers remain active after video navigation
@@ -970,7 +1097,7 @@ Added a segment list overlay on the right side of the screen when viewing Sponso
 
 ### Video Playback
 
-Added "Chapter Skip" 
+Added "Chapter Skip"
 
 - Press the 5 key on LG remote during video playback to automatically skip to the start of the next chapter. Only available on videos with chapters.
 
@@ -1112,12 +1239,12 @@ Memory Efficiency: Switched to in-place array mutation for filtering content, re
 ### Removed
 
 - Removed webOS version from green button UI header except for webOS 25
--- Since webOS version ≠ YouTube UI, we only need to detect webOS 25 to apply the chromecast fix. Everything else will be detected via queryselectors to determine which YouTube UI is running.
+  -- Since webOS version ≠ YouTube UI, we only need to detect webOS 25 to apply the chromecast fix. Everything else will be detected via queryselectors to determine which YouTube UI is running.
 
 ### Added
 
 - Updated webOS detection via firmware version
--- If webOS 25 is detected, the chromecast fix is applied to fix the freezing issue
+  -- If webOS 25 is detected, the chromecast fix is applied to fix the freezing issue
 
 ### Fixes
 
@@ -1136,14 +1263,16 @@ Memory Efficiency: Switched to in-place array mutation for filtering content, re
 SponsorBlock Rewrite | SponsorBlock received a much needed overhaul!
 
 ### Summary
+
 1. 99% reduction in CPU usage: setInterval polls 4-10 times a second, MutationObserver only fires when there is an update event.
 2. ~80% more efficient: segments were drawn one by one, forcing a layout recalculation for every single segment. Now, DocumentFragment batches everything into 1 single layout calculation.
 3. Removed layout thrashing: The old code read properties like .offsetWidth or .contains inside loops, forcing the browser to pause and calculate styles synchronously. The new code uses requestAnimationFrame, allowing the browser to check these values only when it is ready to paint the next frame.
 
 ### Massive Performance Overhaul
+
 1. Removed Polling Loops: Replaced setInterval checks with MutationObserver
 2. Frame-Perfect Updates: All DOM checks are now throttled using requestAnimationFrame to prevent dropping frames during UI updates
--- This draws segments the instant the progress bar is visible, eliminating slight delays
+   -- This draws segments the instant the progress bar is visible, eliminating slight delays
 3. Batch Rendering: Segments are now built in memory using DocumentFragment and appended in a single operation, rather than injecting elements one by one
 4. Memory Management: Implemented a better destroy() method that cleanly disconnects all observers and event listeners to prevent memory leaks
 
@@ -1160,29 +1289,35 @@ SponsorBlock Rewrite | SponsorBlock received a much needed overhaul!
 ## [0.5.3] - 2025/11/22
 
 ### Notes
+
 YouTube has started rolling out a new UI on most webOS versions.
 From my testing, all webOS versions from 6 through 25 are all being served the new UI.
 If you're still on the old UI and have no bugs, please feel free to stay on 0.5.2 - I cannot test the old UIs anymore
 
 ### YouTube's New UI Fixes
+
 - Fixed Return YouTube Dislike UI on description page (YouTube's new UI is broken, so if they fix it, expect it to break again :/)
---No longer rely on specifically webOS version, apply if the new UI is detected
+  --No longer rely on specifically webOS version, apply if the new UI is detected
 - Implemented new SponsorBlock rules to detect YouTube UI instead of relying on webOS version only
 - Fixed SponsorBlock segments not appearing on progress bar if the loaded video lacks a multi-markers-player-bar-renderer
 
 ### Added
+
 - Enhanced webOS version detection
 
 ### Other Fixes
+
 - Fixed casting from android/iOS
 
 ### Other / File Size Reductions
+
 - Added cssnano to remove comments from userScript.js build
 - Disable source maps for production
 - Bump dependencies
 - Implement some older bug fixes from webosbrew
 
 ### Known Issues / Fixed in next version
+
 Guest Mode button not being hidden
 SponsorBlock segments appear slightly off-center when progress bar is not focused
 
@@ -1205,20 +1340,23 @@ Attempt to fix Android casting issue
 ## Features & Improvements
 
 ### Return YouTube Dislike
-* **Native UI Integration:** Moved the dislike count from button tooltips to the main video description panel. It now appears natively alongside Likes and Views.
-* **Dynamic Layout Engine:** Implemented a smart layout shifter that automatically adjusts content spacing to prevent button overlaps, regardless of the video description length.
-* **Multi-Version Support:** Added specific CSS selectors and spacing rules to ensure perfect rendering across **webOS 23, 24, and 25**.
-* **Visual Tweaks:** Fixed the alignment of the "Date" element to ensure it centers correctly on its own line when the Dislike count is present.
+
+- **Native UI Integration:** Moved the dislike count from button tooltips to the main video description panel. It now appears natively alongside Likes and Views.
+- **Dynamic Layout Engine:** Implemented a smart layout shifter that automatically adjusts content spacing to prevent button overlaps, regardless of the video description length.
+- **Multi-Version Support:** Added specific CSS selectors and spacing rules to ensure perfect rendering across **webOS 23, 24, and 25**.
+- **Visual Tweaks:** Fixed the alignment of the "Date" element to ensure it centers correctly on its own line when the Dislike count is present.
 
 ### SponsorBlock
-* **webOS 25 Support:** Optimized segment rendering for the newer OS.
-* **Dynamic Visibility:** Segments now correctly disappear when the player progress bar is hidden.
-* **Focus Scaling:** Segments now correctly resize and fit the progress bar during focus/unfocus states.
+
+- **webOS 25 Support:** Optimized segment rendering for the newer OS.
+- **Dynamic Visibility:** Segments now correctly disappear when the player progress bar is hidden.
+- **Focus Scaling:** Segments now correctly resize and fit the progress bar during focus/unfocus states.
 
 ### Core / Internal
-* **webOS 25 Support:** Added general compatibility for webOS 25.
-* **Version Detection:** Added `webos-utils.js` to accurately map User Agent Chrome versions to webOS versions (based on [LGE Specifications](https://webostv.developer.lge.com/develop/specifications/web-api-and-web-engine)). This ensures visuals and features load with the correct version-specific rules.
-* **Major Version Improvements:** Sponsorblock and Return YouTube Dislike now have individual rules for each webOS version for better functionality.
+
+- **webOS 25 Support:** Added general compatibility for webOS 25.
+- **Version Detection:** Added `webos-utils.js` to accurately map User Agent Chrome versions to webOS versions (based on [LGE Specifications](https://webostv.developer.lge.com/develop/specifications/web-api-and-web-engine)). This ensures visuals and features load with the correct version-specific rules.
+- **Major Version Improvements:** Sponsorblock and Return YouTube Dislike now have individual rules for each webOS version for better functionality.
 
 ## [0.5.0] - 2025/11/11
 
@@ -1274,6 +1412,7 @@ Attempt to fix Android casting issue
 ### Changed
 
 SponsorBlock Optimizations:
+
 - Network - API fallback added, timeout handling
 - Memory - centralized management system to prevent memory leaks
 - Performance - caching for DOM elements
@@ -1350,6 +1489,7 @@ SponsorBlock Optimizations:
 ### Fixed
 
 - Sponsored segments not showing on preview bar
+
 ## [0.5.3] - 2026/04/18
 
 ### Fixed
@@ -1603,7 +1743,7 @@ SponsorBlock Optimizations:
 
 - Created basic web app which launches YouTube TV.
 
-[Unreleased]: https://github.com/webosbrew/youtube-webos/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/webosbrew/youtube-webos/compare/v0.8.0...HEAD
 [0.3.1]: https://github.com/webosbrew/youtube-webos/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/webosbrew/youtube-webos/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/webosbrew/youtube-webos/compare/v0.2.0...v0.2.1
