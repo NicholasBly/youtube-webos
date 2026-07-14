@@ -88,7 +88,9 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
       throw new TypeError('Failed to fetch');
     }
 
-    const res = await this.#originalFetch(resource, init);
+    const fetchResource =
+      resource instanceof Request ? resource : resource.toString();
+    const res = await this.#originalFetch(fetchResource, init);
 
     if (window.__ytaf_debug__) {
       console.debug(`Response ${this.#fetchCount}:`, res);
@@ -126,3 +128,5 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
     registry = null;
   }
 }
+
+FetchRegistry.getInstance();

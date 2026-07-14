@@ -12,7 +12,7 @@ class Watch {
     // Constants
     this._PLAYER_SELECTOR = 'ytlr-watch-default'; // Kept specific to this clock feature if needed, or could use SELECTORS.PLAYER_CONTAINER if appropriate.
     this._DEBOUNCE_DELAY = 50;
-	this._cachedPlayer = null;
+    this._cachedPlayer = null;
     this._cachedOverlay = null;
 
     // Bind methods

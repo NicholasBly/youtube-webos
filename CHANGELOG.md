@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.8.0] - 2026/05/27
 
@@ -1350,6 +1350,89 @@ SponsorBlock Optimizations:
 ### Fixed
 
 - Sponsored segments not showing on preview bar
+## [0.5.3] - 2026/04/18
+
+### Fixed
+
+- [#444](https://github.com/webosbrew/youtube-webos/pull/444): Fix YTAF not loading due to YouTube's Trusted Types enforcement (@fire332)
+
+## [0.5.2] - 2026/04/18
+
+### Fixed
+
+- [#443](https://github.com/webosbrew/youtube-webos/pull/443): Fix adblock and Shorts removal (@fire332)
+
+### Changed
+
+- [#443](https://github.com/webosbrew/youtube-webos/pull/443): Invalidate Babel cache on config change (@fire332)
+- [#442](https://github.com/webosbrew/youtube-webos/pull/442): Add syntax compatibility validation for build artifacts (@fire332)
+
+## [0.5.1] - 2026/04/16
+
+### Added
+
+- [#383](https://github.com/webosbrew/youtube-webos/pull/383): Add option to bypass the "Who's Watching?" account selection screen (@fire332)
+- [#435](https://github.com/webosbrew/youtube-webos/pull/435): Add additional image assets (@GA251)
+- [#436](https://github.com/webosbrew/youtube-webos/pull/436): Show YTAF version in the settings menu (@jesvijonathan)
+- [#436](https://github.com/webosbrew/youtube-webos/pull/436): Polish YTAF settings menu visuals (@jesvijonathan)
+
+### Fixed
+
+- [#433](https://github.com/webosbrew/youtube-webos/pull/433): Fix the app failing to load on webOS 3 due to a syntax error in the bundle (@fire332)
+- [#409](https://github.com/webosbrew/youtube-webos/pull/409): Fix blank thumbnails in the Shorts shelf (@LeviSnoot)
+- [#332](https://github.com/webosbrew/youtube-webos/pull/332): Fix adblock bypass caused by server-side backoff producing fake buffering (@fire332)
+
+### Changed
+
+- [#418](https://github.com/webosbrew/youtube-webos/pull/418): Migrate package manager from npm to pnpm (@fire332)
+- [#417](https://github.com/webosbrew/youtube-webos/pull/417), [#432](https://github.com/webosbrew/youtube-webos/pull/432): Update dependencies (@fire332)
+- [#417](https://github.com/webosbrew/youtube-webos/pull/417): Migrate Babel config to `preset-typescript` (@fire332)
+- [#417](https://github.com/webosbrew/youtube-webos/pull/417): Swap `@webos-tools/cli` with a fork that supports Node.js v24 (@fire332)
+- [#434](https://github.com/webosbrew/youtube-webos/pull/434): Format `yt-fixes.css` with Prettier (@fire332)
+- [#438](https://github.com/webosbrew/youtube-webos/pull/438): Generate `appinfo.json` version from `package.json` to streamline releases (@fire332)
+
+## [0.5.0] - 2025/11/10
+
+### Added
+
+- [#331](https://github.com/webosbrew/youtube-webos/pull/331): Add option to remove video end screens (@fire332)
+- [#321](https://github.com/webosbrew/youtube-webos/pull/321): Add audio-only mode and colour-coded toasts (@jesvijonathan)
+- [#372](https://github.com/webosbrew/youtube-webos/pull/372): Allow casting with the TV turned off for newer webOS version (@GAA251)
+
+### Fixed
+
+- [#316](https://github.com/webosbrew/youtube-webos/pull/316): Fix language switching reliability (@fire332; thanks to @reisxd)
+- [#361](https://github.com/webosbrew/youtube-webos/pull/361): Improve reliability of automatic video quality upgrades (@fire332)
+- [#355](https://github.com/webosbrew/youtube-webos/pull/355): Prevent `fetch` hook exceptions when URLs omit a scheme (@fire332)
+- [#346](https://github.com/webosbrew/youtube-webos/pull/346): Block the built-in webOS Chromecast service to fix conflict with Chromecast overlay in newer webOS (@fire332)
+- [#374](https://github.com/webosbrew/youtube-webos/pull/374): Improve CSS selector used by the watch shadow fix (@fire332)
+
+### Changed
+
+- [#344](https://github.com/webosbrew/youtube-webos/pull/344): Update dependencies and development tooling (@fire332)
+- [#330](https://github.com/webosbrew/youtube-webos/pull/330): Misc developer experience improvements (@fire332)
+
+## [0.4.1] - 2025/07/28
+
+### Fixed
+
+- [#313](https://github.com/webosbrew/youtube-webos/pull/313): Fix `async` keyword leaking into bundle (@fire332)
+
+## [0.4.0] - 2025/07/25
+
+### Fixed
+
+- [#298](https://github.com/webosbrew/youtube-webos/pull/298): Remove ads from shorts reel (@pwNBait)
+- [#302](https://github.com/webosbrew/youtube-webos/pull/302): Fix sponsorblock segment overlay (@fire332)
+- [#304](https://github.com/webosbrew/youtube-webos/pull/304): Fix appearance of YTAF settings menu (@jesvijonathan)
+- [#308](https://github.com/webosbrew/youtube-webos/pull/308): Fix video quality not upgraded after transition from preview -> watch (@fire332)
+- [#305](https://github.com/webosbrew/youtube-webos/pull/305): Fix exceptions for new gradient cards in library tab (@fire332)
+- [#305](https://github.com/webosbrew/youtube-webos/pull/305): Fix exceptions in adblock.js (@fire332)
+
+### Added
+
+- [#299](https://github.com/webosbrew/youtube-webos/pull/299): Add option to display time in UI (@ChTosar)
+- [#305](https://github.com/webosbrew/youtube-webos/pull/305): Add option to force max video quality playback (@fire332)
 
 ## [0.3.8] - 2025/05/10
 

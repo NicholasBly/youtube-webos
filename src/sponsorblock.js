@@ -1250,6 +1250,37 @@ if (typeof window !== 'undefined') {
     let initTimeout = null;
 
     const initSB = () => {
+        let videoID = null;
+        try {
+            const hash = window.location.hash;
+            if (hash.startsWith('#')) {
+                const parts = hash.split('?');
+                if (parts.length > 1) {
+                    if (typeof URLSearchParams !== 'undefined') {
+                        const params = new URLSearchParams(parts[1]);
+                        videoID = params.get('v');
+                    } else {
+                        const match = parts[1].match(/(?:[?&]|^)v=([^&]+)/);
+                        if (match) videoID = match[1];
+                    }
+                }
+            }
+        } catch (e) { /* ignore */ }
+
+        // Uninitialize when not on /watch or if videoID is missing
+        const hashVal = window.location.hash.substring(1);
+        let pathname = '';
+        try {
+            const newURL = new URL(hashVal, window.location.href);
+            pathname = newURL.pathname;
+        } catch (e) {}
+
+        if ((pathname !== '/watch' || !videoID) && window.sponsorblock) {
+            window.sponsorblock.destroy();
+            window.sponsorblock = null;
+            return;
+        }
+
         if (window.sponsorblock) {
             window.sponsorblock.destroy();
             window.sponsorblock = null;
@@ -1257,23 +1288,6 @@ if (typeof window !== 'undefined') {
         if (initTimeout) clearTimeout(initTimeout);
 
         const run = () => {
-            let videoID = null;
-            try {
-                const hash = window.location.hash;
-                if (hash.startsWith('#')) {
-                    const parts = hash.split('?');
-                    if (parts.length > 1) {
-                        if (typeof URLSearchParams !== 'undefined') {
-                            const params = new URLSearchParams(parts[1]);
-                            videoID = params.get('v');
-                        } else {
-                            const match = parts[1].match(/(?:[?&]|^)v=([^&]+)/);
-                            if (match) videoID = match[1];
-                        }
-                    }
-                }
-            } catch (e) { /* ignore */ }
-
             const config = configGetAll();
             if (videoID && config.enableSponsorBlock) {
                 window.sponsorblock = new SponsorBlockHandler(videoID);

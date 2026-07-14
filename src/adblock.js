@@ -2,7 +2,6 @@ import { configGetAll, configAddChangeListener } from './config';
 import { isShortsPage } from './utils';
 import { getWebOSVersion } from './webos-utils';
 import { FetchRegistry } from './hooks';
-
 const DEBUG = false;
 const EMOJI_DEBUG = false; 
 const FORCE_FALLBACK = false;

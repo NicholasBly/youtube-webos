@@ -28,6 +28,7 @@ export const shortcutActions = {
   save_to_playlist: 'Save / Watch Later',
   oled_toggle: 'Toggle OLED Care Mode',
   sb_manual_skip: 'Manual Skip / Jump to Highlight',
+  audio_only: 'Toggle Audio-Only Mode',
   config_menu: 'Open/Close Settings'
 };
 
@@ -51,7 +52,6 @@ export const forcePreviewModes = {
   force_on: 'Force On',
   force_off: 'Force Off'
 };
-
 const configOptions = new Map([
   ['uiTheme', { default: 'blue-force-field', desc: 'UI Theme' }],
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],

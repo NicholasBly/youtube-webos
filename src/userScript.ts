@@ -25,6 +25,10 @@ import './screensaver-fix.js';
 import './yt-fixes.css';
 import './watch.js';
 import './lang-settings-fix';
+import './hooks/json-stringify';
+import './remove-endscreen';
+import './hooks';
+import './auto-account-select';
 
 (function oneTimeParamsCheck() {
     const params = extractLaunchParams();

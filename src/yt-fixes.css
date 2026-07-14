@@ -9,7 +9,6 @@
 
 /* Removes duplicated panel on UI partially blocking video tiles */
 .RYo6Fb .hsdF6b { width: 0rem !important; }
-
 .ytLrWatchDefaultShadow,
 [idomkey='shadow'] {
   background-image: linear-gradient(
@@ -43,7 +42,6 @@ ytlr-tile-renderer[style*='width: 12.75rem; height: 21.25rem;']
 	right: 40rem !important;
 	top: 12rem !important;
 }
-
 /**
  * Dirty hack to fix offset <video> on shorts on older webOS versions.
  * This shouldn't work but it does 😵‍💫.
