@@ -50,10 +50,7 @@ class PlayerManager
 
   #handlePlayerStateChange = () => {
     const current = this.#player.getPlayerStateObject();
-    const diff = diffPlayerState(
-      this.#lastPlayerState,
-      this.#player.getPlayerStateObject()
-    );
+    const diff = diffPlayerState(this.#lastPlayerState, current);
     this.#lastPlayerState = current;
 
     // Assume video ID hasn't changed if diff is empty.
@@ -106,12 +103,6 @@ export async function getPlayerManager(): Promise<PlayerManager> {
     const player = await getPlayer();
     instance = new PlayerManager(player);
   }
-
-  instance.addEventListener('playbackStart', function (event) {
-    event.type;
-    event.currentTarget?.currentVideoID;
-    event.detail;
-  });
 
   return instance;
 }

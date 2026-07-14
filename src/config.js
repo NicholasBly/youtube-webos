@@ -4,7 +4,11 @@ export const segmentTypes = {
   sponsor: { color: '#00d400', opacity: '0.7', name: 'sponsored' },
   intro: { color: '#00ffff', opacity: '0.7', name: 'intro' },
   outro: { color: '#0202ed', opacity: '0.7', name: 'outro' },
-  interaction: { color: '#cc00ff', opacity: '0.7', name: 'interaction reminder' },
+  interaction: {
+    color: '#cc00ff',
+    opacity: '0.7',
+    name: 'interaction reminder'
+  },
   selfpromo: { color: '#ffff00', opacity: '0.7', name: 'self-promotion' },
   musicofftopic: { color: '#ff9900', opacity: '0.7', name: 'non-music part' },
   preview: { color: '#008fd6', opacity: '0.7', name: 'recap or preview' },
@@ -32,7 +36,6 @@ export const shortcutActions = {
   config_menu: 'Open/Close Settings'
 };
 
-
 export const sbModes = {
   auto_skip: 'Auto Skip',
   manual_skip: 'Manual Skip',
@@ -55,19 +58,34 @@ export const forcePreviewModes = {
 const configOptions = new Map([
   ['uiTheme', { default: 'blue-force-field', desc: 'UI Theme' }],
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
-  ['enableTrackingBlock', { default: false, desc: 'Reduce Telemetry & Tracking' }],
-  ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
+  [
+    'enableTrackingBlock',
+    { default: false, desc: 'Reduce Telemetry & Tracking' }
+  ],
+  [
+    'enableReturnYouTubeDislike',
+    { default: true, desc: 'Return YouTube Dislike' }
+  ],
   ['upgradeThumbnails', { default: false, desc: 'Max Thumbnail Quality' }],
   ['removeGlobalShorts', { default: false, desc: 'Remove Shorts (Global)' }],
   ['removeTopLiveGames', { default: false, desc: 'Remove Top Live Games' }],
-  ['removeMostRelevant', { default: false, desc: 'Remove "Most Relevant" Shelf' }],
+  [
+    'removeMostRelevant',
+    { default: false, desc: 'Remove "Most Relevant" Shelf' }
+  ],
   ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
-  ['enableMutedSegments', { default: false, desc: 'Allow segments that mute audio' }],
+  [
+    'enableMutedSegments',
+    { default: false, desc: 'Allow segments that mute audio' }
+  ],
   ['skipSegmentsOnce', { default: false, desc: 'Skip Segments Once' }],
   ['sbMode_sponsor', { default: 'auto_skip', desc: 'Sponsor' }],
   ['sbMode_intro', { default: 'auto_skip', desc: 'Intermission/Intro' }],
   ['sbMode_outro', { default: 'auto_skip', desc: 'Endcards/Credits' }],
-  ['sbMode_interaction', { default: 'auto_skip', desc: 'Interaction Reminder' }],
+  [
+    'sbMode_interaction',
+    { default: 'auto_skip', desc: 'Interaction Reminder' }
+  ],
   ['sbMode_selfpromo', { default: 'auto_skip', desc: 'Self Promotion' }],
   ['sbMode_musicofftopic', { default: 'auto_skip', desc: 'Non-Music Section' }],
   ['sbMode_preview', { default: 'seek_bar', desc: 'Preview/Recap' }],
@@ -78,44 +96,66 @@ const configOptions = new Map([
   ['enableAutoLogin', { default: true, desc: 'Auto Login' }],
   ['hideLogo', { default: false, desc: 'Hide YouTube Logo' }],
   ['showWatch', { default: false, desc: 'Display Time in UI' }],
-  ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
+  [
+    'enableOledCareMode',
+    { default: false, desc: 'OLED-Care Mode (True Black UI)' }
+  ],
   ['videoShelfOpacity', { default: 100, desc: 'Video shelf opacity' }],
   ['fixMultilineTitles', { default: true, desc: 'Fix Multiline Titles' }],
   ['removeBlackBorders', { default: false, desc: 'New Liquid Glass UI' }],
   ['forcePreviews', { default: 'disabled', desc: 'Force Previews' }],
   ['enableLegacyEmojiFix', { default: true, desc: 'Emoji + Characters Fix' }],
-  ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
+  [
+    'hideGuestSignInPrompts',
+    { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }
+  ],
+  ['autoAccountSelect', { default: false, desc: 'Bypass Account Selector' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],
   ['disableNotifications', { default: false, desc: 'Disable Notifications' }]
 ]);
 
 // Register shortcut keys 0-9
 for (let i = 0; i < 10; i++) {
-  configOptions.set(`shortcut_key_${i}`, { default: i === 5 ? 'chapter_skip' : 'none', desc: `Key ${i} Action` });
+  configOptions.set(`shortcut_key_${i}`, {
+    default: i === 5 ? 'chapter_skip' : 'none',
+    desc: `Key ${i} Action`
+  });
 }
 
 // Register shortcut keys Red, Green, Blue
-['red', 'green', 'blue'].forEach(color => {
-    let def = 'none';
-    if (color === 'red') def = 'oled_toggle';
-    if (color === 'green') def = 'config_menu';
-    if (color === 'blue') def = 'sb_manual_skip';
-    configOptions.set(`shortcut_key_${color}`, { default: def, desc: `${color.charAt(0).toUpperCase() + color.slice(1)} Button Action` });
+['red', 'green', 'blue'].forEach((color) => {
+  let def = 'none';
+  if (color === 'red') def = 'oled_toggle';
+  if (color === 'green') def = 'config_menu';
+  if (color === 'blue') def = 'sb_manual_skip';
+  configOptions.set(`shortcut_key_${color}`, {
+    default: def,
+    desc: `${color.charAt(0).toUpperCase() + color.slice(1)} Button Action`
+  });
 });
 
 for (const [key, value] of Object.entries(segmentTypes)) {
-  configOptions.set(`${key}Color`, { default: value.color, desc: `Color for ${value.name}` });
+  configOptions.set(`${key}Color`, {
+    default: value.color,
+    desc: `Color for ${value.name}`
+  });
 }
 
 const defaultConfig = {};
-for (const [k, v] of configOptions) { defaultConfig[k] = v.default; }
+for (const [k, v] of configOptions) {
+  defaultConfig[k] = v.default;
+}
 
 const changeListeners = new Map();
 
 function loadStoredConfig() {
   const storage = window.localStorage.getItem(CONFIG_KEY);
   if (storage === null) return null;
-  try { return JSON.parse(storage); } catch (err) { return null; }
+  try {
+    return JSON.parse(storage);
+  } catch {
+    return null;
+  }
 }
 
 let localConfig = Object.assign({}, defaultConfig, loadStoredConfig() || {});
@@ -127,15 +167,21 @@ function flushPendingWrite() {
   if (pendingWriteTimer === null) return;
   clearTimeout(pendingWriteTimer);
   pendingWriteTimer = null;
-  try { window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig); }
-  catch (e) { /* quota / SecurityError on private mode */ }
+  try {
+    window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
+  } catch {
+    /* quota / SecurityError on private mode */
+  }
 }
 function scheduleWrite() {
   if (pendingWriteTimer !== null) return;
   pendingWriteTimer = setTimeout(() => {
     pendingWriteTimer = null;
-    try { window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig); }
-    catch (e) { /* ignore */ }
+    try {
+      window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
+    } catch {
+      /* ignore */
+    }
   }, 200);
 }
 if (typeof window !== 'undefined') {
@@ -143,22 +189,27 @@ if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', flushPendingWrite);
 }
 
-function configExists(key) { return configOptions.has(key); }
+function configExists(key) {
+  return configOptions.has(key);
+}
 
 export function configGetDesc(key) {
-  if (!configExists(key)) throw new Error('tried to get desc for unknown config key: ' + key);
+  if (!configExists(key))
+    throw new Error('tried to get desc for unknown config key: ' + key);
   return configOptions.get(key).desc;
 }
 
 export function configRead(key) {
-  if (!configExists(key)) throw new Error('tried to read unknown config key: ' + key);
+  if (!configExists(key))
+    throw new Error('tried to read unknown config key: ' + key);
   return localConfig[key];
 }
 
 export function configWrite(key, value) {
-  if (!configExists(key)) throw new Error('tried to write unknown config key: ' + key);
+  if (!configExists(key))
+    throw new Error('tried to write unknown config key: ' + key);
   const oldValue = localConfig[key];
-  if (oldValue === value) return; 
+  if (oldValue === value) return;
 
   console.info('Changing key', key, 'from', oldValue, 'to', value);
   localConfig[key] = value;
@@ -167,7 +218,9 @@ export function configWrite(key, value) {
   const listeners = changeListeners.get(key);
   if (listeners) {
     const syntheticEvent = { detail: { key, newValue: value, oldValue } };
-    for (const callback of listeners) { callback(syntheticEvent); }
+    for (const callback of listeners) {
+      callback(syntheticEvent);
+    }
   }
 }
 
@@ -182,7 +235,8 @@ export function configRemoveChangeListener(key, callback) {
 }
 
 export function configGetDefault(key) {
-  if (!configExists(key)) throw new Error('tried to get default for unknown config key: ' + key);
+  if (!configExists(key))
+    throw new Error('tried to get default for unknown config key: ' + key);
   return configOptions.get(key).default;
 }
 

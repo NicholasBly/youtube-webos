@@ -801,6 +801,7 @@ function createOptionsPanel() {
   pageMain.appendChild(
     createSection('Interface', [
       createConfigCheckbox('enableAutoLogin'),
+      createConfigCheckbox('autoAccountSelect'),
       createConfigCheckbox('upgradeThumbnails'),
       createConfigCheckbox('hideLogo'),
       createConfigCheckbox('showWatch'),

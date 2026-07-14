@@ -14,7 +14,7 @@ const originalParse = JSON.parse;
 function jsonParse(str: string, reviver?: JSONReviver) {
   const res = originalParse(str, reviver) as unknown;
 
-  if (!configRead('removeEndscreen')) {
+  if (!configRead('hideEndcards')) {
     return res;
   }
 
