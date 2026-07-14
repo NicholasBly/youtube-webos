@@ -4,12 +4,16 @@
   "vendor": "webosbrew.org",
   "type": "web",
   "main": "index.html",
-  "bgImage":"9262051282473701_youtube_leanback_preview.png",
+  "bgImage":"bgImage.png",
   "title": "YouTube AdFree",
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",
+  "mediumLargeIcon": "mediumLargeIcon.png",
+  "extraLargeIcon": "extraLargeIcon.png",
+  "playIcon": "playIcon.png",
   "iconColor": "#FFFFFF",
-  "splashBackground":"9262051307371701_youtube_leanback_splash.png",
+  "splashBackground": "splashBackground-v1.png",
+  "imageForRecents": "imageForRecents.png",
   "support360Content": true,
   "checkUpdateOnLaunch": false,
   "accessibility": {
@@ -35,5 +39,6 @@
   "supportQuickStart": true,
   "dialAppName": "YouTube",
   "disableBackHistoryAPI": true,
-  "supportGIP": true
+  "supportGIP": true,
+  "wolwowlan": true
 }

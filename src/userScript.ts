@@ -1,0 +1,57 @@
+import 'whatwg-fetch';
+import './domrect-polyfill';
+import './adblock.js';
+
+if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
+    Object.defineProperty(Node.prototype, 'isConnected', {
+        get: function() {
+            return document.contains(this);
+        },
+        configurable: true,
+        enumerable: true
+    });
+}
+
+import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
+import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';
+import { isWebOS25, simulatorMode } from './webos-utils.js';
+import { initBlockWebOSCast } from './block-webos-cast';
+import './app_api/index';
+import './ui.js'; // Registers the green-key handler, options panel, video-quality, global styles
+import './sponsorblock.js';
+import './emoji-font.js';
+import './thumbnail-quality.js';
+import './screensaver-fix.js';
+import './yt-fixes.css';
+import './watch.js';
+import './lang-settings-fix';
+import './hooks/json-stringify';
+import './remove-endscreen';
+import './hooks';
+import './auto-account-select';
+
+(function oneTimeParamsCheck() {
+    const params = extractLaunchParams();
+    if (params && Object.keys(params).length > 0) {
+        attemptActiveBypass();
+    }
+})();
+
+document.addEventListener(
+  'webOSRelaunch',
+  (evt) => {
+    console.info('RELAUNCH:', evt, window.launchParams);
+	resetActiveBypass();
+    if (document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR)) {
+        console.info('[Main] Relaunch detected on Account Selector. Triggering bypass.');
+        attemptActiveBypass(true);
+    }
+    handleLaunch(evt.detail);
+  },
+  true
+);
+
+if (isWebOS25() && simulatorMode === false) {
+  console.info('[Main] Enabling webOS Google Cast Block');
+  initBlockWebOSCast();
+}

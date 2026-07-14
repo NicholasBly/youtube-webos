@@ -1,4 +1,8 @@
-import { configRead, configAddChangeListener, configRemoveChangeListener } from './config';
+import {
+  configRead,
+  configAddChangeListener,
+  configRemoveChangeListener
+} from './config';
 import { debounce } from './utils';
 import './watch.css';
 
@@ -7,26 +11,30 @@ class Watch {
     // Standard properties
     this._watch = null;
     this._timer = null;
+    this._alignmentTimer = null;
     this._globalListeners = [];
-    
+
     // Constants
     this._PLAYER_SELECTOR = 'ytlr-watch-default'; // Kept specific to this clock feature if needed, or could use SELECTORS.PLAYER_CONTAINER if appropriate.
     this._DEBOUNCE_DELAY = 50;
-	this._cachedPlayer = null;
+    this._cachedPlayer = null;
     this._cachedOverlay = null;
 
     // Bind methods
     this.onOledChange = this.onOledChange.bind(this);
     this.updateVisibility = this.updateVisibility.bind(this);
-    
+
     // Use shared debounce
-    this.debouncedUpdate = debounce(this.updateVisibility, this._DEBOUNCE_DELAY);
+    this.debouncedUpdate = debounce(
+      this.updateVisibility,
+      this._DEBOUNCE_DELAY
+    );
 
     // Initialize
     this.createElement();
     this.startClock();
     this.setupGlobalListeners();
-    
+
     this.applyOledMode(configRead('enableOledCareMode'));
     configAddChangeListener('enableOledCareMode', this.onOledChange);
 
@@ -65,14 +73,15 @@ class Watch {
       if (this._watch) {
         // textContent is faster than innerText
         this._watch.textContent = formatter.format(new Date());
-        
+
         // Safety check on the minute mark
         this.updateVisibility();
       }
     };
 
     setTime();
-    setTimeout(() => {
+    this._alignmentTimer = setTimeout(() => {
+      this._alignmentTimer = null;
       setTime();
       this._timer = setInterval(setTime, 60000);
     }, nextSeg);
@@ -82,28 +91,32 @@ class Watch {
     if (!this._watch) return;
 
     if (!this._cachedPlayer || !this._cachedPlayer.isConnected) {
-        this._cachedPlayer = document.querySelector(this._PLAYER_SELECTOR);
+      this._cachedPlayer = document.querySelector(this._PLAYER_SELECTOR);
     }
-    
+
     if (!this._cachedPlayer) {
       if (this._watch.style.display !== 'block') {
-         this._watch.style.display = 'block';
+        this._watch.style.display = 'block';
       }
       return;
     }
 
     if (!this._cachedOverlay || !this._cachedOverlay.isConnected) {
-        this._cachedOverlay = document.querySelector('.AmQJbe');
+      this._cachedOverlay = document.querySelector('.AmQJbe');
     }
 
-    const isHybridFocused = this._cachedPlayer.getAttribute('hybridnavfocusable') === 'true';
-    const isPlayerElementActive = document.activeElement === this._cachedPlayer || document.activeElement === document.body;
+    const isHybridFocused =
+      this._cachedPlayer.getAttribute('hybridnavfocusable') === 'true';
+    const isPlayerElementActive =
+      document.activeElement === this._cachedPlayer ||
+      document.activeElement === document.body;
     const isOverlayActive = !!this._cachedOverlay;
 
-    const shouldHide = isHybridFocused || isPlayerElementActive || isOverlayActive;
-    
+    const shouldHide =
+      isHybridFocused || isPlayerElementActive || isOverlayActive;
+
     const newDisplay = shouldHide ? 'none' : 'block';
-    
+
     if (this._watch.style.display !== newDisplay) {
       this._watch.style.display = newDisplay;
     }
@@ -113,7 +126,7 @@ class Watch {
     this.boundStateChange = (e) => {
       const state = e.detail.state;
       if (state === 1 || state === 2 || state === -1) {
-          this.debouncedUpdate();
+        this.debouncedUpdate();
       }
     };
     window.addEventListener('yt-player-state-change', this.boundStateChange);
@@ -124,32 +137,39 @@ class Watch {
     };
 
     addListener('focusin', this.debouncedUpdate);
-    addListener('focusout', this.debouncedUpdate); 
+    addListener('focusout', this.debouncedUpdate);
   }
 
   destroy() {
+    if (this._alignmentTimer) {
+      clearTimeout(this._alignmentTimer);
+      this._alignmentTimer = null;
+    }
     if (this._timer) {
       clearInterval(this._timer);
       this._timer = null;
     }
-    
-    // Note: Debounce internal timer is managed by closure in shared helper, 
+
+    // Note: Debounce internal timer is managed by closure in shared helper,
     // so strictly speaking we can't cancel it externally easily unless debounce returns a cancel method.
-    // For this use case (UI visibility), letting a pending check run once after destroy is harmless, 
+    // For this use case (UI visibility), letting a pending check run once after destroy is harmless,
     // but the shared debounce usually doesn't expose cancel.
     // If strict cleanup is needed, update the shared debounce to return { run, cancel }.
 
     configRemoveChangeListener('enableOledCareMode', this.onOledChange);
-    
+
     if (this.boundStateChange) {
-        window.removeEventListener('yt-player-state-change', this.boundStateChange);
+      window.removeEventListener(
+        'yt-player-state-change',
+        this.boundStateChange
+      );
     }
-    
-    this._globalListeners.forEach(l => {
+
+    this._globalListeners.forEach((l) => {
       document.removeEventListener(l.type, l.fn, true);
     });
     this._globalListeners = [];
-    
+
     if (this._watch) {
       this._watch.remove();
       this._watch = null;
@@ -165,9 +185,9 @@ function toggleWatch(show) {
       watchInstance = new Watch();
     }
   } else if (watchInstance) {
-      watchInstance.destroy();
-      watchInstance = null;
-    }
+    watchInstance.destroy();
+    watchInstance = null;
+  }
 }
 
 toggleWatch(configRead('showWatch'));

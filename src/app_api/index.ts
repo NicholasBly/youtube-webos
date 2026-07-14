@@ -30,6 +30,10 @@ export class ResolveCommandRegistry {
     command: Record<string, unknown>,
     extra?: unknown
   ) => {
+    if (!command || typeof command !== 'object') {
+      return this.#originalFn(command, extra);
+    }
+
     console.group(`[${this.constructor.name}] Resolving`);
     console.debug(`Command:`);
     console.debug(command);
@@ -73,9 +77,7 @@ export class ResolveCommandRegistry {
       target &&
       typeof target === 'function' &&
       'instance' in target &&
-      typeof target.instance === 'object' &&
-      typeof (target.instance as Record<string, unknown>).resolveCommand ===
-        'function'
+      typeof (target.instance as any)?.resolveCommand === 'function'
     );
   }
 
@@ -102,7 +104,7 @@ export class ResolveCommandRegistry {
         if (hook) {
           resolve(hook);
         } else {
-          setTimeout(poll, 0);
+          setTimeout(poll, 50);
         }
       };
       poll();
