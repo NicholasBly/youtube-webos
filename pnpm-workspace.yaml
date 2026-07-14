@@ -1,8 +1,8 @@
 allowBuilds:
-  '@webos-tools/cli@https://codeload.github.com/fire332/webos-cli/tar.gz/6cfbcf231a0fa1e50519d370ee6e5edc71c4998a': set this to true or false
-  core-js-pure: set this to true or false
-  cpu-features: set this to true or false
-  ssh2: set this to true or false
+  '@webos-tools/cli@https://codeload.github.com/fire332/webos-cli/tar.gz/6cfbcf231a0fa1e50519d370ee6e5edc71c4998a': true
+  core-js-pure: true
+  cpu-features: true
+  ssh2: true
 onlyBuiltDependencies:
   - '@webos-tools/cli'
   - core-js-pure
