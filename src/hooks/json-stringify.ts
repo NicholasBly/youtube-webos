@@ -15,36 +15,14 @@ function stringify(
   space?: string | number
 ): string {
   if (!isPrimitive(value)) {
+    value = structuredClone(value);
     // TODO: add below to a dump-level logger
     // console.debug('JSON.stringify', value, replacer, space);
 
-    const holder = value as Record<string, any>;
-    const pbCtx = holder.playbackContext as Record<string, any> | undefined;
-    const ctx = pbCtx?.contentPlaybackContext as
-      | Record<string, unknown>
-      | undefined;
-
-    if (!isPrimitive(ctx) && ctx!.isInlinePlaybackNoAd !== true) {
-      // Setting `isInlinePlaybackNoAd` tells InnerTube not to serve ads, which
-      // avoids the server-side SABR "backoff" that otherwise stalls playback
-      // after a few seconds. YouTube has shipped a "locker" script that defines
-      // this property as non-writable/non-configurable via Object.defineProperty,
-      // so a direct assignment (`ctx.isInlinePlaybackNoAd = true`) silently fails.
-      //
-      // Instead of mutating YouTube's object in place, rebuild the holder chain
-      // with fresh plain objects. `JSON.stringify` only serializes own enumerable
-      // properties, so spreading reproduces exactly what would be serialized while
-      // dropping any locked property descriptors, letting our flag stick.
-      value = {
-        ...holder,
-        playbackContext: {
-          ...pbCtx,
-          contentPlaybackContext: {
-            ...ctx,
-            isInlinePlaybackNoAd: true
-          }
-        }
-      };
+    // @ts-expect-error TS doesn't allow optional chaining on `unknown`. See: https://github.com/microsoft/TypeScript/issues/37700
+    const ctx = value?.playbackContext?.contentPlaybackContext as unknown;
+    if (!isPrimitive(ctx)) {
+      (ctx as Record<string, unknown>).isInlinePlaybackNoAd = true;
       console.info(`[JSON.stringify] Set isInlinePlaybackNoAd`);
     }
   }
