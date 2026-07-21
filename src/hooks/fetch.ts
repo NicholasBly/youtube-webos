@@ -22,6 +22,32 @@ interface EventMap {
 export class FetchRegistry extends CustomEventTarget<EventMap> {
   #originalFetch: typeof fetch;
   #fetchCount = 0;
+  // Per-type listener counts so #customFetch can skip URL construction and
+  // CustomEvent dispatch when nobody is listening (e.g. tracking block off).
+  // Native EventTarget exposes no listener count, so we maintain our own.
+  #listenerCounts: { request: number; response: number } = {
+    request: 0,
+    response: 0
+  };
+
+  override addEventListener(type: any, callback: any, options?: any): void {
+    super.addEventListener(type, callback, options);
+    if (callback && (type === 'request' || type === 'response')) {
+      this.#listenerCounts[type as 'request' | 'response']++;
+    }
+  }
+
+  override removeEventListener(
+    type: any,
+    callback: any,
+    options?: any
+  ): void {
+    super.removeEventListener(type, callback, options);
+    if (callback && (type === 'request' || type === 'response')) {
+      const key = type as 'request' | 'response';
+      if (this.#listenerCounts[key] > 0) this.#listenerCounts[key]--;
+    }
+  }
 
   private constructor() {
     super();
@@ -57,6 +83,17 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
     resource: FetchTarget,
     init?: RequestInit
   ): Promise<Response> => {
+    // Fast path: no listeners and not debugging — pass straight through with
+    // zero allocations (no URL object, no CustomEvent dispatch). Tracking
+    // block off is the common case for most sessions.
+    if (
+      !window.__ytaf_debug__ &&
+      this.#listenerCounts.request === 0 &&
+      this.#listenerCounts.response === 0
+    ) {
+      return this.#originalFetch(resource as Parameters<typeof fetch>[0], init);
+    }
+
     if (window.__ytaf_debug__) {
       console.debug(`Request ${this.#fetchCount}:`, resource);
       init && console.debug(`Options  ${this.#fetchCount}:`, init);
@@ -67,17 +104,20 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
       }
     }
 
-    const url =
-      resource instanceof Request
-        ? new URL(resource.url)
-        : new URL(resource.toString(), document.location.href);
+    let reqAllowed = true;
+    if (this.#listenerCounts.request > 0) {
+      const url =
+        resource instanceof Request
+          ? new URL(resource.url)
+          : new URL(resource.toString(), document.location.href);
 
-    const reqAllowed = this.dispatchEvent(
-      new TypedCustomEvent('request', {
-        detail: { url, resource, init },
-        cancelable: true
-      })
-    );
+      reqAllowed = this.dispatchEvent(
+        new TypedCustomEvent('request', {
+          detail: { url, resource, init },
+          cancelable: true
+        })
+      );
+    }
 
     if (!reqAllowed) {
       console.info(
@@ -97,9 +137,12 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
       resBody && console.debug(`Response Body ${this.#fetchCount}:`, resBody);
     }
 
-    const resAllowed = this.dispatchEvent(
-      new TypedCustomEvent('response', { detail: res, cancelable: true })
-    );
+    let resAllowed = true;
+    if (this.#listenerCounts.response > 0) {
+      resAllowed = this.dispatchEvent(
+        new TypedCustomEvent('response', { detail: res, cancelable: true })
+      );
+    }
 
     if (!resAllowed) {
       console.info(

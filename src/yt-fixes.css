@@ -7,6 +7,9 @@
   width: 100% !important;
 }
 
+/* Make Space/Clear/Search buttons have rounded corners */
+.YLmQmf .ZfNUK { border-radius: 0.5rem !important; }
+
 /* Removes duplicated panel on UI partially blocking video tiles */
 .RYo6Fb .hsdF6b { width: 0rem !important; }
 

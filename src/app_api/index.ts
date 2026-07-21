@@ -3,6 +3,8 @@
 declare global {
   interface Window {
     _yttv?: Record<string, unknown>;
+    // Debug toggle read by hooks/fetch.ts (set via devtools); optional.
+    __ytaf_debug__?: boolean;
   }
 }
 

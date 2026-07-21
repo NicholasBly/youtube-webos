@@ -1,6 +1,7 @@
 import 'whatwg-fetch';
 import './domrect-polyfill';
 import './adblock.js';
+import './hooks/json-stringify';
 
 if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
     Object.defineProperty(Node.prototype, 'isConnected', {
@@ -11,6 +12,8 @@ if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnect
         enumerable: true
     });
 }
+
+//import './perf_mon.js'; // Uncomment for testing
 
 import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
 import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';
