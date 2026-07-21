@@ -13,16 +13,16 @@
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4",
-        "version": "0.8.0",
+        "version": "0.8.1",
         "type": "web",
         "title": "YouTube AdFree",
         "appDescription": "YouTube AdFree",
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.8.0/youtube.leanback.v4_0.8.0_all.ipk",
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.8.1/youtube.leanback.v4_0.8.1_all.ipk",
         "ipkHash": {
-          "sha256": "697cccc6a9f6336408f9574f824f83eb5ca3e562e3a27ec55a2b6df755b9fe14"
+          "sha256": "cd46058063b100e8d00e9d44839517d38f8a39c59670f551d7a919cf5162349e"
         }
       }
     },
@@ -33,16 +33,16 @@
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4.webos22",
-        "version": "0.8.0",
+        "version": "0.8.1",
         "type": "web",
         "title": "YouTube AdFree (webOS 22+)",
         "appDescription": "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware.",
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.8.0/youtube.leanback.v4_0.8.0_all_webOS22%2B.ipk",
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.8.1/youtube.leanback.v4_0.8.1_all_webOS22%2B.ipk",
         "ipkHash": {
-          "sha256": "f2fb55223574bc67a3577891761128328e8b30756b0919d75448d31700059b99"
+          "sha256": "ca73e6484f979c2618983295c7e300b4804e80ed8d6c7127fd042311eb05ce4e"
         }
       }
     }
