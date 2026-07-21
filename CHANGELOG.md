@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.1] - 2026/07/20
+
+## Fixes
+
++ Fix/mitigate "QR Code" video playback issue. Still needs more testing. Implemented json-stringify.ts from webosbrew - https://github.com/NicholasBly/youtube-webos/issues/143
+
++ Fixed webOS 6 Description panel bug. Highlighting the Description button and pressing enter wouldn't inject RYD/Navigation fix. Switched RYD observer from zylon-provider-7 to zylon-provider-6 which is where the description panel lives - https://github.com/NicholasBly/youtube-webos/issues/136
+
++ Removed segment skip sleep timer logic - https://github.com/NicholasBly/youtube-webos/issues/141
+(If videos buffer/frame skip, the timer becomes out of sync, causing some segments not to be skipped properly)
+RequestAnimationFrame still waits until a second before skipping to perform frame-perfect skips
+
+### AdBlock
+
++ Reduce tracking and telemetry: requests are now asynchronously aborted to correctly trigger event listeners, preventing memory leaks and retry backlogs
+
+### SponsorBlock
+
++ Fixed segment overlays not dynamically redrawing when modifying segment colors mid-video (added color config keys to the change listener and lastOverlayHash)
+
+## Changes
+
++ Add css rule to change some buttons to rounded corners - https://github.com/NicholasBly/youtube-webos/issues/130
+
+## Optimizations
+
+### AdBlock
+
++ Merged stripTrackingParams and findAndProcessText into a single combined tree traversal, preventing double or triple recursive walks over large JSON responses
+
+### Thumbnail Quality
+
++ Optimized image preloading
+
+### SponsorBlock
+
++ Cached getComputedStyle and getBoundingClientRect reads for the progress bar anchor to prevent forced synchronous style recalculations every 500ms during handleTimeUpdate (after skipping a SponsorBlock segment)
+
++ Pre-compute segment category string names when building segments instead of during playback. Removes unnecessary string lookups during skips
+
++ Switched visibility checks to use a MutationObserver on the zylon-hidden class instead of polling opacity via computed style
+
+### Return Dislike
+
++ Replaced observeBodyForPanel mutationObserver with 500ms polling interval, massively reducing CPU cycles during video playback
+
 ## [0.8.0] - 2026/05/21
 
 ## Summary

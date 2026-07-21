@@ -15,18 +15,23 @@ function stringify(
   space?: string | number
 ): string {
   if (!isPrimitive(value)) {
-    value = structuredClone(value);
-    // TODO: add below to a dump-level logger
-    // console.debug('JSON.stringify', value, replacer, space);
+    // 1. Check if this specific object actually contains the YouTube player context FIRST
+    const holder = value as Record<string, any>;
+    const ctx = holder?.playbackContext?.contentPlaybackContext as Record<string, unknown> | undefined;
 
-    // @ts-expect-error TS doesn't allow optional chaining on `unknown`. See: https://github.com/microsoft/TypeScript/issues/37700
-    const ctx = value?.playbackContext?.contentPlaybackContext as unknown;
-    if (!isPrimitive(ctx)) {
-      (ctx as Record<string, unknown>).isInlinePlaybackNoAd = true;
+    // 2. Only trigger the heavy deep clone if the target exists and needs modification
+    if (!isPrimitive(ctx) && ctx.isInlinePlaybackNoAd !== true) {
+      value = structuredClone(value);
+      
+      // 3. Extract the cloned context and apply the flag
+      const clonedCtx = (value as any).playbackContext.contentPlaybackContext;
+      clonedCtx.isInlinePlaybackNoAd = true;
+      
       console.info(`[JSON.stringify] Set isInlinePlaybackNoAd`);
     }
   }
 
+  // 4. Pass either the untouched original object or our modified clone to the native stringify
   return originalStringify(value, replacer as any, space);
 }
 
