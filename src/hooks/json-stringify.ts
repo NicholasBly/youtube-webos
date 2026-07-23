@@ -24,12 +24,14 @@ function stringify(
     if (!isPrimitive(ctx) && ctx.isInlinePlaybackNoAd !== true) {
       
       if (HAS_STRUCTURED_CLONE) {
-        value = structuredClone(value);
-      } else {
-        // Fallback for older WebOS (Chromium < 98)
-        // use originalStringify to prevent infinite recursive loops
-        value = JSON.parse(originalStringify(value));
-      }
+	    try {
+		  value = structuredClone(value);
+	    } catch {
+		  value = JSON.parse(originalStringify(value));
+	    }
+	  } else {
+	    value = JSON.parse(originalStringify(value));
+	  }
       
       // Extract the cloned context and apply the flag
       const clonedCtx = (value as Record<string, any>).playbackContext.contentPlaybackContext;

@@ -123,41 +123,30 @@ class SponsorBlockHandler {
         return null;
     }
 
-    // Returns where/how to inject the overlay.
-    // For ytlr-multi-markers-player-bar-renderer children, injection inside works fine.
-    // For the standard ytlr-progress-bar slider, YouTube's framework nukes foreign child
-    // nodes instantly — so we inject as a sibling of ytlr-progress-bar instead, positioned
-    // absolutely to cover the same visual area.
     _getProgressBarAnchor() {
         if (!this.progressBar) return { container: null, asSibling: false };
 
-        // Cached per progress-bar identity. handleTimeUpdate calls this every
-        // 500ms; the answer only changes when the bar element is replaced,
-        // which checkForProgressBar handles by clearing the cache.
         if (this._anchorCache && this._anchorCacheBar === this.progressBar) {
             return this._anchorCache;
         }
 
+        // ALWAYS inject as a sibling. YouTube's virtual DOM destroys foreign children.
+        const ytPB = this._getClosest(this.progressBar, 'ytlr-multi-markers-player-bar-renderer') ||
+                     this._getClosest(this.progressBar, 'ytlr-progress-bar') || 
+                     this.progressBar;
+                     
+        const parent = ytPB.parentNode;
         let result;
-        // Multi-markers bar: direct child injection is fine, keep existing behaviour.
-        if (this._getClosest(this.progressBar, 'ytlr-multi-markers-player-bar-renderer')) {
+
+        if (!parent) {
             result = { container: this.progressBar, asSibling: false };
         } else {
-            // Standard progress bar: walk up to ytlr-progress-bar and inject after it.
-            const ytPB = this._getClosest(this.progressBar, 'ytlr-progress-bar') || this.progressBar;
-            const parent = ytPB.parentNode;
-            if (!parent) {
-                result = { container: this.progressBar, asSibling: false };
-            } else {
-                // The parent becomes our positioning context. The computed-style
-                // read now happens once per bar instead of on every 500ms sync.
-                const ps = window.getComputedStyle(parent);
-                if (ps.position === 'static') parent.style.setProperty('position', 'relative', 'important');
-                if (ps.display === 'inline' || ps.display === '') {
-                    parent.style.setProperty('display', 'block', 'important');
-                }
-                result = { container: ytPB, asSibling: true };
+            const ps = window.getComputedStyle(parent);
+            if (ps.position === 'static') parent.style.setProperty('position', 'relative', 'important');
+            if (ps.display === 'inline' || ps.display === '') {
+                parent.style.setProperty('display', 'block', 'important');
             }
+            result = { container: ytPB, asSibling: true };
         }
 
         this._anchorCache = result;
@@ -690,14 +679,22 @@ class SponsorBlockHandler {
     checkForProgressBar() {
         if (this.isDestroyed) return;
 
-        // Don't re-query if we have a valid progress bar in DOM
-        if (this.overlay && this.overlay.parentNode && this._isNodeConnected(this.overlay.parentNode)) {
+        // Check if both the overlay AND the tracked progress bar are ACTUALLY in the DOM
+        if (this.overlay && this._isNodeConnected(this.overlay) &&
+            this.progressBar && this._isNodeConnected(this.progressBar)) {
+            
             // Ensure the sibling overlay syncs visibility when attributes mutate
             const { container, asSibling } = this._getProgressBarAnchor();
             if (asSibling && container) {
                 this._syncOverlayPosition(container);
             }
             return;
+        }
+
+        // If the overlay was orphaned or wiped, clear it so drawOverlay creates a fresh one
+        if (this.overlay && !this._isNodeConnected(this.overlay)) {
+            this.overlay.remove();
+            this.overlay = null;
         }
 
         let target = null;
@@ -733,13 +730,11 @@ class SponsorBlockHandler {
             // recomputes the positioning context for the new element.
             this._anchorCache = null;
             this._anchorCacheBar = null;
+            
             const style = window.getComputedStyle(target);
-            // For multi-markers bars these tweaks ensure segments are visible inside.
-            // For ytlr-progress-bar sliders the overlay is injected as a sibling
-            // (see _getProgressBarAnchor), so the position tweak here is a no-op for
-            // that case — but keep overflow:visible so storyboard/playhead are unclipped.
             if (style.position === 'static') target.style.position = 'relative';
             if (style.overflow !== 'visible') target.style.setProperty('overflow', 'visible', 'important');
+            
             this.drawOverlay();
         }
     }
@@ -931,17 +926,15 @@ class SponsorBlockHandler {
         const expectedSeg = this.skipSegments[this.nextSegmentIndex];
 
         if (expectedSeg && currentTime >= expectedSeg.start) {
-            // Check if we are inside it, OR if we overshot it due to WebOS frame drops (< 1.5s gap)
-            if (currentTime < expectedSeg.end || (currentTime - expectedSeg.end) < 1.5) {
-                segmentIdx = this.nextSegmentIndex;
-            } else {
-                // Fallback to Binary Search
-                segmentIdx = this.findSegmentAtTime(currentTime);
-            }
-        } else {
-            // Fallback to Binary Search
-            segmentIdx = this.findSegmentAtTime(currentTime);
-        }
+			// Only apply the 1.5s frame drop gap to auto_skip segments
+			const isAutoSkip = expectedSeg.mode === 'auto_skip';
+			if (currentTime < expectedSeg.end || (isAutoSkip && (currentTime - expectedSeg.end) < 1.5)) {
+				segmentIdx = this.nextSegmentIndex;
+			} else {
+				// Fallback to Binary Search
+				segmentIdx = this.findSegmentAtTime(currentTime);
+			}
+		}
 
         if (segmentIdx === -1) {
             // We aren't in a segment. Since resetSegmentTracking was correct, 
