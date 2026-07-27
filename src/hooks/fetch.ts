@@ -1,4 +1,8 @@
-import { CustomEventTarget, TypedCustomEvent } from '../custom-event-target';
+import {
+  CustomEventTarget,
+  TypedCustomEvent,
+  type EventListenerArg
+} from '../custom-event-target';
 
 export interface StringConvertible {
   toString(): string;
@@ -30,18 +34,23 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
     response: 0
   };
 
-  override addEventListener(type: any, callback: any, options?: any): void {
+  override addEventListener<K extends keyof EventMap & string>(
+    type: K,
+    callback: EventListenerArg<this, EventMap, K>,
+    options?: boolean | AddEventListenerOptions
+  ): void {
     super.addEventListener(type, callback, options);
-    if (callback && (type === 'request' || type === 'response')) {
-      this.#listenerCounts[type as 'request' | 'response']++;
-    }
+    if (callback) this.#listenerCounts[type]++;
   }
 
-  override removeEventListener(type: any, callback: any, options?: any): void {
+  override removeEventListener<K extends keyof EventMap & string>(
+    type: K,
+    callback: EventListenerArg<this, EventMap, K>,
+    options?: boolean | EventListenerOptions
+  ): void {
     super.removeEventListener(type, callback, options);
-    if (callback && (type === 'request' || type === 'response')) {
-      const key = type as 'request' | 'response';
-      if (this.#listenerCounts[key] > 0) this.#listenerCounts[key]--;
+    if (callback && this.#listenerCounts[type] > 0) {
+      this.#listenerCounts[type]--;
     }
   }
 

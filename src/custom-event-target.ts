@@ -78,7 +78,7 @@ interface EventListenerObject<
   handleEvent: EventListener<Self, T, EventName>;
 }
 
-type EventListenerArg<
+export type EventListenerArg<
   Self extends EventTarget,
   T extends EmptyEventMap,
   EventName extends keyof T
