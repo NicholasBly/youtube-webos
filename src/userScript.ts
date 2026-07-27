@@ -1,15 +1,20 @@
 import 'whatwg-fetch';
 import './domrect-polyfill';
 import './adblock.js';
+import './hooks/json-stringify';
 
-if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
-    Object.defineProperty(Node.prototype, 'isConnected', {
-        get: function() {
-            return document.contains(this);
-        },
-        configurable: true,
-        enumerable: true
-    });
+if (
+  typeof window !== 'undefined' &&
+  typeof Node !== 'undefined' &&
+  !('isConnected' in Node.prototype)
+) {
+  Object.defineProperty(Node.prototype, 'isConnected', {
+    get: function () {
+      return document.contains(this);
+    },
+    configurable: true,
+    enumerable: true
+  });
 }
 
 import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
@@ -25,26 +30,30 @@ import './screensaver-fix.js';
 import './yt-fixes.css';
 import './watch.js';
 import './lang-settings-fix';
-import './hooks/json-stringify';
 import './remove-endscreen';
 import './hooks';
 import './auto-account-select';
 
 (function oneTimeParamsCheck() {
-    const params = extractLaunchParams();
-    if (params && Object.keys(params).length > 0) {
-        attemptActiveBypass();
-    }
+  const params = extractLaunchParams();
+  if (params && Object.keys(params).length > 0) {
+    attemptActiveBypass();
+  }
 })();
 
 document.addEventListener(
   'webOSRelaunch',
   (evt) => {
     console.info('RELAUNCH:', evt, window.launchParams);
-	resetActiveBypass();
-    if (document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR)) {
-        console.info('[Main] Relaunch detected on Account Selector. Triggering bypass.');
-        attemptActiveBypass(true);
+    resetActiveBypass();
+    if (
+      document.body &&
+      document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR)
+    ) {
+      console.info(
+        '[Main] Relaunch detected on Account Selector. Triggering bypass.'
+      );
+      attemptActiveBypass(true);
     }
     handleLaunch(evt.detail);
   },

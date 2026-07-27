@@ -3,6 +3,8 @@
 declare global {
   interface Window {
     _yttv?: Record<string, unknown>;
+    // Debug toggle read by hooks/fetch.ts (set via devtools); optional.
+    __ytaf_debug__?: boolean;
   }
 }
 
@@ -34,12 +36,14 @@ export class ResolveCommandRegistry {
       return this.#originalFn(command, extra);
     }
 
-    console.group(`[${this.constructor.name}] Resolving`);
-    console.debug(`Command:`);
-    console.debug(command);
-    console.debug(`Extra:`);
-    console.debug(extra);
-    console.groupEnd();
+    if (window.__ytaf_debug__) {
+      console.group(`[${this.constructor.name}] Resolving`);
+      console.debug(`Command:`);
+      console.debug(command);
+      console.debug(`Extra:`);
+      console.debug(extra);
+      console.groupEnd();
+    }
 
     for (const key of Object.keys(command)) {
       if (this.#cmds.has(key)) {
@@ -104,7 +108,7 @@ export class ResolveCommandRegistry {
         if (hook) {
           resolve(hook);
         } else {
-          setTimeout(poll, 50);
+          setTimeout(poll, 0);
         }
       };
       poll();

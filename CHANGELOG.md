@@ -2,66 +2,135 @@
 
 All notable changes to this project will be documented in this file.
 
-Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-## [0.8.0] - 2026/05/27
-
-## Summary
-
-This update features a codebase-wide audit focused on **performance and efficiency**. Consolidated resources across files resulting in lower CPU usage across all TVs.
-
-**Key Highlights:**
-
-- **Performance:** Core systems like AdBlock, SponsorBlock, and shortcuts were improved to use less memory and CPU cycles for better responsiveness across the YouTube app.
-- **Visual & UI Fixes:** [YouTube homescreen UI](https://github.com/NicholasBly/youtube-webos/issues/129) and [YouTube Kids debug overlay](https://github.com/NicholasBly/youtube-webos/issues/127).
-- **Snappier UI:** OLED-Care sliders, remote shortcuts, and scrolling through thumbnails are now significantly more responsive when toggled.
-- **Build Fix:** Fixed typo in webpack causing modern build to include emoji fix from the legacy version.
-
-## Optimizations & Improvements
-
-### AdBlock
-
-- **Faster JSON Filtering:** Populated configuration flags once per session and removed redundant API checks -> eliminates unnecessary boolean checks on every single network response.
-- **Streamlined Telemetry Blocking:** Switched from `url.href` to `url.pathname` and pre-compiled regex -> skips full URL serialization, saving CPU cycles on outgoing requests.
-- **Early Exit Logic:** The engine now bails immediately if all filters are disabled.
-
-### Interface & OLED-Care Mode
-
-- **CSS Opacity Rules:** Replaced dynamic style rebuilds with pure CSS custom properties (`--ytaf-oled-opacity`) -> completely eliminates lag/stuttering when quickly changing the Video Shelf Opacity.
-- **Bundled Styling:** Moved runtime CSS injections for SponsorBlock, Auto-Login, and Emoji-Font into dedicated `.css` files -> removes runtime string parsing and speeds up initial app boot time.
-- **Event Listener Consolidation:** Chained `toggleComments`, `toggleDescription`, and `playPause` into a single helper and merged three separate keydown listeners into one -> saves 4 queries per shortcut press for instant remote response.
-- **ui.js:** Cached document.querySelector('video') in utils.js
-
-### Thumbnail Quality & Emojis
-
-- **Smart Queueing:** Capped the thumbnail request queue to 50 and increased polling intervals -> prevents runaway memory growth and stuttering during fast scrolling.
-- **Cache Trimming:** `parsedTextCache` now trims the oldest half of its data instead of completely clearing -> keeps recently viewed emojis loaded to prevent visual pop-in during long scroll sessions.
-
-### SponsorBlock
-
-- **Throttle UI Sync:** Overlay position syncing is now throttled to 500ms -> prevents forced layout recalculations, eliminating frame drops on older webOS 3 TVs.
-- **Load:** SponsorBlock segments inject and are shown immediately on video load. Eliminates flicker of colored segments in some scenarios.
-- **SponsorBlock UI:** Fixed segment list category keys - musicofftopic and hook rows now show the correct color and label (previously fell through to gray with raw category text)
+## [0.8.1] - 2026/07/20
 
 ## Fixes
 
-### General UI
+- Fix/mitigate "QR Code" video playback issue. Still needs more testing. Implemented json-stringify.ts from webosbrew - https://github.com/NicholasBly/youtube-webos/issues/143
 
-- **Homescreen Fix:** Fixed an issue where the YouTube homescreen was cutting off certain UI elements (https://github.com/NicholasBly/youtube-webos/issues/129).
-- **YouTube Kids:** Fixed and removed the debug overlay appearing in the YouTube Kids app (https://github.com/NicholasBly/youtube-webos/issues/127).
-- **Config Saves:** Debounced `localStorage` writes -> prevents the TV from stuttering when quickly dragging color pickers or sliders.
+- Fixed webOS 6 Description panel bug. Highlighting the Description button and pressing enter wouldn't inject RYD/Navigation fix. Switched RYD observer from zylon-provider-7 to zylon-provider-6 which is where the description panel lives - https://github.com/NicholasBly/youtube-webos/issues/136
+
+- Removed segment skip sleep timer logic - https://github.com/NicholasBly/youtube-webos/issues/141
+  (If videos buffer/frame skip, the timer becomes out of sync, causing some segments not to be skipped properly)
+  RequestAnimationFrame still waits until a second before skipping to perform frame-perfect skips
+
+### AdBlock
+
+- Reduce tracking and telemetry: requests are now asynchronously aborted to correctly trigger event listeners, preventing memory leaks and retry backlogs
+
+### SponsorBlock
+
+- Fixed segment overlays not dynamically redrawing when modifying segment colors mid-video (added color config keys to the change listener and lastOverlayHash)
+
+## Changes
+
+- Add css rule to change some buttons to rounded corners - https://github.com/NicholasBly/youtube-webos/issues/130
+
+## Optimizations
+
+### AdBlock
+
+- Merged stripTrackingParams and findAndProcessText into a single combined tree traversal, preventing double or triple recursive walks over large JSON responses
+
+### Thumbnail Quality
+
+- Optimized image preloading
+
+### SponsorBlock
+
+- Cached getComputedStyle and getBoundingClientRect reads for the progress bar anchor to prevent forced synchronous style recalculations every 500ms during handleTimeUpdate (after skipping a SponsorBlock segment)
+
+- Pre-compute segment category string names when building segments instead of during playback. Removes unnecessary string lookups during skips
+
+- Switched visibility checks to use a MutationObserver on the zylon-hidden class instead of polling opacity via computed style
+
+### Return Dislike
+
+- Replaced observeBodyForPanel mutationObserver with 500ms polling interval, massively reducing CPU cycles during video playback
+
+## [0.8.0] - 2026/05/21
+
+## Summary
+
+Codebase-wide audit pass focused on **webOS 3 performance**, correctness bugs, and code-quality cleanup. Settings panel reliability, SponsorBlock UI labels, and overall CPU usage on older TVs all improved.
+
+## Optimizations
+
+### AdBlock
+
+- JSON.parse hook: combined three `.includes()` content scans into a single regex pass. Saves ~2 full-string scans per API response
+- Replaced per-request `configGetAll()` allocation with a live config snapshot reference. Filter flags (`anyFilterEnabled`, `cfgNeedsContentFiltering`) are now precomputed via config change listeners instead of recalculating 8 booleans per request
+- Added a top-level `anyFilterEnabled` fast-path — if every filter is off, the hook bails immediately with no further work
+
+### SponsorBlock
+
+- Overlay position sync in `handleTimeUpdate()` throttled to 500ms (timeupdate fires ~4Hz and the viewport rarely changes — old code did 2 forced layouts per frame on webOS 3)
+- Added window resize listener that forces immediate overlay re-sync, bypassing the throttle so layout changes still snap into place
+- Init guard relaxed from `readyState === 'complete'` to `readyState !== 'loading'` — SponsorBlock now starts as soon as the document is interactive instead of waiting for full load on slow boots
 
 ### Return YouTube Dislike
 
-- **Description Button Fix:** Fixed a bug where highlighting and selecting the description button with the LG remote (Arrow Keys/Enter) failed to apply the dislike value and navigation fix.
-- **Observer Efficiency:** Eliminated the `bodyObserver` and replaced it with a targeted `focusin` fallback -> reduces background DOM scanning.
+- Body MutationObserver no longer watches `attributes` (childList/subtree only). Body attribute mutations fire constantly during focus animations — we only care about panel adds/removes
 
-### Modern Build (webOS 22+)
+### Screensaver Fix
 
-- **Emoji-Font Typo:** Fixed a webpack alias typo (`emoji-font.ts` instead of `.js`) -> successfully strips out a useless legacy mutation observer, fixing font inconsistencies and shrinking the modern bundle file size.
-- **Auto Login:** Fixed Guest Mode cache invalidation on `webOSRelaunch` -> signing in and out between app launches is now reflected correctly.
+- Style mutation handler is now coalesced into a single `requestAnimationFrame` per burst. Multiple style mutations in the same tick collapse into one DOM write instead of N separate reflows
+
+### Thumbnail Quality
+
+- IntersectionObserver polyfill poll interval raised from 300ms to 600ms on webOS 3. Halves the per-tile `getBoundingClientRect()` reflow cost on populated grids with no perceptible change to upgrade timing
+
+### Utils.js
+
+- Body class MutationObserver now skips mutations that don't touch a `WEB_PAGE_TYPE_*` class. YouTube flips body classes constantly for focus/animation state — we only care when the actual page type changes
+
+### UI.js
+
+- `initGlobalStyles()` rewritten with static CSS and body-class toggles (`ytaf-hide-logo`, `ytaf-fix-titles`, `ytaf-remove-borders`) instead of rebuilding `<style>.textContent` on every config change. Toggling any of these no longer forces a full stylesheet reparse
+
+### Config.js
+
+- localStorage writes now debounced 200ms. Color picker drags and other rapid-input paths were stringifying the entire ~50-key config object on every event. A `beforeunload`/`pagehide` flush guarantees the final value is persisted
+
+## Changes
+
+### Code Structure
+
+- Extracted `showNotification` and notification container management into a new `notifications.js` module. SponsorBlock and Video Quality now import from it directly, reducing the boot-time dependency footprint
+- `userScript.js` now explicitly imports `ui.js` (previously it was loaded transitively through SponsorBlock — moving the import makes the boot graph explicit)
+- Standardized `HAS_ABORT_CONTROLLER` feature-detect constant across `sponsorblock.js` and `return-dislike.js`
+
+### Utils.js
+
+- Exported `invalidateGuestModeCache()` so Guest Mode detection can be refreshed when identity changes between sessions
+
+## Fixes
+
+### Options Panel
+
+- Fixed `ReferenceError` thrown when the settings panel tried to fall back to a focus path that referenced an undefined variable. Opening the panel cold no longer risks throwing
+- Fixed shortcut keys pressed while the panel is open corrupting the global debounce timer. The panel-open check now runs before the debounce state mutates, so closing the panel doesn't leave shortcuts stuck for ~100ms
+
+### SponsorBlock
+
+- Fixed `TypeError` in `executeChainSkip()` when retry cleanup ran after a destroyed video instance was already cleared (rapid navigation race)
+
+### SponsorBlock UI
+
+- Fixed segment list category keys — `musicofftopic` and `hook` rows now show the correct color and label (previously fell through to gray with raw category text)
+- Removed dead `poi` key alias that never matched what the API returns
+
+### Auto Login
+
+- Guest Mode cache is now invalidated on `webOSRelaunch` via `resetActiveBypass()`. Signing in/out between launches will be reflected correctly in the panel layout and bypass logic
+
+### AdBlock
+
+- `cachedWebOSVersion` is now initialized at module load via `getWebOSVersion()` rather than lazily inside `initAdblock()`. Removes a subtle ordering ambiguity around the legacy-emoji-fix gating
 
 ## [0.7.9] - 2026/05/15
 
@@ -1490,90 +1559,6 @@ SponsorBlock Optimizations:
 
 - Sponsored segments not showing on preview bar
 
-## [0.5.3] - 2026/04/18
-
-### Fixed
-
-- [#444](https://github.com/webosbrew/youtube-webos/pull/444): Fix YTAF not loading due to YouTube's Trusted Types enforcement (@fire332)
-
-## [0.5.2] - 2026/04/18
-
-### Fixed
-
-- [#443](https://github.com/webosbrew/youtube-webos/pull/443): Fix adblock and Shorts removal (@fire332)
-
-### Changed
-
-- [#443](https://github.com/webosbrew/youtube-webos/pull/443): Invalidate Babel cache on config change (@fire332)
-- [#442](https://github.com/webosbrew/youtube-webos/pull/442): Add syntax compatibility validation for build artifacts (@fire332)
-
-## [0.5.1] - 2026/04/16
-
-### Added
-
-- [#383](https://github.com/webosbrew/youtube-webos/pull/383): Add option to bypass the "Who's Watching?" account selection screen (@fire332)
-- [#435](https://github.com/webosbrew/youtube-webos/pull/435): Add additional image assets (@GA251)
-- [#436](https://github.com/webosbrew/youtube-webos/pull/436): Show YTAF version in the settings menu (@jesvijonathan)
-- [#436](https://github.com/webosbrew/youtube-webos/pull/436): Polish YTAF settings menu visuals (@jesvijonathan)
-
-### Fixed
-
-- [#433](https://github.com/webosbrew/youtube-webos/pull/433): Fix the app failing to load on webOS 3 due to a syntax error in the bundle (@fire332)
-- [#409](https://github.com/webosbrew/youtube-webos/pull/409): Fix blank thumbnails in the Shorts shelf (@LeviSnoot)
-- [#332](https://github.com/webosbrew/youtube-webos/pull/332): Fix adblock bypass caused by server-side backoff producing fake buffering (@fire332)
-
-### Changed
-
-- [#418](https://github.com/webosbrew/youtube-webos/pull/418): Migrate package manager from npm to pnpm (@fire332)
-- [#417](https://github.com/webosbrew/youtube-webos/pull/417), [#432](https://github.com/webosbrew/youtube-webos/pull/432): Update dependencies (@fire332)
-- [#417](https://github.com/webosbrew/youtube-webos/pull/417): Migrate Babel config to `preset-typescript` (@fire332)
-- [#417](https://github.com/webosbrew/youtube-webos/pull/417): Swap `@webos-tools/cli` with a fork that supports Node.js v24 (@fire332)
-- [#434](https://github.com/webosbrew/youtube-webos/pull/434): Format `yt-fixes.css` with Prettier (@fire332)
-- [#438](https://github.com/webosbrew/youtube-webos/pull/438): Generate `appinfo.json` version from `package.json` to streamline releases (@fire332)
-
-## [0.5.0] - 2025/11/10
-
-### Added
-
-- [#331](https://github.com/webosbrew/youtube-webos/pull/331): Add option to remove video end screens (@fire332)
-- [#321](https://github.com/webosbrew/youtube-webos/pull/321): Add audio-only mode and colour-coded toasts (@jesvijonathan)
-- [#372](https://github.com/webosbrew/youtube-webos/pull/372): Allow casting with the TV turned off for newer webOS version (@GAA251)
-
-### Fixed
-
-- [#316](https://github.com/webosbrew/youtube-webos/pull/316): Fix language switching reliability (@fire332; thanks to @reisxd)
-- [#361](https://github.com/webosbrew/youtube-webos/pull/361): Improve reliability of automatic video quality upgrades (@fire332)
-- [#355](https://github.com/webosbrew/youtube-webos/pull/355): Prevent `fetch` hook exceptions when URLs omit a scheme (@fire332)
-- [#346](https://github.com/webosbrew/youtube-webos/pull/346): Block the built-in webOS Chromecast service to fix conflict with Chromecast overlay in newer webOS (@fire332)
-- [#374](https://github.com/webosbrew/youtube-webos/pull/374): Improve CSS selector used by the watch shadow fix (@fire332)
-
-### Changed
-
-- [#344](https://github.com/webosbrew/youtube-webos/pull/344): Update dependencies and development tooling (@fire332)
-- [#330](https://github.com/webosbrew/youtube-webos/pull/330): Misc developer experience improvements (@fire332)
-
-## [0.4.1] - 2025/07/28
-
-### Fixed
-
-- [#313](https://github.com/webosbrew/youtube-webos/pull/313): Fix `async` keyword leaking into bundle (@fire332)
-
-## [0.4.0] - 2025/07/25
-
-### Fixed
-
-- [#298](https://github.com/webosbrew/youtube-webos/pull/298): Remove ads from shorts reel (@pwNBait)
-- [#302](https://github.com/webosbrew/youtube-webos/pull/302): Fix sponsorblock segment overlay (@fire332)
-- [#304](https://github.com/webosbrew/youtube-webos/pull/304): Fix appearance of YTAF settings menu (@jesvijonathan)
-- [#308](https://github.com/webosbrew/youtube-webos/pull/308): Fix video quality not upgraded after transition from preview -> watch (@fire332)
-- [#305](https://github.com/webosbrew/youtube-webos/pull/305): Fix exceptions for new gradient cards in library tab (@fire332)
-- [#305](https://github.com/webosbrew/youtube-webos/pull/305): Fix exceptions in adblock.js (@fire332)
-
-### Added
-
-- [#299](https://github.com/webosbrew/youtube-webos/pull/299): Add option to display time in UI (@ChTosar)
-- [#305](https://github.com/webosbrew/youtube-webos/pull/305): Add option to force max video quality playback (@fire332)
-
 ## [0.3.8] - 2025/05/10
 
 ### Fixed
@@ -1743,7 +1728,7 @@ SponsorBlock Optimizations:
 
 - Created basic web app which launches YouTube TV.
 
-[Unreleased]: https://github.com/webosbrew/youtube-webos/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/NicholasBly/youtube-webos/compare/v0.8.1...HEAD
 [0.3.1]: https://github.com/webosbrew/youtube-webos/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/webosbrew/youtube-webos/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/webosbrew/youtube-webos/compare/v0.2.0...v0.2.1

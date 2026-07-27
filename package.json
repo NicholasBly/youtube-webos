@@ -1,6 +1,6 @@
 {
   "name": "youtube-webos",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Ad-free YouTube app for webOS",
   "type": "module",
   "main": "index.js",
@@ -13,6 +13,7 @@
     "inspect": "ares-inspect youtube.leanback.v4",
     "launch": "ares-launch youtube.leanback.v4",
     "manifest": "node tools/gen-manifest.cjs youtube.leanback.v4.manifest.json",
+    "version": "node tools/sync-version.cjs && git add assets/appinfo.json",
     "prepare": "husky",
     "test:compat": "es-check",
     "lint:eslint": "eslint --concurrency auto",
@@ -76,10 +77,6 @@
       "name": "node",
       "version": ">=22",
       "onFail": "download"
-    },
-    "packageManager": {
-      "name": "pnpm",
-      "onFail": "error"
     }
   },
   "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"

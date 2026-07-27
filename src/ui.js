@@ -1,4 +1,4 @@
-/*global navigate, __YTAF_VERSION__*/
+/*global navigate*/
 import './spatial-navigation-polyfill.js';
 import {
   configAddChangeListener,
@@ -40,7 +40,6 @@ import {
   setNotificationOled,
   setNotificationTheme
 } from './notifications.js';
-import { requireElement } from './player_api/helpers';
 
 // Re-export so existing `import { showNotification } from './ui'` sites keep working.
 export const showNotification = _showNotification;
@@ -195,18 +194,18 @@ const createElement = (tag, props = {}, ...children) => {
   const el = document.createElement(tag);
 
   for (const key in props) {
-    if (Object.prototype.hasOwnProperty.call(props, key)) {
+    if (Object.hasOwn(props, key)) {
       const val = props[key];
       if (key === 'style' && typeof val === 'object') {
         for (const styleKey in val) {
-          if (Object.prototype.hasOwnProperty.call(val, styleKey)) {
+          if (Object.hasOwn(val, styleKey)) {
             el.style[styleKey] = val[styleKey];
           }
         }
       } else if (key === 'class') el.className = val;
       else if (key === 'events' && typeof val === 'object') {
         for (const evt in val) {
-          if (Object.prototype.hasOwnProperty.call(val, evt)) {
+          if (Object.hasOwn(val, evt)) {
             el.addEventListener(evt, val[evt]);
           }
         }
@@ -889,12 +888,6 @@ function createOptionsPanel() {
   pageUITweaks.appendChild(createSection('Player UI Tweaks', playerUITweaks));
 
   elmContainer.appendChild(pageUITweaks);
-
-  const version = document.createElement('div');
-  version.className = 'ytaf-ui-version';
-  version.textContent = `v${__YTAF_VERSION__}`;
-
-  elmContainer.appendChild(version);
 
   return elmContainer;
 }
@@ -1588,9 +1581,6 @@ function handleShortcutAction(action) {
         showNotification('Error: ' + e.message);
       }
       break;
-    case 'audio_only':
-      initAudioOnlyToggle();
-      break;
     default:
       console.warn(`[Shortcut] Unknown action: ${action}`);
   }
@@ -1631,17 +1621,7 @@ const eventHandler = (evt) => {
     !keyColor &&
     (evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA')
   ) {
-    console.log('We are typing!');
     return true;
-  }
-  if (!action || action === 'none') {
-    if (isVideoPage) {
-      evt.preventDefault();
-      evt.stopPropagation();
-      return false;
-    } else {
-      return true;
-    }
   }
 
   // Release the key instantly if the action's required scope doesn't match the page
@@ -1722,7 +1702,7 @@ function initGlobalStyles() {
         html.oled-theme-active .ZghAqf,
         html.oled-theme-active .RAE3Re .AmQJbe,
         html.oled-theme-active .tVp1L,
-        html.oled-theme-active .DnwJH,
+        html.oled-theme-active .app-quality-root .DnwJH,
         html.oled-theme-active .qRdzpd.stQChb .TYE3Ed,
         html.oled-theme-active .k82tDb { background-color: #000 !important; }
         html.oled-theme-active .ytLrGuideResponseGradient { display: none; }
@@ -1731,11 +1711,11 @@ function initGlobalStyles() {
         html.oled-theme-active .p0DeOc { background-color: #000 !important; background-image: none !important; }
         html.oled-theme-active ytlr-player-focus-ring { border: 0.375rem solid rgb(200, 200, 200) !important; }
         html.oled-theme-active ytlr-surface-page { background-image: none !important; background-color: #000 !important; }
-        html.oled-theme-active.oled-transparent-shelf .UGcxnc .dxLAmd,
-        html.oled-theme-active.oled-transparent-shelf .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }
+        html.oled-theme-active.oled-transparent-shelf .app-quality-root .UGcxnc .dxLAmd,
+        html.oled-theme-active.oled-transparent-shelf .app-quality-root .UGcxnc .Dc2Zic .JkDfAc { background-color: rgba(0, 0, 0, 0) !important; }
 
-        html.ytaf-fix-titles .SK1srf .WVWtef,
-        html.ytaf-fix-titles .SK1srf .niS3yd {
+        html.ytaf-fix-titles .app-quality-root .SK1srf .WVWtef,
+        html.ytaf-fix-titles .app-quality-root .SK1srf .niS3yd {
             padding-bottom: 0.37vh !important;
             padding-top: 0.37vh !important;
         }
@@ -1758,10 +1738,10 @@ function initGlobalStyles() {
         html.ytaf-remove-borders .ytp-videowall-still-info-bg {
             background-color: transparent !important;
         }
-        html.ytaf-remove-borders .boSXqb .QFqCxd:before,
-        html.ytaf-remove-borders .V7jTHe,
-        html.ytaf-remove-borders .g6XRz,
-        html.ytaf-remove-borders .UGcxnc .sjENQb {
+        html.ytaf-remove-borders .app-quality-root .boSXqb .QFqCxd:before,
+        html.ytaf-remove-borders .app-quality-root .V7jTHe,
+        html.ytaf-remove-borders .app-quality-root .g6XRz,
+        html.ytaf-remove-borders .app-quality-root .UGcxnc .sjENQb {
             background-color: transparent !important;
         }
         html.ytaf-remove-borders .ltewod.BZ345e { background-color: #f1f1f1 !important; }
@@ -1924,98 +1904,3 @@ setTimeout(
     showNotification('Press [GREEN] to open SponsorBlock configuration screen'),
   2000
 );
-
-let audioOnlyEnabled = false;
-let overlayObserver = null;
-
-async function initAudioOnlyToggle() {
-  const elVideo = await requireElement('video', HTMLVideoElement);
-
-  audioOnlyEnabled = !audioOnlyEnabled;
-  elVideo.style.visibility = audioOnlyEnabled ? 'hidden' : '';
-
-  const AUDIO_OVERLAY_SELECTOR = '.ytLrAudioPlayerOverlayAudioMode';
-  const YTAF_OVERLAY_CLASS = 'ytaf-ui-watchControl-overlayMessage';
-
-  const applyAudioOverlayFilter = () => {
-    const node = document.querySelector(AUDIO_OVERLAY_SELECTOR);
-    if (!node) return;
-    if (audioOnlyEnabled) {
-      node.style.setProperty('filter', 'brightness(0)', 'important');
-    } else {
-      node.style.removeProperty('filter');
-    }
-  };
-  applyAudioOverlayFilter();
-
-  showNotification(
-    `Audio-Only mode: ${audioOnlyEnabled ? 'Enabled' : 'Disabled'}`,
-    2000,
-    'blue'
-  );
-
-  const controlsContainer = await requireElement(
-    '[idomkey="controls"]',
-    HTMLElement
-  );
-
-  const updateOverlay = (root = controlsContainer) => {
-    let overlay = root.querySelector(`.${YTAF_OVERLAY_CLASS}`);
-
-    if (!audioOnlyEnabled) {
-      overlay?.remove();
-      return;
-    }
-
-    if (overlay) return;
-
-    overlay = Object.assign(document.createElement('div'), {
-      textContent: 'Audio-Only Mode Enabled',
-      className: YTAF_OVERLAY_CLASS
-    });
-    root.prepend(overlay);
-  };
-  updateOverlay();
-
-  if (overlayObserver) overlayObserver.disconnect();
-  overlayObserver = new MutationObserver(() => {
-    updateOverlay();
-    applyAudioOverlayFilter();
-  });
-
-  overlayObserver.observe(controlsContainer, {
-    childList: true,
-    subtree: true
-  });
-}
-
-function applyUIFixes() {
-  try {
-    const bodyClasses = document.body.classList;
-
-    const observer = new MutationObserver(function bodyClassCallback(
-      _records,
-      _observer
-    ) {
-      try {
-        if (bodyClasses.contains('app-quality-root')) {
-          bodyClasses.remove('app-quality-root');
-        }
-      } catch (e) {
-        console.error('error in <body> class observer callback:', e);
-      }
-    });
-
-    observer.observe(document.body, {
-      subtree: false,
-      childList: false,
-      attributes: true,
-      attributeFilter: ['class'],
-      characterData: false
-    });
-  } catch (e) {
-    console.error('error setting up <body> class observer:', e);
-  }
-}
-
-applyUIFixes();
