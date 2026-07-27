@@ -15,6 +15,7 @@ function stringify(
   space?: string | number
 ): string {
   if (!isPrimitive(value)) {
+    value = structuredClone(value);
     // TODO: add below to a dump-level logger
     // console.debug('JSON.stringify', value, replacer, space);
 
