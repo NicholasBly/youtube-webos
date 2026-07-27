@@ -32,7 +32,8 @@ html.ytaf-legacy-emoji .description,
 html.ytaf-legacy-emoji #description,
 html.ytaf-legacy-emoji .video-title-text,
 html.ytaf-legacy-emoji .badge-text {
-  font-family: 'Roboto', 'YouTube Noto', 'YouTube Sans', 'Noto Sans Arabic', 'Arial',
+  font-family:
+    'Roboto', 'YouTube Noto', 'YouTube Sans', 'Noto Sans Arabic', 'Arial',
     'Noto Sans Math', sans-serif !important;
   text-rendering: optimizeLegibility !important;
 }
