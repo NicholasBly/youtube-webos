@@ -40,6 +40,7 @@ import {
   setNotificationOled,
   setNotificationTheme
 } from './notifications.js';
+import { requireElement } from './player_api/helpers';
 
 // Re-export so existing `import { showNotification } from './ui'` sites keep working.
 export const showNotification = _showNotification;
@@ -1581,6 +1582,9 @@ function handleShortcutAction(action) {
         showNotification('Error: ' + e.message);
       }
       break;
+    case 'audio_only':
+      initAudioOnlyToggle();
+      break;
     default:
       console.warn(`[Shortcut] Unknown action: ${action}`);
   }
@@ -1904,3 +1908,98 @@ setTimeout(
     showNotification('Press [GREEN] to open SponsorBlock configuration screen'),
   2000
 );
+
+let audioOnlyEnabled = false;
+let overlayObserver = null;
+
+async function initAudioOnlyToggle() {
+  const elVideo = await requireElement('video', HTMLVideoElement);
+
+  audioOnlyEnabled = !audioOnlyEnabled;
+  elVideo.style.visibility = audioOnlyEnabled ? 'hidden' : '';
+
+  const AUDIO_OVERLAY_SELECTOR = '.ytLrAudioPlayerOverlayAudioMode';
+  const YTAF_OVERLAY_CLASS = 'ytaf-ui-watchControl-overlayMessage';
+
+  const applyAudioOverlayFilter = () => {
+    const node = document.querySelector(AUDIO_OVERLAY_SELECTOR);
+    if (!node) return;
+    if (audioOnlyEnabled) {
+      node.style.setProperty('filter', 'brightness(0)', 'important');
+    } else {
+      node.style.removeProperty('filter');
+    }
+  };
+  applyAudioOverlayFilter();
+
+  showNotification(
+    `Audio-Only mode: ${audioOnlyEnabled ? 'Enabled' : 'Disabled'}`,
+    2000,
+    'blue'
+  );
+
+  const controlsContainer = await requireElement(
+    '[idomkey="controls"]',
+    HTMLElement
+  );
+
+  const updateOverlay = (root = controlsContainer) => {
+    let overlay = root.querySelector(`.${YTAF_OVERLAY_CLASS}`);
+
+    if (!audioOnlyEnabled) {
+      overlay?.remove();
+      return;
+    }
+
+    if (overlay) return;
+
+    overlay = Object.assign(document.createElement('div'), {
+      textContent: 'Audio-Only Mode Enabled',
+      className: YTAF_OVERLAY_CLASS
+    });
+    root.prepend(overlay);
+  };
+  updateOverlay();
+
+  if (overlayObserver) overlayObserver.disconnect();
+  overlayObserver = new MutationObserver(() => {
+    updateOverlay();
+    applyAudioOverlayFilter();
+  });
+
+  overlayObserver.observe(controlsContainer, {
+    childList: true,
+    subtree: true
+  });
+}
+
+function applyUIFixes() {
+  try {
+    const bodyClasses = document.body.classList;
+
+    const observer = new MutationObserver(function bodyClassCallback(
+      _records,
+      _observer
+    ) {
+      try {
+        if (bodyClasses.contains('app-quality-root')) {
+          bodyClasses.remove('app-quality-root');
+        }
+      } catch (e) {
+        console.error('error in <body> class observer callback:', e);
+      }
+    });
+
+    observer.observe(document.body, {
+      subtree: false,
+      childList: false,
+      attributes: true,
+      attributeFilter: ['class'],
+      characterData: false
+    });
+  } catch (e) {
+    console.error('error setting up <body> class observer:', e);
+  }
+}
+
+applyUIFixes();
