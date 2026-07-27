@@ -14,8 +14,10 @@ function makeEl(tag, className, text) {
 function ensureContainer() {
   if (notificationContainer) return notificationContainer;
   notificationContainer = makeEl('div', 'ytaf-notification-container');
-  if (configRead('enableOledCareMode')) notificationContainer.classList.add('oled-care');
-  if (configRead('uiTheme') === 'classic-red') notificationContainer.classList.add('theme-classic-red');
+  if (configRead('enableOledCareMode'))
+    notificationContainer.classList.add('oled-care');
+  if (configRead('uiTheme') === 'classic-red')
+    notificationContainer.classList.add('theme-classic-red');
   document.body.appendChild(notificationContainer);
   return notificationContainer;
 }
@@ -28,15 +30,19 @@ export function showNotification(text, time = 3000) {
   const container = ensureContainer();
 
   // Reuse an existing visible message with the same text instead of stacking duplicates.
-  const existing = Array.from(container.querySelectorAll('.message'))
-    .find(el => el.textContent === text && !el.classList.contains('message-hidden'));
+  const existing = Array.from(container.querySelectorAll('.message')).find(
+    (el) => el.textContent === text && !el.classList.contains('message-hidden')
+  );
 
   if (existing) {
     if (existing._removeTimer) clearTimeout(existing._removeTimer);
     if (time > 0) {
       existing._removeTimer = setTimeout(() => {
         existing.classList.add('message-hidden');
-        setTimeout(() => existing.parentElement && existing.parentElement.remove(), 1000);
+        setTimeout(
+          () => existing.parentElement && existing.parentElement.remove(),
+          1000
+        );
       }, time);
     }
     return NOOP_HANDLE;
@@ -47,7 +53,9 @@ export function showNotification(text, time = 3000) {
   elm.appendChild(elmInner);
   container.appendChild(elm);
 
-  requestAnimationFrame(() => requestAnimationFrame(() => elmInner.classList.remove('message-hidden')));
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => elmInner.classList.remove('message-hidden'))
+  );
 
   const remove = () => {
     if (elmInner._removeTimer) clearTimeout(elmInner._removeTimer);
@@ -82,5 +90,8 @@ export function setNotificationOled(enabled) {
 
 export function setNotificationTheme(theme) {
   if (!notificationContainer) return;
-  notificationContainer.classList.toggle('theme-classic-red', theme === 'classic-red');
+  notificationContainer.classList.toggle(
+    'theme-classic-red',
+    theme === 'classic-red'
+  );
 }

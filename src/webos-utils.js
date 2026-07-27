@@ -27,7 +27,9 @@ export function getWebOSVersion() {
     const year = parseInt(platformMatch[1], 10);
     if (WEBOS_YEAR_MAP[year]) {
       cachedWebOSVersion = WEBOS_YEAR_MAP[year];
-      console.info(`[WebOSUtils] Detected webOS ${cachedWebOSVersion} via platform year: ${year}`);
+      console.info(
+        `[WebOSUtils] Detected webOS ${cachedWebOSVersion} via platform year: ${year}`
+      );
       return cachedWebOSVersion;
     }
   }
@@ -38,7 +40,9 @@ export function getWebOSVersion() {
     const majorVersion = parseInt(firmwareMatch[1].split('.')[0], 10);
     if (majorVersion >= 33) {
       cachedWebOSVersion = 25;
-      console.info(`[WebOSUtils] Detected webOS 25 via firmware version: ${firmwareMatch[1]}`);
+      console.info(
+        `[WebOSUtils] Detected webOS 25 via firmware version: ${firmwareMatch[1]}`
+      );
       return cachedWebOSVersion;
     }
   }
@@ -47,12 +51,15 @@ export function getWebOSVersion() {
   const chromeMatch = ua.match(/Chrome\/(\d+)/);
   if (chromeMatch) {
     const chromeVersion = parseInt(chromeMatch[1], 10);
-    console.info(`[WebOSUtils] Detected Chrome version: ${chromeVersion} (simulator mode)`);
+    console.info(
+      `[WebOSUtils] Detected Chrome version: ${chromeVersion} (simulator mode)`
+    );
     simulatorMode = true;
 
     if (chromeVersion >= 120) {
       cachedWebOSVersion = 25;
-    } else if (chromeVersion <= 53) { // webOS 4
+    } else if (chromeVersion <= 53) {
+      // webOS 4
       cachedWebOSVersion = 4;
     } else {
       cachedWebOSVersion = 6;
@@ -60,8 +67,10 @@ export function getWebOSVersion() {
     return cachedWebOSVersion;
   }
 
-  console.warn('[WebOSUtils] Could not detect webOS version from user agent. Defaulting to 6.');
-  return cachedWebOSVersion = 6;
+  console.warn(
+    '[WebOSUtils] Could not detect webOS version from user agent. Defaulting to 6.'
+  );
+  return (cachedWebOSVersion = 6);
 }
 
 export function isWebOS25() {

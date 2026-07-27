@@ -1,5 +1,11 @@
 import { configRead, configAddChangeListener } from './config.js';
-import { SELECTORS, REMOTE_KEYS, isGuestMode, sendKey, extractLaunchParams, invalidateGuestModeCache } from './utils';
+import {
+  SELECTORS,
+  REMOTE_KEYS,
+  isGuestMode,
+  sendKey,
+  invalidateGuestModeCache
+} from './utils';
 import './auto-login.css';
 
 const STORAGE_KEY = 'yt.leanback.default::recurring_actions';
@@ -20,7 +26,8 @@ let pageObserverAttached = false;
 function disableWhosWatching(enable = true) {
   try {
     const storedData = localStorage.getItem(STORAGE_KEY);
-    if (!storedData) return console.warn('Auto login: No recurring actions found');
+    if (!storedData)
+      return console.warn('Auto login: No recurring actions found');
 
     const json = JSON.parse(storedData);
     const actions = json.data?.data;
@@ -28,7 +35,9 @@ function disableWhosWatching(enable = true) {
     if (!actions) return;
 
     // Use a future date if enabling, or Date.now() if disabling
-    const targetDate = enable ? Date.now() + (7 * 24 * 60 * 60 * 1000) : Date.now();
+    const targetDate = enable
+      ? Date.now() + 7 * 24 * 60 * 60 * 1000
+      : Date.now();
     let isModified = false;
 
     for (const key of TARGET_ACTIONS) {
@@ -40,7 +49,9 @@ function disableWhosWatching(enable = true) {
 
     if (isModified) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
-      console.info(`Auto login: "Who's watching" screens ${enable ? 'disabled' : 'enabled'}`);
+      console.info(
+        `Auto login: "Who's watching" screens ${enable ? 'disabled' : 'enabled'}`
+      );
     }
   } catch (error) {
     console.error('Auto login: Failed to update settings:', error);
@@ -49,13 +60,21 @@ function disableWhosWatching(enable = true) {
 
 export function setInlinePlayback(mode) {
   if (mode === 'disabled') return;
-  
+
   const isEnabled = mode === 'force_on';
   try {
-    localStorage.setItem('yt.leanback.default::inline-playback-enabled', JSON.stringify({ data: isEnabled }));
-    console.info(`[Auto Login] Inline playback (previews) forced to: ${isEnabled}`);
+    localStorage.setItem(
+      'yt.leanback.default::inline-playback-enabled',
+      JSON.stringify({ data: isEnabled })
+    );
+    console.info(
+      `[Auto Login] Inline playback (previews) forced to: ${isEnabled}`
+    );
   } catch (error) {
-    console.error('[Auto Login] Failed to update inline playback setting:', error);
+    console.error(
+      '[Auto Login] Failed to update inline playback setting:',
+      error
+    );
   }
 }
 
@@ -66,62 +85,69 @@ export function initPreviews() {
   // Delay by 2.5 seconds to ensure it applies after YouTube's initial load overrides
   setTimeout(() => {
     setInlinePlayback(mode);
-  }, 2500); 
+  }, 2500);
 }
 
 // CSS rules live in auto-login.css and are scoped by body.ytaf-bypassing-login,
 // so toggling the body class activates/deactivates the page-hide instantly with
 // no <style> element churn.
 function injectBypassCSS() {
-    if (document.body) document.body.classList.add(BYPASS_BODY_CLASS);
+  if (document.body) document.body.classList.add(BYPASS_BODY_CLASS);
 }
 
 function finalizeBypass() {
-    console.info('[Auto Login] Bypass: Done. Cleaning up...');
-    setTimeout(() => {
-        if (document.body) document.body.classList.remove(BYPASS_BODY_CLASS);
-    }, 2000);
+  console.info('[Auto Login] Bypass: Done. Cleaning up...');
+  setTimeout(() => {
+    if (document.body) document.body.classList.remove(BYPASS_BODY_CLASS);
+  }, 2000);
 }
 
 export function attemptActiveBypass(force = false) {
-    const isSelector = document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR);
-    
-    // const params = extractLaunchParams();
-    // const hasParams = params && Object.keys(params).length > 0;
+  const isSelector =
+    document.body &&
+    document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR);
 
-    if (!isSelector && !force) return;
-    // if (!hasParams && !force) return; Still checking for account selector page on normal loads too
-    if (hasBypassed && !force) return;
-	
-    console.info('[Auto Login] Active Bypass: Selector Detected! Executing sequence...');
-    hasBypassed = true;
-    injectBypassCSS();
+  // const params = extractLaunchParams();
+  // const hasParams = params && Object.keys(params).length > 0;
 
-    setTimeout(() => {
-        if (isGuestMode()) {
-            sendKey(REMOTE_KEYS.DOWN);
-            setTimeout(() => { sendKey(REMOTE_KEYS.ENTER); finalizeBypass(); }, 200);
-        } else {
-            sendKey(REMOTE_KEYS.ENTER);
-            finalizeBypass();
-        }
-    }, 500);
+  if (!isSelector && !force) return;
+  // if (!hasParams && !force) return; Still checking for account selector page on normal loads too
+  if (hasBypassed && !force) return;
+
+  console.info(
+    '[Auto Login] Active Bypass: Selector Detected! Executing sequence...'
+  );
+  hasBypassed = true;
+  injectBypassCSS();
+
+  setTimeout(() => {
+    if (isGuestMode()) {
+      sendKey(REMOTE_KEYS.DOWN);
+      setTimeout(() => {
+        sendKey(REMOTE_KEYS.ENTER);
+        finalizeBypass();
+      }, 200);
+    } else {
+      sendKey(REMOTE_KEYS.ENTER);
+      finalizeBypass();
+    }
+  }, 500);
 }
 
 export function resetActiveBypass() {
-    hasBypassed = false;
-    // Identity may have changed between launches (sign-in/out); drop the cached guest flag.
-    invalidateGuestModeCache();
+  hasBypassed = false;
+  // Identity may have changed between launches (sign-in/out); drop the cached guest flag.
+  invalidateGuestModeCache();
 }
 
 function setupActiveBypassListener() {
-    if (pageObserverAttached) return;
-    window.addEventListener('ytaf-page-update', (evt) => {
-        if (evt.detail && evt.detail.isAccountSelector) {
-            attemptActiveBypass();
-        } 
-    });
-    pageObserverAttached = true;
+  if (pageObserverAttached) return;
+  window.addEventListener('ytaf-page-update', (evt) => {
+    if (evt.detail && evt.detail.isAccountSelector) {
+      attemptActiveBypass();
+    }
+  });
+  pageObserverAttached = true;
 }
 
 export function initAutoLogin() {
@@ -129,18 +155,21 @@ export function initAutoLogin() {
     console.info('[Auto Login] Initializing...');
     disableWhosWatching();
     setupActiveBypassListener();
-    
+
     setTimeout(() => {
-        if (!hasBypassed) {
-            console.info('[Auto Login] Startup window closed');
-            hasBypassed = true;
-        }
+      if (!hasBypassed) {
+        console.info('[Auto Login] Startup window closed');
+        hasBypassed = true;
+      }
     }, 15000);
   }
 }
 
 document.readyState === 'loading'
-  ? document.addEventListener('DOMContentLoaded', () => { initAutoLogin(); initPreviews(); })
+  ? document.addEventListener('DOMContentLoaded', () => {
+      initAutoLogin();
+      initPreviews();
+    })
   : (initAutoLogin(), initPreviews());
 
 configAddChangeListener('enableAutoLogin', ({ detail }) => {

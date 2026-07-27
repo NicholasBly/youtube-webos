@@ -20,6 +20,26 @@ type EventOptionsType<T> = T extends new (
   ? O
   : never;
 
+export function asTypedEvent<
+  const E extends Event,
+  const A = EventInit
+>(event: { new (type: string, options?: A): E }) {
+  return event as {
+    new <
+      T extends EventTarget,
+      const U,
+      const O extends EventOptionsType<typeof event>
+    >(
+      type: U,
+      options?: O
+    ): BaseTypedEvent<T, EventInstanceType<typeof event, O>, U>;
+    prototype: BaseTypedEvent<EventTarget, E, string>;
+  };
+}
+
+export type TypedEvent<T extends EventTarget, U> = BaseTypedEvent<T, Event, U>;
+export const TypedEvent = asTypedEvent(Event);
+
 export type TypedCustomEvent<
   D,
   T extends EventTarget,
@@ -58,7 +78,7 @@ interface EventListenerObject<
   handleEvent: EventListener<Self, T, EventName>;
 }
 
-type EventListenerArg<
+export type EventListenerArg<
   Self extends EventTarget,
   T extends EmptyEventMap,
   EventName extends keyof T

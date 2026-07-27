@@ -3,7 +3,14 @@
  * the entire screen, the screensaver can kick in.
  */
 
-import { waitForChildAdd, sendKey, SELECTORS, REMOTE_KEYS, isWatchPage, isShortsPage } from './utils';
+import {
+  waitForChildAdd,
+  sendKey,
+  SELECTORS,
+  REMOTE_KEYS,
+  isWatchPage,
+  isShortsPage
+} from './utils';
 
 /**
  * document.querySelector but waits for the Element to be added if it doesn't already exist.
@@ -26,7 +33,10 @@ export async function requireElement(cssSelectors, expected) {
 }
 
 function isPlayerHidden(video) {
-  return video.style.display == 'none' || (video.style.top && video.style.top.indexOf('-') === 0);
+  return (
+    video.style.display == 'none' ||
+    (video.style.top && video.style.top.indexOf('-') === 0)
+  );
 }
 
 // Cached Page State
@@ -38,39 +48,53 @@ const STATE_PLAYING = 1;
 function setShortsKeepAlive(enable) {
   if (enable) {
     if (shortsKeepAliveTimer) return;
-    console.info('[ScreensaverFix] Shorts detected: Starting keep-alive (Yellow Key / 30s)');
+    console.info(
+      '[ScreensaverFix] Shorts detected: Starting keep-alive (Yellow Key / 30s)'
+    );
     shortsKeepAliveTimer = window.setInterval(() => {
-        // Check player state to ensure we only keep awake if actually playing
-        const player = document.getElementById(SELECTORS.PLAYER_ID);
-        const isPlaying = player && typeof player.getPlayerState === 'function' && player.getPlayerState() === STATE_PLAYING;
+      // Check player state to ensure we only keep awake if actually playing
+      const player = document.getElementById(SELECTORS.PLAYER_ID);
+      const isPlaying =
+        player &&
+        typeof player.getPlayerState === 'function' &&
+        player.getPlayerState() === STATE_PLAYING;
 
-        if (isPlaying) {
-            console.log("[ScreensaverFix] Video is playing, preparing to send yellow presses");
-            
-            let target = null;
-            let source = '';
-            if (document.activeElement && document.activeElement !== document.body) {
-                target = document.activeElement;
-                source = 'document.activeElement (Focus)';
-            }
-            if (!target) {
-                target = document.body;
-                source = 'document.body (Fallback)';
-            }
+      if (isPlaying) {
+        console.log(
+          '[ScreensaverFix] Video is playing, preparing to send yellow presses'
+        );
 
-            console.log(`[ScreensaverFix] Target picked: ${source}`, target);
-            console.log(`[ScreensaverFix] Sending YELLOW (${REMOTE_KEYS.YELLOW.code})`);
-
-            sendKey(REMOTE_KEYS.YELLOW, target);
-
-            if (shortsBufferTimer) clearTimeout(shortsBufferTimer);
-
-            shortsBufferTimer = window.setTimeout(() => {
-                console.log(`[ScreensaverFix] Sending YELLOW_ALT (${REMOTE_KEYS.YELLOW_ALT.code})`);
-                sendKey(REMOTE_KEYS.YELLOW_ALT, target);
-                shortsBufferTimer = null;
-            }, 250);
+        let target = null;
+        let source = '';
+        if (
+          document.activeElement &&
+          document.activeElement !== document.body
+        ) {
+          target = document.activeElement;
+          source = 'document.activeElement (Focus)';
         }
+        if (!target) {
+          target = document.body;
+          source = 'document.body (Fallback)';
+        }
+
+        console.log(`[ScreensaverFix] Target picked: ${source}`, target);
+        console.log(
+          `[ScreensaverFix] Sending YELLOW (${REMOTE_KEYS.YELLOW.code})`
+        );
+
+        sendKey(REMOTE_KEYS.YELLOW, target);
+
+        if (shortsBufferTimer) clearTimeout(shortsBufferTimer);
+
+        shortsBufferTimer = window.setTimeout(() => {
+          console.log(
+            `[ScreensaverFix] Sending YELLOW_ALT (${REMOTE_KEYS.YELLOW_ALT.code})`
+          );
+          sendKey(REMOTE_KEYS.YELLOW_ALT, target);
+          shortsBufferTimer = null;
+        }, 250);
+      }
     }, 30000);
   } else {
     if (shortsKeepAliveTimer) {
@@ -79,8 +103,8 @@ function setShortsKeepAlive(enable) {
       shortsKeepAliveTimer = null;
     }
     if (shortsBufferTimer) {
-        clearTimeout(shortsBufferTimer);
-        shortsBufferTimer = null;
+      clearTimeout(shortsBufferTimer);
+      shortsBufferTimer = null;
     }
   }
 }
@@ -97,12 +121,16 @@ const playerCtrlObs = new MutationObserver((mutations) => {
 
   const video = mutations[0]?.target;
   if (!video || !(video instanceof HTMLVideoElement)) {
-    console.warn('[ScreensaverFix] Invalid video element in mutation, disconnecting observer');
+    console.warn(
+      '[ScreensaverFix] Invalid video element in mutation, disconnecting observer'
+    );
     playerCtrlObs.disconnect();
     return;
   }
   if (!video.isConnected) {
-    console.warn('[ScreensaverFix] Video element disconnected, stopping observer');
+    console.warn(
+      '[ScreensaverFix] Video element disconnected, stopping observer'
+    );
     playerCtrlObs.disconnect();
     return;
   }
@@ -143,8 +171,8 @@ let currentVideoElement = null;
 const updateState = async () => {
   const isWatch = isWatchPage();
   const isShorts = isShortsPage();
-  
-  const newPageType = isWatch ? 'WATCH' : (isShorts ? 'SHORTS' : 'OTHER');
+
+  const newPageType = isWatch ? 'WATCH' : isShorts ? 'SHORTS' : 'OTHER';
 
   // Optimization: If the page type hasn't changed, ignore
   if (newPageType === lastPageType) return;
@@ -154,8 +182,8 @@ const updateState = async () => {
   if (newPageType === 'SHORTS') {
     // Ensure Watch logic is disabled
     if (currentVideoElement) {
-        playerCtrlObs.disconnect();
-        currentVideoElement = null;
+      playerCtrlObs.disconnect();
+      currentVideoElement = null;
     }
     setShortsKeepAlive(true);
     return;
@@ -176,22 +204,22 @@ const updateState = async () => {
 
   try {
     const playerContainer = document.getElementById(SELECTORS.PLAYER_CONTAINER);
-    
+
     // If container exists, search inside it. If not, fallback to body.
     const searchRoot = playerContainer || document.body;
-    
+
     // Note: We manually query inside the root instead of using requireElement's default body scan
     let video = searchRoot.querySelector('video');
-    
+
     // If not found immediately, use the waiter (scoped to root)
     if (!video) {
-         video = await waitForChildAdd(
-            searchRoot,
-            (node) => node instanceof HTMLVideoElement,
-            false
-        );
+      video = await waitForChildAdd(
+        searchRoot,
+        (node) => node instanceof HTMLVideoElement,
+        false
+      );
     }
-    
+
     // Double check we are still on Watch page after await
     if (lastPageType !== 'WATCH') return;
 
@@ -199,9 +227,9 @@ const updateState = async () => {
       if (currentVideoElement) {
         playerCtrlObs.disconnect();
       }
-      
+
       currentVideoElement = video;
-      
+
       if (video.isConnected) {
         playerCtrlObs.observe(video, {
           attributes: true,
@@ -217,7 +245,7 @@ const updateState = async () => {
 window.addEventListener('ytaf-page-update', updateState);
 
 // Initial Check
-if(document.body) updateState();
+if (document.body) updateState();
 else document.addEventListener('DOMContentLoaded', updateState);
 
 window.addEventListener('beforeunload', () => {

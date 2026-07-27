@@ -24,7 +24,9 @@
   box-shadow: 0 0.93vh 1.56vw rgba(0, 0, 0, 0.8);
 }
 
-.sb-segments-popup.visible { display: block; }
+.sb-segments-popup.visible {
+  display: block;
+}
 
 .sb-popup-header {
   display: flex;

@@ -7,14 +7,15 @@
   max-width: 41.6vw;
   max-height: 95vh;
   color: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 4.44vh;
   z-index: 1000;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background-color: #001a2e;
-  background-image: 
+  background-image:
     linear-gradient(rgba(0, 212, 255, 0.15) 0.09vh, transparent 0.09vh),
     linear-gradient(90deg, rgba(0, 212, 255, 0.15) 0.09vh, transparent 0.09vh);
   background-size: 3.7vh 3.7vh;
@@ -159,14 +160,16 @@
   font-size: 2.22vh;
   font-weight: 400;
   line-height: 0.85;
-  padding: 1.0vh 0;
+  padding: 1vh 0;
   cursor: pointer;
   border-radius: 0.75vh;
   margin: 0 -0.75vh 0.2vh;
   padding-left: 0.75vh;
   padding-right: 0.75vh;
   box-shadow: 0 0 0 2px transparent;
-  transition: box-shadow 0.1s ease-out, background 0.1s ease-out;
+  transition:
+    box-shadow 0.1s ease-out,
+    background 0.1s ease-out;
 }
 
 .ytaf-settings-section label {
@@ -274,8 +277,10 @@
   margin-bottom: 1.1vh;
   border-radius: 1.1vh;
   /* Reduced shadow */
-  box-shadow: 0 0.5vh 1.4vh rgba(0,0,0,0.5);
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  box-shadow: 0 0.5vh 1.4vh rgba(0, 0, 0, 0.5);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
   opacity: 1;
   transform: translateX(0);
   border-left: 0.37vh solid #00d4ff;
@@ -301,12 +306,12 @@
     transform: translate(-50%, -50%);
     max-height: 95vh;
   }
-  
+
   .ytaf-ui-container h1 {
     font-size: 2.22vh;
     padding: 1.3vh 2.2vh 1vh;
   }
-  
+
   .ytaf-ui-container .ytaf-logo {
     width: 4.1vh;
     height: 4.1vh;
@@ -373,7 +378,10 @@
   border-radius: 0.75vh;
   cursor: pointer;
   outline: none;
-  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
   font-family: inherit;
 }
 
@@ -414,16 +422,18 @@
   font-size: 2.22vh;
   margin: 0 -0.75vh 0.2vh;
   box-shadow: 0 0 0 2px transparent;
-  transition: box-shadow 0.1s ease-out, background 0.1s ease-out;
+  transition:
+    box-shadow 0.1s ease-out,
+    background 0.1s ease-out;
 }
 
-.shortcut-label { 
+.shortcut-label {
   color: #b8e6f5;
   font-weight: 400;
 }
 
-.ytaf-ui-container.theme-classic-red .shortcut-label { 
-  color: #e0e0e0; 
+.ytaf-ui-container.theme-classic-red .shortcut-label {
+  color: #e0e0e0;
 }
 
 .shortcut-value-container {

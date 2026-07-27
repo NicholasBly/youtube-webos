@@ -32,12 +32,18 @@ export class ResolveCommandRegistry {
     command: Record<string, unknown>,
     extra?: unknown
   ) => {
-    console.group(`[${this.constructor.name}] Resolving`);
-    console.debug(`Command:`);
-    console.debug(command);
-    console.debug(`Extra:`);
-    console.debug(extra);
-    console.groupEnd();
+    if (!command || typeof command !== 'object') {
+      return this.#originalFn(command, extra);
+    }
+
+    if (window.__ytaf_debug__) {
+      console.group(`[${this.constructor.name}] Resolving`);
+      console.debug(`Command:`);
+      console.debug(command);
+      console.debug(`Extra:`);
+      console.debug(extra);
+      console.groupEnd();
+    }
 
     for (const key of Object.keys(command)) {
       if (this.#cmds.has(key)) {
@@ -75,9 +81,7 @@ export class ResolveCommandRegistry {
       target &&
       typeof target === 'function' &&
       'instance' in target &&
-      typeof target.instance === 'object' &&
-      typeof (target.instance as Record<string, unknown>).resolveCommand ===
-        'function'
+      typeof (target.instance as any)?.resolveCommand === 'function'
     );
   }
 
