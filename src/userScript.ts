@@ -17,6 +17,8 @@ if (
   });
 }
 
+//import './perf_mon.js'; // Uncomment for testing
+
 import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
 import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';
 import { isWebOS25, simulatorMode } from './webos-utils.js';
