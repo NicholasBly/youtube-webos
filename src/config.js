@@ -176,7 +176,10 @@ export function configWrite(key, value) {
   const listeners = changeListeners.get(key);
   if (listeners) {
     const syntheticEvent = { detail: { key, newValue: value, oldValue } };
-    for (const callback of listeners) { callback(syntheticEvent); }
+    for (const callback of listeners) {
+      try { callback(syntheticEvent); }
+      catch (err) { console.warn('[Config] change listener failed for', key, err); }
+    }
   }
 }
 
@@ -195,7 +198,7 @@ export function configGetDefault(key) {
   return configOptions.get(key).default;
 }
 
-// NEW: Export the live object reference directly for zero-overhead caching
+// Export the live object reference directly for zero-overhead caching
 export function configGetAll() {
   return localConfig;
 }

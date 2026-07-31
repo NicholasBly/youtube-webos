@@ -24,7 +24,7 @@ const CSS_URL_REGEX = /url\(['"]?([^'"]+?)['"]?\)/;
 const AMPERSAND_REGEX = /&amp;/g;
 const I_DOMAIN_REGEX = /^i\d/;
 
-const YT_THUMBNAIL_SELECTOR = 'ytlr-thumbnail-details, ytlr-surface-page';
+const YT_THUMBNAIL_SELECTOR = 'ytlr-thumbnail-details, ytlr-surface-page, thumbnail image';
 
 const webpTestImgs = {
   lossy: 'UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA'
