@@ -3,6 +3,7 @@ import { configAddChangeListener, configRemoveChangeListener, segmentTypes, conf
 import { showNotification } from './notifications.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { isLegacyWebOS } from './webos-utils.js';
+import { getVideo, waitForChildAdd } from './utils.js';
 import './sponsorblock.css';
 
 const SPONSORBLOCK_CONFIG = {
@@ -93,7 +94,7 @@ class SponsorBlockHandler {
         this.lastOverlayHash = null;
 
         this._skipWatchdogTimer = null;
-        this._videoWaitTimer = null;
+        this._videoWait = null;
         this._attrObserver = null;
         this._lastSyncSig = null;
 
@@ -110,26 +111,12 @@ class SponsorBlockHandler {
     }
 
     // ==========================================
-    // WebOS 3 DOM Helper Methods
+    // Progress-bar geometry
     // ==========================================
-
-    _isNodeConnected(node) {
-        if (!node) return false;
-        return node.isConnected !== undefined ? node.isConnected : document.body.contains(node);
-    }
-
-    _getClosest(el, selector) {
-        if (!el || el.nodeType !== 1) return null;
-        if (el.closest) return el.closest(selector);
-        
-        const matches = el.matches || el.webkitMatchesSelector || el.mozMatchesSelector || el.msMatchesSelector;
-        let current = el;
-        while (current && current.nodeType === 1) {
-            if (matches && matches.call(current, selector)) return current;
-            current = current.parentNode;
-        }
-        return null;
-    }
+    //
+    // Node#isConnected and Element#closest are guaranteed by polyfills.js
+    // (imported via utils.js), so the private _isNodeConnected/_getClosest
+    // fallbacks that used to live here have been removed.
 
     _getProgressBarAnchor() {
         if (!this.progressBar) return { container: null, asSibling: false };
@@ -141,13 +128,19 @@ class SponsorBlockHandler {
         // built, inserted, invisible.
         if (this._anchorCache &&
             this._anchorCacheBar === this.progressBar &&
-            (!this._anchorCache.container || this._isNodeConnected(this._anchorCache.container))) {
+            (!this._anchorCache.container || this._anchorCache.container.isConnected)) {
             return this._anchorCache;
         }
 
         // ALWAYS inject as a sibling. YouTube's virtual DOM destroys foreign children.
-        const ytPB = this._getClosest(this.progressBar, 'ytlr-multi-markers-player-bar-renderer') ||
-                     this._getClosest(this.progressBar, 'ytlr-progress-bar') || 
+        //
+        // These MUST stay as two chained calls. closest('a, b') returns the
+        // NEAREST ancestor matching either selector — and ytlr-progress-bar
+        // sits inside ytlr-multi-markers-player-bar-renderer, so a union
+        // selector would silently invert this priority order and anchor the
+        // overlay to the wrong element.
+        const ytPB = this.progressBar.closest('ytlr-multi-markers-player-bar-renderer') ||
+                     this.progressBar.closest('ytlr-progress-bar') ||
                      this.progressBar;
                      
         const parent = ytPB.parentNode;
@@ -533,7 +526,7 @@ class SponsorBlockHandler {
             this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
 
             // Use 'this.video' if start() already found it, or re-query
-            const video = this.video || document.querySelector('video');
+            const video = this.video || getVideo();
             if (video && video.duration && !isNaN(video.duration)) {
                 this.processSegments(video.duration);
             }
@@ -569,23 +562,19 @@ class SponsorBlockHandler {
     }
 
     start() {
-        this.video = document.querySelector('video');
+        // getVideo() caches with an isConnected guard and invalidates on page
+        // change; waitForChildAdd() is the shared MutationObserver-based waiter.
+        // Together they replace a 4Hz polling timer AND fire the instant the
+        // element mounts instead of up to 250ms late.
+        this.video = getVideo();
         if (!this.video) {
-            if (!this._videoWaitTimer) {
-                let attempts = 0;
-                this._videoWaitTimer = setInterval(() => {
-                    if (this.isDestroyed) {
-                        clearInterval(this._videoWaitTimer);
-                        this._videoWaitTimer = null;
-                        return;
-                    }
-                    const v = document.querySelector('video');
-                    if (v || ++attempts >= 40) {
-                        clearInterval(this._videoWaitTimer);
-                        this._videoWaitTimer = null;
-                        if (v) this.start();
-                    }
-                }, 250);
+            if (!this._videoWait) {
+                this._videoWait = waitForChildAdd(
+                    document.body, (n) => n instanceof HTMLVideoElement, false, null, 10000
+                ).then(() => {
+                    this._videoWait = null;
+                    if (!this.isDestroyed) this.start();
+                }).catch(() => { this._videoWait = null; });
             }
             return;
         }
@@ -779,7 +768,7 @@ class SponsorBlockHandler {
     // hashchange, so nothing ever re-armed them.
     _ensureObserverAlive() {
         if (this.isDestroyed) return;
-        if (this._observedRoot && this._isNodeConnected(this._observedRoot)) return;
+        if (this._observedRoot && this._observedRoot.isConnected) return;
         this.log('info', 'Observer root was destroyed — re-attaching');
         this.observePlayerUI();
     }
@@ -797,7 +786,7 @@ class SponsorBlockHandler {
                 this._barRetryTimer = null;
                 return;
             }
-            if (this.overlay && this._isNodeConnected(this.overlay)) {
+            if (this.overlay && this.overlay.isConnected) {
                 clearInterval(this._barRetryTimer);
                 this._barRetryTimer = null;
                 return;
@@ -810,15 +799,15 @@ class SponsorBlockHandler {
     checkForProgressBar() {
         if (this.isDestroyed) return;
 
-        if (this.video && !this._isNodeConnected(this.video)) {
+        if (this.video && !this.video.isConnected) {
             this._rebindVideo();
         }
 
         this._ensureObserverAlive();
 
         // Check if both the overlay AND the tracked progress bar are ACTUALLY in the DOM
-        if (this.overlay && this._isNodeConnected(this.overlay) &&
-            this.progressBar && this._isNodeConnected(this.progressBar)) {
+        if (this.overlay && this.overlay.isConnected &&
+            this.progressBar && this.progressBar.isConnected) {
             
             // Ensure the sibling overlay syncs visibility when attributes mutate
             const { container, asSibling } = this._getProgressBarAnchor();
@@ -829,7 +818,7 @@ class SponsorBlockHandler {
         }
 
         // If the overlay was orphaned or wiped, clear it so drawOverlay creates a fresh one
-        if (this.overlay && !this._isNodeConnected(this.overlay)) {
+        if (this.overlay && !this.overlay.isConnected) {
             this.overlay.remove();
             this.overlay = null;
         }
@@ -882,7 +871,7 @@ class SponsorBlockHandler {
             
             this.drawOverlay();
 
-            if (this._barRetryTimer && this.overlay && this._isNodeConnected(this.overlay)) {
+            if (this._barRetryTimer && this.overlay && this.overlay.isConnected) {
                 clearInterval(this._barRetryTimer);
                 this._barRetryTimer = null;
             }
@@ -904,7 +893,7 @@ class SponsorBlockHandler {
         // it inserted the overlay into an orphaned subtree — which is why the
         // segments existed but never showed, and flashed briefly when a seek
         // caused the stale node to be touched.
-        if (!this.progressBar || !this._isNodeConnected(this.progressBar)) {
+        if (!this.progressBar || !this.progressBar.isConnected) {
             this.progressBar = null;
             this._anchorCache = null;
             this._anchorCacheBar = null;
@@ -922,7 +911,7 @@ class SponsorBlockHandler {
         let colorSig = '';
         for (const k in segmentTypes) colorSig += config[`${k}Color`] || '';
         const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${config.sbMode_highlight}_${colorSig}`;
-        if (overlayHash === this.lastOverlayHash && this.overlay && this._isNodeConnected(this.overlay)) {
+        if (overlayHash === this.lastOverlayHash && this.overlay && this.overlay.isConnected) {
             return;
         }
         this.lastOverlayHash = overlayHash;
@@ -992,7 +981,7 @@ class SponsorBlockHandler {
         // FIX (replay): if the insert landed in an orphaned subtree, drop the
         // hash so the next pass rebuilds rather than early-returning on an
         // unchanged hash (identical video = identical hash on replay).
-        if (!this._isNodeConnected(this.overlay)) {
+        if (!this.overlay.isConnected) {
             this.lastOverlayHash = null;
             this._scheduleBarRetry();
         }
@@ -1442,10 +1431,7 @@ class SponsorBlockHandler {
             this._barRetryTimer = null;
         }
         this._observedRoot = null;
-        if (this._videoWaitTimer) {
-            clearInterval(this._videoWaitTimer);
-            this._videoWaitTimer = null;
-        }
+        this._videoWait = null;
 
         sponsorBlockUI.togglePopup(false);
         sponsorBlockUI.updateSegments([]);

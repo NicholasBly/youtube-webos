@@ -4,10 +4,9 @@ import { configAddChangeListener, configRead, configWrite, configGetDesc, segmen
 import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
-// import { initYouTubeFixes } from './yt-fixes.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo } from './utils.js';
+import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo } from './utils.js';
 import { initAdblock, destroyAdblock, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
 import { getWebOSVersion } from './webos-utils.js';
 import { showNotification as _showNotification, setNotificationOled, setNotificationTheme } from './notifications.js';
@@ -49,6 +48,42 @@ const cachedSelectors = {
     save: null
 };
 
+// Candidate lists hoisted to module scope so they aren't rebuilt per keypress.
+const COMMENT_SELECTORS = [
+    'yt-button-container[aria-label="Comments"]',
+    'yt-icon.qHxFAf.ieYpu.nGYLgf',
+    'yt-icon.qHxFAf.ieYpu.wFZPnb',
+    'ytlr-button-renderer[idomkey="item-1"] ytlr-button',
+    '[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button',
+    'ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button',
+    'ytlr-button-renderer[idomkey="1"] yt-button-container'
+];
+const SAVE_SELECTORS = [
+    'yt-button-container[aria-label="Save"]',
+    'yt-icon.p9sZp'
+];
+const DESCRIPTION_FALLBACK_SELECTOR = 'ytlr-button-renderer yt-formatted-string.XGffTd.OqGroe';
+
+// "Try the cached selector, else walk the candidate list, else cache the
+// winner" — was hand-rolled three times with subtly different fallback
+// behaviour. If a cached selector stops matching we now always fall through to
+// the full walk instead of returning null.
+function resolveCached(cacheKey, selectors) {
+    const cached = cachedSelectors[cacheKey];
+    if (cached) {
+        const hit = document.querySelector(cached);
+        if (hit) return hit;
+    }
+    for (let i = 0; i < selectors.length; i++) {
+        const el = document.querySelector(selectors[i]);
+        if (el) {
+            cachedSelectors[cacheKey] = selectors[i];
+            return el;
+        }
+    }
+    return null;
+}
+
 window.addEventListener('ytaf-page-update', (e) => {
     if (e.detail.isWatch) {
         cachedSelectors.comments = null;
@@ -84,25 +119,9 @@ shortcutKeys.forEach(key => {
     configAddChangeListener(`shortcut_key_${key}`, () => updateShortcutCache(key));
 });
 
-// --- Polyfills & Helpers ---
-
-if (!Element.prototype.matches) {
-    Element.prototype.matches = 
-        Element.prototype.webkitMatchesSelector || 
-        Element.prototype.mozMatchesSelector || 
-        Element.prototype.msMatchesSelector || 
-        Element.prototype.oMatchesSelector;
-}
-if (!Element.prototype.closest) {
-  Element.prototype.closest = function(s) {
-    let el = this;
-    do {
-      if (Element.prototype.matches.call(el, s)) return el;
-      el = el.parentElement || el.parentNode;
-    } while (el !== null && el.nodeType === 1);
-    return null;
-  };
-}
+// --- Helpers ---
+// Element#matches / Element#closest polyfills now live in polyfills.js,
+// imported via utils.js so every module gets them regardless of import order.
 
 const simulateBack = () => { console.log('[Shortcut] Simulating Back/Escape...'); sendKey(REMOTE_KEYS.BACK); };
 
@@ -126,13 +145,9 @@ const ARROW_KEY_CODE = {
   [REMOTE_KEYS.DOWN.code]: 'down' 
 };
 
-const colorCodeMap = new Map([
-    [403, 'red'], [166, 'red'], 
-    [404, 'green'], [172, 'green'], 
-    [405, 'yellow'], [170, 'yellow'], 
-    [406, 'blue'], [167, 'blue'], [191, 'blue']
-]);
-const getKeyColor = (charCode) => colorCodeMap.get(charCode) || null;
+// Built from REMOTE_KEYS in utils.js — one source of truth for color codes
+// and their per-remote alternates.
+const getKeyColor = (charCode) => COLOR_CODE_MAP.get(charCode) || null;
 
 // --- DOM Utility Functions ---
 
@@ -486,10 +501,13 @@ function createOptionsPanel() {
 
   // Dependency Management
   const setState = (el, enabled) => { if (!el) return; const input = el.querySelector('input'); if (input) { input.disabled = !enabled; el.style.opacity = enabled ? '1' : '0.5'; }};
+
+  // Declared after the conditional elGuestPrompts assignment above.
+  // setState already no-ops on null, so no filtering needed.
+  const adBlockDependents = [elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant, elGuestPrompts];
   const updateDependencyState = () => {
-    const isAdBlockOn = configRead('enableAdBlock');
-    if (!isAdBlockOn) { [elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant, elGuestPrompts].forEach(el => { setState(el, false); }); return; }
-	[elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant, elGuestPrompts].forEach(el => { setState(el, true); });
+    const enabled = configRead('enableAdBlock');
+    adBlockDependents.forEach(el => setState(el, enabled));
   };
   
   elAdBlock.querySelector('input').addEventListener('change', updateDependencyState);
@@ -821,31 +839,7 @@ function toggleSubtitlesLogic(player) {
 }
 
 function toggleCommentsLogic() {
-    let target = null;
-    if (cachedSelectors.comments) {
-        target = document.querySelector(cachedSelectors.comments);
-    }
-
-    if (!target) {
-        const queryList = [
-            'yt-button-container[aria-label="Comments"]',
-            'yt-icon.qHxFAf.ieYpu.nGYLgf',
-            'yt-icon.qHxFAf.ieYpu.wFZPnb',
-            'ytlr-button-renderer[idomkey="item-1"] ytlr-button',
-            '[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button',
-            'ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button',
-            'ytlr-button-renderer[idomkey="1"] yt-button-container'
-        ];
-
-        for (let i = 0; i < queryList.length; i++) {
-            target = document.querySelector(queryList[i]);
-            if (target) {
-                cachedSelectors.comments = queryList[i];
-                break;
-            }
-        }
-    }
-
+    const target = resolveCached('comments', COMMENT_SELECTORS);
     let commBtn = target ? target.closest('yt-button-container, ytlr-button') : null;
     let isLiveChat = false;
 
@@ -883,19 +877,24 @@ function toggleDescriptionLogic() {
         target = cachedEl ? cachedEl.closest('yt-button-container') : null;
     }
 
+    // Text-matching pass can't be expressed as a selector, so it stays bespoke.
+    // The querySelectorAll result is iterated directly rather than materialised
+    // into an array first.
     if (!target) {
-        let descText = Array.from(document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe'))
-            .find(el => el.textContent.trim() === 'Description');
-        
-        if (descText) {
-            target = descText.closest('yt-button-container');
-        } else {
-            const fallbackSelector = 'ytlr-button-renderer yt-formatted-string.XGffTd.OqGroe';
-            const genericTextBtn = document.querySelector(fallbackSelector);
-            if (genericTextBtn) {
-                target = genericTextBtn.closest('yt-button-container');
-                cachedSelectors.description = fallbackSelector;
+        const candidates = document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe');
+        for (let i = 0; i < candidates.length; i++) {
+            if (candidates[i].textContent.trim() === 'Description') {
+                target = candidates[i].closest('yt-button-container');
+                break;
             }
+        }
+    }
+
+    if (!target) {
+        const genericTextBtn = document.querySelector(DESCRIPTION_FALLBACK_SELECTOR);
+        if (genericTextBtn) {
+            target = genericTextBtn.closest('yt-button-container');
+            cachedSelectors.description = DESCRIPTION_FALLBACK_SELECTOR;
         }
     }
 
@@ -915,31 +914,11 @@ function toggleDescriptionLogic() {
 }
 
 function saveToPlaylistLogic() {
-    let target = null;
+    const el = resolveCached('save', SAVE_SELECTORS);
+    // Structural check rather than comparing against the selector string, so
+    // this keeps working if the selector text ever changes.
+    const target = el && el.tagName === 'YT-ICON' ? el.closest('yt-button-container') : el;
 
-    if (cachedSelectors.save) {
-        const el = document.querySelector(cachedSelectors.save);
-        if (el) {
-            target = cachedSelectors.save === 'yt-icon.p9sZp' ? el.closest('yt-button-container') : el;
-        }
-    }
-
-    if (!target) {
-        const queryList = [
-            'yt-button-container[aria-label="Save"]',
-            'yt-icon.p9sZp'
-        ];
-
-        for (let i = 0; i < queryList.length; i++) {
-            const el = document.querySelector(queryList[i]);
-            if (el) {
-                target = queryList[i] === 'yt-icon.p9sZp' ? el.closest('yt-button-container') : el;
-                cachedSelectors.save = queryList[i];
-                break;
-            }
-        }
-    }
-      
     const panel = document.querySelector('.AmQJbe');
       
     if (panel) simulateBack();
@@ -1076,7 +1055,6 @@ function handleShortcutAction(action) {
   if (!isWatchPage() && !isShortsPage()) return;
 
   const video = getVideo();
-  const player = document.getElementById(SELECTORS.PLAYER_ID) || document.querySelector('.html5-video-player');
   if (!video) return;
 
   switch (action) {
@@ -1096,7 +1074,12 @@ function handleShortcutAction(action) {
         playPauseLogic(video);
         break;
     case 'toggle_subs':
-        toggleSubtitlesLogic(player);
+        // Resolved here rather than above the switch: only this one action
+        // needs it, and the .html5-video-player fallback is a full-document
+        // class-selector walk that was being paid on every shortcut keypress.
+        toggleSubtitlesLogic(
+            document.getElementById(SELECTORS.PLAYER_ID) || document.querySelector('.html5-video-player')
+        );
         break;
     case 'toggle_comments':
         toggleCommentsLogic();
@@ -1299,15 +1282,15 @@ function initGlobalStyles() {
     document.head.appendChild(style);
 
     const syncClass = (cls, key) => document.documentElement.classList.toggle(cls, !!configRead(key));
-    const apply = () => {
-        syncClass('ytaf-hide-logo', 'hideLogo');
-        syncClass('ytaf-fix-titles', 'fixMultilineTitles');
-        syncClass('ytaf-remove-borders', 'removeBlackBorders');
+    const CLASS_KEYS = {
+        'ytaf-hide-logo': 'hideLogo',
+        'ytaf-fix-titles': 'fixMultilineTitles',
+        'ytaf-remove-borders': 'removeBlackBorders'
     };
-    apply();
-    configAddChangeListener('hideLogo', () => syncClass('ytaf-hide-logo', 'hideLogo'));
-    configAddChangeListener('fixMultilineTitles', () => syncClass('ytaf-fix-titles', 'fixMultilineTitles'));
-    configAddChangeListener('removeBlackBorders', () => syncClass('ytaf-remove-borders', 'removeBlackBorders'));
+    for (const [cls, key] of Object.entries(CLASS_KEYS)) {
+        syncClass(cls, key);
+        configAddChangeListener(key, () => syncClass(cls, key));
+    }
 }
 
 function updateLogoState() {

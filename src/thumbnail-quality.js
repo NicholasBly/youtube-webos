@@ -26,9 +26,7 @@ const I_DOMAIN_REGEX = /^i\d/;
 
 const YT_THUMBNAIL_SELECTOR = 'ytlr-thumbnail-details, ytlr-surface-page, thumbnail image';
 
-const webpTestImgs = {
-  lossy: 'UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA'
-};
+const WEBP_TEST_IMG = 'UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA';
 
 // --- Compatibility Fallbacks (WebOS 3 / Chrome 38) ---
 const VisibilityObserverClass = window.IntersectionObserver || class {
@@ -105,6 +103,12 @@ const qualityCache = new Map();
 const requestQueue = new Map(); 
 let activeRequests = 0;
 
+// One definition of the FIFO eviction policy, previously inlined at five sites.
+function capSet(map, key, value, limit) {
+  if (map.size >= limit) map.delete(map.keys().next().value);
+  map.set(key, value);
+}
+
 // --- WebP Detection ---
 let webpDetectionPromise = null;
 let webpSupported = false;
@@ -121,7 +125,7 @@ function detectWebP() {
     };
     img.onload = () => done(img.width > 0 && img.height > 0);
     img.onerror = () => done(false);
-    img.src = 'data:image/webp;base64,' + webpTestImgs.lossy;
+    img.src = 'data:image/webp;base64,' + WEBP_TEST_IMG;
   });
 }
 
@@ -169,12 +173,7 @@ function parseCSSUrl(value) {
     const match = value.match(CSS_URL_REGEX);
     if (match && match[1]) {
       const url = new URL(match[1]);
-      
-      if (urlCache.size >= CACHE_SIZE_LIMIT) {
-        urlCache.delete(urlCache.keys().next().value);
-      }
-      
-      urlCache.set(value, url);
+      capSet(urlCache, value, url, CACHE_SIZE_LIMIT);
       return url;
     }
   } catch (e) {
@@ -305,19 +304,43 @@ async function processUpgrade(element, generationId) {
   // candidates are ordered best-quality-first, so the first success wins.
   for (let i = 0; i < candidates.length; i++) {
     if (results[i]) {
-      // Target FIFO deletion rather than full wipe
-      if (qualityCache.size >= CACHE_SIZE_LIMIT) qualityCache.delete(qualityCache.keys().next().value);
-      qualityCache.set(videoId, candidates[i].quality);
+      capSet(qualityCache, videoId, candidates[i].quality, CACHE_SIZE_LIMIT);
       applyUpgrade(candidates[i].url, candidates[i].quality);
       return;
     }
   }
 
-  if (qualityCache.size >= CACHE_SIZE_LIMIT) qualityCache.delete(qualityCache.keys().next().value);
-  qualityCache.set(videoId, null);
+  capSet(qualityCache, videoId, null, CACHE_SIZE_LIMIT);
 }
 
 // --- Scoped Observers ---
+// Visit an element plus any nested thumbnails, once each. Replaces the
+// hand-rolled matches-polyfill chain + nested loop that was duplicated between
+// the added-node and removed-node branches of domObserver.
+function eachThumb(node, fn) {
+  if (node.nodeType !== Node.ELEMENT_NODE) return;
+  if (node.matches(YT_THUMBNAIL_SELECTOR)) fn(node);
+  const nested = node.querySelectorAll(YT_THUMBNAIL_SELECTOR);
+  for (let i = 0, len = nested.length; i < len; i++) fn(nested[i]);
+}
+
+const track = (el) => {
+  if (elementState.has(el)) return;
+  elementState.set(el, { generationId: 1 });
+  styleObserver.observe(el, { attributes: true, attributeFilter: ['style'] });
+  visibilityObserver.observe(el);
+};
+
+const untrack = (el) => {
+  visibilityObserver.unobserve(el);
+  requestQueue.delete(el);
+};
+
+const enqueue = (node, generationId) => {
+  capSet(requestQueue, node, () => processUpgrade(node, generationId), REQUEST_QUEUE_MAX);
+  processRequestQueue();
+};
+
 const styleObserver = new MutationObserver(mutations => {
   for (let i = 0, len = mutations.length; i < len; i++) {
     const mut = mutations[i];
@@ -336,12 +359,7 @@ const styleObserver = new MutationObserver(mutations => {
 
       const currentGen = s ? s.generationId : 0;
       elementState.set(node, { generationId: currentGen + 1 });
-
-      if (requestQueue.size >= REQUEST_QUEUE_MAX) {
-        requestQueue.delete(requestQueue.keys().next().value);
-      }
-      requestQueue.set(node, () => processUpgrade(node, currentGen + 1));
-      processRequestQueue();
+      enqueue(node, currentGen + 1);
     }
   }
 });
@@ -352,70 +370,23 @@ const visibilityObserver = new VisibilityObserverClass((entries) => {
     
     if (entry.isIntersecting) {
       const s = elementState.get(node);
-      if (s && node.style.backgroundImage !== '') {
-        if (requestQueue.size >= REQUEST_QUEUE_MAX) {
-          requestQueue.delete(requestQueue.keys().next().value);
-        }
-        requestQueue.set(node, () => processUpgrade(node, s.generationId));
-        processRequestQueue();
-      }
+      if (s && node.style.backgroundImage !== '') enqueue(node, s.generationId);
     } else {
       requestQueue.delete(node);
     }
   });
 }, { rootMargin: '100px' }); // Tightened rootMargin
 
+// domObserver is only ever registered with { subtree: true, childList: true },
+// so the old `mut.type === 'childList'` guard was dead — attribute records can
+// never reach here. Both branches now share eachThumb().
 const domObserver = new MutationObserver(mutations => {
   for (let i = 0, len = mutations.length; i < len; i++) {
-    const mut = mutations[i];
+    const { addedNodes, removedNodes } = mutations[i];
 
-    // Disconnect strong refs to offloaded nodes
-    if (mut.removedNodes.length > 0) {
-      for (let j = 0, jLen = mut.removedNodes.length; j < jLen; j++) {
-        const node = mut.removedNodes[j];
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          const matchesFn = node.matches || node.webkitMatchesSelector || node.mozMatchesSelector || node.msMatchesSelector;
-          
-          if (matchesFn && matchesFn.call(node, YT_THUMBNAIL_SELECTOR)) {
-            visibilityObserver.unobserve(node);
-            requestQueue.delete(node);
-          }
-          
-          const nested = node.querySelectorAll(YT_THUMBNAIL_SELECTOR);
-          for (let k = 0, kLen = nested.length; k < kLen; k++) {
-            visibilityObserver.unobserve(nested[k]);
-            requestQueue.delete(nested[k]);
-          }
-        }
-      }
-    }
-
-    if (mut.type === 'childList') {
-      const addedNodes = mut.addedNodes;
-      for (let j = 0, jLen = addedNodes.length; j < jLen; j++) {
-        const node = addedNodes[j];
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          const matchesFn = node.matches || node.webkitMatchesSelector || node.mozMatchesSelector || node.msMatchesSelector;
-          
-          if (matchesFn && matchesFn.call(node, YT_THUMBNAIL_SELECTOR)) {
-            elementState.set(node, { generationId: 1 });
-            styleObserver.observe(node, { attributes: true, attributeFilter: ['style'] });
-            visibilityObserver.observe(node);
-            
-          } else if (node.firstElementChild) {
-            const nested = node.querySelectorAll(YT_THUMBNAIL_SELECTOR);
-            for(let k = 0, kLen = nested.length; k < kLen; k++) {
-               const targetNode = nested[k];
-               if (elementState.has(targetNode)) continue;
-
-               elementState.set(targetNode, { generationId: 1 });
-               styleObserver.observe(targetNode, { attributes: true, attributeFilter: ['style'] });
-               visibilityObserver.observe(targetNode);
-            }
-          }
-        }
-      }
-    }
+    // Drop strong refs to offloaded nodes first.
+    for (let j = 0, jLen = removedNodes.length; j < jLen; j++) eachThumb(removedNodes[j], untrack);
+    for (let j = 0, jLen = addedNodes.length; j < jLen; j++) eachThumb(addedNodes[j], track);
   }
 });
 
@@ -465,15 +436,8 @@ async function enableObserver() {
 
   isObserving = true;
   
-  const existingThumbnails = appContainer.querySelectorAll(YT_THUMBNAIL_SELECTOR);
-  for (let i = 0, len = existingThumbnails.length; i < len; i++) {
-    const node = existingThumbnails[i];
-    if (!elementState.has(node)) {
-      elementState.set(node, { generationId: 1 });
-      styleObserver.observe(node, { attributes: true, attributeFilter: ['style'] });
-      visibilityObserver.observe(node);
-    }
-  }
+  // Same tracking path as the observer — no duplicated observe() triple.
+  eachThumb(appContainer, track);
 }
 
 export function cleanup() {

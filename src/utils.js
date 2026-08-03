@@ -1,3 +1,5 @@
+import './polyfills.js';
+
 const CONTENT_INTENT_REGEX = /^.+(?=Content)/g;
 
 export const SELECTORS = {
@@ -16,25 +18,28 @@ export const REMOTE_KEYS = {
   UP:     { code: 38,  key: 'ArrowUp' },
   RIGHT:  { code: 39,  key: 'ArrowRight' },
   DOWN:   { code: 40,  key: 'ArrowDown' },
-  RED:    { code: 403, key: 'Red' },
-  GREEN:  { code: 404, key: 'Green' },
-  YELLOW: { code: 405, key: 'Yellow' },
+  RED:    { code: 403, key: 'Red',    alt: [166] },
+  GREEN:  { code: 404, key: 'Green',  alt: [172] },
+  YELLOW: { code: 405, key: 'Yellow', alt: [170] },
   // Secondary yellow keycode emitted by some webOS remotes alongside 405.
   // Used by screensaver-fix.js to send both halves of the keep-alive burst.
   YELLOW_ALT: { code: 170, key: 'Yellow', charCode: 170 },
-  BLUE:   { code: 406, key: 'Blue' },
-
-  0: { code: 48, key: '0' },
-  1: { code: 49, key: '1' },
-  2: { code: 50, key: '2' },
-  3: { code: 51, key: '3' },
-  4: { code: 52, key: '4' },
-  5: { code: 53, key: '5' },
-  6: { code: 54, key: '6' },
-  7: { code: 55, key: '7' },
-  8: { code: 56, key: '8' },
-  9: { code: 57, key: '9' }
+  BLUE:   { code: 406, key: 'Blue',   alt: [167, 191] }
 };
+
+// Numeric keys 0-9 are mechanical: keyCode 48 + n.
+for (let i = 0; i <= 9; i++) REMOTE_KEYS[i] = { code: 48 + i, key: String(i) };
+
+// Single source of truth for color-key codes, including the alternate codes
+// emitted by some webOS remotes. ui.js consumes this instead of maintaining a
+// parallel table.
+export const COLOR_CODE_MAP = new Map();
+for (const name of ['RED', 'GREEN', 'YELLOW', 'BLUE']) {
+  const def = REMOTE_KEYS[name];
+  const lower = name.toLowerCase();
+  COLOR_CODE_MAP.set(def.code, lower);
+  if (def.alt) def.alt.forEach((code) => COLOR_CODE_MAP.set(code, lower));
+}
 
 let _isWatchPage = false;
 let _isShortsPage = false;

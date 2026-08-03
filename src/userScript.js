@@ -1,19 +1,12 @@
 import 'whatwg-fetch';
+// Element#matches / Element#closest / Node#isConnected for Chrome 38 (webOS 3).
+// Must stay above every feature import; utils.js also imports it defensively.
+import './polyfills.js';
 import './domrect-polyfill';
 import './adblock.js';
 import './hooks/json-stringify';
 
-if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
-    Object.defineProperty(Node.prototype, 'isConnected', {
-        get: function() {
-            return document.contains(this);
-        },
-        configurable: true,
-        enumerable: true
-    });
-}
-
-//import './perf_mon.js'; // Uncomment for testing
+//import './perf_mon.js'; // Dev-only instrumentation. Uncomment for testing.
 
 import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
 import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';

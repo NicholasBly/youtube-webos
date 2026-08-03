@@ -123,8 +123,11 @@ class Watch {
       this._globalListeners.push({ type, fn: handler });
     };
 
+    // focusin only: a focusout is followed by a focusin in every practical
+    // case on this platform, and the callback is debounced at 50ms, so the
+    // focusout invocation was always coalesced away. Halves the clock's share
+    // of the per-keypress focus traffic.
     addListener('focusin', this.debouncedUpdate);
-    addListener('focusout', this.debouncedUpdate); 
   }
 
   destroy() {
