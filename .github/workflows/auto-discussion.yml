@@ -1,0 +1,72 @@
+name: Auto-Post Test Updates
+on:
+  push:
+    branches:
+      - test # Only runs when you upload to the test branch
+
+permissions:
+  contents: read
+  discussions: write # Gives the robot permission to read and post in discussions
+
+jobs:
+  post-comment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Post to Discussion Thread
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Authenticates the GitHub CLI
+        run: |
+          # 1. Get commit title and body (patch notes)
+          TITLE=$(git log -1 --pretty=%s)
+          BODY=$(git log -1 --pretty=%b)
+
+          # 2. Extract the version number (e.g., grabs "0.8.2" from "0.8.2 build 1")
+          VERSION=$(echo "$TITLE" | grep -oP '^[0-9]+\.[0-9]+\.[0-9]+' || true)
+
+          if [ -z "$VERSION" ]; then
+            echo "Could not find a version number (like 0.8.2) in the title: $TITLE"
+            echo "Skipping discussion post."
+            exit 0
+          fi
+
+          TARGET_TITLE="$VERSION test builds"
+          echo "Looking for discussion thread titled: $TARGET_TITLE"
+
+          # 3. Search for the existing discussion thread by title in the "General" category
+          DISCUSSION_NUMBER=$(gh discussion list --repo ${{ github.repository }} --category "General" --json number,title -q ".[] | select(.title == \"$TARGET_TITLE\") | .number" | head -n 1)
+
+          # If the thread doesn't exist yet, create it automatically!
+          if [ -z "$DISCUSSION_NUMBER" ]; then
+            echo "Thread '$TARGET_TITLE' not found. Creating it now..."
+            gh discussion create --repo ${{ github.repository }} \
+              --category "General" \
+              --title "$TARGET_TITLE" \
+              --body "Running list of test builds for version $VERSION."
+            
+            # Fetch the ID of the thread we just created
+            DISCUSSION_NUMBER=$(gh discussion list --repo ${{ github.repository }} --category "General" --json number,title -q ".[] | select(.title == \"$TARGET_TITLE\") | .number" | head -n 1)
+          fi
+
+          # 4. Find the updated .ipk files in the repository
+          MODERN=$(ls *webOS22*.ipk 2>/dev/null | head -n 1 || true)
+          STD=$(ls *.ipk 2>/dev/null | grep -v "webOS22" | head -n 1 || true)
+
+          # 5. Construct the layout for the comment using your exact format
+          cat <<EOF > comment_body.md
+          $TITLE - https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+
+          [$STD](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/$STD?raw=true)
+          
+          [$MODERN](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/$MODERN?raw=true)
+
+          ### Patch Notes
+
+          $BODY
+          EOF
+
+          # 6. Post the comment into the thread
+          gh discussion comment $DISCUSSION_NUMBER --repo ${{ github.repository }} --body-file comment_body.md
+          echo "Successfully posted to discussion thread #$DISCUSSION_NUMBER"
