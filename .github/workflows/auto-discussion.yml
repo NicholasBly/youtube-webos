@@ -35,11 +35,15 @@ jobs:
           echo "Looking for discussion thread titled: $TARGET_TITLE"
 
           # 3. Search for the existing discussion thread
-          # We use standard 'jq' here and fetch up to 100 threads to be safe
           DISCUSSIONS_JSON=$(gh discussion list --repo ${{ github.repository }} --category "General" --limit 100 --json number,title)
           
-          # Safely extract the discussion number matching the title exactly
-          DISCUSSION_NUMBER=$(echo "$DISCUSSIONS_JSON" | jq -r 'map(select(.title == "'"$TARGET_TITLE"'")) | .[0].number // empty')
+          # Print the raw output to the logs for easy debugging if needed
+          echo "Debug - Raw JSON output from GitHub CLI:"
+          echo "$DISCUSSIONS_JSON"
+
+          # 4. Safely extract the discussion number
+          # '.. | objects' digs through any unexpected array wrapping to find the raw data
+          DISCUSSION_NUMBER=$(echo "$DISCUSSIONS_JSON" | jq -r '.. | objects | select(.title == "'"$TARGET_TITLE"'") | .number' | head -n 1)
 
           # If the thread doesn't exist yet, create it automatically
           if [ -z "$DISCUSSION_NUMBER" ] || [ "$DISCUSSION_NUMBER" == "null" ]; then
@@ -49,7 +53,7 @@ jobs:
               --title "$TARGET_TITLE" \
               --body "Running list of test builds for version $VERSION.")
             
-            # gh create outputs the URL (e.g. .../discussions/158). We can just grab the number at the end!
+            # gh create outputs the URL. We grab the number at the end!
             DISCUSSION_NUMBER=$(echo "$NEW_URL" | awk -F'/' '{print $NF}')
           fi
 
@@ -59,11 +63,11 @@ jobs:
             exit 1
           fi
 
-          # 4. Find the updated .ipk files in the repository
+          # 5. Find the updated .ipk files in the repository
           MODERN=$(ls *webOS22*.ipk 2>/dev/null | head -n 1 || true)
           STD=$(ls *.ipk 2>/dev/null | grep -v "webOS22" | head -n 1 || true)
 
-          # 5. Construct the layout for the comment
+          # 6. Construct the layout for the comment
           cat <<EOF > comment_body.md
           $TITLE - https://github.com/${{ github.repository }}/commit/${{ github.sha }}
 
@@ -76,6 +80,6 @@ jobs:
           $BODY
           EOF
 
-          # 6. Post the comment into the thread
+          # 7. Post the comment into the thread
           gh discussion comment $DISCUSSION_NUMBER --repo ${{ github.repository }} --body-file comment_body.md
           echo "Successfully posted to discussion thread #$DISCUSSION_NUMBER"
