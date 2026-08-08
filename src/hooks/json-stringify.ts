@@ -1,48 +1,54 @@
-function isPrimitive(
-  value: unknown
-): value is string | number | boolean | null | undefined | symbol | bigint {
-  return Object(value) !== value;
-}
-
 const originalStringify = JSON.stringify;
-const HAS_STRUCTURED_CLONE = typeof structuredClone === 'function';
+const hasOwn = Object.prototype.hasOwnProperty;
+const MAX_DEPTH = 6;
 
-type FunctionReplacer = (this: any, key: string, value: any) => any;
-type WhitelistReplacer = (string | number)[] | null;
-
-function stringify(
-  value: unknown,
-  replacer?: FunctionReplacer | WhitelistReplacer,
-  space?: string | number
-): string {
-  if (!isPrimitive(value)) {
-    // Check if this specific object actually contains the YouTube player context FIRST
-    const holder = value as Record<string, any>;
-    const ctx = holder?.playbackContext?.contentPlaybackContext as Record<string, unknown> | undefined;
-
-    // Only trigger the heavy deep clone if the target exists and needs modification
-    if (!isPrimitive(ctx) && ctx.isInlinePlaybackNoAd !== true) {
-      
-      if (HAS_STRUCTURED_CLONE) {
-	    try {
-		  value = structuredClone(value);
-	    } catch {
-		  value = JSON.parse(originalStringify(value));
-	    }
-	  } else {
-	    value = JSON.parse(originalStringify(value));
-	  }
-      
-      // Extract the cloned context and apply the flag
-      const clonedCtx = (value as Record<string, any>).playbackContext.contentPlaybackContext;
-      clonedCtx.isInlinePlaybackNoAd = true;
-      
-      // console.info(`[JSON.stringify] Set isInlinePlaybackNoAd`);
+function findCtx(root: any): any {
+  const queue: any[] = [root, 0];
+  let i = 0;
+  while (i < queue.length) {
+    const node = queue[i++];
+    const depth = queue[i++];
+    if (!node || typeof node !== 'object' || depth > MAX_DEPTH) continue;
+    const pc = node.playbackContext;
+    if (pc && typeof pc === 'object' && pc.contentPlaybackContext) {
+      return pc.contentPlaybackContext;
+    }
+    for (const k in node) {
+      const v = node[k];
+      if (v && typeof v === 'object') queue.push(v, depth + 1);
     }
   }
+  return null;
+}
 
-  // Pass either the untouched original object or our modified clone to the native stringify
-  return originalStringify(value, replacer as any, space);
+function stringify(value: any, replacer?: any, space?: any): string {
+  let ctx = null;
+  let had = false;
+  let prev;
+  try {
+    if (value !== null && typeof value === 'object') {
+      ctx = findCtx(value);
+      if (ctx && ctx.isInlinePlaybackNoAd !== true) {
+        had = hasOwn.call(ctx, 'isInlinePlaybackNoAd');
+        prev = ctx.isInlinePlaybackNoAd;
+        ctx.isInlinePlaybackNoAd = true;
+		console.info(`[JSON.stringify] Set isInlinePlaybackNoAd`);
+      } else {
+        ctx = null;
+      }
+    }
+  } catch (e) {
+    ctx = null; // our logic must never break YouTube's serialization
+  }
+
+  try {
+    return originalStringify(value, replacer, space);
+  } finally {
+    if (ctx) {
+      if (had) ctx.isInlinePlaybackNoAd = prev;
+      else delete ctx.isInlinePlaybackNoAd;
+    }
+  }
 }
 
 JSON.stringify = stringify;
