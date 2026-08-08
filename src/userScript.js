@@ -20,6 +20,14 @@ import './yt-fixes.css';
 import './watch.js';
 import './lang-settings-fix';
 
+import { initBufferLimit } from './hooks/buffer-limit.js';
+import { getWebOSVersion } from './webos-utils.js';
+
+if (typeof initBufferLimit === 'function' && getWebOSVersion() <= 4) {
+	initBufferLimit();
+	console.info("Initiating buffer limit");
+}
+
 (function oneTimeParamsCheck() {
     const params = extractLaunchParams();
     if (params && Object.keys(params).length > 0) {
