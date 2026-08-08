@@ -2,11 +2,11 @@ name: Auto-Post Test Updates
 on:
   push:
     branches:
-      - test # Only runs when you upload to the test branch
+      - test
 
 permissions:
   contents: read
-  discussions: write # Gives the robot permission to read and post in discussions
+  discussions: write
 
 jobs:
   post-comment:
@@ -17,7 +17,7 @@ jobs:
 
       - name: Post to Discussion Thread
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Authenticates the GitHub CLI
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # 1. Get commit title and body (patch notes)
           TITLE=$(git log -1 --pretty=%s)
@@ -27,34 +27,43 @@ jobs:
           VERSION=$(echo "$TITLE" | grep -oP '^[0-9]+\.[0-9]+\.[0-9]+' || true)
 
           if [ -z "$VERSION" ]; then
-            echo "Could not find a version number (like 0.8.2) in the title: $TITLE"
-            echo "Skipping discussion post."
+            echo "Could not find a version number in the title: $TITLE"
             exit 0
           fi
 
           TARGET_TITLE="$VERSION test builds"
           echo "Looking for discussion thread titled: $TARGET_TITLE"
 
-          # 3. Search for the existing discussion thread by title in the "General" category
-          DISCUSSION_NUMBER=$(gh discussion list --repo ${{ github.repository }} --category "General" --json number,title -q ".[] | select(.title == \"$TARGET_TITLE\") | .number" | head -n 1)
+          # 3. Search for the existing discussion thread
+          # We use standard 'jq' here and fetch up to 100 threads to be safe
+          DISCUSSIONS_JSON=$(gh discussion list --repo ${{ github.repository }} --category "General" --limit 100 --json number,title)
+          
+          # Safely extract the discussion number matching the title exactly
+          DISCUSSION_NUMBER=$(echo "$DISCUSSIONS_JSON" | jq -r 'map(select(.title == "'"$TARGET_TITLE"'")) | .[0].number // empty')
 
-          # If the thread doesn't exist yet, create it automatically!
-          if [ -z "$DISCUSSION_NUMBER" ]; then
+          # If the thread doesn't exist yet, create it automatically
+          if [ -z "$DISCUSSION_NUMBER" ] || [ "$DISCUSSION_NUMBER" == "null" ]; then
             echo "Thread '$TARGET_TITLE' not found. Creating it now..."
-            gh discussion create --repo ${{ github.repository }} \
+            NEW_URL=$(gh discussion create --repo ${{ github.repository }} \
               --category "General" \
               --title "$TARGET_TITLE" \
-              --body "Running list of test builds for version $VERSION."
+              --body "Running list of test builds for version $VERSION.")
             
-            # Fetch the ID of the thread we just created
-            DISCUSSION_NUMBER=$(gh discussion list --repo ${{ github.repository }} --category "General" --json number,title -q ".[] | select(.title == \"$TARGET_TITLE\") | .number" | head -n 1)
+            # gh create outputs the URL (e.g. .../discussions/158). We can just grab the number at the end!
+            DISCUSSION_NUMBER=$(echo "$NEW_URL" | awk -F'/' '{print $NF}')
+          fi
+
+          # Final safety check before posting
+          if [ -z "$DISCUSSION_NUMBER" ]; then
+            echo "Critical Error: Could not determine Discussion Number."
+            exit 1
           fi
 
           # 4. Find the updated .ipk files in the repository
           MODERN=$(ls *webOS22*.ipk 2>/dev/null | head -n 1 || true)
           STD=$(ls *.ipk 2>/dev/null | grep -v "webOS22" | head -n 1 || true)
 
-          # 5. Construct the layout for the comment using your exact format
+          # 5. Construct the layout for the comment
           cat <<EOF > comment_body.md
           $TITLE - https://github.com/${{ github.repository }}/commit/${{ github.sha }}
 
