@@ -250,23 +250,37 @@ function concatSearchParams(a, b) {
     return a;
 }
 
+function sameOriginURL(candidate, expectedOrigin) {
+  let parsed;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    return null;
+  }
+  return parsed.origin === expectedOrigin ? parsed : null;
+}
+
 export function handleLaunch(params) {
   console.info('handleLaunch', params);
   let ytURL = getYTURL();
-  let { target, contentTarget = target } = params;
+  let { target, contentTarget = target } = params ?? {};
 
   if (typeof contentTarget === 'string') {
-      if (contentTarget.startsWith(ytURL.origin)) {
-        ytURL = new URL(contentTarget);
+      const sameOrigin = sameOriginURL(contentTarget, ytURL.origin);
+      if (sameOrigin) {
+        ytURL = sameOrigin;
       } else {
         if (contentTarget.startsWith('v=v=')) contentTarget = contentTarget.substring(2);
-        
+
         concatSearchParams(ytURL.searchParams, new URLSearchParams(contentTarget));
       }
-  } else if (typeof contentTarget === 'object') {
+  } else if (contentTarget && typeof contentTarget === 'object') {
       const { intent, intentParam } = contentTarget;
       const search = ytURL.searchParams;
-      const voiceContentIntent = intent.match(CONTENT_INTENT_REGEX)?.[0]?.toLowerCase();
+      const voiceContentIntent =
+        typeof intent === 'string'
+          ? intent.match(CONTENT_INTENT_REGEX)?.[0]?.toLowerCase()
+          : undefined;
 
       search.set('inApp', true);
       search.set('vs', 9); 

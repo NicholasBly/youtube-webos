@@ -664,7 +664,7 @@ if (typeof window !== 'undefined') {
   const handleHashChange = () => {
     const urlStr = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
     if (!urlStr) { cleanup(); return; }
-    const url = new URL(urlStr, 'http://dummy.com');
+    const url = new URL(urlStr, location.href);
     if (url.pathname !== '/watch' || !url.searchParams.get('v')) { cleanup(); return; }
 
     if (!window.returnYouTubeDislike || window.returnYouTubeDislike.videoID !== url.searchParams.get('v')) {

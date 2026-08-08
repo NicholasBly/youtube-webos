@@ -8,6 +8,9 @@ import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo } from './utils.js';
 import { initAdblock, destroyAdblock, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
+import logoBlueUrl from './icons/logo-blue.png';
+import logoRedUrl from './icons/logo-red.png';
+import logoDarkUrl from './icons/logo-dark.png';
 import { getWebOSVersion } from './webos-utils.js';
 import { showNotification as _showNotification, setNotificationOled, setNotificationTheme } from './notifications.js';
 
@@ -476,9 +479,9 @@ function createOptionsPanel() {
   
   const elmHeading = createElement('h1', {},
     createElement('span', { text: 'YouTube Extended' }),
-    createLogo('https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/NB%20Logo-gigapixel.png', 'logo-blue'),
-    createLogo('https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/NB%20Logo-gigapixel2.png', 'logo-red'),
-    createLogo('https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/NB%20Logo-gigapixel4.png', 'logo-dark')
+    createLogo(logoBlueUrl, 'logo-blue'),
+    createLogo(logoRedUrl, 'logo-red'),
+    createLogo(logoDarkUrl, 'logo-dark')
   );
   elmContainer.appendChild(elmHeading);
   elmContainer.appendChild(tabMenu);

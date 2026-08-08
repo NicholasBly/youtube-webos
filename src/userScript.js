@@ -1,12 +1,10 @@
+// import './perf_mon.js'; // Uncomment for testing
+
 import 'whatwg-fetch';
-// Element#matches / Element#closest / Node#isConnected for Chrome 38 (webOS 3).
-// Must stay above every feature import; utils.js also imports it defensively.
 import './polyfills.js';
 import './domrect-polyfill';
 import './adblock.js';
 import './hooks/json-stringify';
-
-//import './perf_mon.js'; // Dev-only instrumentation. Uncomment for testing.
 
 import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
 import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';

@@ -115,7 +115,7 @@ const changeListeners = new Map();
 function loadStoredConfig() {
   const storage = window.localStorage.getItem(CONFIG_KEY);
   if (storage === null) return null;
-  try { return JSON.parse(storage); } catch (err) { return null; }
+  try { return JSON.parse(storage); } catch { return null; }
 }
 
 // MUTATE IN PLACE ONLY — adblock.js (and other modules) hold a module-level
@@ -130,7 +130,7 @@ let pendingWriteTimer = null;
 function writeNow() {
   pendingWriteTimer = null;
   try { window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig); }
-  catch (e) { /* quota / SecurityError on private mode */ }
+  catch { /* quota / SecurityError on private mode */ }
 }
 const flushPendingWrite = () => {
   if (pendingWriteTimer !== null) { clearTimeout(pendingWriteTimer); writeNow(); }

@@ -7,7 +7,8 @@ const DEBUG = false;
 const EMOJI_DEBUG = false; 
 const FORCE_FALLBACK = false;
 
-let isTelemetryHooked = false;
+let isFetchHooked = false;
+let isXHRHooked = false;
 let originalXHROpen = null;
 let originalXHRSend = null;
 const cachedWebOSVersion = getWebOSVersion();
@@ -56,12 +57,12 @@ const CONFIG_KEYS = {
 const EMOJI_RE = /[\u00A9\u00AE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23E9-\u23F3\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB-\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u261D\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692-\u2697\u2699\u269B\u269C\u26A0\u26A1\u26AA\u26AB\u26B0\u26B1\u26BD\u26BE\u26C4\u26C5\u26CE\u26CF\u26D1\u26D3\u26D4\u26E9\u26EA\u26F0-\u26F5\u26F7-\u26FA\u26FD\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B50\u2B55\u3030\u303D\u3297\u3299]|[\uD83C-\uDBFF][\uDC00-\uDFFF]/;
 const EMOJI_RE_CAP = new RegExp(`(${EMOJI_RE.source})`, 'g');
 const EMOJI_RE_GLOBAL = new RegExp(EMOJI_RE.source, 'g');
-const CLEAN_TEXT_RE = /[\u2060\uFEFF]/g;
+// Includes our own sentinels: a title that ships \u200B/\u200C verbatim could
+// otherwise forge an "already wrapped" region that emoji-font.js then treats
+// as its own output. Stripping first also makes processEmojiString idempotent.
+const CLEAN_TEXT_RE = /[\u200B\u200C\u2060\uFEFF]/g;
 
 const IGNORE_ON_SHORTS = new Set(['SEARCH', 'PLAYER', 'ACTION']);
-
-// Combined needle regex — one pass instead of three string scans per JSON.parse
-const RESPONSE_NEEDLE_RE = /responseContext|playerResponse|continuationContents/;
 
 // Snapshot of config — configGetAll() returns the live reference, so this only
 // needs to be re-bound when the module loads. Flags below are recomputed on
@@ -153,8 +154,9 @@ function debugLog(msg, ...args) {
 
 function processEmojiString(str) {
   if (typeof str !== 'string' || !str) return str;
+  // CLEAN_TEXT_RE now strips \u200B/\u200C, so this is idempotent by
+  // construction and no longer needs an "already wrapped" early-out.
   let cleanedStr = str.replace(CLEAN_TEXT_RE, '');
-  if (cleanedStr.includes('\u200B') && cleanedStr.includes('\u200C')) return cleanedStr;
 
   const replaced = cleanedStr.replace(EMOJI_RE_GLOBAL, '\u200B$&\u200C');
   if (EMOJI_DEBUG && replaced !== str) {
@@ -274,12 +276,13 @@ const telemetryFetchHandler = (evt) => {
 };
 
 export function initTrackingBlock() {
-  if (isTelemetryHooked) return;
+  if (isFetchHooked || isXHRHooked) return;
 
   // 1. Hook Fetch (Wrapped separately so webOS 3 EventTarget failures don't break XHR)
   try {
     if (typeof FetchRegistry !== 'undefined' && FetchRegistry.getInstance) {
       FetchRegistry.getInstance().addEventListener('request', telemetryFetchHandler);
+      isFetchHooked = true; // set here — nothing between this and add() can throw
     }
   } catch (e) {
     console.warn('[AdBlock] Fetch hook failed (expected behavior on webOS 3):', e.message);
@@ -291,31 +294,29 @@ export function initTrackingBlock() {
     originalXHRSend = window.XMLHttpRequest.prototype.send;
 
     window.XMLHttpRequest.prototype.open = function(method, url) {
-      // Store the URL on the instance so we can read it during send()
       // Fallback for older engines that might not support optional chaining properly
-      this.__adblockRequestUrl = typeof url === 'string' ? url : (url && url.toString ? url.toString() : '');
-      
+      const urlStr = typeof url === 'string' ? url : (url && url.toString ? url.toString() : '');
+      this.__adblockBlocked = !!urlStr && TELEMETRY_REGEX.test(urlStr);
+
+      if (this.__adblockBlocked) {
+        if (DEBUG) console.info('[AdBlock] Blocked telemetry XHR request:', urlStr);
+        // Point the request at an empty data: URL instead of refusing to send.
+        const isAsync = arguments.length > 2 ? arguments[2] : true;
+        return originalXHROpen.call(this, 'GET', 'data:text/plain,', isAsync);
+      }
+
       // Use standard 'arguments' instead of spread syntax (...args) for webOS 3 compatibility
       return originalXHROpen.apply(this, arguments);
     };
 
     window.XMLHttpRequest.prototype.send = function(body) {
-      const reqUrl = this.__adblockRequestUrl;
-      if (reqUrl && TELEMETRY_REGEX.test(reqUrl)) {
-        if (DEBUG) console.info('[AdBlock] Blocked telemetry XHR request:', reqUrl);
-        // Abort asynchronously so readystatechange/abort/loadend fire and the
-        // caller's request queue settles, instead of leaving the XHR pending
-        // forever (which can cause YT's telemetry queue to grow/retry).
-        const xhr = this;
-        setTimeout(function() {
-          try { xhr.abort(); } catch { /* already done/aborted */ }
-        }, 0);
-        return;
+      if (this.__adblockBlocked) {
+        return originalXHRSend.call(this); // drop the telemetry body
       }
       return originalXHRSend.apply(this, arguments);
     };
 
-    isTelemetryHooked = true;
+    isXHRHooked = true;
     console.info('[AdBlock] Telemetry network hooks enabled (XHR)');
   } catch (e) {
     console.error('[AdBlock] Failed to initialize XHR telemetry blockers:', e);
@@ -323,30 +324,36 @@ export function initTrackingBlock() {
 }
 
 export function destroyTrackingBlock() {
-  if (!isTelemetryHooked) return;
+  if (!isFetchHooked && !isXHRHooked) return;
 
   // 1. Unhook Fetch
-  try {
-    if (typeof FetchRegistry !== 'undefined' && FetchRegistry.getInstance) {
-      FetchRegistry.getInstance().removeEventListener('request', telemetryFetchHandler);
+  if (isFetchHooked) {
+    try {
+      if (typeof FetchRegistry !== 'undefined' && FetchRegistry.getInstance) {
+        FetchRegistry.getInstance().removeEventListener('request', telemetryFetchHandler);
+      }
+    } catch (e) {
+      console.warn('[AdBlock] Fetch unhook failed (expected on older engines):', e.message);
+    } finally {
+      isFetchHooked = false;
     }
-  } catch (e) {
-    console.warn('[AdBlock] Fetch unhook failed (expected on older engines):', e.message);
   }
 
   // 2. Unhook XMLHttpRequest
-  try {
-    if (originalXHROpen && originalXHRSend) {
-      window.XMLHttpRequest.prototype.open = originalXHROpen;
-      window.XMLHttpRequest.prototype.send = originalXHRSend;
-      originalXHROpen = null;
-      originalXHRSend = null;
+  if (isXHRHooked) {
+    try {
+      if (originalXHROpen && originalXHRSend) {
+        window.XMLHttpRequest.prototype.open = originalXHROpen;
+        window.XMLHttpRequest.prototype.send = originalXHRSend;
+        originalXHROpen = null;
+        originalXHRSend = null;
+      }
+    } catch (e) {
+      console.error('[AdBlock] Failed to remove XHR network blockers:', e);
+    } finally {
+      isXHRHooked = false;
+      if (DEBUG) console.info('[AdBlock] Telemetry network hooks disabled');
     }
-  } catch (e) {
-    console.error('[AdBlock] Failed to remove XHR network blockers:', e);
-  } finally {
-    isTelemetryHooked = false;
-    if (DEBUG) console.info('[AdBlock] Telemetry network hooks disabled');
   }
 }
 
@@ -360,7 +367,7 @@ function logSchemaMiss(data, textLength) {
       info = `Top-Level Keys: [${Array.isArray(keys) ? keys.join(', ') : 'Array'}]`;
     }
     debugLog(`MISS (Fallback used) | Size: ${textLength} | ${info}`);
-  } catch (e) {
+  } catch {
     debugLog(`MISS (Fallback used) | Size: ${textLength} | Error analyzing structure`);
   }
 }
@@ -369,7 +376,12 @@ function hookedParse(text, reviver) {
   const data = origParse.call(this, text, reviver);
   if (!text || text.length < 500 || !data || typeof data !== 'object') return data;
   if (!anyFilterEnabled) return data;
-  if (!RESPONSE_NEEDLE_RE.test(text)) return data;
+  if (
+    data.responseContext === undefined &&
+    data.playerResponse === undefined &&
+    data.continuationContents === undefined
+  )
+    return data;
   if (data.botguardData) return data;
 
   try {

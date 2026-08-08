@@ -6,20 +6,6 @@ type TypedEventPartial<T extends EventTarget, U> = {
 type BaseTypedEvent<T extends EventTarget, E extends Event, U> = E &
   TypedEventPartial<T, U>;
 
-type EventInstanceType<T, O> = T extends abstract new (
-  type: string,
-  options?: O
-) => infer R
-  ? R
-  : never;
-
-type EventOptionsType<T> = T extends new (
-  type: string,
-  options?: infer O
-) => Event
-  ? O
-  : never;
-
 export type TypedCustomEvent<
   D,
   T extends EventTarget,
@@ -47,7 +33,7 @@ interface EventListener<
   T extends EmptyEventMap,
   EventName extends keyof T
 > {
-  (this: Self, evt: T[EventName] & TypedEvent<Self, EventName>): void;
+  (this: Self, evt: T[EventName] & TypedEventPartial<Self, EventName>): void;
 }
 
 interface EventListenerObject<
@@ -92,5 +78,5 @@ export const CustomEventTarget = EventTarget as {
 
 export type EventMapOf<T> =
   T extends CustomEventTarget<infer U>
-    ? { [K in keyof U]: U[K] & TypedEvent<T, K> }
+    ? { [K in keyof U]: U[K] & TypedEventPartial<T, K> }
     : never;

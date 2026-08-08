@@ -62,5 +62,8 @@ const hook: ResolveCommandHook = function (resolveCommand, payload, extra) {
   return true;
 };
 
-const registry = await ResolveCommandRegistry.getInstance();
-registry.setHook('setClientSettingEndpoint', hook);
+ResolveCommandRegistry.getInstance()
+  .then((registry) => registry.setHook('setClientSettingEndpoint', hook))
+  .catch((e) => {
+    console.warn('[lang-settings-fix] hook not installed:', e);
+  });

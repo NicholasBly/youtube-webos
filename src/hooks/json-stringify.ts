@@ -37,7 +37,7 @@ function stringify(
       const clonedCtx = (value as Record<string, any>).playbackContext.contentPlaybackContext;
       clonedCtx.isInlinePlaybackNoAd = true;
       
-      console.info(`[JSON.stringify] Set isInlinePlaybackNoAd`);
+      // console.info(`[JSON.stringify] Set isInlinePlaybackNoAd`);
     }
   }
 
