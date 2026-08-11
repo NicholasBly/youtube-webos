@@ -998,15 +998,20 @@ function playPauseLogic(video) {
         notify('Paused');
 
         // Dismiss controls
-        if(needsHide && !isShortsPage() && !isPanelVisible) {
-            shortcutDebounceTime = 650;
-        
-            if (document.activeElement && typeof document.activeElement.blur === 'function') {
-                document.activeElement.blur();
-            }
-            
-            setTimeout(() => sendKey(REMOTE_KEYS.BACK, document.activeElement), 250); // don't press back button if we're on shorts or we leave the page
-        }
+		if(needsHide && !isShortsPage() && !isPanelVisible) {
+			shortcutDebounceTime = 650;
+		
+			if (document.activeElement && typeof document.activeElement.blur === 'function') {
+				document.activeElement.blur();
+			}
+			
+			setTimeout(() => {
+				const currentControls = document.querySelector('yt-focus-container[idomkey="controls"]');
+				if (currentControls && currentControls.classList.contains('MFDzfe--focused')) {
+					sendKey(REMOTE_KEYS.BACK, document.activeElement);
+				}
+			}, 250); // don't press back button if we're on shorts or we leave the page
+		}
         
         if(needsHide && !isShortsPage()) {
             setTimeout(() => {
