@@ -33,6 +33,7 @@ class ReturnYouTubeDislike {
     this.enableDislikes = enableDislikes;
     this.active = true;
     this.dislikesCount = 0;
+    this.dataReady = !enableDislikes;
     
     this.timers = {};
     this.observers = new Set();
@@ -100,12 +101,21 @@ class ReturnYouTubeDislike {
     this.log('info', 'Initializing...');
     try {
       this.injectPersistentStyles();
+      this.setupNavigation();
+
+      // Panel detection must not sit behind the network. A cold first request
+      // to the RYD API can take seconds (up to the 8s race timeout), which used
+      // to burn the poll window on the first video of the session.
+      this.observeBodyForPanel();
+
       if (this.enableDislikes) {
           await this.fetchVideoData();
+          if (!this.active) return;
+          this.dataReady = true;
+          // The panel may already have been set up while the fetch was in
+          // flight; inject now that we actually have a number.
+          if (this.panelElement) this.checkAndInjectDislike(this.panelElement);
       }
-
-      if (!this.active) return;
-      this.observeBodyForPanel();
     } catch (error) {
       this.log('error', 'Init error:', error);
     }
@@ -542,6 +552,8 @@ class ReturnYouTubeDislike {
 
   checkAndInjectDislike(panelElement) {
     if (!this.active || !this.enableDislikes) return;
+    // Wait for fetchVideoData(); init() re-calls this once the count lands.
+    if (!this.dataReady) return;
     if (document.getElementById('ryd-dislike-factoid')) return;
 
     try {
