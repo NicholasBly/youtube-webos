@@ -37,6 +37,13 @@ const CHAIN_SKIP_CONSTANTS = {
     MIN_PLAYBACK_TIME: 0.1
 };
 
+const FETCH_CATEGORIES = encodeURIComponent(JSON.stringify([
+    'sponsor', 'intro', 'outro', 'interaction', 'selfpromo',
+    'musicofftopic', 'preview', 'chapter', 'poi_highlight',
+    'filler', 'hook'
+]));
+const FETCH_ACTION_TYPES = encodeURIComponent(JSON.stringify(['skip', 'mute']));
+
 const HAS_ABORT_CONTROLLER = typeof AbortController !== 'undefined';
 
 class SponsorBlockHandler {
@@ -475,12 +482,15 @@ class SponsorBlockHandler {
         this.lastSkipTime = chain.endTime;
         this.hasPerformedChainSkip = true;
         
-        // Mark all auto_skip segments that were successfully bypassed as skipped
-        this.skipSegments.forEach(seg => {
-            if (seg.mode === 'auto_skip' && seg.start < chain.endTime && seg.end <= chain.endTime + 0.1) {
+        // Fast chronologically-sorted short-circuit skip mapping
+        for (let i = 0; i < this.skipSegments.length; i++) {
+            const seg = this.skipSegments[i];
+            if (seg.start > chain.endTime) break; 
+            
+           if (seg.mode === 'auto_skip' && seg.start < chain.endTime && seg.end <= chain.endTime + 0.1) {
                 this.skippedSegmentIndices.add(seg.originalIndex);
             }
-        });
+        }
 
         this.requestAF(() => {
             const categories = chain.chainDescription.split(' → ')
@@ -933,8 +943,10 @@ class SponsorBlockHandler {
                 if (!mode || mode === 'disable') continue;
             }
 
-            const [start, end] = segment.segment;
-            const div = document.createElement('div');
+            // Destructuring avoidance for speed, plus batch styling execution
+            const start = segment.segment[0];
+            const end = segment.segment[1];
+           const div = document.createElement('div');
 
             const colorKey = isHighlight ? 'poi_highlightColor' : `${segment.category}Color`;
             const color = config[colorKey] || segmentTypes[segment.category]?.color || '#00d400';
@@ -945,14 +957,18 @@ class SponsorBlockHandler {
             div.style.top = '0';
 
             const left = (start / duration) * 100;
+            const zIndex = isHighlight ? '2001' : '2000';
+
             div.className = isHighlight ? 'previewbar highlight' : 'previewbar';
             div.style.left = `${left}%`;
             div.style.zIndex = isHighlight ? '2001' : '2000';
 
-            if (!isHighlight) {
-                const width = ((end - start) / duration) * 100;
-                div.style.width = `${width}%`;
-                div.style.opacity = segmentTypes[segment.category]?.opacity || '0.7';
+            if (isHighlight) {
+                div.style.cssText = `background-color: ${color}; position: absolute; height: 100%; top: 0; left: ${left}%; z-index: ${zIndex};`;
+            } else {
+               const width = ((end - start) / duration) * 100;
+                const opacity = segmentTypes[segment.category]?.opacity || '0.7';
+                div.style.cssText = `background-color: ${color}; position: absolute; height: 100%; top: 0; left: ${left}%; width: ${width}%; opacity: ${opacity}; z-index: ${zIndex};`;
             }
 
             fragment.appendChild(div);
@@ -1346,11 +1362,8 @@ class SponsorBlockHandler {
             if (this.isDestroyed) return null;
 
             try {
-                // Do NOT send videoID with the hash-prefix endpoint — that
-                // defeats the k-anonymity the prefix hashing provides. We
-                // already select our video client-side via
-                // data.find(x => x.videoID === this.videoID) in init().
-                const fetchURL = `${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&actionTypes=${encodeURIComponent(actionTypes)}`;
+                const fetchURL = `${url}/skipSegments/${hashPrefix}?categories=${FETCH_CATEGORIES}&actionTypes=${FETCH_ACTION_TYPES}`;
+
 
                 let res;
                 if (HAS_ABORT_CONTROLLER) {
