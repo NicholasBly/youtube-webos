@@ -32,16 +32,18 @@ export class ResolveCommandRegistry {
     command: Record<string, unknown>,
     extra?: unknown
   ) => {
-    console.group(`[${this.constructor.name}] Resolving`);
-    console.debug(`Command:`);
-    console.debug(command);
-    console.debug(`Extra:`);
-    console.debug(extra);
-    console.groupEnd();
+    if (window.__ytaf_debug__) {
+      console.group(`[${this.constructor.name}] Resolving`);
+      console.debug(`Command:`);
+      console.debug(command);
+      console.debug(`Extra:`);
+      console.debug(extra);
+      console.groupEnd();
+    }
 
-    for (const key of Object.keys(command)) {
-      if (this.#cmds.has(key)) {
-        return this.#cmds.get(key)!(this.#originalFn, command, extra);
+    for (const [key, hook] of this.#cmds) {
+      if (key in command) {
+        return hook(this.#originalFn, command, extra);
       }
     }
 
@@ -93,21 +95,34 @@ export class ResolveCommandRegistry {
     return null;
   }
 
+  private static readonly POLL_TIMEOUT_MS = 30_000;
+  private static readonly POLL_MAX_DELAY_MS = 1_000;
+
   private static async getHookTarget(): Promise<string> {
-    let hook = this.findHookTarget();
+    const immediate = this.findHookTarget();
+    if (immediate) return immediate;
 
-    if (hook) return hook;
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + this.POLL_TIMEOUT_MS;
+      let delay = 16;
 
-    return new Promise((resolve) => {
       const poll = () => {
-        hook = this.findHookTarget();
-        if (hook) {
-          resolve(hook);
-        } else {
-          setTimeout(poll, 0);
+        const hook = this.findHookTarget();
+        if (hook) return resolve(hook);
+
+        if (Date.now() >= deadline) {
+          return reject(
+            new Error(
+              `No resolveCommand hook target in window._yttv after ${this.POLL_TIMEOUT_MS}ms`
+            )
+          );
         }
+
+        delay = Math.min(delay * 2, this.POLL_MAX_DELAY_MS);
+        setTimeout(poll, delay);
       };
-      poll();
+
+      setTimeout(poll, delay);
     });
   }
 
@@ -133,4 +148,6 @@ export class ResolveCommandRegistry {
   }
 }
 
-ResolveCommandRegistry.getInstance();
+ResolveCommandRegistry.getInstance().catch((e) => {
+  console.warn('[app_api] resolveCommand hook unavailable:', e);
+});

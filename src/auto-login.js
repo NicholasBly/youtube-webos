@@ -1,5 +1,5 @@
 import { configRead, configAddChangeListener } from './config.js';
-import { SELECTORS, REMOTE_KEYS, isGuestMode, sendKey, extractLaunchParams, invalidateGuestModeCache } from './utils';
+import { SELECTORS, REMOTE_KEYS, isGuestMode, sendKey, invalidateGuestModeCache } from './utils';
 import './auto-login.css';
 
 const STORAGE_KEY = 'yt.leanback.default::recurring_actions';
@@ -85,12 +85,10 @@ function finalizeBypass() {
 
 export function attemptActiveBypass(force = false) {
     const isSelector = document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR);
-    
-    // const params = extractLaunchParams();
-    // const hasParams = params && Object.keys(params).length > 0;
 
+    // Note: launch-param gating was removed deliberately — we check for the
+    // account selector page on normal loads too, not just parameterised ones.
     if (!isSelector && !force) return;
-    // if (!hasParams && !force) return; Still checking for account selector page on normal loads too
     if (hasBypassed && !force) return;
 	
     console.info('[Auto Login] Active Bypass: Selector Detected! Executing sequence...');

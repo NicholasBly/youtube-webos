@@ -7,13 +7,16 @@ const DEBUG_EMOJI_DOM = false;
 
 const WRAPPED_EMOJI_RE = /\u200B([^\u200C]+)\u200C/; 
 const HAS_WRAPPED_EMOJI_RE = /\u200B[^\u200C]+\u200C/;
-const IMG_ALT_RE = /<img([^>]+)alt="([^"]+)"([^>]*)>/g;
-
 // Only process text nodes inside elements where emojis actually render
 const ALLOWED_EMOJI_TAGS = new Set([
   'YT-FORMATTED-STRING', 'YT-CORE-ATTRIBUTED-STRING', 'SPAN', 'DIV', 'H1', 'H2', 'H3'
 ]);
 
+// Cache emoji -> token list, not an HTML string. Tokens are plain data, so
+// rendering is createElement + createTextNode with no HTML parser in the loop:
+// nothing that arrived in a video title can become markup. The old path ran
+// twemoji output back through a regex and reassigned innerHTML, and the
+// \u200B..\u200C capture group is [^\u200C]+ — anything, not just emoji.
 const parsedTextCache = new Map();
 const MAX_CACHE_SIZE = 500;
 
@@ -28,6 +31,53 @@ const twemojiOptions = {
     return `https://cdnjs.cloudflare.com/ajax/libs/twemoji/16.0.1/72x72/${icon}.png`;
   }
 };
+
+/** @returns {Array<{text?: string, src?: string, alt?: string, cls?: string}>} */
+function tokenizeEmoji(cleanEmoji) {
+  const scratch = document.createElement('span');
+  scratch.textContent = cleanEmoji;       // textContent, never innerHTML
+  twemoji.parse(scratch, twemojiOptions); // element form: DOM APIs, no HTML
+
+  const tokens = [];
+  const kids = scratch.childNodes;
+  for (let i = 0; i < kids.length; i++) {
+    const n = kids[i];
+    if (n.nodeType === 1 && n.tagName === 'IMG') {
+      tokens.push({
+        src: n.getAttribute('src'),
+        alt: n.getAttribute('alt') || '',
+        cls: n.className || 'emoji'
+      });
+    } else if (n.nodeValue) {
+      tokens.push({ text: n.nodeValue });
+    }
+  }
+  return tokens;
+}
+
+function renderTokens(target, tokens) {
+  target.textContent = ''; // clears children without touching innerHTML
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t.text !== undefined) {
+      target.appendChild(document.createTextNode(t.text));
+      continue;
+    }
+
+    const img = document.createElement('img');
+    img.className = t.cls;
+    img.draggable = false;
+    img.src = t.src;
+    img.alt = t.alt;
+    target.appendChild(img);
+
+    // The hidden-text twin the old IMG_ALT_RE rewrite produced.
+    const hidden = document.createElement('span');
+    hidden.className = 'twemoji-hidden-text';
+    hidden.appendChild(document.createTextNode('\u200B' + t.alt + '\u200C'));
+    target.appendChild(hidden);
+  }
+}
 
 function queueTextNode(node) {
   const val = node.nodeValue;
@@ -72,44 +122,41 @@ function processTextNode(textNode) {
       nextNode = currentNode.splitText(emojiLength);
     }
     
-    let parsedHTML = parsedTextCache.get(cleanEmoji);
-    if (!parsedHTML) {
-      let twemojiHTML = twemoji.parse(cleanEmoji, twemojiOptions);
-
-      if (twemojiHTML !== cleanEmoji) {
-        parsedHTML = twemojiHTML.replace(IMG_ALT_RE, (_match, beforeAlt, altText, afterAlt) => {
-          const hiddenText = `<span class="twemoji-hidden-text">\u200B${altText}\u200C</span>`;
-          return `<img${beforeAlt}alt="${altText}"${afterAlt}>${hiddenText}`;
-        });
-        
-        parsedTextCache.set(cleanEmoji, parsedHTML);
-        if (parsedTextCache.size > MAX_CACHE_SIZE) {
-            // Trim oldest half rather than .clear() — Map iteration is insertion
-            // order, so dropping the first 250 keeps the most-recently-parsed
-            // emojis hot for the page the user is actually scrolling.
-            const keysIter = parsedTextCache.keys();
-            const trimCount = MAX_CACHE_SIZE >> 1;
-            for (let i = 0; i < trimCount; i++) {
-                parsedTextCache.delete(keysIter.next().value);
-            }
-        }
-      } else {
-        parsedHTML = cleanEmoji;
+    let tokens = parsedTextCache.get(cleanEmoji);
+    if (!tokens) {
+      tokens = tokenizeEmoji(cleanEmoji);
+      parsedTextCache.set(cleanEmoji, tokens);
+      if (parsedTextCache.size > MAX_CACHE_SIZE) {
+          // Trim oldest half rather than .clear() — Map iteration is insertion
+          // order, so dropping the first 250 keeps the most-recently-parsed
+          // emojis hot for the page the user is actually scrolling.
+          const keysIter = parsedTextCache.keys();
+          const trimCount = MAX_CACHE_SIZE >> 1;
+          for (let i = 0; i < trimCount; i++) {
+              parsedTextCache.delete(keysIter.next().value);
+          }
       }
     }
 
-    if (parsedHTML !== cleanEmoji) {
+    // "twemoji changed something" is now "at least one img token", replacing
+    // the old parsedHTML !== cleanEmoji string compare.
+    let hasEmojiImg = false;
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i].src !== undefined) { hasEmojiImg = true; break; }
+    }
+
+    if (hasEmojiImg) {
       currentNode.nodeValue = '';
 
       let existingSpan = nodeToSpan.get(currentNode);
 
       if (existingSpan && existingSpan.parentNode === parent) {
-        existingSpan.innerHTML = parsedHTML;
+        renderTokens(existingSpan, tokens);
         if (DEBUG_EMOJI_DOM) console.log('[Emoji-DOM-Debug] Replaced emoji in existing span.');
       } else {
         existingSpan = document.createElement('emoji-render');
         existingSpan.className = 'twemoji-injected';
-        existingSpan.innerHTML = parsedHTML;
+        renderTokens(existingSpan, tokens);
         
         parent.insertBefore(existingSpan, currentNode.nextSibling);
         nodeToSpan.set(currentNode, existingSpan);

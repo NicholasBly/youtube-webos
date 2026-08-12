@@ -3,6 +3,7 @@ import { configAddChangeListener, configRemoveChangeListener, segmentTypes, conf
 import { showNotification } from './notifications.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { isLegacyWebOS } from './webos-utils.js';
+import { getVideo, waitForChildAdd } from './utils.js';
 import './sponsorblock.css';
 
 const SPONSORBLOCK_CONFIG = {
@@ -35,6 +36,13 @@ const CHAIN_SKIP_CONSTANTS = {
     OVERLAP_TOLERANCE: 0.2,
     MIN_PLAYBACK_TIME: 0.1
 };
+
+const FETCH_CATEGORIES = encodeURIComponent(JSON.stringify([
+    'sponsor', 'intro', 'outro', 'interaction', 'selfpromo',
+    'musicofftopic', 'preview', 'chapter', 'poi_highlight',
+    'filler', 'hook'
+]));
+const FETCH_ACTION_TYPES = encodeURIComponent(JSON.stringify(['skip', 'mute']));
 
 const HAS_ABORT_CONTROLLER = typeof AbortController !== 'undefined';
 
@@ -92,6 +100,14 @@ class SponsorBlockHandler {
 
         this.lastOverlayHash = null;
 
+        this._skipWatchdogTimer = null;
+        this._videoWait = null;
+        this._attrObserver = null;
+        this._lastSyncSig = null;
+
+        this._observedRoot = null;
+        this._barRetryTimer = null;
+
         // Cached _getProgressBarAnchor() result, keyed on progressBar identity.
         this._anchorCache = null;
         this._anchorCacheBar = null;
@@ -102,62 +118,50 @@ class SponsorBlockHandler {
     }
 
     // ==========================================
-    // WebOS 3 DOM Helper Methods
+    // Progress-bar geometry
     // ==========================================
+    //
+    // Node#isConnected and Element#closest are guaranteed by polyfills.js
+    // (imported via utils.js), so the private _isNodeConnected/_getClosest
+    // fallbacks that used to live here have been removed.
 
-    _isNodeConnected(node) {
-        if (!node) return false;
-        return node.isConnected !== undefined ? node.isConnected : document.body.contains(node);
-    }
-
-    _getClosest(el, selector) {
-        if (!el || el.nodeType !== 1) return null;
-        if (el.closest) return el.closest(selector);
-        
-        const matches = el.matches || el.webkitMatchesSelector || el.mozMatchesSelector || el.msMatchesSelector;
-        let current = el;
-        while (current && current.nodeType === 1) {
-            if (matches && matches.call(current, selector)) return current;
-            current = current.parentNode;
-        }
-        return null;
-    }
-
-    // Returns where/how to inject the overlay.
-    // For ytlr-multi-markers-player-bar-renderer children, injection inside works fine.
-    // For the standard ytlr-progress-bar slider, YouTube's framework nukes foreign child
-    // nodes instantly — so we inject as a sibling of ytlr-progress-bar instead, positioned
-    // absolutely to cover the same visual area.
     _getProgressBarAnchor() {
         if (!this.progressBar) return { container: null, asSibling: false };
 
-        // Cached per progress-bar identity. handleTimeUpdate calls this every
-        // 500ms; the answer only changes when the bar element is replaced,
-        // which checkForProgressBar handles by clearing the cache.
-        if (this._anchorCache && this._anchorCacheBar === this.progressBar) {
+        // FIX (replay): validate the cached container too, not just the bar
+        // identity. The TV UI can reuse the same progress-bar node while
+        // rebuilding the wrapper around it, which left us holding a detached
+        // ancestor and inserting the overlay into an orphaned subtree —
+        // built, inserted, invisible.
+        if (this._anchorCache &&
+            this._anchorCacheBar === this.progressBar &&
+            (!this._anchorCache.container || this._anchorCache.container.isConnected)) {
             return this._anchorCache;
         }
 
+        // ALWAYS inject as a sibling. YouTube's virtual DOM destroys foreign children.
+        //
+        // These MUST stay as two chained calls. closest('a, b') returns the
+        // NEAREST ancestor matching either selector — and ytlr-progress-bar
+        // sits inside ytlr-multi-markers-player-bar-renderer, so a union
+        // selector would silently invert this priority order and anchor the
+        // overlay to the wrong element.
+        const ytPB = this.progressBar.closest('ytlr-multi-markers-player-bar-renderer') ||
+                     this.progressBar.closest('ytlr-progress-bar') ||
+                     this.progressBar;
+                     
+        const parent = ytPB.parentNode;
         let result;
-        // Multi-markers bar: direct child injection is fine, keep existing behaviour.
-        if (this._getClosest(this.progressBar, 'ytlr-multi-markers-player-bar-renderer')) {
+
+        if (!parent) {
             result = { container: this.progressBar, asSibling: false };
         } else {
-            // Standard progress bar: walk up to ytlr-progress-bar and inject after it.
-            const ytPB = this._getClosest(this.progressBar, 'ytlr-progress-bar') || this.progressBar;
-            const parent = ytPB.parentNode;
-            if (!parent) {
-                result = { container: this.progressBar, asSibling: false };
-            } else {
-                // The parent becomes our positioning context. The computed-style
-                // read now happens once per bar instead of on every 500ms sync.
-                const ps = window.getComputedStyle(parent);
-                if (ps.position === 'static') parent.style.setProperty('position', 'relative', 'important');
-                if (ps.display === 'inline' || ps.display === '') {
-                    parent.style.setProperty('display', 'block', 'important');
-                }
-                result = { container: ytPB, asSibling: true };
+            const ps = window.getComputedStyle(parent);
+            if (ps.position === 'static') parent.style.setProperty('position', 'relative', 'important');
+            if (ps.display === 'inline' || ps.display === '') {
+                parent.style.setProperty('display', 'block', 'important');
             }
+            result = { container: ytPB, asSibling: true };
         }
 
         this._anchorCache = result;
@@ -190,21 +194,30 @@ class SponsorBlockHandler {
             ? this.progressBar
             : ytPB;
 
-        const ov = this.overlay;
-        function set(prop, val) { ov.style.setProperty(prop, val, 'important'); }
-
-        // Sync visibility to mirror YouTube's UI state. classList.contains and
-        // the inline-style read are both recalc-free, unlike the previous
-        // getComputedStyle(ytPB).opacity poll; the inline check still catches UI
-        // builds that hide via inline opacity without the zylon-hidden class.
+        // PERF — READS first, in one batch. The old order was read → write
+        // top/left → read offsetWidth → write → read offsetHeight → write,
+        // which forced up to 3 synchronous reflows per sync on webOS.
+        // classList.contains and the inline-style read are recalc-free, unlike
+        // the earlier getComputedStyle(ytPB).opacity poll; the inline check
+        // still catches UI builds that hide via inline opacity without the
+        // zylon-hidden class.
         const isHidden = ytPB.classList.contains('zylon-hidden') || ytPB.style.opacity === '0';
-        set('opacity', isHidden ? '0' : '1');
-
+        const width  = trackEl.offsetWidth;
+        const height = trackEl.offsetHeight;
         const pos = this._offsetRelativeTo(trackEl, parent);
-        set('top',    pos.top  + 'px');
-        set('left',   pos.left + 'px');
-        set('width',  trackEl.offsetWidth  + 'px');
-        set('height', trackEl.offsetHeight + 'px');
+
+        // PERF — skip the style writes entirely when nothing changed (the
+        // common case for the 500ms timeupdate sync and mutation-driven syncs).
+        const sig = (isHidden ? 'h' : 'v') + '_' + pos.top + '_' + pos.left + '_' + width + '_' + height;
+        if (sig === this._lastSyncSig) return;
+        this._lastSyncSig = sig;
+
+        const st = this.overlay.style;
+        st.setProperty('opacity', isHidden ? '0' : '1', 'important');
+        st.setProperty('top',    pos.top  + 'px', 'important');
+        st.setProperty('left',   pos.left + 'px', 'important');
+        st.setProperty('width',  width  + 'px', 'important');
+        st.setProperty('height', height + 'px', 'important');
     }
 
     // ==========================================
@@ -401,7 +414,7 @@ class SponsorBlockHandler {
 
         const firstSeg = segments[firstSegIdx];
         let finalSeekTime = firstSeg.end;
-        const chainParts = [`${firstSeg.category}[${firstSeg.start.toFixed(1)}s-${firstSeg.end.toFixed(1)}s]`];
+        const chainSegs = [firstSeg];
 
         for (let i = firstSegIdx + 1; i < segments.length; i++) {
             const current = segments[i];
@@ -419,16 +432,20 @@ class SponsorBlockHandler {
             if (gapToNext > CHAIN_SKIP_CONSTANTS.OVERLAP_TOLERANCE) break;
 
             if (current.end > finalSeekTime) {
-                chainParts.push(`${current.category}[${current.start.toFixed(1)}s-${current.end.toFixed(1)}s]`);
+                chainSegs.push(current);
                 finalSeekTime = current.end;
             }
         }
 
-        if (chainParts.length === 1 && finalSeekTime - firstSeg.start < 1) return null;
+        if (chainSegs.length === 1 && finalSeekTime - firstSeg.start < 1) return null;
 
+        // PERF: build the description only once the chain is known-valid —
+        // this path runs on every 'seeked' event.
         return {
             endTime: finalSeekTime,
-            chainDescription: chainParts.join(' → ')
+            chainDescription: chainSegs
+                .map(s => `${s.category}[${s.start.toFixed(1)}s-${s.end.toFixed(1)}s]`)
+                .join(' → ')
         };
     }
 
@@ -465,12 +482,15 @@ class SponsorBlockHandler {
         this.lastSkipTime = chain.endTime;
         this.hasPerformedChainSkip = true;
         
-        // Mark all auto_skip segments that were successfully bypassed as skipped
-        this.skipSegments.forEach(seg => {
-            if (seg.mode === 'auto_skip' && seg.start < chain.endTime && seg.end <= chain.endTime + 0.1) {
+        // Fast chronologically-sorted short-circuit skip mapping
+        for (let i = 0; i < this.skipSegments.length; i++) {
+            const seg = this.skipSegments[i];
+            if (seg.start > chain.endTime) break; 
+            
+           if (seg.mode === 'auto_skip' && seg.start < chain.endTime && seg.end <= chain.endTime + 0.1) {
                 this.skippedSegmentIndices.add(seg.originalIndex);
             }
-        });
+        }
 
         this.requestAF(() => {
             const categories = chain.chainDescription.split(' → ')
@@ -516,7 +536,7 @@ class SponsorBlockHandler {
             this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
 
             // Use 'this.video' if start() already found it, or re-query
-            const video = this.video || document.querySelector('video');
+            const video = this.video || getVideo();
             if (video && video.duration && !isNaN(video.duration)) {
                 this.processSegments(video.duration);
             }
@@ -552,21 +572,49 @@ class SponsorBlockHandler {
     }
 
     start() {
-        this.video = document.querySelector('video');
-        if (!this.video) return;
+        // getVideo() caches with an isConnected guard and invalidates on page
+        // change; waitForChildAdd() is the shared MutationObserver-based waiter.
+        // Together they replace a 4Hz polling timer AND fire the instant the
+        // element mounts instead of up to 250ms late.
+        this.video = getVideo();
+        if (!this.video) {
+            if (!this._videoWait) {
+                this._videoWait = waitForChildAdd(
+                    document.body, (n) => n instanceof HTMLVideoElement, false, null, 10000
+                ).then(() => {
+                    this._videoWait = null;
+                    if (!this.isDestroyed) this.start();
+                }).catch(() => { this._videoWait = null; });
+            }
+            return;
+        }
 
         // CSS is loaded via static import (./sponsorblock.css) — no runtime
         // <style> injection needed.
         this.resetSegmentTracking();
 
+        if (this.boundStateChange) {
+            // start() can now be re-entered (late video mount / element rebind);
+            // never double-register the window listeners.
+            window.removeEventListener('yt-player-state-change', this.boundStateChange);
+        }
         this.boundStateChange = (e) => {
             const state = e.detail.state;
             
             if (state === 0) { // ENDED
                 this.hasPerformedChainSkip = false;
                 this.toggleTimeListener(false);
+                // FIX (replay): the end screen is about to tear down the player
+                // chrome. Invalidate the cached drawing context so a replay
+                // rebuilds from scratch — on replay every input to the overlay
+                // hash is identical, so a stale hash would suppress the redraw.
+                this.lastOverlayHash = null;
+                this._anchorCache = null;
+                this._anchorCacheBar = null;
+                this._lastSyncSig = null;
             } else if (state === 1) { // PLAYING
                 // Check for progress bar existence on play in case UI was destroyed (e.g. after side-panel interaction)
+                this._ensureObserverAlive();
                 this.checkForProgressBar();
                 // Re-evaluate tracking (re-enables time listener if needed)
                 this.resetSegmentTracking();
@@ -581,6 +629,7 @@ class SponsorBlockHandler {
         window.addEventListener('yt-player-state-change', this.boundStateChange);
 
         // Resize forces an immediate overlay re-sync (bypassing the timeupdate throttle).
+        if (this.boundResize) window.removeEventListener('resize', this.boundResize);
         this.boundResize = () => {
             this._lastSyncTime = 0;
             if (this.overlay && this.progressBar && !this.isDestroyed) {
@@ -592,6 +641,7 @@ class SponsorBlockHandler {
 
         this.addEvent(this.video, 'seeked', () => {
             if (this.isDestroyed) return;
+            this._clearSkipWatchdog();
             this.stopHighFreqLoop();
             this.hasPerformedChainSkip = false;
             this.executeChainSkip(this.video);
@@ -614,6 +664,15 @@ class SponsorBlockHandler {
             }
         });
 
+        this.addEvent(this.video, 'playing', () => {
+            if (this.isDestroyed) return;
+            this.resetSegmentTracking();
+        });
+        this.addEvent(this.video, 'pause', () => {
+            this.stopHighFreqLoop();
+            this.toggleTimeListener(false);
+        });
+
         if (this.video.duration) this.processSegments(this.video.duration);
 
         this.observePlayerUI();
@@ -625,44 +684,48 @@ class SponsorBlockHandler {
             this.domObserver.disconnect();
             this.observers.delete(this.domObserver);
         }
+        if (this._attrObserver) {
+            // observePlayerUI can re-run via start() (late mount / video rebind);
+            // drop the old attribute observer so it doesn't leak.
+            this._attrObserver.disconnect();
+            this.observers.delete(this._attrObserver);
+            this._attrObserver = null;
+        }
 
         const OPTIMAL_SELECTOR = 'ytlr-progress-bar';
 
         const startOptimizedObserver = (targetNode) => {
             // Observe parent to catch if the bar itself is destroyed/recreated by the framework
             const observeTarget = targetNode.parentNode || targetNode;
+            this._observedRoot = observeTarget;
             this.log('info', 'Attaching optimized observer to:', observeTarget.tagName);
             
-            this.domObserver = new MutationObserver((mutations) => {
+            const scheduleCheck = () => {
                 if (this.isProcessing || this.isDestroyed) return;
+                this.isProcessing = true;
+                this.requestAF(() => {
+                    this.checkForProgressBar();
+                    this.isProcessing = false;
+                });
+            };
 
-                let shouldCheck = false;
-                for (const m of mutations) {
-                    if (m.type === 'attributes') {
-                        if (m.target === this.progressBar) shouldCheck = true;
-                    } else if (m.type === 'childList') {
-                        // If observing parent, childList changes mean the bar might be replaced
-                        shouldCheck = true;
-                    }
-                    if (shouldCheck) break;
-                }
-
-                if (shouldCheck) {
-                    this.isProcessing = true;
-                    this.requestAF(() => {
-                        this.checkForProgressBar();
-                        this.isProcessing = false;
-                    });
-                }
-            });
-
-            this.domObserver.observe(observeTarget, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                attributeFilter: ['class', 'style', 'hidden']
-            });
+            // PERF: split into two narrow observers. The old single observer
+            // used attributes + subtree:true, so YouTube's per-frame style
+            // writes on playhead/buffered-range descendants generated mutation
+            // records (and a callback invocation) every animation frame just to
+            // be filtered out again in JS. Semantics are unchanged:
+            // 1) childList-only subtree observer — catches the bar being
+            //    destroyed/recreated by the framework.
+            this.domObserver = new MutationObserver(scheduleCheck);
+            this.domObserver.observe(observeTarget, { childList: true, subtree: true });
             this.observers.add(this.domObserver);
+
+            // 2) attribute observer pinned to the tracked bar element itself
+            //    (no subtree) — matches the old `m.target === this.progressBar`
+            //    filter exactly; re-targeted in checkForProgressBar whenever
+            //    the bar is (re)acquired.
+            this._attrObserver = new MutationObserver(scheduleCheck);
+            this.observers.add(this._attrObserver);
             this.checkForProgressBar();
         };
 
@@ -687,17 +750,87 @@ class SponsorBlockHandler {
         }
     }
 
+    _rebindVideo() {
+        const old = this.video;
+        if (old) {
+            if (this.isTimeListenerActive) {
+                old.removeEventListener('timeupdate', this.boundTimeUpdate);
+                this.isTimeListenerActive = false;
+            }
+            const events = this.listeners.get(old);
+            if (events) {
+                events.forEach((handler, type) => old.removeEventListener(type, handler));
+                this.listeners.delete(old);
+            }
+        }
+        this.video = null;
+        this.log('info', 'Video element was replaced — rebinding');
+        this.start();
+    }
+
+    // FIX (replay): domObserver is attached to a specific container captured at
+    // setup time. When a video reaches the end, the TV UI tears down the whole
+    // player chrome — including that container — and rebuilds it when playback
+    // restarts. The observer survives but is now watching a DETACHED node, so
+    // it never sees the new progress bar appear and checkForProgressBar() is
+    // never called again. Loading a different video always worked because that
+    // fires a hashchange -> full re-init -> fresh observers; replay fires no
+    // hashchange, so nothing ever re-armed them.
+    _ensureObserverAlive() {
+        if (this.isDestroyed) return;
+        if (this._observedRoot && this._observedRoot.isConnected) return;
+        this.log('info', 'Observer root was destroyed — re-attaching');
+        this.observePlayerUI();
+    }
+
+    // Bounded poll for the progress bar. checkForProgressBar() used to give up
+    // silently when the bar was missing (`if (target)` with no else), relying
+    // entirely on the observer to call it back — which is exactly what fails on
+    // replay, since the chrome is rebuilt asynchronously AFTER playback starts.
+    _scheduleBarRetry() {
+        if (this._barRetryTimer || this.isDestroyed) return;
+        let attempts = 0;
+        this._barRetryTimer = setInterval(() => {
+            if (this.isDestroyed || ++attempts > 40) { // ~10s ceiling
+                clearInterval(this._barRetryTimer);
+                this._barRetryTimer = null;
+                return;
+            }
+            if (this.overlay && this.overlay.isConnected) {
+                clearInterval(this._barRetryTimer);
+                this._barRetryTimer = null;
+                return;
+            }
+            this._ensureObserverAlive();
+            this.checkForProgressBar();
+        }, 250);
+    }
+
     checkForProgressBar() {
         if (this.isDestroyed) return;
 
-        // Don't re-query if we have a valid progress bar in DOM
-        if (this.overlay && this.overlay.parentNode && this._isNodeConnected(this.overlay.parentNode)) {
+        if (this.video && !this.video.isConnected) {
+            this._rebindVideo();
+        }
+
+        this._ensureObserverAlive();
+
+        // Check if both the overlay AND the tracked progress bar are ACTUALLY in the DOM
+        if (this.overlay && this.overlay.isConnected &&
+            this.progressBar && this.progressBar.isConnected) {
+            
             // Ensure the sibling overlay syncs visibility when attributes mutate
             const { container, asSibling } = this._getProgressBarAnchor();
             if (asSibling && container) {
                 this._syncOverlayPosition(container);
             }
             return;
+        }
+
+        // If the overlay was orphaned or wiped, clear it so drawOverlay creates a fresh one
+        if (this.overlay && !this.overlay.isConnected) {
+            this.overlay.remove();
+            this.overlay = null;
         }
 
         let target = null;
@@ -733,19 +866,51 @@ class SponsorBlockHandler {
             // recomputes the positioning context for the new element.
             this._anchorCache = null;
             this._anchorCacheBar = null;
+
+            if (this._attrObserver) {
+                this._attrObserver.disconnect();
+                this._attrObserver.observe(target, {
+                    attributes: true,
+                    attributeFilter: ['class', 'style', 'hidden']
+                });
+            }
+            
             const style = window.getComputedStyle(target);
-            // For multi-markers bars these tweaks ensure segments are visible inside.
-            // For ytlr-progress-bar sliders the overlay is injected as a sibling
-            // (see _getProgressBarAnchor), so the position tweak here is a no-op for
-            // that case — but keep overflow:visible so storyboard/playhead are unclipped.
             if (style.position === 'static') target.style.position = 'relative';
             if (style.overflow !== 'visible') target.style.setProperty('overflow', 'visible', 'important');
+            
             this.drawOverlay();
+
+            if (this._barRetryTimer && this.overlay && this.overlay.isConnected) {
+                clearInterval(this._barRetryTimer);
+                this._barRetryTimer = null;
+            }
+        } else {
+            // FIX (replay): bar not in the DOM yet — keep looking instead of
+            // giving up silently and waiting for an observer callback that may
+            // never come.
+            this.progressBar = null;
+            this._anchorCache = null;
+            this._anchorCacheBar = null;
+            this._scheduleBarRetry();
         }
     }
 
     drawOverlay() {
-        if (!this.progressBar || !this.segments.length || this.isDestroyed) return;
+        if (this.isDestroyed || !this.segments.length) return;
+
+        // FIX (replay): a detached progressBar is still truthy. Drawing against
+        // it inserted the overlay into an orphaned subtree — which is why the
+        // segments existed but never showed, and flashed briefly when a seek
+        // caused the stale node to be touched.
+        if (!this.progressBar || !this.progressBar.isConnected) {
+            this.progressBar = null;
+            this._anchorCache = null;
+            this._anchorCacheBar = null;
+            this.lastOverlayHash = null;
+            this._scheduleBarRetry();
+            return;
+        }
 
         const duration = this.video ? this.video.duration : 0;
         if (!duration || isNaN(duration)) return;
@@ -756,7 +921,7 @@ class SponsorBlockHandler {
         let colorSig = '';
         for (const k in segmentTypes) colorSig += config[`${k}Color`] || '';
         const overlayHash = `${duration}_${this.activeCategories.size}_${this.segments.length}_${config.sbMode_highlight}_${colorSig}`;
-        if (overlayHash === this.lastOverlayHash && this.overlay && this._isNodeConnected(this.overlay)) {
+        if (overlayHash === this.lastOverlayHash && this.overlay && this.overlay.isConnected) {
             return;
         }
         this.lastOverlayHash = overlayHash;
@@ -778,8 +943,10 @@ class SponsorBlockHandler {
                 if (!mode || mode === 'disable') continue;
             }
 
-            const [start, end] = segment.segment;
-            const div = document.createElement('div');
+            // Destructuring avoidance for speed, plus batch styling execution
+            const start = segment.segment[0];
+            const end = segment.segment[1];
+           const div = document.createElement('div');
 
             const colorKey = isHighlight ? 'poi_highlightColor' : `${segment.category}Color`;
             const color = config[colorKey] || segmentTypes[segment.category]?.color || '#00d400';
@@ -790,14 +957,18 @@ class SponsorBlockHandler {
             div.style.top = '0';
 
             const left = (start / duration) * 100;
+            const zIndex = isHighlight ? '2001' : '2000';
+
             div.className = isHighlight ? 'previewbar highlight' : 'previewbar';
             div.style.left = `${left}%`;
             div.style.zIndex = isHighlight ? '2001' : '2000';
 
-            if (!isHighlight) {
-                const width = ((end - start) / duration) * 100;
-                div.style.width = `${width}%`;
-                div.style.opacity = segmentTypes[segment.category]?.opacity || '0.7';
+            if (isHighlight) {
+                div.style.cssText = `background-color: ${color}; position: absolute; height: 100%; top: 0; left: ${left}%; z-index: ${zIndex};`;
+            } else {
+               const width = ((end - start) / duration) * 100;
+                const opacity = segmentTypes[segment.category]?.opacity || '0.7';
+                div.style.cssText = `background-color: ${color}; position: absolute; height: 100%; top: 0; left: ${left}%; width: ${width}%; opacity: ${opacity}; z-index: ${zIndex};`;
             }
 
             fragment.appendChild(div);
@@ -805,6 +976,7 @@ class SponsorBlockHandler {
 
         this.overlay = document.createElement('div');
         this.overlay.id = 'previewbar';
+        this._lastSyncSig = null; // fresh element — force the next geometry sync
         this.overlay.appendChild(fragment);
 
         const { container, asSibling } = this._getProgressBarAnchor();
@@ -820,6 +992,14 @@ class SponsorBlockHandler {
             this._syncOverlayPosition(container);
         } else {
             container.appendChild(this.overlay);
+        }
+
+        // FIX (replay): if the insert landed in an orphaned subtree, drop the
+        // hash so the next pass rebuilds rather than early-returning on an
+        // unchanged hash (identical video = identical hash on replay).
+        if (!this.overlay.isConnected) {
+            this.lastOverlayHash = null;
+            this._scheduleBarRetry();
         }
     }
 
@@ -840,6 +1020,29 @@ class SponsorBlockHandler {
 
         if (changed) {
             this.rebuildSkipSegments();
+        }
+    }
+
+    // Safety net: if the media pipeline swallows the 'seeked' event for a
+    // programmatic skip (buffer stalls / near-EOS quirks on webOS), clear the
+    // isSkipping latch so the timeupdate pipeline keeps working. Mirrors the
+    // 500ms fallback handleBlueButton already had, with headroom for slow seeks.
+    _armSkipWatchdog() {
+        if (this._skipWatchdogTimer) clearTimeout(this._skipWatchdogTimer);
+        this._skipWatchdogTimer = setTimeout(() => {
+            this._skipWatchdogTimer = null;
+            if (!this.isDestroyed && this.isSkipping) {
+                this.log('warn', "'seeked' never fired after skip — watchdog reset");
+                this.isSkipping = false;
+                this.resetSegmentTracking();
+            }
+        }, 1500);
+    }
+
+    _clearSkipWatchdog() {
+        if (this._skipWatchdogTimer) {
+            clearTimeout(this._skipWatchdogTimer);
+            this._skipWatchdogTimer = null;
         }
     }
 
@@ -931,17 +1134,15 @@ class SponsorBlockHandler {
         const expectedSeg = this.skipSegments[this.nextSegmentIndex];
 
         if (expectedSeg && currentTime >= expectedSeg.start) {
-            // Check if we are inside it, OR if we overshot it due to WebOS frame drops (< 1.5s gap)
-            if (currentTime < expectedSeg.end || (currentTime - expectedSeg.end) < 1.5) {
-                segmentIdx = this.nextSegmentIndex;
-            } else {
-                // Fallback to Binary Search
-                segmentIdx = this.findSegmentAtTime(currentTime);
-            }
-        } else {
-            // Fallback to Binary Search
-            segmentIdx = this.findSegmentAtTime(currentTime);
-        }
+			// Only apply the 1.5s frame drop gap to auto_skip segments
+			const isAutoSkip = expectedSeg.mode === 'auto_skip';
+			if (currentTime < expectedSeg.end || (isAutoSkip && (currentTime - expectedSeg.end) < 1.5)) {
+				segmentIdx = this.nextSegmentIndex;
+			} else {
+				// Fallback to Binary Search
+				segmentIdx = this.findSegmentAtTime(currentTime);
+			}
+		}
 
         if (segmentIdx === -1) {
             // We aren't in a segment. Since resetSegmentTracking was correct, 
@@ -1029,7 +1230,6 @@ class SponsorBlockHandler {
             return;
         }
 
-        this.isSkipping = true;
         this.lastSkipTime = currentTime;
         this.lastSkippedSegmentIndex = segmentIdx;
         
@@ -1042,8 +1242,11 @@ class SponsorBlockHandler {
             }
         }
 
-        // Prevents a micro-rewind if a frame drop caused us to overshoot the jump target
-        this.video.currentTime = Math.max(jumpTarget, currentTime);
+        if (jumpTarget > currentTime + 0.05) {
+            this.isSkipping = true;
+            this._armSkipWatchdog();
+            this.video.currentTime = jumpTarget;
+        }
 
         if (!this.isLegacyWebOSVer) {
             const timeRemaining = this.video.duration - this.video.currentTime;
@@ -1159,11 +1362,8 @@ class SponsorBlockHandler {
             if (this.isDestroyed) return null;
 
             try {
-                // Do NOT send videoID with the hash-prefix endpoint — that
-                // defeats the k-anonymity the prefix hashing provides. We
-                // already select our video client-side via
-                // data.find(x => x.videoID === this.videoID) in init().
-                const fetchURL = `${url}/skipSegments/${hashPrefix}?categories=${encodeURIComponent(categories)}&actionTypes=${encodeURIComponent(actionTypes)}`;
+                const fetchURL = `${url}/skipSegments/${hashPrefix}?categories=${FETCH_CATEGORIES}&actionTypes=${FETCH_ACTION_TYPES}`;
+
 
                 let res;
                 if (HAS_ABORT_CONTROLLER) {
@@ -1238,6 +1438,13 @@ class SponsorBlockHandler {
         }
 
         this.clearManualNotification();
+        this._clearSkipWatchdog();
+        if (this._barRetryTimer) {
+            clearInterval(this._barRetryTimer);
+            this._barRetryTimer = null;
+        }
+        this._observedRoot = null;
+        this._videoWait = null;
 
         sponsorBlockUI.togglePopup(false);
         sponsorBlockUI.updateSegments([]);

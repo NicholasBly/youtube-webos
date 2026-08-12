@@ -4,11 +4,13 @@ import { configAddChangeListener, configRead, configWrite, configGetDesc, segmen
 import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
-// import { initYouTubeFixes } from './yt-fixes.js';
 import { initVideoQuality } from './video-quality.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { sendKey, REMOTE_KEYS, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo } from './utils.js';
+import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo } from './utils.js';
 import { initAdblock, destroyAdblock, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
+import logoBlueUrl from './icons/logo-blue.png';
+import logoRedUrl from './icons/logo-red.png';
+import logoDarkUrl from './icons/logo-dark.png';
 import { getWebOSVersion } from './webos-utils.js';
 import { showNotification as _showNotification, setNotificationOled, setNotificationTheme } from './notifications.js';
 
@@ -49,6 +51,42 @@ const cachedSelectors = {
     save: null
 };
 
+// Candidate lists hoisted to module scope so they aren't rebuilt per keypress.
+const COMMENT_SELECTORS = [
+    'yt-button-container[aria-label="Comments"]',
+    'yt-icon.qHxFAf.ieYpu.nGYLgf',
+    'yt-icon.qHxFAf.ieYpu.wFZPnb',
+    'ytlr-button-renderer[idomkey="item-1"] ytlr-button',
+    '[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button',
+    'ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button',
+    'ytlr-button-renderer[idomkey="1"] yt-button-container'
+];
+const SAVE_SELECTORS = [
+    'yt-button-container[aria-label="Save"]',
+    'yt-icon.p9sZp'
+];
+const DESCRIPTION_FALLBACK_SELECTOR = 'ytlr-button-renderer yt-formatted-string.XGffTd.OqGroe';
+
+// "Try the cached selector, else walk the candidate list, else cache the
+// winner" — was hand-rolled three times with subtly different fallback
+// behaviour. If a cached selector stops matching we now always fall through to
+// the full walk instead of returning null.
+function resolveCached(cacheKey, selectors) {
+    const cached = cachedSelectors[cacheKey];
+    if (cached) {
+        const hit = document.querySelector(cached);
+        if (hit) return hit;
+    }
+    for (let i = 0; i < selectors.length; i++) {
+        const el = document.querySelector(selectors[i]);
+        if (el) {
+            cachedSelectors[cacheKey] = selectors[i];
+            return el;
+        }
+    }
+    return null;
+}
+
 window.addEventListener('ytaf-page-update', (e) => {
     if (e.detail.isWatch) {
         cachedSelectors.comments = null;
@@ -84,25 +122,9 @@ shortcutKeys.forEach(key => {
     configAddChangeListener(`shortcut_key_${key}`, () => updateShortcutCache(key));
 });
 
-// --- Polyfills & Helpers ---
-
-if (!Element.prototype.matches) {
-    Element.prototype.matches = 
-        Element.prototype.webkitMatchesSelector || 
-        Element.prototype.mozMatchesSelector || 
-        Element.prototype.msMatchesSelector || 
-        Element.prototype.oMatchesSelector;
-}
-if (!Element.prototype.closest) {
-  Element.prototype.closest = function(s) {
-    let el = this;
-    do {
-      if (Element.prototype.matches.call(el, s)) return el;
-      el = el.parentElement || el.parentNode;
-    } while (el !== null && el.nodeType === 1);
-    return null;
-  };
-}
+// --- Helpers ---
+// Element#matches / Element#closest polyfills now live in polyfills.js,
+// imported via utils.js so every module gets them regardless of import order.
 
 const simulateBack = () => { console.log('[Shortcut] Simulating Back/Escape...'); sendKey(REMOTE_KEYS.BACK); };
 
@@ -126,40 +148,29 @@ const ARROW_KEY_CODE = {
   [REMOTE_KEYS.DOWN.code]: 'down' 
 };
 
-const colorCodeMap = new Map([
-    [403, 'red'], [166, 'red'], 
-    [404, 'green'], [172, 'green'], 
-    [405, 'yellow'], [170, 'yellow'], 
-    [406, 'blue'], [167, 'blue'], [191, 'blue']
-]);
-const getKeyColor = (charCode) => colorCodeMap.get(charCode) || null;
+// Built from REMOTE_KEYS in utils.js — one source of truth for color codes
+// and their per-remote alternates.
+const getKeyColor = (charCode) => COLOR_CODE_MAP.get(charCode) || null;
 
 // --- DOM Utility Functions ---
 
 const createElement = (tag, props = {}, ...children) => {
   const el = document.createElement(tag);
   
-  for (const key in props) {
-      if (Object.prototype.hasOwnProperty.call(props, key)) {
-          const val = props[key];
-          if (key === 'style' && typeof val === 'object') {
-              for (const styleKey in val) {
-                  if (Object.prototype.hasOwnProperty.call(val, styleKey)) {
-                      el.style[styleKey] = val[styleKey];
-                  }
-              }
+  for (const [key, val] of Object.entries(props)) {
+      if (key === 'style' && typeof val === 'object') {
+          for (const [styleKey, styleVal] of Object.entries(val)) {
+              el.style[styleKey] = styleVal;
           }
-          else if (key === 'class') el.className = val;
-          else if (key === 'events' && typeof val === 'object') {
-              for (const evt in val) {
-                  if (Object.prototype.hasOwnProperty.call(val, evt)) {
-                      el.addEventListener(evt, val[evt]);
-                  }
-              }
-          }
-          else if (key === 'text') el.textContent = val;
-          else el[key] = val;
       }
+      else if (key === 'class') el.className = val;
+      else if (key === 'events' && typeof val === 'object') {
+          for (const [evt, handler] of Object.entries(val)) {
+              el.addEventListener(evt, handler);
+          }
+      }
+      else if (key === 'text') el.textContent = val;
+      else el[key] = val;
   }
 
   for (let i = 0; i < children.length; i++) {
@@ -272,7 +283,7 @@ function createSegmentControl(key) {
           }
       });
       
-      configAddChangeListener(colorKey, (evt) => { colorInput.value = evt.detail.newValue; window.sponsorblock?.buildOverlay(); });
+      configAddChangeListener(colorKey, (evt) => { colorInput.value = evt.detail.newValue; window.sponsorblock?.drawOverlay(); });
       extraElements = createElement('div', { style: { display: 'flex', marginLeft: '10px' } }, resetButton, colorInput);
   }
 
@@ -340,7 +351,7 @@ function createOptionsPanel() {
     class: 'ytaf-tab-menu',
     events: {
       mouseleave: () => {
-        const activeTabBtn = elmContainer.querySelector('.ytaf-tab-btn.active');
+        const activeTabBtn = tabBtns[activePage];
         if (activeTabBtn && document.activeElement && document.activeElement.classList.contains('ytaf-tab-btn')) {
             activeTabBtn.focus();
         }
@@ -417,7 +428,7 @@ function createOptionsPanel() {
 
         if (dir === 'up' && preFocus !== postFocus) {
             if (preFocus.closest('.ytaf-settings-page') && postFocus.classList.contains('ytaf-tab-btn')) {
-                const activeTabBtn = elmContainer.querySelector('.ytaf-tab-btn.active');
+                const activeTabBtn = tabBtns[activePage];
                 if (activeTabBtn) activeTabBtn.focus();
             }
         }
@@ -454,16 +465,16 @@ function createOptionsPanel() {
       evt.preventDefault(); 
       evt.stopPropagation(); 
       configWrite('uiTheme', configRead('uiTheme') === 'blue-force-field' ? 'classic-red' : 'blue-force-field'); 
-      const activeTab = elmContainer.querySelector('.ytaf-tab-btn.active');
+      const activeTab = tabBtns[activePage];
       if (activeTab) activeTab.focus();
   };
   const createLogo = (src, cls) => createElement('img', { src, alt: 'Logo', class: `ytaf-logo ${cls}`, title: 'Click to switch theme', style: cls !== 'logo-blue' ? { display: 'none' } : {}, events: { click: toggleTheme }});
   
   const elmHeading = createElement('h1', {},
     createElement('span', { text: 'YouTube Extended' }),
-    createLogo('https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/NB%20Logo-gigapixel.png', 'logo-blue'),
-    createLogo('https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/NB%20Logo-gigapixel2.png', 'logo-red'),
-    createLogo('https://raw.githubusercontent.com/NicholasBly/youtube-webos/refs/heads/main/src/icons/NB%20Logo-gigapixel4.png', 'logo-dark')
+    createLogo(logoBlueUrl, 'logo-blue'),
+    createLogo(logoRedUrl, 'logo-red'),
+    createLogo(logoDarkUrl, 'logo-dark')
   );
   elmContainer.appendChild(elmHeading);
   elmContainer.appendChild(tabMenu);
@@ -486,10 +497,13 @@ function createOptionsPanel() {
 
   // Dependency Management
   const setState = (el, enabled) => { if (!el) return; const input = el.querySelector('input'); if (input) { input.disabled = !enabled; el.style.opacity = enabled ? '1' : '0.5'; }};
+
+  // Declared after the conditional elGuestPrompts assignment above.
+  // setState already no-ops on null, so no filtering needed.
+  const adBlockDependents = [elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant, elGuestPrompts];
   const updateDependencyState = () => {
-    const isAdBlockOn = configRead('enableAdBlock');
-    if (!isAdBlockOn) { [elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant, elGuestPrompts].forEach(el => { setState(el, false); }); return; }
-	[elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant, elGuestPrompts].forEach(el => { setState(el, true); });
+    const enabled = configRead('enableAdBlock');
+    adBlockDependents.forEach(el => setState(el, enabled));
   };
   
   elAdBlock.querySelector('input').addEventListener('change', updateDependencyState);
@@ -607,7 +621,7 @@ document.addEventListener('focus', (e) => {
     e.preventDefault();
     if (lastSafeFocus && lastSafeFocus.isConnected) lastSafeFocus.focus();
     else {
-      const firstVisibleInput = Array.from(optionsPanel.querySelectorAll('input, .shortcut-control-row, .ytaf-tab-btn')).find(el => el.offsetParent !== null && !el.disabled);
+      const firstVisibleInput = optionsPanel.querySelector('.ytaf-tab-btn.active, .ytaf-settings-page[style*="block"] input:not([disabled]), .ytaf-settings-page[style*="block"] .shortcut-control-row');
       if (firstVisibleInput) firstVisibleInput.focus();
       else optionsPanel.focus();
     }
@@ -658,17 +672,18 @@ async function skipChapter(direction = 'next') {
     return;
   }
 
-  // Single-pass calculation O(N)
   const totalDuration = video.duration;
   const currentTime = video.currentTime;
-  let accumulatedWidth = 0;
   let totalWidth = 0;
+  const chapters = [];
 
-  // 1. Calculate total width first
+  // 1. Single DOM pass: extract valid chapters and calculate total width
   for (let i = 0; i < chapterEls.length; i++) {
       const el = chapterEls[i];
       if (el.getAttribute('idomkey')?.startsWith('chapter-')) {
-          totalWidth += parseFloat(el.style.width || '0');
+          const width = parseFloat(el.style.width || '0');
+          totalWidth += width;
+          chapters.push(width);
       }
   }
 
@@ -677,13 +692,11 @@ async function skipChapter(direction = 'next') {
   let targetTime = -1;
   let currentChapterStart = 0;
   let prevChapterStart = 0;
+  let accumulatedWidth = 0;
 
-  // 2. Find target
-  for (let i = 0; i < chapterEls.length; i++) {
-      const el = chapterEls[i];
-      if (!el.getAttribute('idomkey')?.startsWith('chapter-')) continue;
-
-      const width = parseFloat(el.style.width || '0');
+  // 2. Find target using cached values
+  for (let i = 0; i < chapters.length; i++) {
+      const width = chapters[i];
       const startTimestamp = (accumulatedWidth / totalWidth) * totalDuration;
       accumulatedWidth += width;
 
@@ -821,37 +834,12 @@ function toggleSubtitlesLogic(player) {
 }
 
 function toggleCommentsLogic() {
-    let target = null;
-    if (cachedSelectors.comments) {
-        target = document.querySelector(cachedSelectors.comments);
-    }
-
-    if (!target) {
-        const queryList = [
-            'yt-button-container[aria-label="Comments"]',
-            'yt-icon.qHxFAf.ieYpu.nGYLgf',
-            'yt-icon.qHxFAf.ieYpu.wFZPnb',
-            'ytlr-button-renderer[idomkey="item-1"] ytlr-button',
-            '[idomkey="TRANSPORT_CONTROLS_BUTTON_TYPE_COMMENTS"] ytlr-button',
-            'ytlr-redux-connect-ytlr-like-button-renderer + ytlr-button-renderer ytlr-button',
-            'ytlr-button-renderer[idomkey="1"] yt-button-container'
-        ];
-
-        for (let i = 0; i < queryList.length; i++) {
-            target = document.querySelector(queryList[i]);
-            if (target) {
-                cachedSelectors.comments = queryList[i];
-                break;
-            }
-        }
-    }
-
+    const target = resolveCached('comments', COMMENT_SELECTORS);
     let commBtn = target ? target.closest('yt-button-container, ytlr-button') : null;
     let isLiveChat = false;
 
     if (!commBtn) {
-          const chatTarget = document.querySelector('ytlr-live-chat-toggle-button yt-button-container') ||
-                             document.querySelector('yt-button-container[aria-label="Live chat"]');
+          const chatTarget = document.querySelector('ytlr-live-chat-toggle-button yt-button-container, yt-button-container[aria-label="Live chat"]');
           if (chatTarget) {
               commBtn = chatTarget;
               isLiveChat = true;
@@ -883,19 +871,24 @@ function toggleDescriptionLogic() {
         target = cachedEl ? cachedEl.closest('yt-button-container') : null;
     }
 
+    // Text-matching pass can't be expressed as a selector, so it stays bespoke.
+    // The querySelectorAll result is iterated directly rather than materialised
+    // into an array first.
     if (!target) {
-        let descText = Array.from(document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe'))
-            .find(el => el.textContent.trim() === 'Description');
-        
-        if (descText) {
-            target = descText.closest('yt-button-container');
-        } else {
-            const fallbackSelector = 'ytlr-button-renderer yt-formatted-string.XGffTd.OqGroe';
-            const genericTextBtn = document.querySelector(fallbackSelector);
-            if (genericTextBtn) {
-                target = genericTextBtn.closest('yt-button-container');
-                cachedSelectors.description = fallbackSelector;
+        const candidates = document.querySelectorAll('yt-formatted-string.XGffTd.OqGroe');
+        for (let i = 0; i < candidates.length; i++) {
+            if (candidates[i].textContent.trim() === 'Description') {
+                target = candidates[i].closest('yt-button-container');
+                break;
             }
+        }
+    }
+
+    if (!target) {
+        const genericTextBtn = document.querySelector(DESCRIPTION_FALLBACK_SELECTOR);
+        if (genericTextBtn) {
+            target = genericTextBtn.closest('yt-button-container');
+            cachedSelectors.description = DESCRIPTION_FALLBACK_SELECTOR;
         }
     }
 
@@ -915,31 +908,11 @@ function toggleDescriptionLogic() {
 }
 
 function saveToPlaylistLogic() {
-    let target = null;
+    const el = resolveCached('save', SAVE_SELECTORS);
+    // Structural check rather than comparing against the selector string, so
+    // this keeps working if the selector text ever changes.
+    const target = el && el.tagName === 'YT-ICON' ? el.closest('yt-button-container') : el;
 
-    if (cachedSelectors.save) {
-        const el = document.querySelector(cachedSelectors.save);
-        if (el) {
-            target = cachedSelectors.save === 'yt-icon.p9sZp' ? el.closest('yt-button-container') : el;
-        }
-    }
-
-    if (!target) {
-        const queryList = [
-            'yt-button-container[aria-label="Save"]',
-            'yt-icon.p9sZp'
-        ];
-
-        for (let i = 0; i < queryList.length; i++) {
-            const el = document.querySelector(queryList[i]);
-            if (el) {
-                target = queryList[i] === 'yt-icon.p9sZp' ? el.closest('yt-button-container') : el;
-                cachedSelectors.save = queryList[i];
-                break;
-            }
-        }
-    }
-      
     const panel = document.querySelector('.AmQJbe');
       
     if (panel) simulateBack();
@@ -1001,36 +974,44 @@ function playPauseLogic(video) {
         video.play(); 
         notify('Playing');
     } else {
-        const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
-        const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
-        const isPanelVisible = isEngagementPanelVisible();
-        const watchOverlay = document.querySelector('.webOs-watch');
-        let needsHide = false;
-        if(!isControlsVisible) {
-            needsHide = true;
-            document.body.classList.add('ytaf-hide-controls');
-            if (watchOverlay) watchOverlay.style.opacity = '0';
-        }
-        
         video.pause();
         notify('Paused');
-
-        // Dismiss controls
-        if(needsHide && !isShortsPage() && !isPanelVisible) {
-            shortcutDebounceTime = 650;
         
-            if (document.activeElement && typeof document.activeElement.blur === 'function') {
-                document.activeElement.blur();
-            }
+        const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
+        const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
+        
+        // Only run hiding logic if the controls are not already visible
+        if (!isControlsVisible) {
+            const watchOverlay = document.querySelector('.webOs-watch');
             
-            setTimeout(() => sendKey(REMOTE_KEYS.BACK, document.activeElement), 250); // don't press back button if we're on shorts or we leave the page
-        }
-        
-        if(needsHide && !isShortsPage()) {
-            setTimeout(() => {
-              document.body.classList.remove('ytaf-hide-controls');
-              if (watchOverlay) watchOverlay.style.opacity = '';
-            }, 750);
+            document.body.classList.add('ytaf-hide-controls');
+            if (watchOverlay) watchOverlay.style.opacity = '0';
+            
+            // We only process the dismissal timers if we aren't on a Shorts page
+            if (!isShortsPage()) {
+                
+                // Lazy-check the engagement panel visibility
+                if (!isEngagementPanelVisible()) {
+                    shortcutDebounceTime = 650;
+                
+                    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                        document.activeElement.blur();
+                    }
+                    
+                    setTimeout(() => {
+                        const currentControls = document.querySelector('yt-focus-container[idomkey="controls"]');
+                        if (currentControls && currentControls.classList.contains('MFDzfe--focused')) {
+                            sendKey(REMOTE_KEYS.BACK, document.activeElement);
+                        }
+                    }, 250);
+                }
+                
+                // Cleanup CSS and overlay
+                setTimeout(() => {
+                  document.body.classList.remove('ytaf-hide-controls');
+                  if (watchOverlay) watchOverlay.style.opacity = '';
+                }, 750);
+            }
         }
     }
 }
@@ -1076,7 +1057,6 @@ function handleShortcutAction(action) {
   if (!isWatchPage() && !isShortsPage()) return;
 
   const video = getVideo();
-  const player = document.getElementById(SELECTORS.PLAYER_ID) || document.querySelector('.html5-video-player');
   if (!video) return;
 
   switch (action) {
@@ -1096,7 +1076,12 @@ function handleShortcutAction(action) {
         playPauseLogic(video);
         break;
     case 'toggle_subs':
-        toggleSubtitlesLogic(player);
+        // Resolved here rather than above the switch: only this one action
+        // needs it, and the .html5-video-player fallback is a full-document
+        // class-selector walk that was being paid on every shortcut keypress.
+        toggleSubtitlesLogic(
+            document.getElementById(SELECTORS.PLAYER_ID) || document.querySelector('.html5-video-player')
+        );
         break;
     case 'toggle_comments':
         toggleCommentsLogic();
@@ -1132,17 +1117,20 @@ function handleShortcutAction(action) {
 
 const eventHandler = (evt) => {
   if (evt.repeat) return;
-  // console.info('Key event:', evt.type, evt.charCode, evt.keyCode);
 
-  // Identify Key (Name or Color)
-  let keyName = null;
   const code = evt.keyCode || evt.charCode; 
   const keyColor = getKeyColor(code);
+  
+  // FAST FAIL: If typing in a native text box, let standard characters (like 0-9) pass through instantly
+  if (!keyColor && (evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA')) {
+      return true;
+  }
+
+  // Identify Key (Name)
+  let keyName = keyColor;
   const isNumberKey = evt.type === 'keydown' && evt.keyCode >= 48 && evt.keyCode <= 57;
   
-  if (keyColor) {
-      keyName = keyColor;
-  } else if (isNumberKey) {
+  if (isNumberKey) {
       if (isSearchPage()) return true; 
       keyName = String(evt.keyCode - 48);
   }
@@ -1156,11 +1144,6 @@ const eventHandler = (evt) => {
   // Scope & Context Checking (O(1) Efficiency)
   const isVideoPage = isWatchPage() || isShortsPage();
   const actionScope = ACTION_SCOPES[action] || 'VIDEO'; // Default unknown actions to VIDEO for safety
-  
-  // If the user is typing in a native text box, let standard characters (like 0-9) pass through
-  if (!keyColor && (evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA')) {
-      return true;
-  }
 
   // Release the key instantly if the action's required scope doesn't match the page
   if (actionScope === 'VIDEO' && !isVideoPage) return true;
@@ -1299,15 +1282,15 @@ function initGlobalStyles() {
     document.head.appendChild(style);
 
     const syncClass = (cls, key) => document.documentElement.classList.toggle(cls, !!configRead(key));
-    const apply = () => {
-        syncClass('ytaf-hide-logo', 'hideLogo');
-        syncClass('ytaf-fix-titles', 'fixMultilineTitles');
-        syncClass('ytaf-remove-borders', 'removeBlackBorders');
+    const CLASS_KEYS = {
+        'ytaf-hide-logo': 'hideLogo',
+        'ytaf-fix-titles': 'fixMultilineTitles',
+        'ytaf-remove-borders': 'removeBlackBorders'
     };
-    apply();
-    configAddChangeListener('hideLogo', () => syncClass('ytaf-hide-logo', 'hideLogo'));
-    configAddChangeListener('fixMultilineTitles', () => syncClass('ytaf-fix-titles', 'fixMultilineTitles'));
-    configAddChangeListener('removeBlackBorders', () => syncClass('ytaf-remove-borders', 'removeBlackBorders'));
+    for (const [cls, key] of Object.entries(CLASS_KEYS)) {
+        syncClass(cls, key);
+        configAddChangeListener(key, () => syncClass(cls, key));
+    }
 }
 
 function updateLogoState() {

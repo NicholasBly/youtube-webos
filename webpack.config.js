@@ -36,8 +36,9 @@ const makeConfig = (env) => {
           // Strip local polyfills
           [path.resolve(__dirname, 'src/spatial-navigation-polyfill.js')]: path.resolve(__dirname, 'src/spatial-navigation.modern.js'),
           [path.resolve(__dirname, 'src/domrect-polyfill.js')]: false,
-		  [path.resolve(__dirname, 'src/emoji-font.js')]: false,
-		  [path.resolve(__dirname, 'src/emoji-font.css')]: false
+          [path.resolve(__dirname, 'src/emoji-font.js')]: false,
+		  [path.resolve(__dirname, 'src/hooks/buffer-limit.js')]: false,
+          [path.resolve(__dirname, 'src/emoji-font.css')]: false
         } : {}
       },
       module: {
@@ -78,6 +79,10 @@ const makeConfig = (env) => {
             resolve: {
               fullySpecified: false
             }
+          },
+          {
+            test: /\.(png|svg)$/i,
+            type: 'asset/inline'
           },
           {
             test: /\.css$/i,
@@ -124,7 +129,7 @@ const makeConfig = (env) => {
               },
               compress: {
                 drop_console: false,
-                drop_debugger: true,
+                 drop_debugger: true,
                 passes: 4,
                 arrows: isModern,
                 ecma: isModern ? 2020 : 5,

@@ -1,6 +1,6 @@
 {
   "id": "youtube.leanback.v4",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "vendor": "webosbrew.org",
   "type": "web",
   "main": "index.html",

@@ -55,7 +55,7 @@ function makeConfig(api) {
         '@babel/preset-env',
         {
           bugfixes: true,
-		  targets: { browsers: ['chrome 38'] },
+		  targets: {},
 		  modules: false,
 		  useBuiltIns: false
         }

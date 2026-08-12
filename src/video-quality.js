@@ -260,13 +260,20 @@ function interceptAndUpgradeQuality(videoId) {
 }
 
 function handleStateChange(state) {
-  if (isDestroyed || !player || !_shouldForce) return;
-  
+  if (isDestroyed || !player) return;
+
   const actualState = (state && state.data !== undefined) ? state.data : state;
-  
-  window.dispatchEvent(new CustomEvent('yt-player-state-change', { 
+
+  // Publish FIRST. This event is shared infrastructure: watch.js (clock
+  // visibility) and sponsorblock.js (overlay cache invalidation, observer
+  // re-arm, chain-skip re-arm, high-freq loop teardown) both subscribe to it.
+  // It must not be suppressed by an unrelated quality setting.
+  window.dispatchEvent(new CustomEvent('yt-player-state-change', {
     detail: { state: actualState, videoId: lastVideoId }
   }));
+
+  // Everything below is quality forcing only.
+  if (!_shouldForce) return;
 
   try {
     const videoData = player.getVideoData?.();
@@ -291,32 +298,17 @@ function handleStateChange(state) {
     }
     
     switch (actualState) {
+        // Identical handling: setQualityOnPlayer() already short-circuits when
+        // the quality is maxed (returning upgraded:false, making
+        // notifyIfUpgraded a no-op), so both cases collapse to one path.
         case STATE_UNSTARTED:
-            if (isNewVideo) {
-                const availableQualities = player.getAvailableQualityLevels?.();
-                if (availableQualities?.length > 0) {
-                    const result = setQualityOnPlayer();
-                    notifyIfUpgraded(result);
-                    qualitySetForVideo.add(videoId);
-                }
-            }
-            break;
-            
         case STATE_BUFFERING:
-            if (isNewVideo) {
-                const availableQualities = player.getAvailableQualityLevels?.();
-                if (availableQualities?.length > 0) {
-                   if (!isQualityAlreadyMax()) {
-                       const result = setQualityOnPlayer();
-                       notifyIfUpgraded(result);
-                       qualitySetForVideo.add(videoId);
-                   } else {
-                       qualitySetForVideo.add(videoId);
-                   }
-                }
+            if (isNewVideo && player.getAvailableQualityLevels?.()?.length > 0) {
+                if (!isQualityAlreadyMax()) notifyIfUpgraded(setQualityOnPlayer());
+                qualitySetForVideo.add(videoId);
             }
             break;
-            
+
         case STATE_PLAYING:
             if (!isQualityAlreadyMax()) {
                 interceptAndUpgradeQuality(videoId);
@@ -410,9 +402,7 @@ export function initVideoQuality() {
     if (isDestroyed) return true;
     
     const p = document.getElementById(SELECTORS.PLAYER_ID);
-    const isConnected = p && (p.isConnected ?? document.contains(p));
-    
-    if (!p || !p.setPlaybackQualityRange || !isConnected) {
+    if (!p || !p.setPlaybackQualityRange || !p.isConnected) {
       return false;
     }
     
@@ -496,10 +486,12 @@ function handleNavigation(event) {
 
 function setupListeners() {
     window.addEventListener('yt-navigate-finish', handleNavigation);
-    
-    window.addEventListener('ytaf-page-update', () => {
-        handleNavigation({ detail: { pageType: isWatchPage() ? 'watch' : 'other' }});
-    });
+
+    // handleNavigation already falls back to isWatchPage() when the event
+    // carries no pageType — and ytaf-page-update never does. The old wrapper
+    // allocated a closure + object literal per navigation to compute a value
+    // that was then ignored.
+    window.addEventListener('ytaf-page-update', handleNavigation);
     
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => handleNavigation());

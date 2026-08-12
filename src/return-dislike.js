@@ -151,40 +151,66 @@ class ReturnYouTubeDislike {
   }
 
   // --- Observer Logic ---
+
+  // Shared reset for a panel that has gone away. Was duplicated verbatim
+  // between the poll body and handleFocusIn.
+  resetPanelState() {
+    this.panelElement = null;
+    this.isPanelFocused = false;
+    this.menuItemsCache = [];
+    this.menuItemsMap.clear();
+    this.lastFocusedElement = null;
+    this.focusedIndex = -1;
+    this.cachedMode = null;
+  }
+
+  stopBodyPoll() {
+    if (this.bodyPollInterval) {
+      clearInterval(this.bodyPollInterval);
+      this.bodyPollInterval = null;
+    }
+  }
+
+  // BOUNDED poll. This used to run at 2Hz for the entire lifetime of every
+  // watch page, doing a compound querySelector on each tick — the single
+  // largest idle cost on older hardware.
+  //
+  // It is only a safety net: the panel is also detected by handleFocusIn
+  // (focus is the only reliable signal for the role="dialog" description
+  // panel) and by ui.js calling observeBodyForPanel() after the description
+  // shortcut fires. So we give it ~10s per arm and then go idle until
+  // something re-arms it.
   observeBodyForPanel() {
     if (!this.active) return;
-    
-    // Clear existing interval or legacy observer if any
-    if (this.bodyPollInterval) clearInterval(this.bodyPollInterval);
+
+    this.stopBodyPoll();
     if (this.bodyObserver) { this.bodyObserver.disconnect(); this.bodyObserver = null; }
 
+    // Immediate check first — usually resolves without ever arming the timer.
+    const existingPanel = document.querySelector(SELECTORS.panel);
+    if (existingPanel) {
+      this.setupPanel(existingPanel);
+      return;
+    }
+
+    let attempts = 0;
     this.bodyPollInterval = setInterval(() => {
-      if (!this.active) {
-          clearInterval(this.bodyPollInterval);
-          return;
+      if (!this.active || ++attempts > 20) { // ~10s ceiling
+        this.stopBodyPoll();
+        return;
       }
 
       if (this.panelElement) {
-        if (!this.panelElement.isConnected) {
-          this.panelElement = null;
-          this.isPanelFocused = false;
-          this.menuItemsCache = [];
-          this.menuItemsMap.clear();
-          this.lastFocusedElement = null;
-          this.focusedIndex = -1;
-          this.cachedMode = null;
-        } else {
-          return; // Panel is active and connected
-        }
+        if (this.panelElement.isConnected) return; // Panel is active and connected
+        this.resetPanelState();
       }
 
       const panel = document.querySelector(SELECTORS.panel);
-      if (panel) this.setupPanel(panel);
+      if (panel) {
+        this.setupPanel(panel);
+        this.stopBodyPoll();
+      }
     }, 500);
-
-    // Immediate check on load
-    const existingPanel = document.querySelector(SELECTORS.panel);
-    if (existingPanel) this.setupPanel(existingPanel);
   }
 
   setupPanel(panel) {
@@ -304,13 +330,10 @@ class ReturnYouTubeDislike {
       // leave it stranded), drop the reference so the focusin fallback
       // below can rebind to whatever's actually in the DOM now.
       if (this.panelElement && !this.panelElement.isConnected) {
-          this.panelElement = null;
-          this.isPanelFocused = false;
-          this.menuItemsCache = [];
-          this.menuItemsMap.clear();
-          this.lastFocusedElement = null;
-          this.focusedIndex = -1;
-          this.cachedMode = null;
+          this.resetPanelState();
+          // Re-arm the bounded poll: the panel we were tracking is gone, so a
+          // replacement may be mounting right now.
+          this.observeBodyForPanel();
       }
 
       // Primary panel detection path: focus crossed into something matching
@@ -601,8 +624,7 @@ class ReturnYouTubeDislike {
     this.observers.forEach(obs => obs.disconnect());
     this.observers.clear();
     
-    // Clean up the new interval
-    if (this.bodyPollInterval) clearInterval(this.bodyPollInterval);
+    this.stopBodyPoll();
     if (this.bodyMutationRaf) cancelAnimationFrame(this.bodyMutationRaf);
     
     if (this.navigationActive) {
@@ -642,7 +664,7 @@ if (typeof window !== 'undefined') {
   const handleHashChange = () => {
     const urlStr = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
     if (!urlStr) { cleanup(); return; }
-    const url = new URL(urlStr, 'http://dummy.com');
+    const url = new URL(urlStr, location.href);
     if (url.pathname !== '/watch' || !url.searchParams.get('v')) { cleanup(); return; }
 
     if (!window.returnYouTubeDislike || window.returnYouTubeDislike.videoID !== url.searchParams.get('v')) {

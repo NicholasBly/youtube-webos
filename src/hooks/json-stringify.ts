@@ -1,33 +1,54 @@
-function isPrimitive(
-  value: unknown
-): value is string | number | boolean | null | undefined | symbol | bigint {
-  return Object(value) !== value;
-}
-
 const originalStringify = JSON.stringify;
+const hasOwn = Object.prototype.hasOwnProperty;
+const MAX_DEPTH = 6;
 
-type FunctionReplacer = (this: any, key: string, value: any) => any;
-type WhitelistReplacer = (string | number)[] | null;
-
-function stringify(
-  value: unknown,
-  replacer?: FunctionReplacer | WhitelistReplacer,
-  space?: string | number
-): string {
-  if (!isPrimitive(value)) {
-    value = structuredClone(value);
-    // TODO: add below to a dump-level logger
-    // console.debug('JSON.stringify', value, replacer, space);
-
-    // @ts-expect-error TS doesn't allow optional chaining on `unknown`. See: https://github.com/microsoft/TypeScript/issues/37700
-    const ctx = value?.playbackContext?.contentPlaybackContext as unknown;
-    if (!isPrimitive(ctx)) {
-      (ctx as Record<string, unknown>).isInlinePlaybackNoAd = true;
-      console.info(`[JSON.stringify] Set isInlinePlaybackNoAd`);
+function findCtx(root: any): any {
+  const queue: any[] = [root, 0];
+  let i = 0;
+  while (i < queue.length) {
+    const node = queue[i++];
+    const depth = queue[i++];
+    if (!node || typeof node !== 'object' || depth > MAX_DEPTH) continue;
+    const pc = node.playbackContext;
+    if (pc && typeof pc === 'object' && pc.contentPlaybackContext) {
+      return pc.contentPlaybackContext;
+    }
+    for (const k in node) {
+      const v = node[k];
+      if (v && typeof v === 'object') queue.push(v, depth + 1);
     }
   }
+  return null;
+}
 
-  return originalStringify(value, replacer as any, space);
+function stringify(value: any, replacer?: any, space?: any): string {
+  let ctx = null;
+  let had = false;
+  let prev;
+  try {
+    if (value !== null && typeof value === 'object') {
+      ctx = findCtx(value);
+      if (ctx && ctx.isInlinePlaybackNoAd !== true) {
+        had = hasOwn.call(ctx, 'isInlinePlaybackNoAd');
+        prev = ctx.isInlinePlaybackNoAd;
+        ctx.isInlinePlaybackNoAd = true;
+		console.info(`[JSON.stringify] Set isInlinePlaybackNoAd`);
+      } else {
+        ctx = null;
+      }
+    }
+  } catch (e) {
+    ctx = null; // our logic must never break YouTube's serialization
+  }
+
+  try {
+    return originalStringify(value, replacer, space);
+  } finally {
+    if (ctx) {
+      if (had) ctx.isInlinePlaybackNoAd = prev;
+      else delete ctx.isInlinePlaybackNoAd;
+    }
+  }
 }
 
 JSON.stringify = stringify;

@@ -4,6 +4,99 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.2] - 2026/08/12
+
+## Fixes
+
+### General
++ Check current visibility of controls before sending back button - https://github.com/NicholasBly/youtube-webos/issues/159
++ Fixed player state events relying on the Force Max Quality setting (clock and SponsorBlock overlay missed visibility updates)
++ Fixed seek-burst notifications not updating their text when the same message was already on screen
++ Optimized some files not using shared helpers, enabling less resource/object usage
++ Twemoji 16.0.1 is used for emoji fix on webOS 3/4, but version 17.0.2 is imported in package.json. Matched both to 16.0.1
+
+### SponsorBlock
++ Fixed manual skip segments causing notification buildup - https://github.com/NicholasBly/youtube-webos/issues/151
++ Additional fixes to the skip logic — https://github.com/NicholasBly/youtube-webos/issues/141
+  + Race condition: a same-position or backwards seek could leave `isSkipping` stuck `true` until manually seeking again.
+  + Race condition: the `yt-player-state-change` "playing" event could fire while `video.paused` was still `true`, so the `timeupdate` listener would fail to re-attach and segments would stop getting skipped for the rest of the video
++ Fixed sponsorblock colored overlays sometimes disappearing and not reattaching after exiting a sponsorblock segment
++ Fixed SponsorBlock colored segment overlay not functioning properly if the video was restarted from the endscreen
+
+### ui.js / SponsorBlock-UI.js
++ Fixed a typo in ui.js - window.sponsorblock?.buildOverlay() -> window.sponsorblock?.drawOverlay()
++ UI.js, SponsorBlock-UI.js: Load icons locally
+
+### Babel
++ Reverted targets: {} so that it properly reads the .browserslistrc file
+
+### index.ts
++ Fixed resolveCommand allocating an array on every call
+
+### adblock.js
++ Converted RESPONSE_NEEDLE_RE to a simple data.x check as it eliminates a regex scan when the data is already parsed at this point
++ Fixed some listener removals
+
+### utils.js
++ handleLaunch uses a string prefix match for the YouTube URL, which is unsafe, as https://www.youtube.com.attacker.example/x can pass this check
+
+### CustomEventTarget
++ Removed unused code
+
+### return-dislike.js
++ Removed dummy.com placeholder domain
+
+## Changes
+
+### General
++ (Debugging) Moved console log for "Resolving" to debug flag, preventing pile up of console logs
++ Consolidated all small polyfills into polyfills.js - previously some overlap between userScript.js, utils.js, ui.js, and SponsorBlock.js.
++ Removed ~350 lines of dead and duplicated code. Shared helpers for element lookups, caching and polyfills now live in one place instead of being reimplemented per file
+
+### SponsorBlock
++ Moved sponsorblock colored segment overlays to a sibling of the progress bar, preventing the app from constantly removing the css rules and redrawing
+
+### json-stringify.js
++ Use a breadth-first search with max depth of 6
++ Remove deep cloning (structuredClone) in favor of Boolean mutation (NoAd false to true)
++ Remove fallback clone method which can corrupt non-serializable data. New version operates on the original object itself, so it doesn't require a clone
+
+## Optimizations
+
+### SponsorBlock.js
++ Reduced MutationObserver coverage. Replaced the single attributes + subtree: true observer with two narrower observers: a childList-only subtree observer (detects the progress bar being destroyed/recreated) and an attribute observer pinned directly to the tracked bar element. Eliminates per-animation-frame mutation callbacks caused by YouTube's own style writes on playhead/buffer descendants.
++ Eliminated redundant reflows in overlay positioning (_syncOverlayPosition) when nothing changed.
++ Build segment description strings (toFixed) only when a skipchain is identified instead of anticipating the next skip to be a chainskip (also on every seeked event).
++ SponsorBlock binds to the video as soon as it appears instead of polling for it, so segments are ready sooner
++ Compile constant arrays for 'categories' and 'actionTypes' once globally instead of on every video load
++ Convert div.style.backgroundColor, div.style.width, div.style.top to div.style.cssText
++ executeChainSkip: break loop whenever we find the next segment past the current time instead of looping through the entire array
+
+### Return YouTube Dislike
++ Return Dislike no longer polls in the background for the entire video. It now checks for ~10 seconds after load and when you interact with the panel, then goes idle - noticeably less CPU during playback on older TVs
+
+### Shorts Screensaver
++ Fixed a slow memory leak in the Shorts screensaver keep-alive that grew for as long as Shorts stayed open
+
+### ui.js
++ Shortcut buttons respond faster - a redundant full-page element search was running on every keypress
++ Refactor play/pause logic to eliminate unnecessary code execution
++ Event hander: move input/text area fast-fail check towards the top of the function to eliminate unnecessary code from running
++ Skip Chapter: Eliminate double looping of chapter calculation
++ Toggle comments: Replace || operator with a comma to do one query selector DOM pass instead of two
++ Eliminate redundant traversals in green button menu logic
+
+## Added
+
+### buffer-limit.js
++ Testing fix for https://github.com/NicholasBly/youtube-webos/issues/157 where memory on older TVs is very scarce
++ Added buffer-limit.js to src/hooks
++ Caps video buffer playback to 30 seconds on webOS 3 and webOS 4 by trimming playback range behind playhead
++ Omitted buffer-limit.js from modern build
+
+### Thumbnail Quality
++ Added support for Max Thumbnail Quality on search pages
+
 ## [0.8.1] - 2026/07/20
 
 ## Fixes

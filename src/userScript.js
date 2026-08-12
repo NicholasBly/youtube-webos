@@ -1,19 +1,10 @@
+// import './perf_mon.js'; // Uncomment for testing
+
 import 'whatwg-fetch';
+import './polyfills.js';
 import './domrect-polyfill';
 import './adblock.js';
 import './hooks/json-stringify';
-
-if (typeof window !== 'undefined' && typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
-    Object.defineProperty(Node.prototype, 'isConnected', {
-        get: function() {
-            return document.contains(this);
-        },
-        configurable: true,
-        enumerable: true
-    });
-}
-
-//import './perf_mon.js'; // Uncomment for testing
 
 import { handleLaunch, SELECTORS, extractLaunchParams } from './utils';
 import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';
@@ -28,6 +19,14 @@ import './screensaver-fix.js';
 import './yt-fixes.css';
 import './watch.js';
 import './lang-settings-fix';
+
+import { initBufferLimit } from './hooks/buffer-limit.js';
+import { getWebOSVersion } from './webos-utils.js';
+
+if (typeof initBufferLimit === 'function' && getWebOSVersion() <= 4) {
+	initBufferLimit();
+	console.info("Initiating buffer limit");
+}
 
 (function oneTimeParamsCheck() {
     const params = extractLaunchParams();

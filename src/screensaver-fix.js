@@ -3,27 +3,10 @@
  * the entire screen, the screensaver can kick in.
  */
 
-import { waitForChildAdd, sendKey, SELECTORS, REMOTE_KEYS, isWatchPage, isShortsPage } from './utils';
+import { waitForChildAdd, sendKey, SELECTORS, REMOTE_KEYS, isWatchPage, isShortsPage, getVideo } from './utils';
 
-/**
- * document.querySelector but waits for the Element to be added if it doesn't already exist.
- */
-export async function requireElement(cssSelectors, expected) {
-  const alreadyPresent = document.querySelector(cssSelectors);
-  if (alreadyPresent) {
-    if (!(alreadyPresent instanceof expected)) throw new Error();
-    return alreadyPresent;
-  }
-
-  const result = await waitForChildAdd(
-    document.body,
-    (node) => node instanceof Element && node.matches(cssSelectors),
-    true
-  );
-
-  if (!(result instanceof expected)) throw new Error();
-  return result;
-}
+// Set to true when debugging the keep-alive / player-sizing logic.
+const DEBUG = false;
 
 function isPlayerHidden(video) {
   return video.style.display == 'none' || (video.style.top && video.style.top.indexOf('-') === 0);
@@ -38,43 +21,34 @@ const STATE_PLAYING = 1;
 function setShortsKeepAlive(enable) {
   if (enable) {
     if (shortsKeepAliveTimer) return;
-    console.info('[ScreensaverFix] Shorts detected: Starting keep-alive (Yellow Key / 30s)');
+    DEBUG && console.info('[ScreensaverFix] Shorts detected: Starting keep-alive (Yellow Key / 30s)');
     shortsKeepAliveTimer = window.setInterval(() => {
         // Check player state to ensure we only keep awake if actually playing
         const player = document.getElementById(SELECTORS.PLAYER_ID);
         const isPlaying = player && typeof player.getPlayerState === 'function' && player.getPlayerState() === STATE_PLAYING;
+        if (!isPlaying) return;
 
-        if (isPlaying) {
-            console.log("[ScreensaverFix] Video is playing, preparing to send yellow presses");
-            
-            let target = null;
-            let source = '';
-            if (document.activeElement && document.activeElement !== document.body) {
-                target = document.activeElement;
-                source = 'document.activeElement (Focus)';
-            }
-            if (!target) {
-                target = document.body;
-                source = 'document.body (Fallback)';
-            }
+        // NOTE: never log the element itself here. console.log(msg, node) makes
+        // the console retain a strong reference to a DOM node that may since
+        // have been removed — a slow leak firing every 30s for the whole
+        // Shorts session on a runtime with no way to drain the buffer.
+        DEBUG && console.log('[ScreensaverFix] keep-alive tick');
 
-            console.log(`[ScreensaverFix] Target picked: ${source}`, target);
-            console.log(`[ScreensaverFix] Sending YELLOW (${REMOTE_KEYS.YELLOW.code})`);
+        // activeElement is already document.body when nothing else has focus,
+        // and null only pre-load — so this is equivalent to the old 8-line pick.
+        const target = document.activeElement || document.body;
 
-            sendKey(REMOTE_KEYS.YELLOW, target);
+        sendKey(REMOTE_KEYS.YELLOW, target);
 
-            if (shortsBufferTimer) clearTimeout(shortsBufferTimer);
-
-            shortsBufferTimer = window.setTimeout(() => {
-                console.log(`[ScreensaverFix] Sending YELLOW_ALT (${REMOTE_KEYS.YELLOW_ALT.code})`);
-                sendKey(REMOTE_KEYS.YELLOW_ALT, target);
-                shortsBufferTimer = null;
-            }, 250);
-        }
+        if (shortsBufferTimer) clearTimeout(shortsBufferTimer);
+        shortsBufferTimer = window.setTimeout(() => {
+            sendKey(REMOTE_KEYS.YELLOW_ALT, target);
+            shortsBufferTimer = null;
+        }, 250);
     }, 30000);
   } else {
     if (shortsKeepAliveTimer) {
-      console.info('[ScreensaverFix] Stopping Shorts keep-alive');
+      DEBUG && console.info('[ScreensaverFix] Stopping Shorts keep-alive');
       clearInterval(shortsKeepAliveTimer);
       shortsKeepAliveTimer = null;
     }
@@ -96,13 +70,9 @@ const playerCtrlObs = new MutationObserver((mutations) => {
   }
 
   const video = mutations[0]?.target;
-  if (!video || !(video instanceof HTMLVideoElement)) {
-    console.warn('[ScreensaverFix] Invalid video element in mutation, disconnecting observer');
-    playerCtrlObs.disconnect();
-    return;
-  }
-  if (!video.isConnected) {
-    console.warn('[ScreensaverFix] Video element disconnected, stopping observer');
+  // Both of these are normal during navigation teardown, not error conditions.
+  if (!video || !(video instanceof HTMLVideoElement) || !video.isConnected) {
+    DEBUG && console.warn('[ScreensaverFix] Video element gone, disconnecting observer');
     playerCtrlObs.disconnect();
     return;
   }
@@ -180,9 +150,9 @@ const updateState = async () => {
     // If container exists, search inside it. If not, fallback to body.
     const searchRoot = playerContainer || document.body;
     
-    // Note: We manually query inside the root instead of using requireElement's default body scan
-    let video = searchRoot.querySelector('video');
-    
+    // Shared cached lookup (isConnected-guarded, invalidated on page change).
+    let video = getVideo() || searchRoot.querySelector('video');
+
     // If not found immediately, use the waiter (scoped to root)
     if (!video) {
          video = await waitForChildAdd(
