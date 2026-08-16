@@ -1,0 +1,12 @@
+/* Account-selector bypass — was injected at runtime as <style id="login-bypass-css">
+   only during the bypass window. Now permanently loaded but gated by a body
+   class so the page-hide only applies while we're actively bypassing. */
+
+body.ytaf-bypassing-login .WEB_PAGE_TYPE_ACCOUNT_SELECTOR,
+body.ytaf-bypassing-login ytlr-account-selector,
+body.ytaf-bypassing-login .ytlr-account-selector,
+body.ytaf-bypassing-login [class*='account-selector'] {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  display: none !important;
+}

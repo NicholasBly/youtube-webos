@@ -7,6 +7,8 @@
   "scripts": {
     "build": "webpack --mode=production",
     "build:modern": "webpack --mode=production --env modern",
+    "build:perf": "webpack --mode=production --env perf",
+    "build:perf:modern": "webpack --mode=production --env modern --env perf",
     "build:dev": "webpack --mode=development",
     "package": "ares-package -n dist",
     "deploy": "node tools/deploy.js",
@@ -24,10 +26,7 @@
   "bugs": "https://github.com/NicholasBly/youtube-webos/issues",
   "homepage": "https://github.com/NicholasBly/youtube-webos#readme",
   "dependencies": {
-    "@babel/runtime-corejs3": "^7.28.0",
     "@twemoji/api": "16.0.1",
-    "core-js-pure": "^3.47.0",
-    "regenerator-runtime": "^0.14.1",
     "tiny-sha256": "^1.0.2",
     "whatwg-fetch": "^3.6.20"
   },
@@ -44,8 +43,6 @@
     "@types/node": "^24.10.1",
     "@webos-tools/cli": "^3.2.1",
     "babel-loader": "^10.0.0",
-    "babel-plugin-polyfill-corejs3": "^0.13.0",
-    "babel-plugin-polyfill-regenerator": "^0.6.5",
     "copy-webpack-plugin": "^13.0.0",
     "css-loader": "^7.1.2",
     "cssnano": "^7.1.2",

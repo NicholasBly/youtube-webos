@@ -1,0 +1,60 @@
+/* Fixes transparency effect for the video player */
+.ytLrWatchDefaultShadow {
+  display: block !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  width: 100% !important;
+}
+
+/* Make Space/Clear/Search buttons have rounded corners */
+.YLmQmf .ZfNUK { border-radius: 0.5rem !important; }
+
+/* Removes duplicated panel on UI partially blocking video tiles */
+.RYo6Fb .hsdF6b { width: 0rem !important; }
+
+.ytLrWatchDefaultShadow,
+[idomkey='shadow'] {
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0.8) 90%
+  ) !important;
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+.ytLrWatchDefault2025Shadow {
+  background-color: rgba(11, 11, 11, 0.5) !important;
+}
+
+/* Fixes shorts thumbnails */
+.ytLrTileHeaderRendererShorts {
+  z-index: -1;
+}
+
+ytlr-tile-renderer[style*='width: 12.75rem; height: 21.25rem;']
+  ytlr-tile-header-renderer {
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(0, 0, 0, 0) 50%
+  ) !important;
+}
+
+/* move stats for nerds UI to the left side of the screen so it's not blocked by the settings panel */
+.iLKnN .html5-video-info-panel {
+	right: 40rem !important;
+	top: 12rem !important;
+}
+
+/**
+ * Dirty hack to fix offset <video> on shorts on older webOS versions.
+ * This shouldn't work but it does 😵‍💫.
+ * See webosbrew/youtube-webos/pull/235 for insanity.
+ */
+.WEB_PAGE_TYPE_SHORTS video {
+  border: black 1px solid;
+  /* Smallest transparent image */
+  border-image: url('data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7')
+    30%;
+}

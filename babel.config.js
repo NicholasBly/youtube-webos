@@ -1,63 +1,48 @@
-import Module from 'node:module';
-
-const require = Module.createRequire(import.meta.url);
-
-// From: https://github.com/babel/babel-polyfills/blob/a5db9c31c5b5474b4018e6178bc40882fc3eb5bf/packages/babel-plugin-polyfill-corejs3/README.md#version
-
-const {
-  version: babelruntimeVersion
-} = require('@babel/runtime-corejs3/package.json');
-const { version: corejspureVersion } = require('core-js-pure/package.json');
+/**
+ * Babel config for the legacy (webOS 3+) build.
+ *
+ * Deliberately does NOT use babel-plugin-polyfill-corejs3. See the header of
+ * src/polyfills.js for the reasoning: core-js considers Chromium 38 to need
+ * 386 modules (~334 KiB) because it re-implements every built-in with any spec
+ * deviation, and `usage-pure` mode additionally rewrites every `arr.slice(x)`
+ * call site into `_sliceInstanceProperty(arr).call(arr, x)` — permanent runtime
+ * overhead on the slowest devices we support.
+ *
+ * src/polyfills.js hand-implements the ~20 built-ins Chromium 38 actually
+ * lacks and this codebase actually uses. It is imported at the top of utils.js,
+ * which every feature module imports, so ordering is guaranteed.
+ *
+ * regenerator: async/await is lowered to generators by preset-env and then to
+ * a state machine by @babel/runtime's regenerator helper (a single shared
+ * module), rather than by the pure-mode plugin which duplicates the import in
+ * every file that awaits.
+ */
 
 /** @type {import('@babel/core').ConfigFunction} */
 function makeConfig(api) {
-  api.cache.invalidate(() => babelruntimeVersion + corejspureVersion);
+  api.cache.forever();
 
   return {
     // Fixes "TypeError: __webpack_require__(...) is not a function"
     // https://github.com/webpack/webpack/issues/9379#issuecomment-509628205
-    // https://babel.dev/docs/options#sourcetype
     sourceType: 'unambiguous',
     // https://babel.dev/docs/assumptions
     assumptions: {
       noNewArrows: true
     },
     plugins: [
-      [
-        '@babel/plugin-transform-typescript',
-        {
-          strictMode: true
-        }
-      ],
-      [
-        '@babel/plugin-transform-runtime',
-        {
-          regenerator: false,
-          version: babelruntimeVersion
-        }
-      ],
-      [
-        'polyfill-corejs3',
-        {
-          method: 'usage-pure',
-          version: corejspureVersion
-        }
-      ],
-      [
-        'polyfill-regenerator',
-        {
-          method: 'usage-pure'
-        }
-      ]
+      ['@babel/plugin-transform-typescript', { strictMode: true }],
+      // Dedupe Babel's helper functions into a shared runtime instead of
+      // re-emitting them per module.
+      ['@babel/plugin-transform-runtime', {}]
     ],
     presets: [
       [
         '@babel/preset-env',
         {
           bugfixes: true,
-		  targets: {},
-		  modules: false,
-		  useBuiltIns: false
+          modules: false,
+          useBuiltIns: false
         }
       ]
     ]
