@@ -75,6 +75,30 @@ function applyChrome38Downgrade(win) {
   rm(win.DOMTokenList && win.DOMTokenList.prototype, 'replace', 'DOMTokenList#replace');
   if (win.Symbol) { rm(win.Symbol, 'asyncIterator', 'Symbol.asyncIterator'); rm(win.Symbol, 'dispose', 'Symbol.dispose'); }
 
+  // --- DOM collections are NOT iterable on Chromium 38 ---
+  // NodeList, HTMLCollection and DOMTokenList only gained Symbol.iterator in
+  // Chrome 51. jsdom makes all three iterable, so `for (const el of
+  // container.children)` passed every test here while throwing
+  // "Invalid attempt to iterate non-iterable instance" on a real webOS 3 TV.
+  // core-js's web.dom-collections.iterator used to paper over this.
+  if (win.Symbol && win.Symbol.iterator) {
+    for (const ctor of ['NodeList', 'HTMLCollection', 'DOMTokenList', 'DOMStringList',
+                        'FileList', 'NamedNodeMap', 'CSSRuleList', 'StyleSheetList']) {
+      const C = win[ctor];
+      if (C && C.prototype && C.prototype[win.Symbol.iterator]) {
+        try { delete C.prototype[win.Symbol.iterator]; del.push(ctor + '[Symbol.iterator]'); }
+        catch (e) { /* non-configurable */ }
+      }
+      // forEach on NodeList is Chrome 51 too; HTMLCollection never had one.
+      if (C && C.prototype && C.prototype.forEach) {
+        try { delete C.prototype.forEach; del.push(ctor + '#forEach'); } catch (e) { /* */ }
+      }
+      if (C && C.prototype && C.prototype.entries) {
+        try { delete C.prototype.entries; delete C.prototype.keys; delete C.prototype.values; } catch (e) { /* */ }
+      }
+    }
+  }
+
   // Chrome 38 has Element#webkitMatchesSelector; restore it so polyfills.js can find it.
   if (!win.Element.prototype.matches) {
     win.Element.prototype.webkitMatchesSelector = function (sel) {
@@ -106,5 +130,27 @@ function setUserAgent(win, ua) {
   if (win.navigator.userAgent !== ua) throw new Error('failed to override userAgent');
 }
 
+/**
+ * Simulates the *worse* Chromium 38 case: DOM collections are not iterable AND
+ * their prototypes reject a Symbol-keyed defineProperty, so a polyfill cannot
+ * install one. Old Blink does this for some host prototypes, which is why
+ * patching HTMLCollection.prototype did not fix Settings-panel navigation on a
+ * real webOS 3 TV even though it fixed the simulation.
+ *
+ * Code that survives this does not depend on DOM collections being iterable at
+ * all - which is the only guarantee available on hardware we cannot test.
+ */
+function sealDomCollectionPrototypes(win) {
+  const sealed = [];
+  for (const ctor of ['NodeList', 'HTMLCollection', 'DOMTokenList', 'NamedNodeMap']) {
+    const C = win[ctor];
+    if (!C || !C.prototype) continue;
+    Object.preventExtensions(C.prototype);
+    sealed.push(ctor);
+  }
+  return sealed;
+}
+
+module.exports.sealDomCollectionPrototypes = sealDomCollectionPrototypes;
 module.exports.UA = UA;
 module.exports.setUserAgent = setUserAgent;

@@ -16,6 +16,7 @@ node bench/modern-smoke.cjs dist/webOSUserScripts/userScript.js 2>&1 | tail -1
 npx webpack --mode=production > /dev/null 2>&1   # back to legacy for the rest
 echo "--- feature dependencies ---";        node bench/dependency-test.cjs dist/webOSUserScripts/userScript.js 2>&1 | tail -1
 echo "--- thumbnail / dislike hot paths ---"; node bench/module-hotpath-bench.cjs dist/webOSUserScripts/userScript.js 2>&1 | grep -E "getBoundingClientRect|closest\(\)"
+echo "--- dislike fetch/render timing ---";   node bench/dislike-timing-test.cjs dist/webOSUserScripts/userScript.js legacy 2>&1 | tail -1
 echo "--- thumbnail / dislike behaviour ---";  node bench/module-behaviour-test.cjs dist/webOSUserScripts/userScript.js 2>&1 | tail -1
 echo "--- options panel build cost ---";   node bench/panel-bench.cjs dist/webOSUserScripts/userScript.js 2>&1 | grep -E "IN the handler|wall time|deferred to"
 echo "--- options panel behaviour ---";     node bench/panel-test.cjs dist/webOSUserScripts/userScript.js 2>&1 | tail -1

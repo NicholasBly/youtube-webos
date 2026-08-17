@@ -153,6 +153,47 @@ diff('URL concat pattern from utils.handleLaunch', (g) => {
   return u.toString();
 });
 
+/* ---- DOM collections must be iterable (Chrome 51) ---- */
+// This is the gap that broke Settings-panel arrow navigation on webOS 3:
+// `for (const el of container.children)` compiles to Babel's for-of helper,
+// which throws "Invalid attempt to iterate non-iterable instance" when the
+// collection has no Symbol.iterator. jsdom makes them all iterable natively,
+// so chrome38-env.cjs strips it back off first.
+{
+  const d = win.document;
+  const host = d.createElement('div');
+  for (let i = 0; i < 3; i++) {
+    const c = d.createElement('span');
+    c.className = 'kid k' + i;
+    c.textContent = 'child' + i;
+    host.appendChild(c);
+  }
+  d.body.appendChild(host);
+
+  const collect = (it) => { const out = []; for (const x of it) out.push(x.textContent || String(x)); return out; };
+
+  check('HTMLCollection (.children) is iterable',
+    collect(host.children), ['child0', 'child1', 'child2']);
+  check('NodeList (querySelectorAll) is iterable',
+    collect(d.querySelectorAll('.kid')), ['child0', 'child1', 'child2']);
+  check('NodeList (.childNodes) is iterable',
+    collect(host.childNodes), ['child0', 'child1', 'child2']);
+  check('DOMTokenList (.classList) is iterable',
+    collect(host.children[0].classList), ['kid', 'k0']);
+  check('getElementsByTagName is iterable',
+    collect(host.getElementsByTagName('span')), ['child0', 'child1', 'child2']);
+  check('Array.from over an HTMLCollection',
+    win.Array.from(host.children).length, 3);
+  check('spread over a NodeList',
+    (() => { let n = 0; for (const _ of d.querySelectorAll('.kid')) n++; return n; })(), 3);
+  check('NodeList#forEach exists',
+    typeof d.querySelectorAll('.kid').forEach, 'function');
+  // HTMLCollection has never had forEach in any browser - do not invent one.
+  check('HTMLCollection#forEach still absent',
+    typeof host.children.forEach, 'undefined');
+  d.body.removeChild(host);
+}
+
 /* ---- Promise#finally ---- */
 (async () => {
   let order = [];

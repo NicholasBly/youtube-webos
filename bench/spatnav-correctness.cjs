@@ -9,7 +9,7 @@
  */
 const fs = require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { applyChrome38Downgrade, UA, setUserAgent } = require('./chrome38-env.cjs');
+const { applyChrome38Downgrade, sealDomCollectionPrototypes, UA, setUserAgent } = require('./chrome38-env.cjs');
 
 const bundlePath = process.argv[2] || 'dist/webOSUserScripts/userScript.js';
 
@@ -38,6 +38,10 @@ win.localStorage.setItem('ytaf-configuration', win.JSON.stringify({
   enableReturnYouTubeDislike: false, upgradeThumbnails: false, enableAutoLogin: false
 }));
 applyChrome38Downgrade(win);
+// Worst case: the polyfill CANNOT install an iterator on these prototypes.
+// Navigation must work anyway.
+const sealed = sealDomCollectionPrototypes(win);
+console.log(`[env] DOM collection prototypes made non-extensible: ${sealed.join(', ')}`);
 win.eval(fs.readFileSync(bundlePath, 'utf8'));
 
 setTimeout(() => {

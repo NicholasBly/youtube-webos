@@ -352,7 +352,8 @@
         container = container.getElementsByTagName('body')[0] || document.body;
       }
       const children = container.children;
-      for (const elem of children) {
+      for (let ci = 0, clen = children.length; ci < clen; ci++) {
+        const elem = children[ci];
         if (isDelegableContainer(elem)) {
           candidates.push(elem);
         } else if (isFocusable(elem)) {
