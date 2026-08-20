@@ -29,6 +29,9 @@ export const shortcutActions = {
   oled_toggle: 'Toggle OLED Care Mode',
   sb_manual_skip: 'Manual Skip / Jump to Highlight',
   config_menu: 'Open/Close Settings'
+  //speed_up: 'Playback Speed +',
+  //speed_down: 'Playback Speed -',
+  //speed_reset: 'Playback Speed Reset (1x)'
 };
 
 
@@ -86,6 +89,7 @@ const configOptions = new Map([
   ['enableLegacyEmojiFix', { default: true, desc: 'Emoji + Characters Fix' }],
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],
+  //['enablePlaybackSpeed', { default: true, desc: 'Playback Speed Control' }],
   ['disableNotifications', { default: false, desc: 'Disable Notifications' }]
 ]);
 

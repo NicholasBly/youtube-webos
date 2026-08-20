@@ -57,6 +57,90 @@ if (typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
   });
 }
 
+/* ----------------------------------------------- DOM collections (51) --- */
+
+// NodeList, HTMLCollection and friends are NOT iterable before Chrome 51.
+// WebIDL gives any interface with an indexed property getter an @@iterator, but
+// Chromium 38 predates that, so `for (const el of container.children)` throws
+//   "Invalid attempt to iterate non-iterable instance."
+// from Babel's for-of helper. core-js's web.dom-collections.iterator used to
+// cover this; spatial-navigation-polyfill.js relies on it for every arrow-key
+// press, which is how it took out Settings-panel navigation on webOS 3.
+//
+// Array.prototype[Symbol.iterator] works verbatim on these: they are all
+// array-like (indexed properties + length), which is exactly what it reads.
+if (typeof Symbol !== 'undefined' && Symbol.iterator && typeof window !== 'undefined') {
+  const arrayValues = Array.prototype[Symbol.iterator];
+  const DOM_COLLECTIONS = [
+    'NodeList',
+    'HTMLCollection',
+    'DOMTokenList',
+    'DOMStringList',
+    'DOMSettableTokenList',
+    'NamedNodeMap',
+    'MediaList',
+    'StyleSheetList',
+    'CSSRuleList',
+    'FileList',
+    'DataTransferItemList',
+    'HTMLAllCollection',
+    'HTMLFormControlsCollection',
+    'HTMLOptionsCollection',
+    'HTMLSelectElement',
+    'ClientRectList',
+    'TouchList',
+    'PluginArray',
+    'MimeTypeArray',
+    'SVGNumberList',
+    'SVGLengthList',
+    'SVGStringList',
+    'SVGTransformList',
+    'SVGPointList'
+  ];
+
+  for (let i = 0; i < DOM_COLLECTIONS.length; i++) {
+    const Ctor = window[DOM_COLLECTIONS[i]];
+    if (!Ctor || !Ctor.prototype || Ctor.prototype[Symbol.iterator]) continue;
+    try {
+      Object.defineProperty(Ctor.prototype, Symbol.iterator, {
+        value: arrayValues,
+        writable: true,
+        enumerable: false,
+        configurable: true
+      });
+    } catch {
+      // Old Blink rejects a Symbol-keyed defineProperty on some host
+      // prototypes. Try a plain assignment before giving up.
+      try {
+        Ctor.prototype[Symbol.iterator] = arrayValues;
+      } catch {
+        /* genuinely not patchable - see the note below */
+      }
+    }
+  }
+
+  // IMPORTANT: this whole block is best-effort. On a real webOS 3 TV some of
+  // these prototypes cannot be patched at all, silently. Do NOT write
+  // `for (const x of someNodeList)` in src/ and rely on this - use an indexed
+  // loop. bench/spatnav-correctness.cjs runs with these prototypes sealed to
+  // keep that honest.
+
+  // NodeList#forEach is Chrome 51 as well. HTMLCollection has never had one in
+  // any browser, so it is deliberately not added here.
+  if (typeof NodeList !== 'undefined' && NodeList.prototype && !NodeList.prototype.forEach) {
+    try {
+      Object.defineProperty(NodeList.prototype, 'forEach', {
+        value: Array.prototype.forEach,
+        writable: true,
+        enumerable: false,
+        configurable: true
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 /* --------------------------------------------------------- ES statics --- */
 
 // Non-enumerable install, matching how the engine defines built-ins. A plain

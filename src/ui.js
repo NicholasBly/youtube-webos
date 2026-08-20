@@ -5,6 +5,7 @@ import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
 import { initVideoQuality } from './video-quality.js';
+// import { initPlaybackSpeed, stepSpeed, resetSpeed } from './playback-speed.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo } from './utils.js';
 import { syncAdblockHook, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
@@ -110,6 +111,9 @@ const ACTION_SCOPES = {
     save_to_playlist: 'VIDEO',
     sb_skip_prev: 'VIDEO',
     sb_manual_skip: 'VIDEO'
+    // speed_up: 'VIDEO',
+    // speed_down: 'VIDEO',
+    // speed_reset: 'VIDEO'
 };
 
 function updateShortcutCache(key) {
@@ -544,7 +548,11 @@ function createOptionsPanel() {
   configAddChangeListener('enableAdBlock', updateDependencyState);
   updateDependencyState();
 
-  pageMain.appendChild(createSection('Video Player', [createConfigCheckbox('forceHighResVideo'), createConfigCheckbox('hideEndcards'), createConfigCheckbox('enableReturnYouTubeDislike')]));
+  pageMain.appendChild(createSection('Video Player',
+  [createConfigCheckbox('forceHighResVideo'),
+  //createConfigCheckbox('enablePlaybackSpeed'),
+  createConfigCheckbox('hideEndcards'),
+  createConfigCheckbox('enableReturnYouTubeDislike')]));
   pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createConfigCheckbox('hideLogo'), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
   elmContainer.appendChild(pageMain);
 
@@ -1059,7 +1067,7 @@ function playPauseLogic(video) {
         notify('Paused');
         
         const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
-        const isControlsVisible = controls && controls.classList.contains('MFDzfe--focused');
+        const isControlsVisible = controls && controls.classList.contains('zylon-focus');
         
         // Only run hiding logic if the controls are not already visible
         if (!isControlsVisible) {
@@ -1081,7 +1089,7 @@ function playPauseLogic(video) {
                     
                     setTimeout(() => {
                         const currentControls = document.querySelector('yt-focus-container[idomkey="controls"]');
-                        if (currentControls && currentControls.classList.contains('MFDzfe--focused')) {
+                        if (currentControls && currentControls.classList.contains('zylon-focus')) {
                             sendKey(REMOTE_KEYS.BACK, document.activeElement);
                         }
                     }, 250);
@@ -1156,6 +1164,18 @@ function handleShortcutAction(action) {
     case 'play_pause':
         playPauseLogic(video);
         break;
+
+    // case 'speed_up':
+        // stepSpeed(1);
+        // break;
+
+    // case 'speed_down':
+        // stepSpeed(-1);
+        // break;
+
+    // case 'speed_reset':
+        // resetSpeed();
+        // break;
     case 'toggle_subs':
         // Resolved here rather than above the switch: only this one action
         // needs it, and the .html5-video-player fallback is a full-document
@@ -1427,6 +1447,7 @@ if (!menuKeyExists) {
 // --- Start-up ---
 initGlobalStyles();
 initVideoQuality();
+// initPlaybackSpeed();
 
 // Initial apply (will skip UI elements if they don't exist yet, but handle global styles)
 applyOledMode(configRead('enableOledCareMode'));

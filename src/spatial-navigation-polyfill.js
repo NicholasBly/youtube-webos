@@ -351,6 +351,14 @@
       if (!container.parentElement) {
         container = container.getElementsByTagName('body')[0] || document.body;
       }
+      // Indexed loop, NOT for-of. `children` is an HTMLCollection, which has no
+      // Symbol.iterator before Chrome 51 - Babel lowers for-of to a helper that
+      // throws "Invalid attempt to iterate non-iterable instance" on webOS 3,
+      // which killed all Settings-panel arrow navigation. Polyfilling the
+      // prototype is not reliable there (old Blink rejects defineProperty on
+      // some host prototypes), so this simply does not depend on it. It is also
+      // cheaper: no iterator object allocated per call, and this runs for every
+      // container on every arrow keypress.
       const children = container.children;
       for (let ci = 0, clen = children.length; ci < clen; ci++) {
         const elem = children[ci];
