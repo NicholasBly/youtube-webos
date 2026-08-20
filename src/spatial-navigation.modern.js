@@ -727,11 +727,9 @@
         if (isBelow(searchOrigin, candidateRect)) { points.exitPoint.y = searchOrigin.top; points.entryPoint.y = Math.min(candidateRect.bottom, searchOrigin.top); }
         else if (isBelow(candidateRect, searchOrigin)) { points.exitPoint.y = searchOrigin.bottom; points.entryPoint.y = Math.max(candidateRect.top, searchOrigin.bottom); }
         else { points.exitPoint.y = points.entryPoint.y = Math.max(searchOrigin.top, candidateRect.top); }
-      } else {
-        if (isRightSide(searchOrigin, candidateRect)) { points.exitPoint.x = searchOrigin.left; points.entryPoint.x = Math.min(candidateRect.right, searchOrigin.left); }
+      } else if (isRightSide(searchOrigin, candidateRect)) { points.exitPoint.x = searchOrigin.left; points.entryPoint.x = Math.min(candidateRect.right, searchOrigin.left); }
         else if (isRightSide(candidateRect, searchOrigin)) { points.exitPoint.x = searchOrigin.right; points.entryPoint.x = Math.max(candidateRect.left, searchOrigin.right); }
         else { points.exitPoint.x = points.entryPoint.x = Math.max(searchOrigin.left, candidateRect.left); }
-      }
     }
     return points;
   }

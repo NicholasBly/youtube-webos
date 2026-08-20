@@ -31,7 +31,7 @@ import { getWebOSVersion } from './webos-utils.js';
 
 if (typeof initBufferLimit === 'function' && getWebOSVersion() <= 4) {
 	initBufferLimit();
-	console.info("Initiating buffer limit");
+	console.info('Initiating buffer limit');
 }
 
 (function oneTimeParamsCheck() {

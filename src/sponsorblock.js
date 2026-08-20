@@ -10,7 +10,6 @@ const SPONSORBLOCK_CONFIG = {
     primaryAPI: 'https://sponsorblock.inf.re/api',
     fallbackAPI: 'https://sponsor.ajay.app/api',
     timeout: 5000,
-    retryAttempts: 2
 };
 
 const CONFIG_MAPPING = {
@@ -759,7 +758,7 @@ class SponsorBlockHandler {
             }
             const events = this.listeners.get(old);
             if (events) {
-                events.forEach((handler, type) => old.removeEventListener(type, handler));
+                events.forEach((handler, type) => { old.removeEventListener(type, handler); });
                 this.listeners.delete(old);
             }
         }
@@ -1233,7 +1232,7 @@ class SponsorBlockHandler {
         this.lastSkipTime = currentTime;
         this.lastSkippedSegmentIndex = segmentIdx;
         
-        segmentsToMark.forEach(idx => this.skippedSegmentIndices.add(idx));
+        segmentsToMark.forEach(idx => { this.skippedSegmentIndices.add(idx); });
 
         if (this.isLegacyWebOSVer) {
             const duration = this.video.duration;
@@ -1347,13 +1346,6 @@ class SponsorBlockHandler {
     async fetchSegments(hashPrefix) {
         if (this.isDestroyed) return null;
 
-        const categories = JSON.stringify([
-            'sponsor', 'intro', 'outro', 'interaction', 'selfpromo',
-            'musicofftopic', 'preview', 'chapter', 'poi_highlight',
-            'filler', 'hook'
-        ]);
-        const actionTypes = JSON.stringify(['skip', 'mute']);
-
         if (this.abortController) {
             this.abortController.abort();
         }
@@ -1418,7 +1410,7 @@ class SponsorBlockHandler {
             this.boundResize = null;
         }
 
-        this.rafIds.forEach(id => cancelAnimationFrame(id));
+        this.rafIds.forEach(id => { cancelAnimationFrame(id); });
         this.rafIds.clear();
         this.stopHighFreqLoop();
 
@@ -1457,11 +1449,11 @@ class SponsorBlockHandler {
         // remove. It only styles elements that exist while SB is active.
 
         this.listeners.forEach((events, elem) => {
-            events.forEach((handler, type) => elem.removeEventListener(type, handler));
+            events.forEach((handler, type) => { elem.removeEventListener(type, handler); });
         });
         this.listeners.clear();
 
-        this.observers.forEach(obs => obs.disconnect());
+        this.observers.forEach(obs => { obs.disconnect(); });
         this.observers.clear();
 
         this.configListeners.forEach(({ key, callback }) => {
@@ -1513,7 +1505,7 @@ if (typeof window !== 'undefined') {
                         }
                     }
                 }
-            } catch (e) { /* ignore */ }
+            } catch { /* ignore */ }
 
             const config = configGetAll();
             if (videoID && config.enableSponsorBlock) {

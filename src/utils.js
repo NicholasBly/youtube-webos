@@ -40,7 +40,7 @@ for (const name of ['RED', 'GREEN', 'YELLOW', 'BLUE']) {
   const def = REMOTE_KEYS[name];
   const lower = name.toLowerCase();
   COLOR_CODE_MAP.set(def.code, lower);
-  if (def.alt) def.alt.forEach((code) => COLOR_CODE_MAP.set(code, lower));
+  if (def.alt) def.alt.forEach((code) => { COLOR_CODE_MAP.set(code, lower); });
 }
 
 let _isWatchPage = false;
@@ -171,7 +171,7 @@ export function isGuestMode() {
     }
     
     return (cachedGuestMode = false);
-  } catch (e) {
+  } catch {
     return (cachedGuestMode = false);
   }
 }
@@ -186,7 +186,7 @@ try {
     // Check if modern constructor works
     new KeyboardEvent('keydown');
     createEventStrategy = (type, opts) => new KeyboardEvent(type, opts);
-} catch (e) {
+} catch {
     // Fallback for webOS 3.0 / Legacy
     createEventStrategy = (type, opts) => {
         const evt = document.createEvent('KeyboardEvent');

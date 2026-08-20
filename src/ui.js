@@ -388,8 +388,7 @@ function createOptionsPanel() {
     }
   });
   const tabs = ['Main', 'SponsorBlock', 'Shortcuts', 'UI Tweaks'];
-  const tabBtns = tabs.map((name, index) => {
-    return createElement('button', {
+  const tabBtns = tabs.map((name, index) => createElement('button', {
       class: index === 0 ? 'ytaf-tab-btn active' : 'ytaf-tab-btn',
       text: name,
       tabIndex: 0,
@@ -397,9 +396,8 @@ function createOptionsPanel() {
         click: () => setActivePage(index),
         mouseenter: (e) => e.target.focus()
       }
-    });
-  });
-  tabBtns.forEach(btn => tabMenu.appendChild(btn));
+    }));
+  tabBtns.forEach(btn => { tabMenu.appendChild(btn); });
 
 	const setActivePage = (pageIndex) => {
 	  if (pageIndex === activePage) return; // Don't do work if we are already on this tab
@@ -537,7 +535,7 @@ function createOptionsPanel() {
   const adBlockDependents = [elTrackingBlock, elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant, elGuestPrompts];
   const updateDependencyState = () => {
     const enabled = configRead('enableAdBlock');
-    adBlockDependents.forEach(el => setState(el, enabled));
+    adBlockDependents.forEach(el => { setState(el, enabled); });
   };
   
   elAdBlock.querySelector('input').addEventListener('change', updateDependencyState);
@@ -1012,14 +1010,14 @@ function saveToPlaylistLogic() {
 
 function refreshPageLogic() {
     const commandPayload = {
-        clickTrackingParams: "",
+        clickTrackingParams: '',
         signalServiceEndpoint: {
-            signal: "CLIENT_SIGNAL",
+            signal: 'CLIENT_SIGNAL',
             actions: [
                 {
-                    clickTrackingParams: "",
+                    clickTrackingParams: '',
                     signalAction: {
-                        signal: "SOFT_RELOAD_PAGE"
+                        signal: 'SOFT_RELOAD_PAGE'
                     },
                     commandMetadata: {
                         webCommandMetadata: {
@@ -1032,7 +1030,7 @@ function refreshPageLogic() {
     };
 
     const appRoot = document.querySelector('ytlr-app') || document.body;
-    console.log("[Shortcut] Triggering soft reload...");
+    console.log('[Shortcut] Triggering soft reload...');
     
     appRoot.dispatchEvent(new CustomEvent('innertube-command', {
         bubbles: true,

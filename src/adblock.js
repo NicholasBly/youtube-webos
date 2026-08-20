@@ -433,7 +433,7 @@ function hookedParse(text, reviver) {
     if (isShortsPage() && responseType && IGNORE_ON_SHORTS.has(responseType)) return data;
 
     if (FORCE_FALLBACK) {
-      if (DEBUG) debugLog(`FORCE_FALLBACK active. Using fallback filters.`);
+      if (DEBUG) debugLog('FORCE_FALLBACK active. Using fallback filters.');
       if (!Array.isArray(data)) applyFallbackFilters(data, cfgFlags, needsContentFiltering);
     } else if (responseType && SCHEMA_REGISTRY.paths[responseType]) {
       if (DEBUG) debugLog(`Schema Match: [${responseType}]`);
