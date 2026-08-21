@@ -497,3 +497,33 @@
 .ytaf-ui-container.theme-classic-red input[type='color'] {
   border-color: #4a4a4a;
 }
+
+/* --- Page 1 density -------------------------------------------------------
+   The Main page gained a row (Remove Live Videos) and is the tallest of the
+   four, so it is the only one at risk of overflowing 95vh on a 1080p panel.
+   These trims apply to that page alone - the other tabs keep the roomier
+   spacing, since they have space to spare. Total saving is ~4.5vh, comfortably
+   more than the ~3.2vh a new row costs. */
+#ytaf-page-main label {
+  padding-top: 0.75vh;
+  padding-bottom: 0.75vh;
+  margin-bottom: 0.1vh;
+}
+
+#ytaf-page-main .ytaf-settings-section {
+  margin-bottom: 0.6vh;
+}
+
+#ytaf-page-main .ytaf-settings-section > .section-title,
+#ytaf-page-main h2 {
+  margin-top: 0.9vh;
+  margin-bottom: 0.35vh;
+}
+
+/* Last-resort safety net: if a future row still overflows, scroll rather than
+   clip. The container hides overflow, so without this a row would simply be
+   unreachable. */
+.ytaf-ui-container > div.ytaf-settings-page {
+  overflow-y: auto;
+  overflow-x: hidden;
+}

@@ -1,10 +1,12 @@
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
+import { logoStyles } from './config.js';
 import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight, forcePreviewModes } from './config.js';
 import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
 import { initVideoQuality } from './video-quality.js';
+import { initLogoStyle } from './logo-style.js';
 // import { initPlaybackSpeed, stepSpeed, resetSpeed } from './playback-speed.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo } from './utils.js';
@@ -284,6 +286,33 @@ function createCycleControl(configKey, labelText, modesArray, displayMap = null,
     return container;
 }
 
+function createLogoControl() {
+  const control = createCycleControl('logoStyle', configGetDesc('logoStyle'),
+    Object.keys(logoStyles), logoStyles);
+  
+  const label = control.querySelector('.shortcut-label');
+  if (label) {
+    label.style.color = 'inherit'; 
+    label.style.display = 'flex';
+    label.style.alignItems = 'center';
+	label.style.lineHeight = 'inherit';
+    
+    const dummyBox = createElement('input', {
+      style: {
+        visibility: 'hidden',
+        paddingLeft: '2.2vh'
+      }
+    });
+    dummyBox.setAttribute('type', 'checkbox');
+    
+    label.textContent = '';
+    label.appendChild(dummyBox);
+    label.appendChild(document.createTextNode('\u00A0' + configGetDesc('logoStyle')));
+  }
+  
+  return control;
+}
+
 function createSegmentControl(key) {
   const isHighlight = key === 'sbMode_highlight';
   const modesMap = isHighlight ? sbModesHighlight : sbModes;
@@ -513,12 +542,12 @@ function createOptionsPanel() {
   const elAdBlock = createConfigCheckbox('enableAdBlock');
   const elTrackingBlock = createConfigCheckbox('enableTrackingBlock');
   const cosmeticGroup = [elAdBlock, elTrackingBlock];
-  let elRemoveGlobalShorts = null, elRemoveTopLiveGames = null, elRemoveMostRelevant = null, elGuestPrompts = null;
-  
-  elRemoveGlobalShorts = createConfigCheckbox('removeGlobalShorts');
-  elRemoveTopLiveGames = createConfigCheckbox('removeTopLiveGames');
-  elRemoveMostRelevant = createConfigCheckbox('removeMostRelevant');
-  cosmeticGroup.push(elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant);
+  const elRemoveGlobalShorts = createConfigCheckbox('removeGlobalShorts');
+  const elRemoveLiveVideos = createConfigCheckbox('removeLiveVideos');
+  const elRemoveTopLiveGames = createConfigCheckbox('removeTopLiveGames');
+  const elRemoveMostRelevant = createConfigCheckbox('removeMostRelevant');
+  let elGuestPrompts = null;
+  cosmeticGroup.push(elRemoveGlobalShorts, elRemoveLiveVideos, elRemoveTopLiveGames, elRemoveMostRelevant);
   if (isGuestMode()) { elGuestPrompts = createConfigCheckbox('hideGuestSignInPrompts'); cosmeticGroup.push(elGuestPrompts); }
 
   pageMain.appendChild(createSection('Cosmetic Filtering', cosmeticGroup));
@@ -532,7 +561,7 @@ function createOptionsPanel() {
   // Blocking, so it genuinely does nothing while Ad Blocking is off. Greying it
   // out is what tells the user that, instead of leaving a checkbox that looks
   // armed but is inert.
-  const adBlockDependents = [elTrackingBlock, elRemoveGlobalShorts, elRemoveTopLiveGames, elRemoveMostRelevant, elGuestPrompts];
+  const adBlockDependents = [elTrackingBlock, elRemoveGlobalShorts, elRemoveLiveVideos, elRemoveTopLiveGames, elRemoveMostRelevant, elGuestPrompts];
   const updateDependencyState = () => {
     const enabled = configRead('enableAdBlock');
     adBlockDependents.forEach(el => { setState(el, enabled); });
@@ -551,7 +580,7 @@ function createOptionsPanel() {
   //createConfigCheckbox('enablePlaybackSpeed'),
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
-  pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createConfigCheckbox('hideLogo'), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
+  pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
   elmContainer.appendChild(pageMain);
 
   // --- Pages 2-4: built off the critical path ---
@@ -1382,7 +1411,6 @@ function initGlobalStyles() {
 
     const syncClass = (cls, key) => document.documentElement.classList.toggle(cls, !!configRead(key));
     const CLASS_KEYS = {
-        'ytaf-hide-logo': 'hideLogo',
         'ytaf-fix-titles': 'fixMultilineTitles',
         'ytaf-remove-borders': 'removeBlackBorders'
     };
@@ -1445,6 +1473,7 @@ if (!menuKeyExists) {
 // --- Start-up ---
 initGlobalStyles();
 initVideoQuality();
+initLogoStyle();
 // initPlaybackSpeed();
 
 // Initial apply (will skip UI elements if they don't exist yet, but handle global styles)

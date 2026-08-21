@@ -39,6 +39,7 @@ const UI_STRINGS = {
 const YT_CONSTANTS = {
   SHELF_TYPE_SHORTS: 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS',
   TILE_STYLE_SHORTS: 'TILE_STYLE_YTLR_SHORTS',
+  BADGE_STYLE_LIVE: 'THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE',
   CONTENT_TYPE_SHORTS: 'TILE_CONTENT_TYPE_SHORTS',
   VIDEO_TYPE_REEL_AD: 'REEL_VIDEO_TYPE_AD'
 };
@@ -47,6 +48,7 @@ const CONFIG_KEYS = {
   ADBLOCK: 'enableAdBlock',
   TRACKING: 'enableTrackingBlock',
   SHORTS: 'removeGlobalShorts',
+  LIVE: 'removeLiveVideos',
   LIVE_GAMES: 'removeTopLiveGames',
   MOST_RELEVANT: 'removeMostRelevant',
   GUEST_PROMPTS: 'hideGuestSignInPrompts',
@@ -83,6 +85,7 @@ const cfgFlags = {
   enableAdBlock: false,
   enableTrackingBlock: false,
   removeGlobalShorts: false,
+  removeLiveVideos: false,
   removeTopLiveGames: false,
   removeMostRelevant: false,
   hideGuestPrompts: false,
@@ -97,6 +100,7 @@ function recomputeFilterFlags() {
   cfgFlags.enableAdBlock = !!cfgSnapshot[CONFIG_KEYS.ADBLOCK];
   cfgFlags.enableTrackingBlock = !!cfgSnapshot[CONFIG_KEYS.TRACKING];
   cfgFlags.removeGlobalShorts = !!cfgSnapshot[CONFIG_KEYS.SHORTS];
+  cfgFlags.removeLiveVideos = !!cfgSnapshot[CONFIG_KEYS.LIVE];
   cfgFlags.removeTopLiveGames = !!cfgSnapshot[CONFIG_KEYS.LIVE_GAMES];
   cfgFlags.removeMostRelevant = !!cfgSnapshot[CONFIG_KEYS.MOST_RELEVANT];
   cfgFlags.hideGuestPrompts = !!cfgSnapshot[CONFIG_KEYS.GUEST_PROMPTS];
@@ -107,6 +111,7 @@ function recomputeFilterFlags() {
     cfgFlags.enableAdBlock ||
     cfgFlags.enableTrackingBlock ||
     cfgFlags.removeGlobalShorts ||
+    cfgFlags.removeLiveVideos ||
     cfgFlags.removeTopLiveGames ||
     cfgFlags.removeMostRelevant ||
     cfgFlags.hideGuestPrompts ||
@@ -444,6 +449,12 @@ function hookedParse(text, reviver) {
     } else if(text.length > 10000 && !Array.isArray(data)) {
       if (DEBUG) logSchemaMiss(data, text.length);
       applyFallbackFilters(data, cfgFlags, needsContentFiltering);
+    } else if ((cfgFlags.removeGlobalShorts || cfgFlags.removeLiveVideos) && !Array.isArray(data)) {
+      // The guide arrives in its own small response, which matches no content
+      // schema and is under the fallback's size threshold - so without this it
+      // was never looked at. removeBlockedNavEntries() early-returns when the
+      // settings are off, and its search is depth-bounded.
+      removeBlockedNavEntries(data, cfgFlags.removeGlobalShorts, cfgFlags.removeLiveVideos);
     }
 
     if (cfgFlags.enableTrackingBlock) {
@@ -480,6 +491,7 @@ function detectResponseType(data) {
 }
 
 function applySchemaFilters(data, responseType, config, needsContentFiltering) {
+  removeBlockedNavEntries(data, config.removeGlobalShorts, config.removeLiveVideos);
   const schema = SCHEMA_REGISTRY.paths[responseType];
   switch (responseType) {
     case 'SHORTS_SEQUENCE':
@@ -600,7 +612,89 @@ function applySchemaFilters(data, responseType, config, needsContentFiltering) {
   }
 }
 
+/**
+ * Remove blocked entries (Shorts, Live) from the left-hand guide.
+ *
+ * Identified by endpoint first - browseId FEshorts / a reelWatchEndpoint for Shorts, 
+ * or FEtopics_live for Live - and only then by title text.
+ */
+function isNavEntryBlocked(entry, removeGlobalShorts, removeLiveVideos) {
+  if (!entry || typeof entry !== 'object') return false;
+
+  const renderer =
+    entry.guideEntryRenderer ||
+    entry.tabRenderer ||
+    entry.pivotBarItemRenderer ||
+    entry;
+
+  const endpoint = renderer.navigationEndpoint || renderer.endpoint || renderer.onSelectCommand;
+  if (endpoint) {
+    if (removeGlobalShorts && endpoint.reelWatchEndpoint) return true;
+    const browseId = endpoint.browseEndpoint?.browseId;
+    if (removeGlobalShorts && (browseId === 'FEshorts' || browseId === 'FEshorts_tv')) return true;
+    if (removeLiveVideos && browseId === 'FEtopics_live') return true;
+  }
+
+  if (removeGlobalShorts) {
+    const title =
+      renderer.title?.simpleText ||
+      renderer.title?.runs?.[0]?.text ||
+      renderer.tabIdentifier ||
+      (typeof renderer.title === 'string' ? renderer.title : undefined);
+    return title === UI_STRINGS.SHORTS_TITLE;
+  }
+  return false;
+}
+
+function removeBlockedNavEntries(data, removeGlobalShorts, removeLiveVideos) {
+  if ((!removeGlobalShorts && !removeLiveVideos) || !data || typeof data !== 'object') return;
+
+  const found = findObjects(
+    data,
+    ['tvSecondaryNavRenderer', 'guideRenderer', 'pivotBarRenderer', 'items', 'tabs', 'sections'],
+    8
+  );
+
+  const lists = [
+    found.tvSecondaryNavRenderer?.sections,
+    found.guideRenderer?.items,
+    found.pivotBarRenderer?.items,
+    found.tabs,
+    found.sections,
+    found.items
+  ];
+
+  for (let i = 0; i < lists.length; i++) {
+    const list = lists[i];
+    if (!Array.isArray(list)) continue;
+
+    for (let j = 0; j < list.length; j++) {
+      const inner =
+        list[j]?.tvSecondaryNavSectionRenderer?.tabs ||
+        list[j]?.guideSectionRenderer?.items;
+      if (Array.isArray(inner)) {
+        const before = inner.length;
+        let w = 0;
+        for (let k = 0; k < inner.length; k++) {
+          if (!isNavEntryBlocked(inner[k], removeGlobalShorts, removeLiveVideos)) inner[w++] = inner[k];
+        }
+        inner.length = w;
+        if (DEBUG && before !== w) debugLog(`Guide: removed ${before - w} blocked entr(ies)`);
+      }
+    }
+
+    const before = list.length;
+    let w = 0;
+    for (let j = 0; j < list.length; j++) {
+      if (!isNavEntryBlocked(list[j], removeGlobalShorts, removeLiveVideos)) list[w++] = list[j];
+    }
+    list.length = w;
+    if (DEBUG && before !== w) debugLog(`Guide: removed ${before - w} blocked entr(ies)`);
+  }
+}
+
 function applyFallbackFilters(data, config, needsContentFiltering) {
+  removeBlockedNavEntries(data, config.removeGlobalShorts, config.removeLiveVideos);
   if (config.enableAdBlock) removePlayerAdsOptimized(data);
   if (config.hideEndcards) removeEndcardsOptimized(data);
   const needles = ['playerOverlayRenderer', 'pivot', 'sectionListRenderer', 'gridRenderer', 'gridContinuation', 'sectionListContinuation', 'entries'];
@@ -650,6 +744,53 @@ function processActions(actions, config, needsContentFiltering) {
 function getShelfTitleOptimized(shelf) {
   if (!shelf) return '';
   return shelf.title?.runs?.[0]?.text || shelf.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title?.runs?.[0]?.text || '';
+}
+
+/**
+ * Is this item a live stream?
+ *
+ * The badge lives at, from an item in a shelf's item list:
+ *   lockupViewModel.contentImage.thumbnailViewModel
+ *     .overlays[].thumbnailBottomOverlayViewModel
+ *     .badges[].thumbnailBadgeViewModel.badgeStyle
+ *
+ * Both arrays are searched rather than indexed at [0]: a thumbnail carries
+ * several overlays (duration, progress, badges) and their order is not
+ * guaranteed, so hardcoding the first entry would miss the badge whenever
+ * anything else is attached to the thumbnail.
+ *
+ * The older tileRenderer shape and a plain text check are kept as fallbacks so
+ * this keeps working if the viewModel schema is swapped out again.
+ */
+function isLiveItem(item, removeLiveVideos) {
+  if (!removeLiveVideos || !item) return false;
+
+  const overlays = item.lockupViewModel?.contentImage?.thumbnailViewModel?.overlays;
+  if (Array.isArray(overlays)) {
+    for (let i = 0; i < overlays.length; i++) {
+      const badges = overlays[i]?.thumbnailBottomOverlayViewModel?.badges;
+      if (!Array.isArray(badges)) continue;
+      for (let b = 0; b < badges.length; b++) {
+        if (badges[b]?.thumbnailBadgeViewModel?.badgeStyle === YT_CONSTANTS.BADGE_STYLE_LIVE) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // Fallback 1: the tileRenderer schema this app already handles elsewhere.
+  const tileBadges = item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays;
+  if (Array.isArray(tileBadges)) {
+    for (let i = 0; i < tileBadges.length; i++) {
+      const style = tileBadges[i]?.thumbnailOverlayTimeStatusRenderer?.style;
+      if (style === 'LIVE' || style === 'THUMBNAIL_OVERLAY_TIME_STATUS_RENDERER_STYLE_LIVE') return true;
+    }
+  }
+
+  // Fallback 2: an explicit live badge anywhere on the item.
+  if (item.tileRenderer?.contentType === 'TILE_CONTENT_TYPE_LIVE') return true;
+
+  return false;
 }
 
 function isReelAd(item, enableAdBlock) {
@@ -717,9 +858,9 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
 // 150 KB browse response meant ~10k redundant node visits per parse.
 function filterItemsOptimized(items, config, needsContentFiltering, skipEmoji) {
   if (!Array.isArray(items) || items.length === 0) return items;
-  const { enableAdBlock, removeGlobalShorts, hideGuestPrompts } = config;
+  const { enableAdBlock, removeGlobalShorts, removeLiveVideos, hideGuestPrompts } = config;
   const enableLegacyEmojiFix = skipEmoji ? false : config.enableLegacyEmojiFix;
-  if (!removeGlobalShorts && !needsContentFiltering) return items;
+  if (!removeGlobalShorts && !removeLiveVideos && !needsContentFiltering) return items;
 
   let writeIdx = 0;
   for (let i = 0; i < items.length; i++) {
@@ -736,6 +877,8 @@ function filterItemsOptimized(items, config, needsContentFiltering, skipEmoji) {
       if (tile && (tile.style === YT_CONSTANTS.TILE_STYLE_SHORTS || tile.contentType === YT_CONSTANTS.CONTENT_TYPE_SHORTS || tile.onSelectCommand?.reelWatchEndpoint)) keep = false;
       else if (item.reelItemRenderer || item.contentType === YT_CONSTANTS.CONTENT_TYPE_SHORTS || item.onSelectCommand?.reelWatchEndpoint) keep = false;
     }
+
+    if (keep && removeLiveVideos && isLiveItem(item, true)) keep = false;
 
     if (keep) {
       if (enableLegacyEmojiFix) findAndProcessText(item, 20);

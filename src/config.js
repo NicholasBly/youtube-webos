@@ -13,6 +13,18 @@ export const segmentTypes = {
   hook: { color: '#395699', opacity: '0.7', name: 'hook/greetings' }
 };
 
+/**
+ * YouTube ships two wordmarks and swaps between them based on the account's
+ * Premium status. Both are the same asset family, so switching is a matter of
+ * pointing at the other file and matching its intrinsic width - see
+ * applyLogoStyle() in ui.js.
+ */
+export const logoStyles = {
+  default: 'Default',
+  premium: 'Premium',
+  hidden: 'Hidden'
+};
+
 export const shortcutActions = {
   none: 'None',
   refresh_page: 'Refresh Page',
@@ -62,6 +74,7 @@ const configOptions = new Map([
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
   ['upgradeThumbnails', { default: false, desc: 'Max Thumbnail Quality' }],
   ['removeGlobalShorts', { default: false, desc: 'Remove Shorts (Global)' }],
+  ['removeLiveVideos', { default: false, desc: 'Remove Live Videos (Global)' }],
   ['removeTopLiveGames', { default: false, desc: 'Remove Top Live Games' }],
   ['removeMostRelevant', { default: false, desc: 'Remove "Most Relevant" Shelf' }],
   ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
@@ -79,7 +92,7 @@ const configOptions = new Map([
   ['sbMode_highlight', { default: 'seek_bar', desc: 'Highlight' }],
   ['hideEndcards', { default: false, desc: 'Hide Endcards' }],
   ['enableAutoLogin', { default: true, desc: 'Auto Login' }],
-  ['hideLogo', { default: false, desc: 'Hide YouTube Logo' }],
+  ['logoStyle', { default: 'default', desc: 'YouTube Logo' }],
   ['showWatch', { default: false, desc: 'Display Time in UI' }],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
   ['videoShelfOpacity', { default: 100, desc: 'Video shelf opacity' }],
