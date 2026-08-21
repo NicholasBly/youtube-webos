@@ -6,7 +6,7 @@ process.exit(
     normalize('./node_modules/.bin/ares-install'),
     [
       normalize(
-        `./youtube.leanback.v4_${process.env.npm_package_version}_all.ipk`
+        `./dist/youtube.leanback.v4_${process.env.npm_package_version}_all.ipk`
       )
     ],
     { stdio: 'inherit', shell: true }
