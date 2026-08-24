@@ -58,17 +58,21 @@ jobs:
             exit 1
           fi
 
-          # 5. Find the updated .ipk files using the exact VERSION number to prevent grabbing old files
-          MODERN=$(ls *"${VERSION}"*webOS22*.ipk 2>/dev/null | head -n 1 || true)
-          STD=$(ls *"${VERSION}"*.ipk 2>/dev/null | grep -v "webOS22" | head -n 1 || true)
+          # 5. Find the updated .ipk files inside the dist/ folder
+          MODERN_PATH=$(ls dist/*"${VERSION}"*webOS22*.ipk 2>/dev/null | head -n 1 || true)
+          STD_PATH=$(ls dist/*"${VERSION}"*.ipk 2>/dev/null | grep -v "webOS22" | head -n 1 || true)
+
+          # Extract just the filename for clean markdown link labels
+          MODERN_NAME=$(basename "$MODERN_PATH" 2>/dev/null || true)
+          STD_NAME=$(basename "$STD_PATH" 2>/dev/null || true)
 
           # 6. Construct the layout for the comment
           cat <<EOF > comment_body.md
           $TITLE - https://github.com/${{ github.repository }}/commit/${{ github.sha }}
 
-          [$STD](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/$STD?raw=true)
+          [$STD_NAME](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/$STD_PATH?raw=true)
           
-          [$MODERN](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/$MODERN?raw=true)
+          [$MODERN_NAME](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/$MODERN_PATH?raw=true)
 
           ### Patch Notes
 
