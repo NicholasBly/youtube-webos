@@ -54,7 +54,7 @@ const DEBUG = false;
 const SPECULATIVE_MODE = 'eager';
 
 /** Emit WebP derivatives (~25-30% smaller) when the runtime can decode them. */
-const USE_WEBP = true;
+const USE_WEBP = false;
 
 /** Patch already-rendered tiles when verification finds something better. */
 const ENABLE_LIVE_PROMOTION = true;
