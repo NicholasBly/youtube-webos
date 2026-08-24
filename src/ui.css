@@ -166,7 +166,6 @@
   padding-left: 0.75vh;
   padding-right: 0.75vh;
   box-shadow: 0 0 0 2px transparent;
-  transition: box-shadow 0.1s ease-out, background 0.1s ease-out;
 }
 
 .ytaf-settings-section label {
@@ -205,19 +204,7 @@
   outline: none;
 }
 
-.ytaf-ui-container label.focused {
-  background: rgba(0, 212, 255, 0.2);
-  border-radius: 0.75vh;
-  box-shadow: 0 0 0 0.19vh #00d4ff;
-}
-
 .ytaf-ui-container.theme-classic-red .shortcut-control-row:focus,
-.ytaf-ui-container.theme-classic-red label.focused {
-  background: rgba(255, 0, 0, 0.1);
-  box-shadow: 0 0 0 0.19vh rgba(255, 0, 0, 0.5);
-  outline: none;
-}
-
 .ytaf-ui-container.theme-classic-red label:focus-within {
   background: rgba(255, 0, 0, 0.1);
   box-shadow: 0 0 0 0.19vh rgba(255, 0, 0, 0.5);
