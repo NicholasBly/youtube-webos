@@ -2,6 +2,7 @@ import { configGetAll, configAddChangeListener } from './config';
 import { isShortsPage } from './utils';
 import { getWebOSVersion } from './webos-utils';
 import { FetchRegistry } from './hooks';
+import { upgradeResponseThumbnails, thumbnailHookRequired } from './thumbnail-quality.js';
 
 const DEBUG = false;
 const EMOJI_DEBUG = false; 
@@ -53,7 +54,8 @@ const CONFIG_KEYS = {
   MOST_RELEVANT: 'removeMostRelevant',
   GUEST_PROMPTS: 'hideGuestSignInPrompts',
   EMOJI_FIX: 'enableLegacyEmojiFix',
-  ENDCARDS: 'hideEndcards'
+  ENDCARDS: 'hideEndcards',
+  THUMBNAILS: 'upgradeThumbnails'
 };
 
 const EMOJI_RE = /[\u00A9\u00AE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23E9-\u23F3\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB-\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u261D\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692-\u2697\u2699\u269B\u269C\u26A0\u26A1\u26AA\u26AB\u26B0\u26B1\u26BD\u26BE\u26C4\u26C5\u26CE\u26CF\u26D1\u26D3\u26D4\u26E9\u26EA\u26F0-\u26F5\u26F7-\u26FA\u26FD\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B50\u2B55\u3030\u303D\u3297\u3299]|[\uD83C-\uDBFF][\uDC00-\uDFFF]/;
@@ -90,7 +92,8 @@ const cfgFlags = {
   removeMostRelevant: false,
   hideGuestPrompts: false,
   enableLegacyEmojiFix: false,
-  hideEndcards: false
+  hideEndcards: false,
+  upgradeThumbnails: false
 };
 
 function recomputeFilterFlags() {
@@ -106,6 +109,7 @@ function recomputeFilterFlags() {
   cfgFlags.hideGuestPrompts = !!cfgSnapshot[CONFIG_KEYS.GUEST_PROMPTS];
   cfgFlags.enableLegacyEmojiFix = cfgEmojiFixEffective;
   cfgFlags.hideEndcards = !!cfgSnapshot[CONFIG_KEYS.ENDCARDS];
+  cfgFlags.upgradeThumbnails = !!cfgSnapshot[CONFIG_KEYS.THUMBNAILS];
 
   anyFilterEnabled = !!(
     cfgFlags.enableAdBlock ||
@@ -116,7 +120,8 @@ function recomputeFilterFlags() {
     cfgFlags.removeMostRelevant ||
     cfgFlags.hideGuestPrompts ||
     cfgFlags.enableLegacyEmojiFix ||
-    cfgFlags.hideEndcards
+    cfgFlags.hideEndcards ||
+    cfgFlags.upgradeThumbnails
   );
 }
 
@@ -456,6 +461,11 @@ function hookedParse(text, reviver) {
       // settings are off, and its search is depth-bounded.
       removeBlockedNavEntries(data, cfgFlags.removeGlobalShorts, cfgFlags.removeLiveVideos);
     }
+
+    // Thumbnail rewriting runs after filtering, so shelves and ad slots that
+    // were just removed are never rewritten, and it reuses the responseType
+    // already resolved above instead of detecting the shape a second time.
+    if (cfgFlags.upgradeThumbnails) upgradeResponseThumbnails(data, responseType);
 
     if (cfgFlags.enableTrackingBlock) {
         // Single combined pass: strip trackingParams across the whole tree,
@@ -989,7 +999,8 @@ export function parseHookRequired() {
     cfgSnapshot[CONFIG_KEYS.ADBLOCK] ||
     cfgSnapshot[CONFIG_KEYS.GUEST_PROMPTS] ||
     cfgSnapshot[CONFIG_KEYS.ENDCARDS] ||
-    cfgEmojiFixEffective
+    cfgEmojiFixEffective ||
+    thumbnailHookRequired()
   );
 }
 

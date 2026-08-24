@@ -219,8 +219,8 @@ function createConfigCheckbox(key) {
   const labelContent = createElement('div', { class: 'label-content', style: { fontSize: '2.1vh' } }, elmInput, `\u00A0${configGetDesc(key)}`);
   const elmLabel = createElement('label', {}, labelContent);
   
-  elmInput.addEventListener('focus', () => elmLabel.classList.add('focused'));
-  elmInput.addEventListener('blur', () => elmLabel.classList.remove('focused'));
+  // elmInput.addEventListener('focus', () => elmLabel.classList.add('focused'));
+  // elmInput.addEventListener('blur', () => elmLabel.classList.remove('focused'));
   configAddChangeListener(key, (evt) => elmInput.checked = evt.detail.newValue);
   
   return elmLabel;
@@ -1503,6 +1503,8 @@ configAddChangeListener('enableTrackingBlock', syncTrackingBlock);
 configAddChangeListener('enableLegacyEmojiFix', () => syncAdblockHook());
 configAddChangeListener('hideGuestSignInPrompts', () => syncAdblockHook());
 configAddChangeListener('hideEndcards', () => syncAdblockHook());
+// Max Thumbnail Quality rewrites URLs inside the same JSON.parse hook.
+configAddChangeListener('upgradeThumbnails', () => syncAdblockHook());
 
 configAddChangeListener('videoShelfOpacity', () => {
   // Cheap update — just retargets the CSS custom property and toggles the

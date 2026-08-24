@@ -33,14 +33,14 @@ echo [3/5] Creating .ipk package...
 set "STASH=_ipk_stash"
 if exist "%STASH%" rd /s /q "%STASH%"
 md "%STASH%" >nul 2>&1
-for /f "delims=" %%f in ('dir /b /a-d "youtube.leanback.v4_*_all.ipk" 2^>nul') do (
-    move /y "%%f" "%STASH%\" >nul
+for /f "delims=" %%f in ('dir /b /a-d "dist\youtube.leanback.v4_*_all.ipk" 2^>nul') do (
+    move /y "dist\%%f" "%STASH%\" >nul
 )
 
 call npm run package
 if !errorlevel! neq 0 (
     echo ERROR: npm run package failed
-    for /f "delims=" %%f in ('dir /b /a-d "%STASH%\*.ipk" 2^>nul') do move /y "%STASH%\%%f" "." >nul
+    for /f "delims=" %%f in ('dir /b /a-d "%STASH%\*.ipk" 2^>nul') do move /y "%STASH%\%%f" "dist\" >nul
     rd /s /q "%STASH%" 2>nul
     echo Press any key to close...
     pause >nul
@@ -49,16 +49,16 @@ if !errorlevel! neq 0 (
 
 echo [4/5] Renaming .ipk file for modern build...
 :: Only the freshly built modern .ipk can match now - the legacy one is stashed
-for /f "delims=" %%f in ('dir /b /a-d /o-d "youtube.leanback.v4_*_all.ipk" 2^>nul') do (
-    if exist "%%~nf_webOS22+.ipk" del /f /q "%%~nf_webOS22+.ipk"
-    ren "%%f" "%%~nf_webOS22+.ipk"
-    echo Renamed modern build: "%%f" -^> "%%~nf_webOS22+.ipk"
+for /f "delims=" %%f in ('dir /b /a-d /o-d "dist\youtube.leanback.v4_*_all.ipk" 2^>nul') do (
+    if exist "dist\%%~nf_webOS22+.ipk" del /f /q "dist\%%~nf_webOS22+.ipk"
+    ren "dist\%%f" "%%~nf_webOS22+.ipk"
+    echo Renamed modern build: "dist\%%f" -^> "dist\%%~nf_webOS22+.ipk"
     goto :rename_done
 )
 :rename_done
 
 :: Restore the legacy .ipk(s) exactly as they were
-for /f "delims=" %%f in ('dir /b /a-d "%STASH%\*.ipk" 2^>nul') do move /y "%STASH%\%%f" "." >nul
+for /f "delims=" %%f in ('dir /b /a-d "%STASH%\*.ipk" 2^>nul') do move /y "%STASH%\%%f" "dist\" >nul
 rd /s /q "%STASH%" 2>nul
 
 echo [5/5] Copying userScript.js to clipboard...

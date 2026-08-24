@@ -20,7 +20,6 @@ import './app_api/index';
 import './ui.js'; // Registers the green-key handler, options panel, video-quality, global styles
 import './sponsorblock.js';
 import './emoji-font.js';
-import './thumbnail-quality.js';
 import './screensaver-fix.js';
 import './yt-fixes.css';
 import './watch.js';
