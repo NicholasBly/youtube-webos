@@ -840,8 +840,21 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
         // skipEmoji: the `findAndProcessText(item, 20)` below walks this whole
         // shelf, nested items included, so doing it per-item here as well was
         // pure duplicate work.
-        if (shelf.content.horizontalListRenderer?.items) filterItemsOptimized(shelf.content.horizontalListRenderer.items, config, needsContentFiltering, true);
-        if (shelf.content.gridRenderer?.items) filterItemsOptimized(shelf.content.gridRenderer.items, config, needsContentFiltering, true);
+        const horizItems = shelf.content.horizontalListRenderer?.items;
+        const gridItems = shelf.content.gridRenderer?.items;
+        if (horizItems) filterItemsOptimized(horizItems, config, needsContentFiltering, true);
+        if (gridItems) filterItemsOptimized(gridItems, config, needsContentFiltering, true);
+
+        // A shelf we emptied has to go with its items. Left in place it still
+        // has a title and a content box, so the app renders the header plus a
+        // <ytlr-ghost-surface> of skeleton tiles and waits forever for content
+        // that was already removed - the "Live now" row of grey boxes.
+        // Guarded on the lists having existed: a shelf whose content uses some
+        // other renderer was never filtered here and must not be judged empty.
+        if ((horizItems || gridItems) && !horizItems?.length && !gridItems?.length) {
+          keepItem = false;
+          if (DEBUG) debugLog(`${contextName ? contextName + ': ' : ''}Dropped emptied shelf "${getShelfTitleOptimized(shelf)}"`);
+        }
       }
     } 
     else if (hasAdRenderer(item, enableAdBlock) || hasGuestPromptRenderer(item, hideGuestPrompts) || isReelAd(item, enableAdBlock)) {

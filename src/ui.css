@@ -156,9 +156,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 2.22vh;
+  font-size: 2.5vh;
   font-weight: 400;
-  line-height: 0.85;
+  line-height: 0.95;
   padding: 1.0vh 0;
   cursor: pointer;
   border-radius: 0.75vh;
@@ -398,7 +398,7 @@
   padding: 0.6vh 0.75vh;
   cursor: pointer;
   border-radius: 0.75vh;
-  font-size: 2.22vh;
+  font-size: 2.5vh;
   margin: 0 -0.75vh 0.2vh;
   box-shadow: 0 0 0 2px transparent;
 }
@@ -512,4 +512,73 @@
 .ytaf-ui-container > div.ytaf-settings-page {
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+   Main settings page layout
+
+   Section chrome lives here rather than in inline styles on createSection(), so
+   the whole panel retunes from one place. The two-column variant and the larger
+   type are a pair: halving the height of Cosmetic Filtering is what buys the
+   room to grow the text without pushing the page into a scroll.
+
+   Flexbox, not grid - webOS 3 is Chrome 38 and CSS Grid did not ship until 57.
+   --------------------------------------------------------------------------- */
+
+.ytaf-settings-section {
+  margin: 1vh 0 0.5vh;
+  padding: 0 1vh 0.5vh;
+  border: 0.19vh solid #444;
+  border-radius: 0.6vh;
+}
+
+.ytaf-settings-section > .section-title {
+  color: #aaa;
+  font-size: 2.6vh;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05vh;
+  margin: 0.6vh 0 0.5vh;
+}
+
+.ytaf-ui-container.theme-classic-red .ytaf-settings-section > .section-title {
+  color: #bbb;
+}
+
+/* Two-column sections.
+
+   `flex: none` with an explicit width rather than `flex: 0 0 50%`: old Chrome
+   miscomputes a percentage flex-basis against a border-box child, and these
+   rows carry horizontal padding. Width plus border-box is the boring, stable
+   way to say the same thing.
+
+   The negative side margins the single-column rows use to bleed their focus
+   highlight past the section padding are removed here - at half width they
+   would push the second column out of the row and force a wrap. */
+#ytaf-page-main .ytaf-section-2col {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+#ytaf-page-main .ytaf-section-2col > .section-title {
+  flex: none;
+  width: 100%;
+}
+
+#ytaf-page-main .ytaf-section-2col > label {
+  box-sizing: border-box;
+  flex: none;
+  width: 50%;
+  margin: 0 0 0.25vh;
+  padding: 0.9vh 1vh;
+  /* Half-width rows can wrap to two lines; 0.95 is tuned for single-line rows
+     and reads as collision once they do. */
+  line-height: 1.15;
+}
+
+/* An odd number of rows (guest mode adds a seventh) leaves the last one alone
+   on its row - let it keep half width so the column edge stays straight. */
+#ytaf-page-main .ytaf-section-2col > label:last-child {
+  margin-bottom: 0.25vh;
 }

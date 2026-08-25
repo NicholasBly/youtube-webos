@@ -25,6 +25,19 @@ export const logoStyles = {
   hidden: 'Hidden'
 };
 
+/**
+ * Max Thumbnail Quality strategy.
+ *
+ * 'safe'    - only ever emit a derivative already known to exist, so a tile can
+ *             never land on a 404. Upgrades past that arrive once verified.
+ * 'eager'   - go straight to maxresdefault. Sharpest first paint, but videos
+ *             with no maxres show a grey box until the correction lands.
+ */
+export const thumbnailQualityModes = {
+  safe: 'hq',
+  eager: 'maxres'
+};
+
 export const shortcutActions = {
   none: 'None',
   refresh_page: 'Refresh Page',
@@ -73,6 +86,7 @@ const configOptions = new Map([
   ['enableTrackingBlock', { default: false, desc: 'Reduce Telemetry & Tracking' }],
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
   ['upgradeThumbnails', { default: false, desc: 'Max Thumbnail Quality' }],
+  ['thumbnailQualityMode', { default: 'safe', desc: 'Thumbnail Strategy' }],
   ['removeGlobalShorts', { default: false, desc: 'Remove Shorts (Global)' }],
   ['removeLiveVideos', { default: false, desc: 'Remove Live Videos (Global)' }],
   ['removeTopLiveGames', { default: false, desc: 'Remove Top Live Games' }],

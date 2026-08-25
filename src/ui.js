@@ -1,6 +1,6 @@
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
-import { logoStyles } from './config.js';
+import { logoStyles, thumbnailQualityModes } from './config.js';
 import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight, forcePreviewModes } from './config.js';
 import './ui.css';
 import './auto-login.js';
@@ -226,9 +226,12 @@ function createConfigCheckbox(key) {
   return elmLabel;
 }
 
-function createSection(title, elements) {
-  const legend = createElement('div', { text: title, style: { color: '#aaa', fontSize: '2.4vh', marginBottom: '0.4vh', fontWeight: 'bold', textTransform: 'uppercase' }});
-  const fieldset = createElement('div', { class: 'ytaf-settings-section', style: { marginTop: '1vh', marginBottom: '0.5vh', padding: '0vh', border: '2px solid #444', borderRadius: '5px' }}, legend, ...elements);
+// `variant` is an extra class on the section, used to opt a section into the
+// two-column layout. Sizing and spacing moved to ui.css so the whole panel can
+// be retuned in one place instead of through inline styles on every section.
+function createSection(title, elements, variant) {
+  const legend = createElement('div', { text: title, class: 'section-title' });
+  const fieldset = createElement('div', { class: 'ytaf-settings-section' + (variant ? ' ' + variant : '') }, legend, ...elements);
   return fieldset;
 }
 
@@ -286,10 +289,19 @@ function createCycleControl(configKey, labelText, modesArray, displayMap = null,
     return container;
 }
 
-function createLogoControl() {
-  const control = createCycleControl('logoStyle', configGetDesc('logoStyle'),
-    Object.keys(logoStyles), logoStyles);
-  
+/**
+ * A cycle control that lines up with the checkbox rows around it.
+ *
+ * A .shortcut-control-row has no checkbox, so its label starts flush against
+ * the row edge while every neighbouring label starts one checkbox-width in. The
+ * hidden input below reserves exactly that width, which is cheaper and steadier
+ * across themes than hard-coding a padding value that has to track the checkbox
+ * CSS by hand.
+ */
+function createAlignedCycleControl(configKey, displayMap) {
+  const control = createCycleControl(configKey, configGetDesc(configKey),
+    Object.keys(displayMap), displayMap);
+
   const label = control.querySelector('.shortcut-label');
   if (label) {
     label.style.color = 'inherit'; 
@@ -307,9 +319,25 @@ function createLogoControl() {
     
     label.textContent = '';
     label.appendChild(dummyBox);
-    label.appendChild(document.createTextNode('\u00A0' + configGetDesc('logoStyle')));
+    label.appendChild(document.createTextNode('\u00A0' + configGetDesc(configKey)));
   }
-  
+
+  return control;
+}
+
+const createLogoControl = () => createAlignedCycleControl('logoStyle', logoStyles);
+function createThumbnailQualityControl() {
+  const control = createAlignedCycleControl('thumbnailQualityMode', thumbnailQualityModes);
+  // The strategy only means anything while the feature it tunes is on. Greyed
+  // out and dropped from the focus order rather than hidden, so the rows below
+  // it do not jump every time the checkbox above is toggled.
+  const sync = () => {
+    const on = configRead('upgradeThumbnails');
+    control.style.opacity = on ? '1' : '0.5';
+    control.tabIndex = on ? 0 : -1;
+  };
+  configAddChangeListener('upgradeThumbnails', sync);
+  sync();
   return control;
 }
 
@@ -550,7 +578,7 @@ function createOptionsPanel() {
   cosmeticGroup.push(elRemoveGlobalShorts, elRemoveLiveVideos, elRemoveTopLiveGames, elRemoveMostRelevant);
   if (isGuestMode()) { elGuestPrompts = createConfigCheckbox('hideGuestSignInPrompts'); cosmeticGroup.push(elGuestPrompts); }
 
-  pageMain.appendChild(createSection('Cosmetic Filtering', cosmeticGroup));
+  pageMain.appendChild(createSection('Cosmetic Filtering', cosmeticGroup, 'ytaf-section-2col'));
 
   // Dependency Management
   const setState = (el, enabled) => { if (!el) return; const input = el.querySelector('input'); if (input) { input.disabled = !enabled; el.style.opacity = enabled ? '1' : '0.5'; }};
@@ -580,7 +608,7 @@ function createOptionsPanel() {
   //createConfigCheckbox('enablePlaybackSpeed'),
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
-  pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
+  pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
   elmContainer.appendChild(pageMain);
 
   // --- Pages 2-4: built off the critical path ---
