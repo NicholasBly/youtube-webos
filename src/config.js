@@ -34,8 +34,8 @@ export const logoStyles = {
  *             with no maxres show a grey box until the correction lands.
  */
 export const thumbnailQualityModes = {
-  safe: 'hq',
-  eager: 'maxres'
+  safe: 'Original',
+  eager: 'Fast'
 };
 
 export const shortcutActions = {
@@ -105,7 +105,7 @@ const configOptions = new Map([
   ['sbMode_hook', { default: 'seek_bar', desc: 'Hook/Greetings' }],
   ['sbMode_highlight', { default: 'seek_bar', desc: 'Highlight' }],
   ['hideEndcards', { default: false, desc: 'Hide Endcards' }],
-  ['enableAutoLogin', { default: true, desc: 'Auto Login' }],
+  ['enableAutoLogin', { default: true, desc: 'Bypass Nag Screens' }],
   ['logoStyle', { default: 'default', desc: 'YouTube Logo' }],
   ['showWatch', { default: false, desc: 'Display Time in UI' }],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],

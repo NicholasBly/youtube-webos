@@ -567,18 +567,48 @@
 }
 
 #ytaf-page-main .ytaf-section-2col > label {
-  box-sizing: border-box;
   flex: none;
   width: 50%;
-  margin: 0 0 0.25vh;
-  padding: 0.9vh 1vh;
-  /* Half-width rows can wrap to two lines; 0.95 is tuned for single-line rows
-     and reads as collision once they do. */
-  line-height: 1.15;
 }
 
 /* An odd number of rows (guest mode adds a seventh) leaves the last one alone
    on its row - let it keep half width so the column edge stays straight. */
 #ytaf-page-main .ytaf-section-2col > label:last-child {
   margin-bottom: 0.25vh;
+}
+
+/* ---------------------------------------------------------------------------
+   Row metrics
+
+   Every row in the settings body is measured by one rule, because they had
+   drifted apart in three separate ways and the seams showed:
+
+     - checkbox rows padded 1.0vh, cycle-control rows 0.6vh
+     - only checkbox rows set a line-height, so a cycle row resolved against the
+       browser default of roughly 1.2 and sat taller than its neighbours
+     - `.ytaf-settings-section label` cancelled the -0.75vh bleed margin but
+       nothing cancelled it for `.shortcut-control-row`, so the cycle rows hung
+       three quarters of a vh further left than the checkboxes above them
+
+   Sizing all of them together is what keeps the gaps even; the alternative is
+   re-deriving four numbers by hand every time one of them moves.
+   --------------------------------------------------------------------------- */
+
+.ytaf-ui-container label,
+.ytaf-ui-container .shortcut-control-row {
+  box-sizing: border-box;
+  padding: 1vh 0.75vh;
+  margin: 0 -0.75vh 0.2vh;
+  line-height: 0.95;
+  /* One line of 2.5vh text. Pins the row against children that bring their own
+     box - the cycle arrows and the hidden alignment checkbox both do - so a row
+     cannot grow just because of what happens to sit inside it. */
+  min-height: 2.375vh;
+}
+
+/* Inside a section the bleed margin is not wanted: the section already supplies
+   the horizontal padding, and bleeding past it is what misaligned the columns. */
+.ytaf-settings-section label,
+.ytaf-settings-section .shortcut-control-row {
+  margin: 0 0 0.2vh;
 }
