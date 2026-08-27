@@ -1517,10 +1517,8 @@ configAddChangeListener('enableAdBlock', () => {
   syncTrackingBlock();
 });
 
-// Tracking Block only runs when Ad Blocking is also on - see the greyed-out
-// checkbox in the Cosmetic Filtering section.
 function syncTrackingBlock() {
-  if (configRead('enableTrackingBlock') && configRead('enableAdBlock')) initTrackingBlock();
+  if (configRead('enableTrackingBlock')) initTrackingBlock();
   else destroyTrackingBlock();
 }
 

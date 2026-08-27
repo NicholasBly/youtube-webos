@@ -17,13 +17,22 @@ const cachedWebOSVersion = getWebOSVersion();
 // --- CONSTANTS & CONFIGURATION ---
 
 // Single source of truth — TELEMETRY_REGEX is derived from this list.
-// '/api/stats/watchtime' intentionally omitted (affects watch time statistics).
+//
+// Two omissions are deliberate. '/api/stats/watchtime' and '/api/stats/playback'
+// are what register a view and its duration against the creator; dropping them
+// buys little privacy - the request carries nothing the player has not already
+// told the server - and quietly costs the channel its numbers.
+//
+// Everything listed is reachable from the fetch/XHR hooks. Things that are not
+// - static.doubleclick.net/instream/ad_status.js and www.google.com/js/th/*.js
+// both arrive as <script> tags - would need DOM-level blocking instead.
 const BLOCKED_TELEMETRY_PATHS = [
   '/youtubei/v1/log_event',
   '/ptracking',
   '/api/stats/atr',
   '/api/stats/qoe',
-  '/pagead/viewthroughconversion'
+  '/pagead/',
+  '/eligibility_check'
 ];
 
 const TELEMETRY_REGEX = new RegExp(
@@ -1043,3 +1052,11 @@ export function destroyAdblock() {
 }
 
 initAdblock();
+
+if (cfgSnapshot[CONFIG_KEYS.TRACKING]) {
+  try {
+    initTrackingBlock();
+  } catch (e) {
+    console.warn('[AdBlock] Early tracking block install failed:', e.message);
+  }
+}
