@@ -1,6 +1,6 @@
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
-import { logoStyles, thumbnailQualityModes } from './config.js';
+import { logoStyles, thumbnailQualityModes, videoCodecModes } from './config.js';
 import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight, forcePreviewModes } from './config.js';
 import './ui.css';
 import './auto-login.js';
@@ -326,6 +326,7 @@ function createAlignedCycleControl(configKey, displayMap) {
 }
 
 const createLogoControl = () => createAlignedCycleControl('logoStyle', logoStyles);
+const createVideoCodecControl = () => createAlignedCycleControl('forceVideoCodec', videoCodecModes);
 function createThumbnailQualityControl() {
   const control = createAlignedCycleControl('thumbnailQualityMode', thumbnailQualityModes);
   // The strategy only means anything while the feature it tunes is on. Greyed
@@ -606,6 +607,7 @@ function createOptionsPanel() {
   pageMain.appendChild(createSection('Video Player',
   [createConfigCheckbox('forceHighResVideo'),
   //createConfigCheckbox('enablePlaybackSpeed'),
+  createVideoCodecControl(),
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
   pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));

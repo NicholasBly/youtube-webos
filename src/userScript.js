@@ -10,6 +10,9 @@ import './polyfills.js';
 import './domrect-polyfill';
 import './adblock.js';
 import './hooks/json-stringify';
+// Must land before the player runs its one-and-only codec capability probe,
+// so it goes here rather than with the UI modules further down.
+import './force-codec.js';
 
 import { SELECTORS } from './utils';
 import { handleLaunch, extractLaunchParams } from './launch.js';

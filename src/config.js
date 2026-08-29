@@ -80,6 +80,23 @@ export const forcePreviewModes = {
   force_off: 'Force Off'
 };
 
+/**
+ * Force Video Codec.
+ *
+ * 'auto' leaves the player and the server to negotiate, which is what the app
+ * has always done. Everything else narrows what the player will accept - see
+ * force-codec.js. 'no_av1' is kept separate from 'vp9' because opting out of
+ * AV1 (issue #143) should not also cost a set its AVC fallback.
+ */
+export const videoCodecModes = {
+  auto: 'Auto',
+  av1: 'AV1',
+  vp9: 'VP9',
+  avc: 'AVC (H.264)',
+  hevc: 'HEVC (H.265)',
+  no_av1: 'Avoid AV1'
+};
+
 const configOptions = new Map([
   ['uiTheme', { default: 'blue-force-field', desc: 'UI Theme' }],
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
@@ -116,6 +133,7 @@ const configOptions = new Map([
   ['enableLegacyEmojiFix', { default: true, desc: 'Emoji + Characters Fix' }],
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],
+  ['forceVideoCodec', { default: 'auto', desc: 'Force Video Codec' }],
   //['enablePlaybackSpeed', { default: true, desc: 'Playback Speed Control' }],
   ['disableNotifications', { default: false, desc: 'Disable Notifications' }]
 ]);
