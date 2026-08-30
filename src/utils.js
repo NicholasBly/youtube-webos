@@ -1,0 +1,295 @@
+import './polyfills.js';
+
+// Re-exported for existing import sites; the implementations live in
+// launch.js so index.js can pull them without utils.js's side effects.
+export { extractLaunchParams, handleLaunch } from './launch.js';
+
+export const SELECTORS = {
+  PLAYER_ID: 'ytlr-player__player-container-player',
+  PLAYER_CONTAINER: 'ytlr-player__player-container',
+  WATCH_PAGE_CLASS: 'WEB_PAGE_TYPE_WATCH',
+  SHORTS_PAGE_CLASS: 'WEB_PAGE_TYPE_SHORTS',
+  ACCOUNT_SELECTOR: 'WEB_PAGE_TYPE_ACCOUNT_SELECTOR',
+  SEARCH_PAGE_CLASS: 'WEB_PAGE_TYPE_SEARCH'
+};
+
+export const REMOTE_KEYS = {
+  ENTER:  { code: 13,  key: 'Enter' },
+  BACK:   { code: 461, key: 'Back' },
+  LEFT:   { code: 37,  key: 'ArrowLeft' },
+  UP:     { code: 38,  key: 'ArrowUp' },
+  RIGHT:  { code: 39,  key: 'ArrowRight' },
+  DOWN:   { code: 40,  key: 'ArrowDown' },
+  RED:    { code: 403, key: 'Red',    alt: [166] },
+  GREEN:  { code: 404, key: 'Green',  alt: [172] },
+  YELLOW: { code: 405, key: 'Yellow', alt: [170] },
+  // Secondary yellow keycode emitted by some webOS remotes alongside 405.
+  // Used by screensaver-fix.js to send both halves of the keep-alive burst.
+  YELLOW_ALT: { code: 170, key: 'Yellow', charCode: 170 },
+  BLUE:   { code: 406, key: 'Blue',   alt: [167, 191] }
+};
+
+// Numeric keys 0-9 are mechanical: keyCode 48 + n.
+for (let i = 0; i <= 9; i++) REMOTE_KEYS[i] = { code: 48 + i, key: String(i) };
+
+// Single source of truth for color-key codes, including the alternate codes
+// emitted by some webOS remotes. ui.js consumes this instead of maintaining a
+// parallel table.
+export const COLOR_CODE_MAP = new Map();
+for (const name of ['RED', 'GREEN', 'YELLOW', 'BLUE']) {
+  const def = REMOTE_KEYS[name];
+  const lower = name.toLowerCase();
+  COLOR_CODE_MAP.set(def.code, lower);
+  if (def.alt) def.alt.forEach((code) => { COLOR_CODE_MAP.set(code, lower); });
+}
+
+let _isWatchPage = false;
+let _isShortsPage = false;
+let _isAccountSelectorPage = false;
+let _isSearchPage = false;
+
+// Cache document.body to avoid DOM lookup overhead if used frequently
+let _body = typeof document !== 'undefined' ? document.body : null;
+
+function updatePageState() {
+    if (!_body) {
+        _body = document.body;
+        if (!_body) return;
+    }
+    
+    const cl = _body.classList;
+    const newWatch = cl.contains(SELECTORS.WATCH_PAGE_CLASS);
+    const newShorts = cl.contains(SELECTORS.SHORTS_PAGE_CLASS);
+    const newAccountSelector = cl.contains(SELECTORS.ACCOUNT_SELECTOR);
+    const newSearch = cl.contains(SELECTORS.SEARCH_PAGE_CLASS);
+
+    if (newWatch === _isWatchPage &&
+        newShorts === _isShortsPage &&
+        newAccountSelector === _isAccountSelectorPage &&
+        newSearch === _isSearchPage) return;
+
+    _isWatchPage = newWatch;
+    _isShortsPage = newShorts;
+    _isAccountSelectorPage = newAccountSelector;
+    _isSearchPage = newSearch;
+
+    window.dispatchEvent(new CustomEvent('ytaf-page-update', {
+        detail: {
+            isWatch: _isWatchPage,
+            isShorts: _isShortsPage,
+            isAccountSelector: _isAccountSelectorPage,
+            isSearch: _isSearchPage
+        }
+    }));
+}
+
+if (typeof document !== 'undefined') {
+    const initObserver = () => {
+        _body = document.body;
+        const pageObserver = new MutationObserver((mutations) => {
+            for (let m of mutations) {
+                // Cheap pre-filter: only care if a WEB_PAGE_TYPE_ class actually changed.
+                // Body classes flip constantly for focus/animation state.
+                const oldV = m.oldValue || '';
+                const newV = m.target.className || '';
+                if (newV === oldV) continue;
+                if (oldV.indexOf('WEB_PAGE_TYPE_') === -1 && newV.indexOf('WEB_PAGE_TYPE_') === -1) continue;
+                updatePageState();
+                break;
+            }
+        });
+        pageObserver.observe(_body, {
+            attributes: true,
+            attributeFilter: ['class'],
+            attributeOldValue: true
+        });
+        updatePageState();
+    };
+
+    if (document.body) {
+        initObserver();
+    } else {
+        document.addEventListener('DOMContentLoaded', initObserver);
+    }
+}
+
+export const isWatchPage = () => _isWatchPage;
+export const isShortsPage = () => _isShortsPage;
+export const isSearchPage = () => _isSearchPage;
+
+// Cached <video> lookup. Several shortcut handlers re-query
+// document.querySelector('video') per keypress; cache it for the lifetime of
+// a watch/shorts session and invalidate when the page state changes.
+let _cachedVideo = null;
+export function getVideo() {
+  if (_cachedVideo && _cachedVideo.isConnected) return _cachedVideo;
+  _cachedVideo = document.querySelector('video');
+  return _cachedVideo;
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('ytaf-page-update', (e) => {
+    // Drop the cache whenever we leave a video page; the next getVideo() call
+    // will re-query on demand.
+    if (!e.detail.isWatch && !e.detail.isShorts) _cachedVideo = null;
+  });
+}
+
+export function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    const context = this; 
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(context, args), wait);
+  };
+}
+
+let cachedGuestMode = null;
+
+export function invalidateGuestModeCache() {
+  cachedGuestMode = null;
+}
+
+export function isGuestMode() {
+  if (cachedGuestMode !== null) return cachedGuestMode;
+
+  try {
+    const lastIdentity = window.localStorage.getItem('yt.leanback.default::last-identity-used');
+    if (lastIdentity) {
+      const parsed = JSON.parse(lastIdentity);
+      if (parsed?.data?.identityType === 'UNAUTHENTICATED_IDENTITY_TYPE_GUEST') {
+        return (cachedGuestMode = true);
+      }
+      return (cachedGuestMode = false); 
+    }
+    
+    const autoNav = window.localStorage.getItem('yt.leanback.default::AUTONAV_FOR_LIVING_ROOM');
+    if (autoNav) {
+      const parsed = JSON.parse(autoNav);
+      if (parsed?.data?.guest === true) {
+        return (cachedGuestMode = true);
+      }
+    }
+    
+    return (cachedGuestMode = false);
+  } catch {
+    return (cachedGuestMode = false);
+  }
+}
+
+// Define Property Descriptor factory to reduce object allocation
+const createDescriptor = (val) => ({ get: () => val });
+
+// Feature Detect once at startup
+let createEventStrategy;
+
+try {
+    // Check if modern constructor works
+    new KeyboardEvent('keydown');
+    createEventStrategy = (type, opts) => new KeyboardEvent(type, opts);
+} catch {
+    // Fallback for webOS 3.0 / Legacy
+    createEventStrategy = (type, opts) => {
+        const evt = document.createEvent('KeyboardEvent');
+        if (evt.initKeyboardEvent) {
+             evt.initKeyboardEvent(type, true, false, window, opts.key, 0, '', false);
+        } else {
+             evt.initEvent(type, true, true);
+        }
+        return evt;
+    };
+}
+
+// Property stamped onto every KeyboardEvent this module dispatches. Read by
+// perf_mon.js (and anything else that needs "was this a real remote press?").
+export const SYNTHETIC_KEY_FLAG = '__ytafSynthetic';
+
+export function sendKey(keyDef, target = document.body) {
+  if (!keyDef?.code) { 
+      if (process.env.NODE_ENV !== 'production') console.warn('[Utils] Invalid key definition');
+      return; 
+  }
+
+  const eventOpts = {
+    bubbles: true, cancelable: false, composed: true, view: window,
+    key: keyDef.key, code: keyDef.key, keyCode: keyDef.code, which: keyDef.code, charCode: keyDef.charCode || 0
+  };
+
+  const keyDownEvt = createEventStrategy('keydown', eventOpts);
+  const keyUpEvt = createEventStrategy('keyup', eventOpts);
+
+  // Explicitly mark keys this mod synthesises. Listeners that must only react
+  // to a real remote press (perf_mon's hotkey, for one) cannot rely on
+  // `evt.isTrusted === false` alone: on Chromium 38 events built via
+  // document.createEvent('KeyboardEvent') can report isTrusted as undefined,
+  // and `undefined === false` is false — so the guard would fail open and
+  // treat screensaver-fix's 30s keep-alive burst as a user pressing a button.
+  keyDownEvt[SYNTHETIC_KEY_FLAG] = true;
+  keyUpEvt[SYNTHETIC_KEY_FLAG] = true;
+
+  const codeDesc = createDescriptor(keyDef.code);
+  const charDesc = createDescriptor(keyDef.charCode || 0);
+
+  Object.defineProperties(keyDownEvt, { keyCode: codeDesc, which: codeDesc, charCode: charDesc });
+  Object.defineProperties(keyUpEvt,   { keyCode: codeDesc, which: codeDesc, charCode: charDesc });
+
+  target.dispatchEvent(keyDownEvt);
+  target.dispatchEvent(keyUpEvt);
+}
+
+export async function waitForChildAdd(parent, predicate, observeAttributes, abortSignal, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    let timer = null;
+    
+    const obs = new MutationObserver((mutations) => {
+      for (let i = 0; i < mutations.length; i++) {
+        const mut = mutations[i];
+        
+        if (mut.type === 'attributes') {
+          if (predicate(mut.target)) {
+            cleanup();
+            resolve(mut.target);
+            return;
+          }
+        } else if (mut.type === 'childList') {
+          const addedNodes = mut.addedNodes;
+          for (let j = 0; j < addedNodes.length; j++) {
+            const node = addedNodes[j];
+            if (node.nodeType !== 1) continue; 
+            
+            if (predicate(node)) {
+              cleanup();
+              resolve(node);
+              return;
+            }
+          }
+        }
+      }
+    });
+
+    const cleanup = () => {
+        obs.disconnect();
+        if (timer) clearTimeout(timer);
+        if (abortSignal) abortSignal.removeEventListener('abort', onAbort);
+    };
+
+    const onAbort = () => {
+        cleanup();
+        reject(new Error('aborted'));
+    };
+
+    if (abortSignal) abortSignal.addEventListener('abort', onAbort);
+
+    if (timeoutMs > 0) {
+        timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('waitForChildAdd timed out'));
+        }, timeoutMs);
+    }
+
+    obs.observe(parent, {
+      subtree: true,
+      attributes: observeAttributes,
+      childList: true
+    });
+  });
+}

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+
+    "lib": ["ESNext", "DOM"]
+  },
+  "include": ["./src"],
+  "references": [{ "path": "./tsconfig.tooling.json" }]
+}
