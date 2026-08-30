@@ -33,11 +33,11 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-webos/blob/main/CHANGELOG.md)
 
-<img width="537" height="652" alt="webOS_TV_25_Simulator_1 4 3_wUCf23ToCs" src="https://github.com/user-attachments/assets/dbf9fe00-6205-4a1c-ac13-f43271af3e23" />
+<img width="642" height="752" alt="webOS_TV_26_Simulator_1 5 0_x16zOsWFaw" src="https://github.com/user-attachments/assets/046b0361-0648-4750-ab97-0b64b553ec17" />
 
-<img width="537" height="569" alt="webOS_TV_25_Simulator_1 4 3_g0uM4TjeIc" src="https://github.com/user-attachments/assets/857a939f-80d6-4cc4-9ecd-d07ecd02b552" />
+<img width="642" height="631" alt="webOS_TV_25_Simulator_1 4 3_UaFvPZ67yL" src="https://github.com/user-attachments/assets/61963e1b-8211-439a-9f66-50b669940233" />
 
-<img width="537" height="507" alt="webOS_TV_25_Simulator_1 4 3_OMUQXUo48c" src="https://github.com/user-attachments/assets/60ab37ee-0322-438b-91b5-09dee100b4bf" />
+<img width="642" height="576" alt="webOS_TV_25_Simulator_1 4 3_uW1aZQeVle" src="https://github.com/user-attachments/assets/877a22b6-6814-457b-926c-cac50ed36077" />
 
 <img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/84c8b6b3-4c82-4a63-9100-b236f2dd3225" />
 
