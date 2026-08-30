@@ -1,0 +1,50 @@
+{
+  "paging": {
+    "page": 1,
+    "count": 2,
+    "maxPage": 1,
+    "itemsTotal": 2
+  },
+  "packages": [
+    {
+      "id": "youtube.leanback.v4",
+      "title": "YouTube AdFree",
+      "description": "YouTube AdFree",
+      "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
+      "manifest": {
+        "id": "youtube.leanback.v4",
+        "version": "0.8.3",
+        "type": "web",
+        "title": "YouTube AdFree",
+        "appDescription": "YouTube AdFree",
+        "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
+        "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
+        "rootRequired": false,
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.8.3/youtube.leanback.v4_0.8.3_all.ipk",
+        "ipkHash": {
+          "sha256": "59ccfe9b9df26de137783a42748f0db9210135d36a4066ddfc04c51820a8cf36"
+        }
+      }
+    },
+    {
+      "id": "youtube.leanback.v4.webos22",
+      "title": "YouTube AdFree (webOS 22+)",
+      "description": "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware.",
+      "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
+      "manifest": {
+        "id": "youtube.leanback.v4.webos22",
+        "version": "0.8.3",
+        "type": "web",
+        "title": "YouTube AdFree (webOS 22+)",
+        "appDescription": "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware.",
+        "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
+        "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
+        "rootRequired": false,
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.8.3/youtube.leanback.v4_0.8.3_all_webOS22%2B.ipk",
+        "ipkHash": {
+          "sha256": "20ed2cc5fa40f2795730f2b6682c1043918fb95623dce550f78ddec87d075686"
+        }
+      }
+    }
+  ]
+}
