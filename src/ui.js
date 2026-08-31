@@ -635,7 +635,9 @@ function createOptionsPanel() {
       ...['Sponsor', 'Intro', 'Outro', 'Interaction', 'SelfPromo', 'MusicOfftopic', 'Filler', 'Hook', 'Preview'].map(s => createSegmentControl(`sbMode_${s.toLowerCase()}`)),
       createSegmentControl('sbMode_highlight'),
       createConfigCheckbox('enableMutedSegments'),
-  	createConfigCheckbox('skipSegmentsOnce')
+  	createConfigCheckbox('skipSegmentsOnce'),
+      createConfigCheckbox('sbFullVideoLabel'),
+      createConfigCheckbox('sbShowTimeWithSkips')
     );
     pageSponsor.appendChild(elmBlock);
     pageSponsor.appendChild(createElement('div', {}, createElement('small', { text: 'Sponsor segments skipping - https://sponsor.ajay.app' })));

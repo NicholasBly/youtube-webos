@@ -2,6 +2,7 @@ import sha256 from 'tiny-sha256';
 import { configAddChangeListener, configRemoveChangeListener, segmentTypes, configGetAll } from './config';
 import { showNotification } from './notifications.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
+import sponsorBlockLabels, { isFullVideoSegment } from './sponsorblock-labels.js';
 import { isLegacyWebOS } from './webos-utils.js';
 import { getVideo, waitForChildAdd } from './utils.js';
 import './sponsorblock.css';
@@ -26,6 +27,7 @@ const CONFIG_MAPPING = {
 
 const EXTRA_CONFIG_KEYS = [
     'enableMutedSegments', 'sbMode_highlight', 'skipSegmentsOnce',
+    'sbFullVideoLabel', 'sbShowTimeWithSkips',
     // Color keys so the overlay redraws when the user changes a segment color
     ...Object.keys(segmentTypes).map(k => `${k}Color`)
 ];
@@ -41,7 +43,17 @@ const FETCH_CATEGORIES = encodeURIComponent(JSON.stringify([
     'musicofftopic', 'preview', 'chapter', 'poi_highlight',
     'filler', 'hook'
 ]));
-const FETCH_ACTION_TYPES = encodeURIComponent(JSON.stringify(['skip', 'mute']));
+/**
+ * Full-video labels are always requested.
+ *
+ * They were originally fetched only when the badge was switched on, to keep the
+ * default request identical. That made enabling the option mid-video do
+ * nothing: the segment list had already been fetched without them, so there was
+ * no label to show until the next video. One extra actionType on a request that
+ * happens anyway is a much smaller cost than a setting that silently does not
+ * apply.
+ */
+const FETCH_ACTION_TYPES = encodeURIComponent(JSON.stringify(['skip', 'mute', 'full']));
 
 const HAS_ABORT_CONTROLLER = typeof AbortController !== 'undefined';
 
@@ -377,6 +389,7 @@ class SponsorBlockHandler {
             }
             this.rebuildSkipSegments();
             this.drawOverlay();
+            this.updateLabels();
         };
         
         const configKeys = [...Object.values(CONFIG_MAPPING), ...EXTRA_CONFIG_KEYS];
@@ -546,12 +559,16 @@ class SponsorBlockHandler {
                 this.executeChainSkip(video);
             }
 
-            // UI was already started, so now we just update the data
-            sponsorBlockUI.updateSegments(this.segments);
+            // UI was already started, so now we just update the data.
+            // Full-video labels are excluded: they are [0, 0] markers meaning
+            // "this whole video is X", not segments, and listing one would show
+            // a nonsense 0:00-to-0:00 row.
+            sponsorBlockUI.updateSegments(this.segments.filter(s => !isFullVideoSegment(s)));
             
             // Explicitly draw overlay now that data is ready
             // (checkForProgressBar might have run when segments were empty)
             this.drawOverlay();
+            this.updateLabels();
 
             if (this.highlightSegment) {
                 const config = configGetAll();
@@ -660,6 +677,7 @@ class SponsorBlockHandler {
             if (this.video?.duration) {
                 this.processSegments(this.video.duration);
                 this.drawOverlay();
+                this.updateLabels();
             }
         });
 
@@ -933,6 +951,8 @@ class SponsorBlockHandler {
         const len = this.segments.length;
         for (let i = 0; i < len; i++) {
             const segment = this.segments[i];
+            // A full-video label spans [0, 0] and would draw a zero-width bar.
+            if (isFullVideoSegment(segment)) continue;
             const isHighlight = segment.category === 'poi_highlight';
 
             if (isHighlight) {
@@ -973,6 +993,13 @@ class SponsorBlockHandler {
             fragment.appendChild(div);
         }
 
+        // Everything was filtered out (e.g. the only entry was a full-video
+        // label). Leave the bar clean rather than inserting an empty overlay.
+        if (!fragment.childNodes.length) {
+            this.overlay = null;
+            return;
+        }
+
         this.overlay = document.createElement('div');
         this.overlay.id = 'previewbar';
         this._lastSyncSig = null; // fresh element — force the next geometry sync
@@ -1000,6 +1027,20 @@ class SponsorBlockHandler {
             this.lastOverlayHash = null;
             this._scheduleBarRetry();
         }
+    }
+
+    /**
+     * Refresh the title badge and the skips-removed duration.
+     *
+     * Cheap and idempotent, so it is called from anywhere the inputs can move:
+     * after the fetch, on durationchange, and whenever a SponsorBlock setting
+     * changes.
+     */
+    updateLabels() {
+        if (this.isDestroyed) return;
+        const video = this.video || getVideo();
+        const duration = video && !isNaN(video.duration) ? video.duration : 0;
+        sponsorBlockLabels.update(this.segments, duration);
     }
 
     processSegments(duration) {
@@ -1440,6 +1481,7 @@ class SponsorBlockHandler {
 
         sponsorBlockUI.togglePopup(false);
         sponsorBlockUI.updateSegments([]);
+        sponsorBlockLabels.clear();
         if (this.overlay) {
             this.overlay.remove();
             this.overlay = null;

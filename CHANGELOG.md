@@ -4,6 +4,63 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.3] - 2026/08/30
+
+### New Features
+
++ "Max Thumbnail Quality": Pick between "Fast" and "Original":
+Fast: Forces the JSON response to replace all thumbnails with maxres before the video tiles load. Works for ~95% of thumbnails, but the other ~5% will show an empty gray thumbnail temporarily until a DOM pass sweeps by and fixes it. Improves scrolling performance at the cost of short-term accuracy
+Original: loads all thumbnails normally in hqdefault resolution, and then upgrades them to maxres if available. No gray boxes, but is computationally more expensive, and represents the original Max Thumbnail Quality strategy
+
++ "Hide YouTube Logo": Now gives you the option to use the default logo, premium logo, or hidden
+
++ Filter "Live" videos from your feed, including the "Live" tab on the left-side navigation panel https://github.com/NicholasBly/youtube-webos/issues/155
+
++ "Remove Shorts (Global)": Now filters out the "Shorts" tab on the left-side navigation panel https://github.com/NicholasBly/youtube-webos/issues/168
+
++ "Force Video Codec" - Auto, AV1, Avoid AV1, AVC, VP9, HEVC - https://github.com/NicholasBly/youtube-webos/issues/147
+
+### Fixes
+
++ Build optimizations (removed unnecessary packages) | 111kb → 83kb for the modern .ipk, and 190kb → 104kb for the legacy .ipk
++ + Removed packages: core-js-pure, @babel/runtime-corejs3, regenerator-runtime, babel-plugin-polyfill-corejs3 and babel-plugin-polyfill-regenerator
+
++ webOS 3/4 optimizations to twemoji
+
++ Fixed RYD displaying a value of 0 in the description panel https://github.com/NicholasBly/youtube-webos/issues/164
+
++ Fixed RYD count showing an uppercase K or M for thousand/million (matches YouTube's lowercase k/m in the like count)
+
++ Fixed video description panel navigation https://github.com/NicholasBly/youtube-webos/issues/160
+
++ Updated HTML selector to fix Play/Pause shortcut https://github.com/NicholasBly/youtube-webos/issues/169
+
++ Fixed AdBlock engine and twemoji fix being dependent on one another (disabling adblock disabled emoji fix)
+
+### Performance
+
++ JSON Filtering Engine: 60% more efficient with every filtering option enabled. Improved memory management and removed redundant passes over the JSON response
+
++ Max Thumbnail Quality - Fast: Now operates on the JSON filtering engine, eliminating a heavy MutationObserver on every browse page working to replace LQ thumbnails. Thumbnails are upgraded before the page ever sees the original, so scrolling/navigation should now be lag-free. Cuts network requests by half
+
++ Spatial Navigation: Huge performance uplift in navigation for the legacy build (webOS 3-6). Layout and style reads cut by 80-97% in the green button UI (settings panel) by building a cache. Opening the settings panel will first render the main page you're looking at, and then the remaining three pages, enabling a more responsive UI
+
+### Changes
+
++ Merge PR - https://github.com/NicholasBly/youtube-webos/pull/171
+
+Auto Login: now renamed to "Bypass Nag Screens"
+
++ Added support for new premium upsell screens: yt.leanback.default::promo-coupon-shown-timestamp and yt.leanback.default::promo-coupon-shown-times
+
++ Green button UI: fixed spacing on the first page to be uniform across entries
+
++ Reduce Telemetry & Tracking: Added new paths: /pagead/ (widened from /pagead/viewthroughconversion/), and /eligibility_check)
+
+### Full List of Changes
+
+https://github.com/NicholasBly/youtube-webos/discussions/161
+
 ## [0.8.2] - 2026/08/12
 
 ## Fixes

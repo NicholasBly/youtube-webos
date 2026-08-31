@@ -3,35 +3,43 @@
 An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 ## Added Features
-- Full support for webOS 3, 4, 5, 6, 22, 23, 24, and 25 (older versions are untested)
-- Enhanced Menu UI
+- Full support for webOS 3, 4, 5, 6, 22, 23, 24, and 25 (2016 and newer LG TVs) (webOS 1 and 2 currently not supported)
+- Enhanced AdBlock Engine: New schema-based filtering system (cleaner Home, Search, and Shorts)
+- Filter out QR code + Shop button overlays during video playback
+- Enhanced Menu UI + Themes
 - Auto Login - bypasses account selection screen
 - Force Max Quality
 - Hide Endcards
 - Shortcuts - Programmable 0-9 key shortcuts during video playback
+- Guest Mode: Hides annoying "Sign in" prompts
 
 - SponsorBlock: Highlight feature added
 -- All segment types added (Hook, Tangents, muted segments)
 -- Color selector for all segments
 -- Segment UI list replicating desktop segment list
 -- Jump to highlight segment with blue button on LG remote
+-- Per-segment options including auto skip, manual skip, show in progress bar, and disabled
+-- Skip Segments Once option
 
-- Toggle black screen with red button on LG remote for OLED TVs
+- Toggle display on/off with red button on LG remote for OLED TVs + persistent keepalive
 - Return YouTube Dislike - added to description tab in video
+- Display Time in UI: Smart clock that hides during fullscreen and when description panel is open
+- YouTube app fixes - Full video description panel hack to restore visual elements and enable full navigation
+- Customizable YouTube UI fixes such as multiline titles and video shelf opacity for better visibility
 - Bug fixes, UI fixes
-- Specific rules for different YouTube UI layouts
 
 ## Improvements
 - Rewritten codebase optimized for performance and efficiency to support LG TV hardware
 
 Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-webos/blob/main/CHANGELOG.md)
 
-<img width="537" height="450" alt="webOS_TV_25_Simulator_1 4 3_cNtrOpwkMt" src="https://github.com/user-attachments/assets/ce136794-d27f-4c9c-bcb8-6b0a495e3207" />
+<img width="642" height="752" alt="webOS_TV_26_Simulator_1 5 0_x16zOsWFaw" src="https://github.com/user-attachments/assets/046b0361-0648-4750-ab97-0b64b553ec17" />
 
-<img width="537" height="569" alt="webOS_TV_25_Simulator_1 4 3_g0uM4TjeIc" src="https://github.com/user-attachments/assets/857a939f-80d6-4cc4-9ecd-d07ecd02b552" />
+<img width="642" height="631" alt="webOS_TV_25_Simulator_1 4 3_UaFvPZ67yL" src="https://github.com/user-attachments/assets/61963e1b-8211-439a-9f66-50b669940233" />
 
-<img width="537" height="507" alt="webOS_TV_25_Simulator_1 4 3_OMUQXUo48c" src="https://github.com/user-attachments/assets/60ab37ee-0322-438b-91b5-09dee100b4bf" />
+<img width="642" height="576" alt="webOS_TV_25_Simulator_1 4 3_uW1aZQeVle" src="https://github.com/user-attachments/assets/877a22b6-6814-457b-926c-cac50ed36077" />
 
+<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/84c8b6b3-4c82-4a63-9100-b236f2dd3225" />
 
 <!--![Configuration Screen](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/webOS_TV_24_Simulator_mKe8Gv7zXq.png?raw=true)-->
 ![Segment Skipped](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/2_sm_new.png?raw=true)
@@ -52,7 +60,7 @@ Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-we
 
 - Use [webOS Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel) - app is available via repo link: https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/repo.json
 - Use [Device Manager app](https://github.com/webosbrew/dev-manager-desktop) - see [Releases](https://github.com/NicholasBly/youtube-webos/releases) for a
-  prebuilt `.ipk` binary file
+  prebuilt `.ipk` binary file. A webOS22+ .ipk is available for users on 2022+ TVs, supporting webOS22-25. These are lighter, more optimized builds for newer hardware, without translation layers needed for older TVs.
 - Use [webOS TV CLI tools](https://webostv.developer.lge.com/develop/tools/cli-installation) -
   `ares-install youtube...ipk` (For more information on configuring the webOS CLI tools, see [below](#development-tv-setup))
 

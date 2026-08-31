@@ -1,0 +1,47 @@
+/* Full Video Label badge and the skips-removed duration.
+
+   Both are pseudo-elements on YouTube's own elements, so nothing is injected
+   into the DOM and there is nothing for the renderer to delete when it
+   re-patches these containers.
+
+   NOTE: neither rule sets `content`, so neither pseudo-element generates a box.
+   sponsorblock-labels.js supplies `content` (and the badge colour) at runtime
+   when a readout is active. Adding a `content` here would make an empty pill
+   appear on every video. */
+
+ytlr-watch-metadata [idomkey="title-text"]::before,
+ytlr-video-title-tray [idomkey="title-text"]::before {
+  display: inline-block;
+  vertical-align: middle;
+
+  /* font-size in vw, everything else in em relative to it. The title's own
+     size sits on the inner yt-formatted-string rather than on this div, so an
+     em-based font-size here would inherit whatever the container happens to be
+     and could come out tiny. Fixing it to the viewport is predictable; the
+     geometry below then scales with the badge itself. */
+  font-size: 1.4vw;
+  font-family: Roboto, Arial, sans-serif;
+  font-weight: 700;
+  line-height: 1.65;
+  white-space: nowrap;
+
+  margin-right: 0.5em;
+  /* Left padding leaves room for the icon, which rides as a background image so
+     one pseudo-element can carry both the icon and the text. */
+  padding: 0.1em 0.7em 0.1em 1.9em;
+  border-radius: 1em;
+
+  background-image: url('./icons/sponsorblock-icon.png');
+  background-repeat: no-repeat;
+  background-position: 0.55em center;
+  background-size: 1em 1em;
+}
+
+/* On the duration span, not its time-label parent: the parent puts elapsed and
+   duration at opposite ends of the seek bar, so a pseudo-element there becomes
+   a third item at the far edge rather than text beside the duration. */
+[idomkey="time-label"] [idomkey="duration"]::after {
+  margin-left: 0.4em;
+  opacity: 0.75;
+  white-space: nowrap;
+}
