@@ -615,15 +615,10 @@ function createOptionsPanel() {
 
   // --- Pages 2-4: built off the critical path ---
   //
-  // Opening the panel used to build all four pages synchronously inside the
-  // keydown handler: 275 createElement calls, of which 205 belong to pages that
-  // are display:none at that moment. On webOS 3 that measured as a single
-  // 170.4ms handler and an fps drop from 60 to 32.
-  //
-  // Only the Main page is built now. The rest are built one per animation frame
-  // once the panel is on screen, and setActivePage() forces a build
-  // synchronously if the user gets to a tab before the idle chain does - so a
-  // fast tab press is never wrong, only marginally slower.
+  // Only the Main page is built up front - building all four inside the keydown
+  // handler cost 170ms on webOS 3, three quarters of it on display:none pages.
+  // The rest build one per animation frame once the panel is up, and
+  // setActivePage() forces a synchronous build if the user beats the chain.
   const pageBuilders = [
     null,
     function buildSponsorPage() {
@@ -1201,7 +1196,7 @@ function handleShortcutAction(action) {
   }
 
   // Player Actions - Require Video/Context
-  // Check context for player actions (same check as used previously for keys 0-9)
+  // Player actions only make sense on a watch or Shorts page.
   if (!isWatchPage() && !isShortsPage()) return;
 
   const video = getVideo();
@@ -1363,10 +1358,9 @@ function initGlobalStyles() {
            Same reason ytaf-hide-logo / ytaf-fix-titles / ytaf-remove-borders
            already live on documentElement.
 
-           Previously this whole block was rebuilt as an inline <style> on every
-           videoShelfOpacity slider tick. Opacity now flows through the CSS
-           custom property --ytaf-oled-opacity; the conditional shelf-transparent
-           rules sit under html.oled-transparent-shelf. */
+           Opacity flows through the --ytaf-oled-opacity custom property, so a
+           videoShelfOpacity slider tick never rebuilds this block; the
+           conditional rules sit under html.oled-transparent-shelf. */
         html.oled-theme-active #container,
         html.oled-theme-active .ytLrGuideResponseMask,
         html.oled-theme-active .geClSe,

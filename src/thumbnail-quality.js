@@ -1,31 +1,14 @@
 import { configRead, configAddChangeListener } from './config.js';
 
 /**
- * Max Thumbnail Quality — InnerTube response rewriter.
+ * Max Thumbnail Quality - rewrites thumbnail URLs in the parsed InnerTube
+ * response, inside the JSON.parse hook adblock.js already owns, so the app is
+ * only ever handed the high-quality URL and never fetches the 320x180 crop.
  *
- * Replaces the old DOM pipeline (a subtree MutationObserver over <ytlr-app>, a
- * per-tile style observer, an IntersectionObserver, a request queue and three
- * HEAD probes per *visible* tile, followed by a backgroundImage overwrite) with
- * an in-place rewrite of the parsed JSON, run inside the JSON.parse hook
- * adblock.js already owns.
- *
- * Why this is cheaper:
- *   - One image fetch per thumbnail instead of two. The old path let the app
- *     download YouTube's 320x180 crop and *then* downloaded the upgrade on top
- *     of it. The app never sees the low-quality URL now, so it is never
- *     requested — on a 15-tile shelf that is 15 fewer image fetches.
- *   - No pop-in. The upgrade is not a second background layer that lands a few
- *     hundred ms later; it is the only URL the app has ever been given.
- *   - No observers. The old module kept three alive for the whole session and
- *     did O(N) getBoundingClientRect() work on the webOS 3 polling fallback.
- *   - Off-screen tiles are upgraded too, so scrolling a shelf no longer sets
- *     off a fresh burst of probes and swaps mid-scroll.
- *
- * The one thing the DOM had that JSON does not is a failure signal: a CSS
- * background can list a fallback layer, a JSON string cannot. maxresdefault
- * does not exist for every video, and YouTube answers a miss with a small grey
- * placeholder rather than a 404 (see PLACEHOLDER_MAX_BYTES). That is handled by
- * SPECULATIVE_MODE plus the verification queue below, not by guessing.
+ * JSON carries no failure signal the way a CSS background fallback does, and
+ * maxresdefault does not exist for every video - YouTube answers a miss with a
+ * small grey placeholder rather than a 404 (see PLACEHOLDER_MAX_BYTES). Hence
+ * SPECULATIVE_MODE and the verification queue below.
  */
 
 const DEBUG = false;
@@ -44,14 +27,10 @@ let eagerMode = configRead('thumbnailQualityMode') === 'eager';
 
 /**
  * Emit WebP derivatives (~25-30% smaller) when the runtime can decode them.
- *
- * Off by default. The saving is real, but `vi_webp` coverage is per-video and
- * all-or-nothing: a video with no webp derivatives 404s on every rung, and
- * nothing in the response says which videos those are. With the JPEG floor
- * above, a miss now degrades to hqdefault.jpg instead of staying grey forever -
- * but the tile is still grey until the probe lands, and the no-webp population
- * is larger than the no-maxres one. Turn it on only if the bandwidth matters
- * more than a first-paint miss on older uploads.
+ * Off by default: `vi_webp` coverage is per-video and all-or-nothing, nothing
+ * in the response says which videos have it, and the no-webp population is
+ * larger than the no-maxres one - so a miss costs a grey tile until the probe
+ * lands. Worth it only if bandwidth matters more than first paint.
  */
 const USE_WEBP = false;
 
@@ -62,9 +41,6 @@ const ENABLE_LIVE_PROMOTION = true;
 // never from the parse itself, so these bound background work only.
 const MAX_CONCURRENT_PROBES = 3;
 // Hard ceiling on how many *distinct* videos are ever probed in one session.
-// Replaces the old queue-length cap, which dropped videos without recording
-// anything — so every later parse re-queued the same ones and scrolling a shelf
-// back and forth re-probed videos that had already been probed dozens of times.
 const PROBE_ATTEMPT_LIMIT = 4000;
 // Verification waits this long after the last response before running. A
 // continuation lands on every scroll, so this doubles as a scroll detector
@@ -144,9 +120,9 @@ const THUMB_IN_CSS_RE = /i\.ytimg\.com\/vi(?:_webp)?\/([\w-]+)\//;
 const DOM_SELECTOR = 'ytlr-thumbnail-details, ytlr-surface-page, thumbnail image';
 
 // --- Runtime capability ---------------------------------------------------
-// Synchronous, unlike the old Image-decode probe: the first browse response can
-// arrive before an async detection settles, and a mid-session flip would emit
-// two URL families for the same video and halve the HTTP cache hit rate.
+// Must be synchronous: the first browse response can arrive before an async
+// detection settles, and a mid-session flip would emit two URL families for the
+// same video and halve the HTTP cache hit rate.
 const webpSupported = (() => {
   if (!USE_WEBP) return false;
   try {
@@ -276,21 +252,11 @@ function buildUrl(videoId, name, forceJpeg) {
 /**
  * Resolve one thumbnail URL to its upgraded form, or null to leave it alone.
  *
- * Two independent questions, which the old code collapsed into one and got
- * wrong: how big a rung is *useful* here, and how big a rung is *safe* here.
- *
- *   useful  - from the width the app declares for the slot. A 320px tile gains
- *             nothing from a 1280px file it will throw 87% of away.
- *   safe    - the ceiling. hqdefault always exists; above that, a rung is only
- *             known to exist if YouTube shipped it in this very container
- *             (`proven`) or a probe confirmed it (`qualityCache`).
- *
- * The emitted rung is the useful one clamped to the safe one, so it can never
- * 404. When useful exceeds safe, a probe is scheduled and the better rung lands
- * on a later parse - the tile is correct in the meantime rather than grey.
- *
- * Width/height on the entry are still left untouched: the app uses them to pick
- * between rungs and to size the tile.
+ * The emitted rung is the useful one (maxres) clamped to the safe one - the
+ * ceiling of what is known to exist, from `proven` in this response or a cached
+ * probe. When useful exceeds safe a probe is scheduled and the better rung
+ * lands on a later parse, so the tile is correct meanwhile rather than grey.
+ * Entry width/height are left alone; the app sizes tiles from them.
  */
 function upgradeEntry(entry, proven) {
   const url = entry.url;
@@ -313,23 +279,19 @@ function upgradeEntry(entry, proven) {
   const ceilingBeforeMode = verified !== undefined && verified > ceiling ? verified : ceiling;
 
   if (verified !== undefined) {
-    // A verified answer is the truth for this video and outranks the mode.
-    // Eager is a policy for the *unknown*, not a licence to re-emit a URL we
-    // have already watched 404 - and because the result is cached to
-    // localStorage, doing that produced a grey tile that survived restarts and
-    // had no way back: `scheduleProbe` is gated on `verified === undefined`, so
-    // no probe ran, no correction was queued, and nothing ever revisited it.
+    // A verified answer is the truth for this video and outranks the mode:
+    // eager is a policy for the *unknown*, not a licence to re-emit a rung
+    // already watched 404. scheduleProbe is gated on `verified === undefined`,
+    // so a wrong answer here would never be revisited.
     ceiling = ceilingBeforeMode;
   } else if (eagerMode) {
     ceiling = RANK.maxresdefault;
   }
 
-  // Both modes want the same thing - the best rung that exists. What separates
-  // them is only whether an *unproven* rung may be rendered while we find out.
-  // This used to be capped by slot width in safe mode, which quietly turned the
-  // feature off: the cap landed on hqdefault, the ceiling was also hqdefault, so
-  // nothing ever wanted more than was already proven, no probe was scheduled,
-  // and safe mode re-emitted roughly what YouTube had sent in the first place.
+  // Both modes want the best rung that exists; they differ only in whether an
+  // *unproven* rung may be rendered while we find out. Not capped by slot
+  // width - that would land on hqdefault, matching the ceiling, so nothing
+  // would ever want more than was already proven and no probe would run.
   const useful = RANK.maxresdefault;
   let target = useful > ceiling ? ceiling : useful;
   // Never hand back something worse than YouTube offered.
@@ -807,13 +769,9 @@ function onProbeDone(videoId, rank) {
   capSet(qualityCache, videoId, resolved, CACHE_LIMIT);
   scheduleSave();
 
-  // Queued unconditionally. This used to be gated on a separate `emittedRank`
-  // map recording what had been written for the video, but that map was FIFO
-  // capped at 600 entries: on a long browse the entry was evicted before its
-  // probe landed, `alreadyEmitted` came back undefined, and the promotion was
-  // dropped on the floor. That is why a tile could sit grey indefinitely.
-  // The sweep already skips elements that are on the right URL, so letting it
-  // decide is both cheaper and impossible to lose.
+  // Queued unconditionally: the sweep already skips elements that are on the
+  // right URL, so letting it decide cannot lose a promotion the way a capped
+  // "what did we emit" map would.
   // 1. Write the truth back into the response objects the app still holds. A
   //    tile that has not scrolled into view yet reads `.url` at render time, so
   //    this corrects it before it is ever drawn - no grey frame at all.
@@ -830,10 +788,9 @@ function onProbeDone(videoId, rank) {
 }
 
 /**
- * Called from the parse. The head of the queue is the top of the response,
- * which is what the user is looking at right now, so a small burst is allowed
- * through immediately: a grey tile on screen costs more than a few hundred
- * bytes of contention. The tail still waits for the surface to settle.
+ * Called from the parse. The head of the queue is the top of the response - what
+ * the user is looking at - so a small burst goes through immediately; the tail
+ * waits for the surface to settle.
  */
 function deferProbes() {
   if (!enabled || probeQueue.size === 0) return;
@@ -845,21 +802,13 @@ function deferProbes() {
 }
 
 /**
- * videoIds the app currently has thumbnails rendered for.
+ * videoIds the app currently has thumbnails rendered for - a free visibility
+ * signal, since the list is virtualised and "has a rendered thumbnail" already
+ * means "on or near screen".
  *
- * This is the visibility signal, and it is free. The list is virtualised - that
- * is why an off-screen shelf is a <ytlr-ghost-surface> of skeleton boxes rather
- * than real tiles - so "has a rendered thumbnail element" already means "on or
- * near screen". The app has done the intersection work; we only have to read
- * the result.
- *
- * Deliberately not IntersectionObserver. That would need the elements first,
- * which means a MutationObserver to catch them being created - the pipeline
- * this module exists to remove - and on webOS 3 the polyfill is a poll that
- * calls getBoundingClientRect() on every observed node, forcing layout each
- * tick. Reading `.style.backgroundImage` parses the style attribute instead and
- * touches no layout at all, so this is one selector match and N string reads
- * against several hundred forced reflows a second.
+ * Not IntersectionObserver: on webOS 3 that polyfill polls
+ * getBoundingClientRect() over every observed node, forcing layout each tick.
+ * Reading .style.backgroundImage touches no layout at all.
  */
 function sampleRenderedIds() {
   const now = Date.now();
@@ -1009,12 +958,9 @@ function runPromotionSweep() {
     patched++;
   }
 
-  // A correction is NOT discarded just because this sweep did not find a home
-  // for it. The list is virtualised: at the moment a probe lands, the tile it
-  // describes is very often not in the DOM at all, and the old code cleared the
-  // map right here - so the correction was thrown away and the tile stayed grey
-  // for good once it finally scrolled into view. Entries now survive a few
-  // rounds, re-armed by the next parse, and expire so the map cannot grow.
+  // A correction is NOT discarded just because this sweep found no home for it:
+  // the list is virtualised, so when a probe lands its tile is often not in the
+  // DOM yet. Entries survive a few rounds and then expire, bounding the map.
   pendingPromotions.forEach((rank, videoId) => {
     const attempts = (promotionAttempts.get(videoId) || 0) + 1;
     if (attempts >= PROMOTION_MAX_ATTEMPTS || applied.has(videoId)) {

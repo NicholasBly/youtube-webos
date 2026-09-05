@@ -60,9 +60,8 @@ class ReturnYouTubeDislike {
     this.enableDislikes = enableDislikes;
     this.active = true;
     this.dislikesCount = 0;
-    // null until a fetch actually succeeds. The old code could not tell "the
-    // API said zero" from "the request failed", so a failure rendered a
-    // permanent 0 with no retry and no later correction.
+    // null until a fetch succeeds, so "the API said zero" stays distinct from
+    // "the request failed".
     this.dislikesValue = null;
     this.dislikeValueElement = null;
     this.dislikeFactoidElement = null;
@@ -137,9 +136,8 @@ class ReturnYouTubeDislike {
       this.injectPersistentStyles();
       this.setupNavigation();
 
-      // Panel detection must not sit behind the network. A cold first request
-      // to the RYD API can take seconds (up to the 8s race timeout), which used
-      // to burn the poll window on the first video of the session.
+      // Panel detection must not sit behind the network: a cold first request
+      // to the RYD API can take seconds, up to the 8s race timeout.
       this.observeBodyForPanel();
 
       if (this.enableDislikes) {
@@ -198,9 +196,8 @@ class ReturnYouTubeDislike {
       this.dislikesCount = 0;
       this.dislikesValue = null;   // unknown, NOT zero - never cached
 
-      // A cold DNS + TLS handshake to the RYD API on real TV hardware is much
-      // slower than on the simulator, and a transient failure used to be
-      // permanent for that video. Back off and try again.
+      // A cold DNS + TLS handshake on real TV hardware is much slower than on
+      // the simulator, so back off and retry rather than failing for good.
       if (this.active && error.name !== 'AbortError' && ++this.fetchAttempts <= FETCH_MAX_RETRIES) {
         const delay = FETCH_RETRY_BASE_MS * this.fetchAttempts;
         this.log('info', `Retrying dislike fetch in ${delay}ms (attempt ${this.fetchAttempts})`);
@@ -214,9 +211,9 @@ class ReturnYouTubeDislike {
   }
 
   /**
-   * Rewrite the already-injected factoid in place. Injection no longer waits
-   * for the network, so this is what turns the placeholder into the real number
-   * whenever the fetch lands - first try or third.
+   * Rewrite the already-injected factoid in place. Injection does not wait for
+   * the network, so this turns the placeholder into the real number whenever
+   * the fetch lands - first try or third.
    */
   updateDislikeDisplay() {
     const valueElement = this.dislikeValueElement;
@@ -254,11 +251,7 @@ class ReturnYouTubeDislike {
     }
   }
 
-  // BOUNDED poll. This used to run at 2Hz for the entire lifetime of every
-  // watch page, doing a compound querySelector on each tick — the single
-  // largest idle cost on older hardware.
-  //
-  // It is only a safety net: the panel is also detected by handleFocusIn
+  // BOUNDED poll, and only a safety net: the panel is also detected by handleFocusIn
   // (focus is the only reliable signal for the role="dialog" description
   // panel) and by ui.js calling observeBodyForPanel() after the description
   // shortcut fires. So we give it ~10s per arm and then go idle until
@@ -563,13 +556,9 @@ class ReturnYouTubeDislike {
       if (isEnter) {
           const current = this.menuItemsCache[this.focusedIndex];
           // Only intercept Enter when the menuitem container is *itself* the
-          // active element. If focus is on a focusable descendant (e.g. the
-          // Description chip's inner <yt-button-container role="button">),
-          // the real Enter must reach YouTube's native handler — dispatching
-          // a synthetic keydown on the parent menuitem targets the wrong node
-          // and, being isTrusted=false, is rejected by YT's nav handlers
-          // anyway. Net effect of the old `contains` branch: real Enter was
-          // swallowed and the panel never opened.
+          // active element. With focus on a focusable descendant the real Enter
+          // must reach YouTube: a synthetic keydown on the parent targets the
+          // wrong node and is rejected anyway for isTrusted=false.
           if (current && current === document.activeElement) {
               e.preventDefault();
               e.stopPropagation();

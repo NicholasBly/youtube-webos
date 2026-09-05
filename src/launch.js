@@ -1,12 +1,10 @@
 /**
  * Launch-URL handling, split out of utils.js.
  *
- * index.js is the tiny bootstrap page that only redirects to youtube.com/tv.
- * It used to import utils.js for these two functions, which dragged in the
- * page-state MutationObserver, the <video> cache, the COLOR_CODE_MAP build and
- * a `new KeyboardEvent()` feature probe — all module-level side effects that
- * run on a page with no YouTube in it. utils.js re-exports from here so the
- * userscript's existing import sites are unchanged.
+ * index.js is the tiny bootstrap page that only redirects to youtube.com/tv,
+ * so these two functions live here rather than in utils.js - importing that
+ * would drag its module-level side effects onto a page with no YouTube in it.
+ * utils.js re-exports from here, so the userscript's import sites are unchanged.
  */
 import './polyfills.js';
 
