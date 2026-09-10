@@ -20,7 +20,7 @@ ytlr-video-title-tray [idomkey="title-text"]::before {
      and could come out tiny. Fixing it to the viewport is predictable; the
      geometry below then scales with the badge itself. */
   font-size: 1.4vw;
-  font-family: Roboto, Arial, sans-serif;
+  font-family: inherit;
   font-weight: 700;
   line-height: 1.65;
   white-space: nowrap;

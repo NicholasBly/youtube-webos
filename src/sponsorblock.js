@@ -132,9 +132,8 @@ class SponsorBlockHandler {
     // Progress-bar geometry
     // ==========================================
     //
-    // Node#isConnected and Element#closest are guaranteed by polyfills.js
-    // (imported via utils.js), so the private _isNodeConnected/_getClosest
-    // fallbacks that used to live here have been removed.
+    // Node#isConnected and Element#closest are guaranteed by polyfills.js,
+    // imported via utils.js.
 
     _getProgressBarAnchor() {
         if (!this.progressBar) return { container: null, asSibling: false };
@@ -205,13 +204,10 @@ class SponsorBlockHandler {
             ? this.progressBar
             : ytPB;
 
-        // PERF — READS first, in one batch. The old order was read → write
-        // top/left → read offsetWidth → write → read offsetHeight → write,
-        // which forced up to 3 synchronous reflows per sync on webOS.
-        // classList.contains and the inline-style read are recalc-free, unlike
-        // the earlier getComputedStyle(ytPB).opacity poll; the inline check
-        // still catches UI builds that hide via inline opacity without the
-        // zylon-hidden class.
+        // PERF - all READS first, in one batch: interleaving them with writes
+        // forced up to 3 synchronous reflows per sync on webOS. classList and
+        // the inline-style read are recalc-free, and the inline check still
+        // catches UI builds that hide via opacity without the zylon-hidden class.
         const isHidden = ytPB.classList.contains('zylon-hidden') || ytPB.style.opacity === '0';
         const width  = trackEl.offsetWidth;
         const height = trackEl.offsetHeight;
@@ -726,21 +722,18 @@ class SponsorBlockHandler {
                 });
             };
 
-            // PERF: split into two narrow observers. The old single observer
-            // used attributes + subtree:true, so YouTube's per-frame style
-            // writes on playhead/buffered-range descendants generated mutation
-            // records (and a callback invocation) every animation frame just to
-            // be filtered out again in JS. Semantics are unchanged:
-            // 1) childList-only subtree observer — catches the bar being
+            // PERF: two narrow observers rather than one attributes+subtree
+            // observer, which woke a callback every animation frame on
+            // YouTube's playhead style writes just to filter them out in JS.
+            // 1) childList-only subtree observer - catches the bar being
             //    destroyed/recreated by the framework.
             this.domObserver = new MutationObserver(scheduleCheck);
             this.domObserver.observe(observeTarget, { childList: true, subtree: true });
             this.observers.add(this.domObserver);
 
             // 2) attribute observer pinned to the tracked bar element itself
-            //    (no subtree) — matches the old `m.target === this.progressBar`
-            //    filter exactly; re-targeted in checkForProgressBar whenever
-            //    the bar is (re)acquired.
+            //    (no subtree); re-targeted in checkForProgressBar whenever the
+            //    bar is (re)acquired.
             this._attrObserver = new MutationObserver(scheduleCheck);
             this.observers.add(this._attrObserver);
             this.checkForProgressBar();
@@ -800,10 +793,8 @@ class SponsorBlockHandler {
         this.observePlayerUI();
     }
 
-    // Bounded poll for the progress bar. checkForProgressBar() used to give up
-    // silently when the bar was missing (`if (target)` with no else), relying
-    // entirely on the observer to call it back — which is exactly what fails on
-    // replay, since the chrome is rebuilt asynchronously AFTER playback starts.
+    // Bounded poll for the progress bar. The observer alone is not enough on
+    // replay: the chrome is rebuilt asynchronously AFTER playback starts.
     _scheduleBarRetry() {
         if (this._barRetryTimer || this.isDestroyed) return;
         let attempts = 0;

@@ -14,9 +14,7 @@ const ALLOWED_EMOJI_TAGS = new Set([
 
 // Cache emoji -> token list, not an HTML string. Tokens are plain data, so
 // rendering is createElement + createTextNode with no HTML parser in the loop:
-// nothing that arrived in a video title can become markup. The old path ran
-// twemoji output back through a regex and reassigned innerHTML, and the
-// \u200B..\u200C capture group is [^\u200C]+ — anything, not just emoji.
+// nothing that arrived in a video title can become markup.
 const parsedTextCache = new Map();
 const MAX_CACHE_SIZE = 500;
 
@@ -71,7 +69,7 @@ function renderTokens(target, tokens) {
     img.alt = t.alt;
     target.appendChild(img);
 
-    // The hidden-text twin the old IMG_ALT_RE rewrite produced.
+    // Hidden-text twin, so the emoji stays readable to search and a11y.
     const hidden = document.createElement('span');
     hidden.className = 'twemoji-hidden-text';
     hidden.appendChild(document.createTextNode('\u200B' + t.alt + '\u200C'));
@@ -138,8 +136,7 @@ function processTextNode(textNode) {
       }
     }
 
-    // "twemoji changed something" is now "at least one img token", replacing
-    // the old parsedHTML !== cleanEmoji string compare.
+    // "twemoji changed something" == "at least one img token".
     let hasEmojiImg = false;
     for (let i = 0; i < tokens.length; i++) {
       if (tokens[i].src !== undefined) { hasEmojiImg = true; break; }

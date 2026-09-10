@@ -16,16 +16,9 @@ const cachedWebOSVersion = getWebOSVersion();
 
 // --- CONSTANTS & CONFIGURATION ---
 
-// Single source of truth — TELEMETRY_REGEX is derived from this list.
-//
-// Two omissions are deliberate. '/api/stats/watchtime' and '/api/stats/playback'
-// are what register a view and its duration against the creator; dropping them
-// buys little privacy - the request carries nothing the player has not already
-// told the server - and quietly costs the channel its numbers.
-//
-// Everything listed is reachable from the fetch/XHR hooks. Things that are not
-// - static.doubleclick.net/instream/ad_status.js and www.google.com/js/th/*.js
-// both arrive as <script> tags - would need DOM-level blocking instead.
+// TELEMETRY_REGEX is derived from this list. '/api/stats/watchtime' and
+// '/api/stats/playback' are deliberately absent: they register the view against
+// the creator and leak nothing the player has not already sent.
 const BLOCKED_TELEMETRY_PATHS = [
   '/youtubei/v1/log_event',
   '/ptracking',
@@ -74,24 +67,20 @@ const EMOJI_RE_GLOBAL = new RegExp(EMOJI_RE.source, 'g');
 // otherwise forge an "already wrapped" region that emoji-font.js then treats
 // as its own output. Stripping first also makes processEmojiString idempotent.
 const CLEAN_TEXT_RE = /[\u200B\u200C\u2060\uFEFF]/g;
-// Single-scan gate for "does this string need any emoji work at all".
-// The old path ran four separate scans over every text field in the response
-// (two String#includes, a replace and an EMOJI_RE test) before discovering
-// that the overwhelming majority of YouTube titles are plain text.
+// Single-scan gate for "does this string need any emoji work at all" - most
+// YouTube titles are plain text and reject here.
 const NEEDS_TEXT_WORK_RE = new RegExp(EMOJI_RE.source + '|[\\u200B\\u200C\\u2060\\uFEFF]');
 
 const IGNORE_ON_SHORTS = new Set(['SEARCH', 'PLAYER', 'ACTION']);
 
-// Snapshot of config — configGetAll() returns the live reference, so this only
-// needs to be re-bound when the module loads. Flags below are recomputed on
-// change to avoid 8 boolean ORs per request.
+// configGetAll() returns the live reference, so this binds once at load.
 const cfgSnapshot = configGetAll();
 let anyFilterEnabled = false;
 let cfgNeedsContentFiltering = false;
 let cfgEmojiFixEffective = false;
 
-// Singleton passed to filter functions — refreshed by recomputeFilterFlags()
-// rather than re-allocated on every JSON.parse.
+// Singleton passed to the filters, refreshed by recomputeFilterFlags() rather
+// than re-allocated on every JSON.parse.
 const cfgFlags = {
   enableAdBlock: false,
   enableTrackingBlock: false,
@@ -179,8 +168,6 @@ function debugLog(msg, ...args) {
 function processEmojiString(str) {
   if (typeof str !== 'string' || !str) return str;
   if (!NEEDS_TEXT_WORK_RE.test(str)) return str;
-  // CLEAN_TEXT_RE now strips \u200B/\u200C, so this is idempotent by
-  // construction and no longer needs an "already wrapped" early-out.
   let cleanedStr = str.replace(CLEAN_TEXT_RE, '');
 
   const replaced = cleanedStr.replace(EMOJI_RE_GLOBAL, '\u200B$&\u200C');
@@ -190,19 +177,10 @@ function processEmojiString(str) {
   return replaced;
 }
 
-// Idempotent by construction: always strip the sentinels first, then re-wrap
-// from the cleaned text. The old code bailed out early on any text that
-// already contained \u200B/\u200C, which made it *destructive* rather than
-// idempotent - the caller's `null` branch then ran replace(CLEAN_TEXT_RE) and
-// removed the very sentinels a previous pass had just written. That is why
-// every shelf tile had to be walked twice to come out correct: the second walk
-// re-wrapped what the first one stripped.
-//
-// Stripping first also preserves the original security intent - a title that
-// ships \u200B/\u200C verbatim cannot forge an "already wrapped" region,
-// because the forged sentinels are removed before anything is emitted.
+// Idempotent by construction: the sentinels are stripped first, then re-wrapped
+// from the cleaned text. That also stops a title shipping \u200B/\u200C verbatim
+// from forging an "already wrapped" region.
 function splitIntoRuns(text, originalRun = {}) {
-    // Cheap single-scan reject before the scans below.
     if (!NEEDS_TEXT_WORK_RE.test(text)) return null;
 
     const cleanText = text.replace(CLEAN_TEXT_RE, '');
@@ -222,14 +200,11 @@ function splitIntoRuns(text, originalRun = {}) {
     return newRuns;
 }
 
-// Non-recursive: process the emoji/text fields of a single node in place.
-// Extracted from the old findAndProcessText so walkAndProcess can apply it
-// per node without a recursive walk of its own. Callers (walkAndProcess)
-// guarantee obj is a non-null object before invoking this.
+// Non-recursive: the emoji/text fields of a single node, in place.
+// walkAndProcess guarantees obj is a non-null object.
 function processTextFieldsInPlace(obj) {
-  
-  // Set when the runs array below was produced by this same call from
-  // simpleText; re-splitting it would be pure work for an identical result.
+  // Set when the runs array below came from simpleText in this same call;
+  // re-splitting it would be work for an identical result.
   let justBuiltRuns = false;
 
   if (typeof obj.simpleText === 'string' && NEEDS_TEXT_WORK_RE.test(obj.simpleText)) {
@@ -253,9 +228,8 @@ function processTextFieldsInPlace(obj) {
   
   if (!justBuiltRuns && Array.isArray(obj.runs)) {
     const src = obj.runs;
-    // newRuns is allocated lazily: a runs array only needs rebuilding if some
-    // run actually splits, which is rare. The old code built a full copy for
-    // every runs-bearing node in the response and then threw it away.
+    // Lazily allocated: a runs array only needs rebuilding if a run actually
+    // splits, which is rare.
     let newRuns = null;
     for (let i = 0, len = src.length; i < len; i++) {
       const run = src[i];
@@ -280,11 +254,8 @@ function processTextFieldsInPlace(obj) {
   }
 }
 
-// Combined depth-limited walk: emoji text processing (doEmoji) and/or
-// trackingParams stripping (doTracking) in a single traversal. Replaces the
-// two structurally identical recursive walkers (the old findAndProcessText
-// recursion and stripTrackingParams) so large JSON.parse responses are walked
-// once instead of twice.
+// Depth-limited walk doing emoji text processing (doEmoji) and/or trackingParams
+// stripping (doTracking) in one traversal rather than two.
 function walkAndProcess(obj, doEmoji, doTracking, maxDepth, currentDepth = 0) {
   if (!obj || typeof obj !== 'object' || currentDepth > maxDepth) return;
 
@@ -301,10 +272,8 @@ function walkAndProcess(obj, doEmoji, doTracking, maxDepth, currentDepth = 0) {
       if (v && typeof v === 'object') walkAndProcess(v, doEmoji, doTracking, maxDepth, nextDepth);
     }
   } else {
-    // for-in rather than Object.keys(): everything JSON.parse produces is an
-    // own enumerable property and Object.prototype has none, so the visited
-    // set is identical — but Object.keys() allocates an array at every single
-    // node, and this walk runs over the whole response tree.
+    // for-in, not Object.keys(): identical visited set for JSON.parse output,
+    // without allocating an array at every node of the response tree.
     for (const k in obj) {
       const v = obj[k];
       if (v && typeof v === 'object') walkAndProcess(v, doEmoji, doTracking, maxDepth, nextDepth);
@@ -312,17 +281,15 @@ function walkAndProcess(obj, doEmoji, doTracking, maxDepth, currentDepth = 0) {
   }
 }
 
-// Thin wrapper preserving the old signature so per-item call sites in
-// filterItemsOptimized / processSectionListOptimized / applySchemaFilters are
-// untouched.
+// Per-item entry point for the filter functions.
 function findAndProcessText(obj, maxDepth = 20) {
   walkAndProcess(obj, true, false, maxDepth);
 }
 
 const telemetryFetchHandler = (evt) => {
   const { url } = evt.detail;
-  // url.pathname avoids the .href getter rebuilding the full URL string,
-  // and is sufficient since all BLOCKED_TELEMETRY_PATHS are path-only.
+  // .pathname avoids the .href getter rebuilding the whole URL string, and all
+  // BLOCKED_TELEMETRY_PATHS are path-only.
   if (TELEMETRY_REGEX.test(url.pathname)) {
     if (DEBUG) console.info('[AdBlock] Blocked telemetry Fetch request:', url.pathname);
     evt.preventDefault();
@@ -477,10 +444,8 @@ function hookedParse(text, reviver) {
     if (cfgFlags.upgradeThumbnails) upgradeResponseThumbnails(data, responseType);
 
     if (cfgFlags.enableTrackingBlock) {
-        // Single combined pass: strip trackingParams across the whole tree,
-        // then (if enabled) wrap emoji on frameworkUpdates as a small targeted
-        // walk on top. Preserves the original depths (15 tracking / 20 emoji)
-        // and replaces the old separate stripTrackingParams + emoji traversals.
+        // trackingParams across the whole tree at depth 15, then emoji on
+        // frameworkUpdates as a small targeted walk at depth 20.
         walkAndProcess(data, false, true, 15);
         if (DEBUG) debugLog('Stripped trackingParams globally');
         if (cfgFlags.enableLegacyEmojiFix && data.frameworkUpdates) {

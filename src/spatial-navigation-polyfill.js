@@ -23,6 +23,18 @@
 
   const ARROW_KEY_CODE = {37: 'left', 38: 'up', 39: 'right', 40: 'down'};
   const TAB_KEY_CODE = 9;
+
+  // Shared lookup tables. These sit on the per-keypress path (isFocusable runs
+  // once per candidate, isVisibleStyleProperty two to three times), so building
+  // the array literal inside each call was thousands of throwaway allocations
+  // per arrow press on a full home page.
+  const DISABLEABLE_TAGS = new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'OPTGROUP', 'OPTION', 'FIELDSET']);
+  const INVISIBLE_VISIBILITY = new Set(['hidden', 'collapse']);
+  const SPINNABLE_INPUT_TYPES = new Set(['email', 'date', 'month', 'number', 'time', 'week']);
+  const TEXT_INPUT_TYPES = new Set(['password', 'text', 'search', 'tel', 'url', null]);
+  const SPATNAV_EVENT_TYPES = new Set(['beforefocus', 'notarget']);
+  const KEY_MODES = new Set(['SHIFTARROW', 'ARROW', 'NONE']);
+
   let mapOfBoundRect = null;
   // Computed styles are read far more often than rects during a candidate
   // search (isFocusable -> isBeingRendered -> isVisibleStyleProperty, plus the
@@ -41,10 +53,7 @@
   let savedSearchOrigin = {element: null, rect: null};  // Saves previous search origin
   let searchOriginRect = null;  // Rect of current search origin
 
-  /**
-   * Initiate the spatial navigation features of the polyfill.
-   * @function initiateSpatialNavigation
-   */
+  /** Initiate the spatial navigation features of the polyfill. */
   function initiateSpatialNavigation() {
     /*
      * Bind the standards APIs to be exposed to the window object for authors
@@ -89,9 +98,8 @@
   }
 
   /**
-   * Add event handlers for the spatial navigation behavior.
-   * This function defines which input methods trigger the spatial navigation behavior.
-   * @function spatialNavigationHandler
+   * Add event handlers for the spatial navigation behavior. This function defines which
+   * input methods trigger the spatial navigation behavior.
    */
   function spatialNavigationHandler() {
     /*
@@ -164,10 +172,9 @@
   }
 
   /**
-   * Enable the author to trigger spatial navigation programmatically, as if the user had done so manually.
+   * Enable the author to trigger spatial navigation programmatically, as if the user had
+   * done so manually.
    * @see {@link https://drafts.csswg.org/css-nav-1/#dom-window-navigate}
-   * @function navigate
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
    */
   function navigate(dir) {
     // ui.js calls navigate() directly rather than through the keydown handler
@@ -276,13 +283,7 @@
     }
   }
 
-  /**
-   * Move the focus to the best candidate or do nothing.
-   * @function focusingController
-   * @param bestCandidate {Node} - The best candidate of the spatial navigation
-   * @param dir {SpatialNavigationDirection}- The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {boolean}
-   */
+  /** Move the focus to the best candidate or do nothing. */
   function focusingController(bestCandidate, dir) {
     // 10 & 11
     // When bestCandidate is found
@@ -311,11 +312,8 @@
   }
 
   /**
-   * Directionally scroll the scrollable spatial navigation container if it can be manually scrolled more.
-   * @function scrollingController
-   * @param container {Node} - The spatial navigation container which can scroll
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {boolean}
+   * Directionally scroll the scrollable spatial navigation container if it can be manually
+   * scrolled more.
    */
   function scrollingController(container, dir) {
 
@@ -335,17 +333,15 @@
 
   /**
    * Find the candidates within a spatial navigation container include delegable container.
-   * This function does not search inside delegable container or focusable container.
-   * In other words, this return candidates set is not included focusable elements inside delegable container or focusable container.
-   *
-   * @function getSpatialNavigationCandidates
-   * @param container {Node} - The spatial navigation container
-   * @param option {FocusableAreasOptions} - 'mode' attribute takes 'visible' or 'all' for searching the boundary of focusable elements.
-   *                                          Default value is 'visible'.
-   * @returns {sequence<Node>} candidate elements within the container
+   * This function does not search inside delegable container or focusable container. In
+   * other words, this return candidates set is not included focusable elements inside
+   * delegable container or focusable container. Default value is 'visible'.
    */
-  function getSpatialNavigationCandidates (container, option = {mode: 'visible'}) {
-    let candidates = [];
+  function getSpatialNavigationCandidates (container, option = {mode: 'visible'}, acc) {
+    // Recursion appends into one accumulator rather than concat()ing a fresh
+    // array per nested container, which would re-copy everything collected so
+    // far at every shelf - O(n^2) copies over a home page.
+    if (!acc) acc = [];
 
     if (container.childElementCount > 0) {
       if (!container.parentElement) {
@@ -354,39 +350,35 @@
       // Indexed loop, NOT for-of. `children` is an HTMLCollection, which has no
       // Symbol.iterator before Chrome 51 - Babel lowers for-of to a helper that
       // throws "Invalid attempt to iterate non-iterable instance" on webOS 3,
-      // which killed all Settings-panel arrow navigation. Polyfilling the
-      // prototype is not reliable there (old Blink rejects defineProperty on
-      // some host prototypes), so this simply does not depend on it. It is also
-      // cheaper: no iterator object allocated per call, and this runs for every
-      // container on every arrow keypress.
+      // which killed all Settings-panel arrow navigation.
       const children = container.children;
       for (let ci = 0, clen = children.length; ci < clen; ci++) {
         const elem = children[ci];
         if (isDelegableContainer(elem)) {
-          candidates.push(elem);
+          acc.push(elem);
         } else if (isFocusable(elem)) {
-          candidates.push(elem);
+          acc.push(elem);
 
           if (!isContainer(elem) && elem.childElementCount) {
-            candidates = candidates.concat(getSpatialNavigationCandidates(elem, {mode: 'all'}));
+            getSpatialNavigationCandidates(elem, {mode: 'all'}, acc);
           }
         } else if (elem.childElementCount) {
-          candidates = candidates.concat(getSpatialNavigationCandidates(elem, {mode: 'all'}));
+          getSpatialNavigationCandidates(elem, {mode: 'all'}, acc);
         }
       }
     }
-    return (option.mode === 'all') ? candidates : candidates.filter(isVisible);
+
+    if (option.mode === 'all') return acc;
+    const visible = [];
+    for (let i = 0, len = acc.length; i < len; i++) {
+      if (isVisible(acc[i])) visible.push(acc[i]);
+    }
+    return visible;
   }
 
   /**
-   * Find the candidates among focusable elements within a spatial navigation container from the search origin (currently focused element)
-   * depending on the directional information.
-   * @function getFilteredSpatialNavigationCandidates
-   * @param element {Node} - The currently focused element which is defined as 'search origin' in the spec
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @param candidates {sequence<Node>} - The candidates for spatial navigation without the directional information
-   * @param container {Node} - The spatial navigation container
-   * @returns {Node} The candidates for spatial navigation considering the directional information
+   * Find the candidates among focusable elements within a spatial navigation container from
+   * the search origin (currently focused element) depending on the directional information.
    */
   function getFilteredSpatialNavigationCandidates (element, dir, candidates, container) {
     const targetElement = element;
@@ -402,19 +394,14 @@
   }
 
   /**
-   * Find the best candidate among the candidates within the container from the search origin (currently focused element)
+   * Find the best candidate among the candidates within the container from the search
+   * origin (currently focused element)
    * @see {@link https://drafts.csswg.org/css-nav-1/#dom-element-spatialnavigationsearch}
-   * @function spatialNavigationSearch
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @param candidates {sequence<Node>} - The candidates for spatial navigation
-   * @param container {Node} - The spatial navigation container
-   * @returns {Node} The best candidate which will gain the focus
    */
   function spatialNavigationSearch (dir, args) {
     const targetElement = this;
-    let internalCandidates = [];
+    const internalCandidates = [];
     let externalCandidates = [];
-    let insideOverlappedCandidates = getOverlappedCandidates(targetElement);
     let bestTarget;
 
     // Set default parameter value
@@ -422,35 +409,64 @@
       args = {};
 
     const defaultContainer = targetElement.getSpatialNavigationContainer();
-    let defaultCandidates = getSpatialNavigationCandidates(defaultContainer);
+    const defaultCandidates = getSpatialNavigationCandidates(defaultContainer);
     const container = args.container || defaultContainer;
     if (args.container && (defaultContainer.contains(args.container))) {
-      defaultCandidates = defaultCandidates.concat(getSpatialNavigationCandidates(container));
+      const extra = getSpatialNavigationCandidates(container);
+      for (let i = 0; i < extra.length; i++) defaultCandidates.push(extra[i]);
     }
-    const candidates = (args.candidates && args.candidates.length > 0) ? 
-                          args.candidates.filter((candidate) => container.contains(candidate)) : 
-                          defaultCandidates.filter((candidate) => container.contains(candidate) && (container !== candidate));
+
+    const raw = (args.candidates && args.candidates.length > 0) ? args.candidates : defaultCandidates;
+    const skipSelf = raw === defaultCandidates;
+    const candidates = [];
+    for (let i = 0, len = raw.length; i < len; i++) {
+      const candidate = raw[i];
+      if (container.contains(candidate) && !(skipSelf && container === candidate)) candidates.push(candidate);
+    }
 
     // Find the best candidate
     // 5
     // If startingPoint is either a scroll container or the document,
     // find the best candidate within startingPoint
-    if (candidates && candidates.length > 0) {
+    if (candidates.length > 0) {
 
       // Divide internal or external candidates
-      candidates.forEach(candidate => {
+      for (let i = 0, len = candidates.length; i < len; i++) {
+        const candidate = candidates[i];
         if (candidate !== targetElement) {
-          (targetElement.contains(candidate) && targetElement !== candidate ? internalCandidates : externalCandidates).push(candidate);
+          (targetElement.contains(candidate) ? internalCandidates : externalCandidates).push(candidate);
         }
-      });
+      }
 
-      // include overlapped element to the internalCandidates
-      let fullyOverlapped = insideOverlappedCandidates.filter(candidate => !internalCandidates.includes(candidate));
-      let overlappedContainer = candidates.filter(candidate => (isContainer(candidate) && isEntirelyVisible(targetElement, candidate)));
-      let overlappedByParent = overlappedContainer.map((elm) => elm.focusableAreas()).flat().filter(candidate => candidate !== targetElement);
-      
-      internalCandidates = internalCandidates.concat(fullyOverlapped).filter((candidate) => container.contains(candidate));
-      externalCandidates = externalCandidates.concat(overlappedByParent).filter((candidate) => container.contains(candidate));
+      // Include overlapped elements. Only these need the container.contains()
+      // check - everything already in the two lists came from `candidates`,
+      // which was built with that same check.
+      //
+      // getOverlappedCandidates() sweeps the whole container via
+      // focusableAreas(), so it stays behind the candidates.length gate rather
+      // than running on the way in.
+      const insideOverlapped = getOverlappedCandidates(targetElement);
+      const internalCount = internalCandidates.length;
+      for (let i = 0, len = insideOverlapped.length; i < len; i++) {
+        const candidate = insideOverlapped[i];
+        // Linear scan, not a Set: `insideOverlapped` is a handful of elements
+        // while internalCandidates can be the whole page, and building a Set of
+        // the larger list to probe the smaller one measures slower.
+        let seen = false;
+        for (let j = 0; j < internalCount; j++) {
+          if (internalCandidates[j] === candidate) { seen = true; break; }
+        }
+        if (!seen && container.contains(candidate)) internalCandidates.push(candidate);
+      }
+
+      for (let i = 0, len = candidates.length; i < len; i++) {
+        const candidate = candidates[i];
+        if (!isContainer(candidate) || !isEntirelyVisible(targetElement, candidate)) continue;
+        const areas = candidate.focusableAreas();
+        for (let j = 0; j < areas.length; j++) {
+          if (areas[j] !== targetElement && container.contains(areas[j])) externalCandidates.push(areas[j]);
+        }
+      }
 
       // Filter external Candidates
       if (externalCandidates.length > 0) {
@@ -462,7 +478,7 @@
         bestTarget = selectBestCandidate(targetElement, getFilteredSpatialNavigationCandidates(targetElement, dir, internalCandidates, container), dir);
       }
 
-      if ((internalCandidates && internalCandidates.length > 0) && !(targetElement.nodeName === 'INPUT')) {
+      if (internalCandidates.length > 0 && targetElement.nodeName !== 'INPUT') {
         bestTarget = selectBestCandidateFromEdge(targetElement, internalCandidates, dir);
       }
 
@@ -490,12 +506,6 @@
   /**
    * Get the filtered candidate among candidates.
    * @see {@link https://drafts.csswg.org/css-nav-1/#select-the-best-candidate}
-   * @function filteredCandidates
-   * @param currentElm {Node} - The currently focused element which is defined as 'search origin' in the spec
-   * @param candidates {sequence<Node>} - The candidates for spatial navigation
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @param container {Node} - The spatial navigation container
-   * @returns {sequence<Node>} The filtered candidates which are not the search origin and not in the given spatial navigation direction from the search origin
    */
   // TODO: Need to fix filtering the candidates with more clean code
   function filteredCandidates(currentElm, candidates, dir, container) {
@@ -540,11 +550,6 @@
   /**
    * Select the best candidate among given candidates.
    * @see {@link https://drafts.csswg.org/css-nav-1/#select-the-best-candidate}
-   * @function selectBestCandidate
-   * @param currentElm {Node} - The currently focused element which is defined as 'search origin' in the spec
-   * @param candidates {sequence<Node>} - The candidates for spatial navigation
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {Node} The best candidate which will gain the focus
    */
   function selectBestCandidate(currentElm, candidates, dir) {
     const container = currentElm.getSpatialNavigationContainer();
@@ -569,13 +574,9 @@
   }
 
   /**
-   * Select the best candidate among candidates by finding the closet candidate from the edge of the currently focused element (search origin).
+   * Select the best candidate among candidates by finding the closet candidate from the
+   * edge of the currently focused element (search origin).
    * @see {@link https://drafts.csswg.org/css-nav-1/#select-the-best-candidate (Step 5)}
-   * @function selectBestCandidateFromEdge
-   * @param currentElm {Node} - The currently focused element which is defined as 'search origin' in the spec
-   * @param candidates {sequence<Node>} - The candidates for spatial navigation
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {Node} The best candidate which will gain the focus
    */
   function selectBestCandidateFromEdge(currentElm, candidates, dir) {
     if (startingPoint)
@@ -585,13 +586,8 @@
   }
 
   /**
-   * Select the closest candidate from the currently focused element (search origin) among candidates by using the distance function.
-   * @function getClosestElement
-   * @param currentElm {Node} - The currently focused element which is defined as 'search origin' in the spec
-   * @param candidates {sequence<Node>} - The candidates for spatial navigation
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @param distanceFunction {function} - The distance function which measures the distance from the search origin to each candidate
-   * @returns {Node} The candidate which is the closest one from the search origin
+   * Select the closest candidate from the currently focused element (search origin) among
+   * candidates by using the distance function.
    */
   function getClosestElement(currentElm, candidates, dir, distanceFunction) {
     let eventTargetRect = null;
@@ -631,9 +627,6 @@
   /**
    * Get container of an element.
    * @see {@link https://drafts.csswg.org/css-nav-1/#dom-element-getspatialnavigationcontainer}
-   * @module Element
-   * @function getSpatialNavigationContainer
-   * @returns {Node} The spatial navigation container
    */
   function getSpatialNavigationContainer() {
     let container = this;
@@ -653,12 +646,7 @@
     return container;
   }
 
-  /**
-   * Get nearest scroll container of an element.
-   * @function getScrollContainer
-   * @param Element
-   * @returns {Node} The spatial navigation container
-   */
+  /** Get nearest scroll container of an element. */
   function getScrollContainer(element) {
     let scrollContainer = element;
 
@@ -685,27 +673,28 @@
   /**
    * Find focusable elements within the spatial navigation container.
    * @see {@link https://drafts.csswg.org/css-nav-1/#dom-element-focusableareas}
-   * @function focusableAreas
-   * @param option {FocusableAreasOptions} - 'mode' attribute takes 'visible' or 'all' for searching the boundary of focusable elements.
-   *                                          Default value is 'visible'.
-   * @returns {sequence<Node>} All focusable elements or only visible focusable elements within the container
    */
   function focusableAreas(option = {mode: 'visible'}) {
+    // One indexed pass over the live HTMLCollection. The two chained filters
+    // this replaces built a full intermediate array and paid the generic
+    // Array.prototype.filter.call cost on a host collection.
     const container = this.parentElement ? this : document.body;
-    const focusables = Array.prototype.filter.call(container.getElementsByTagName('*'), isFocusable);
-    return (option.mode === 'all') ? focusables : focusables.filter(isVisible);
+    const all = container.getElementsByTagName('*');
+    const wantVisible = option.mode !== 'all';
+    const focusables = [];
+    for (let i = 0, len = all.length; i < len; i++) {
+      const elem = all[i];
+      if (isFocusable(elem) && (!wantVisible || isVisible(elem))) focusables.push(elem);
+    }
+    return focusables;
   }
 
   /**
    * Create the NavigationEvent: navbeforefocus, navnotarget
    * @see {@link https://drafts.csswg.org/css-nav-1/#events-navigationevent}
-   * @function createSpatNavEvents
-   * @param option {string} - Type of the navigation event (beforefocus, notarget)
-   * @param element {Node} - The target element of the event
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
    */
   function createSpatNavEvents(eventType, containerElement, currentElement, direction) {
-    if (['beforefocus', 'notarget'].includes(eventType)) {
+    if (SPATNAV_EVENT_TYPES.has(eventType)) {
       const data = {
         causedTarget: currentElement,
         dir: direction
@@ -715,47 +704,26 @@
     }
   }
 
-  /**
-   * Get the value of the CSS custom property of the element
-   * @function readCssVar
-   * @param element {Node}
-   * @param varName {string} - The name of the css custom property without '--'
-   * @returns {string} The value of the css custom property
-   */
+  /** Get the value of the CSS custom property of the element */
   function readCssVar(element, varName) {
     // 20210606 fix getPropertyValue returning null ~inf
     return (element.style.getPropertyValue(`--${varName}`) || '').trim();
   }
 
   /**
-   * Decide whether or not the 'contain' value is given to 'spatial-navigation-contain' css property of an element
-   * @function isCSSSpatNavContain
-   * @param element {Node}
-   * @returns {boolean}
+   * Decide whether or not the 'contain' value is given to 'spatial-navigation-contain' css
+   * property of an element
    */
   function isCSSSpatNavContain(element) {
     return readCssVar(element, 'spatial-navigation-contain') === 'contain';
   }
 
-  /**
-   * Return the value of 'spatial-navigation-action' css property of an element
-   * @function getCSSSpatNavAction
-   * @param element {Node} - would be the spatial navigation container
-   * @returns {string} auto | focus | scroll
-   */
+  /** Return the value of 'spatial-navigation-action' css property of an element */
   function getCSSSpatNavAction(element) {
     return readCssVar(element, 'spatial-navigation-action') || 'auto';
   }
 
-  /**
-   * Only move the focus with spatial navigation. Manually scrolling isn't available.
-   * @function navigateChain
-   * @param eventTarget {Node} - currently focused element
-   * @param container {SpatialNavigationContainer} - container
-   * @param parentContainer {SpatialNavigationContainer} - parent container
-   * @param option - visible || all
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   */
+  /** Only move the focus with spatial navigation. Manually scrolling isn't available. */
   function navigateChain(eventTarget, container, parentContainer, dir, option) {
     let currentOption = {candidates: getSpatialNavigationCandidates(container, {mode: option}), container};
 
@@ -804,8 +772,6 @@
   /**
    * Find search origin
    * @see {@link https://drafts.csswg.org/css-nav-1/#nav}
-   * @function findSearchOrigin
-   * @returns {Node} The search origin for the spatial navigation
    */
   function findSearchOrigin() {
     let searchOrigin = document.activeElement;
@@ -814,9 +780,8 @@
       // When the previous search origin lost its focus by blur: (1) disable attribute (2) visibility: hidden
       if (savedSearchOrigin.element && (searchOrigin !== savedSearchOrigin.element)) {
         const elementStyle = getCachedComputedStyle(savedSearchOrigin.element);
-        const invisibleStyle = ['hidden', 'collapse'];
 
-        if (savedSearchOrigin.element.disabled || invisibleStyle.includes(elementStyle.getPropertyValue('visibility'))) {
+        if (savedSearchOrigin.element.disabled || INVISIBLE_VISIBILITY.has(elementStyle.getPropertyValue('visibility'))) {
           searchOrigin = savedSearchOrigin.element;
           return searchOrigin;
         }
@@ -841,10 +806,6 @@
    * Move the scroll of an element depending on the given spatial navigation directrion
    * (Assume that User Agent defined distance is '40px')
    * @see {@link https://drafts.csswg.org/css-nav-1/#directionally-scroll-an-element}
-   * @function moveScroll
-   * @param element {Node} - The scrollable element
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @param offset {Number} - The explicit amount of offset for scrolling. Default value is 0.
    */
   function moveScroll(element, dir, offset = 0) {
     if (element) {
@@ -857,12 +818,7 @@
     }
   }
 
-  /**
-   * Decide whether an element is container or not.
-   * @function isContainer
-   * @param element {Node} element
-   * @returns {boolean}
-   */
+  /** Decide whether an element is container or not. */
   function isContainer(element) {
     return (!element.parentElement) ||
             (element.nodeName === 'IFRAME') ||
@@ -870,13 +826,7 @@
             (isCSSSpatNavContain(element));
   }
 
-  /**
-   * Decide whether an element is delegable container or not.
-   * NOTE: THIS IS NON-NORMATIVE API. 
-   * @function isDelegableContainer
-   * @param element {Node} element
-   * @returns {boolean}
-   */
+  /** Decide whether an element is delegable container or not. NOTE: THIS IS NON-NORMATIVE API. */
   function isDelegableContainer(element) {
     return readCssVar(element, 'spatial-navigation-contain') === 'delegable';
   }
@@ -884,9 +834,6 @@
   /**
    * Decide whether an element is a scrollable container or not.
    * @see {@link https://drafts.csswg.org/css-overflow-3/#scroll-container}
-   * @function isScrollContainer
-   * @param element {Node}
-   * @returns {boolean}
    */
   function isScrollContainer(element) {
     const elementStyle = getCachedComputedStyle(element);
@@ -899,13 +846,10 @@
   }
 
   /**
-   * Decide whether this element is scrollable or not.
-   * NOTE: If the value of 'overflow' is given to either 'visible', 'clip', or 'hidden', the element isn't scrollable.
-   *       If the value is 'hidden', the element can be only programmically scrollable. (https://drafts.csswg.org/css-overflow-3/#valdef-overflow-hidden)
-   * @function isScrollable
-   * @param element {Node}
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {boolean}
+   * Decide whether this element is scrollable or not. NOTE: If the value of 'overflow' is
+   * given to either 'visible', 'clip', or 'hidden', the element isn't scrollable. If the
+   * value is 'hidden', the element can be only programmically scrollable.
+   * (https://drafts.csswg.org/css-overflow-3/#valdef-overflow-hidden)
    */
   function isScrollable(element, dir) { // element, dir
     if (element && typeof element === 'object') {
@@ -935,13 +879,7 @@
     }
   }
 
-  /**
-   * Decide whether an element is overflow or not.
-   * @function isOverflow
-   * @param element {Node}
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {boolean}
-   */
+  /** Decide whether an element is overflow or not. */
   function isOverflow(element, dir) {
     if (element && typeof element === 'object') {
       if (dir && typeof dir === 'string') { // parameter: element, dir
@@ -962,13 +900,7 @@
     }
   }
 
-  /**
-   * Decide whether the scrollbar of the browsing context reaches to the end or not.
-   * @function isHTMLScrollBoundary
-   * @param element {Node} - The top browsing context
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {boolean}
-   */
+  /** Decide whether the scrollbar of the browsing context reaches to the end or not. */
   function isHTMLScrollBoundary(element, dir) {
     let result = false;
     switch (dir) {
@@ -988,13 +920,7 @@
     return result;
   }
 
-  /**
-   * Decide whether the scrollbar of an element reaches to the end or not.
-   * @function isScrollBoundary
-   * @param element {Node}
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {boolean}
-   */
+  /** Decide whether the scrollbar of an element reaches to the end or not. */
   function isScrollBoundary(element, dir) {
     if (isScrollable(element, dir)) {
       const winScrollY = element.scrollTop;
@@ -1013,13 +939,7 @@
     return false;
   }
 
-  /**
-   * Decide whether an element is inside the scorller viewport or not
-   *
-   * @function isVisibleInScroller
-   * @param element {Node}
-   * @returns {boolean}
-   */
+  /** Decide whether an element is inside the scorller viewport or not */
   function isVisibleInScroller(element) {
     const elementRect = element.getBoundingClientRect();
     let nearestScroller = getScrollContainer(element);
@@ -1038,18 +958,12 @@
   }
 
   /**
-   * Decide whether an element is focusable for spatial navigation.
-   * 1. If element is the browsing context (document, iframe), then it's focusable,
-   * 2. If the element is scrollable container (regardless of scrollable axis), then it's focusable,
-   * 3. The value of tabIndex >= 0, then it's focusable,
-   * 4. If the element is disabled, it isn't focusable,
-   * 5. If the element is expressly inert, it isn't focusable,
-   * 6. Whether the element is being rendered or not.
-   *
-   * @function isFocusable
-   * @param element {Node}
-   * @returns {boolean}
-   *
+   * Decide whether an element is focusable for spatial navigation. 1. If element is the
+   * browsing context (document, iframe), then it's focusable, 2. If the element is
+   * scrollable container (regardless of scrollable axis), then it's focusable, 3. The value
+   * of tabIndex >= 0, then it's focusable, 4. If the element is disabled, it isn't
+   * focusable, 5. If the element is expressly inert, it isn't focusable, 6. Whether the
+   * element is being rendered or not.
    * @see {@link https://html.spec.whatwg.org/multipage/interaction.html#focusable-area}
    */
   function isFocusable(element) {
@@ -1059,55 +973,35 @@
       return true;
   }
 
-  /**
-   * Decide whether an element is a tag without href attribute or not.
-   *
-   * @function isAtagWithoutHref
-   * @param element {Node}
-   * @returns {boolean}
-   */
+  /** Decide whether an element is a tag without href attribute or not. */
   function isAtagWithoutHref(element) {
     return (element.tagName === 'A' && element.getAttribute('href') === null && element.getAttribute('tabIndex') === null);
   }
 
   /**
    * Decide whether an element is actually disabled or not.
-   *
-   * @function isActuallyDisabled
-   * @param element {Node}
-   * @returns {boolean}
-   *
    * @see {@link https://html.spec.whatwg.org/multipage/semantics-other.html#concept-element-disabled}
    */
   function isActuallyDisabled(element) {
-    if (['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'OPTGROUP', 'OPTION', 'FIELDSET'].includes(element.tagName))
-      return (element.disabled);
-    else
-      return false;
+    return DISABLEABLE_TAGS.has(element.tagName) ? element.disabled : false;
   }
 
   /**
    * Decide whether the element is expressly inert or not.
    * @see {@link https://html.spec.whatwg.org/multipage/interaction.html#expressly-inert}
-   * @function isExpresslyInert
-   * @param element {Node}
-   * @returns {boolean}
    */
   function isExpresslyInert(element) {
     return ((element.inert) && (!element.ownerDocument.documentElement.inert));
   }
 
   /**
-   * Decide whether the element is being rendered or not.
-   * 1. If an element has the style as "visibility: hidden | collapse" or "display: none", it is not being rendered.
-   * 2. If an element has the style as "opacity: 0", it is not being rendered.(that is, invisible).
+   * Decide whether the element is being rendered or not. 1. If an element has the style as
+   * "visibility: hidden | collapse" or "display: none", it is not being rendered. 2. If an
+   * element has the style as "opacity: 0", it is not being rendered.(that is, invisible).
    * 3. If width and height of an element are explicitly set to 0, it is not being rendered.
-   * 4. If a parent element is hidden, an element itself is not being rendered.
-   * (CSS visibility property and display property are inherited.)
+   * 4. If a parent element is hidden, an element itself is not being rendered. (CSS
+   * visibility property and display property are inherited.)
    * @see {@link https://html.spec.whatwg.org/multipage/rendering.html#being-rendered}
-   * @function isBeingRendered
-   * @param element {Node}
-   * @returns {boolean}
    */
   function isBeingRendered(element) {
     if (!isVisibleStyleProperty(element.parentElement))
@@ -1118,22 +1012,12 @@
     return true;
   }
 
-  /**
-   * Decide whether this element is partially or completely visible to user agent.
-   * @function isVisible
-   * @param element {Node}
-   * @returns {boolean}
-   */
+  /** Decide whether this element is partially or completely visible to user agent. */
   function isVisible(element) {
     return (!element.parentElement) || (isVisibleStyleProperty(element) && hitTest(element));
   }
 
-  /**
-   * Decide whether this element is completely visible in this viewport for the arrow direction.
-   * @function isEntirelyVisible
-   * @param element {Node}
-   * @returns {boolean}
-   */
+  /** Decide whether this element is completely visible in this viewport for the arrow direction. */
   function isEntirelyVisible(element, container) {
     const rect = getBoundingClientRect(element);
     const containerElm = container || element.getSpatialNavigationContainer();
@@ -1148,27 +1032,14 @@
     return entirelyVisible;
   }
 
-  /**
-   * Decide the style property of this element is specified whether it's visible or not.
-   * @function isVisibleStyleProperty
-   * @param element {CSSStyleDeclaration}
-   * @returns {boolean}
-   */
+  /** Decide the style property of this element is specified whether it's visible or not. */
   function isVisibleStyleProperty(element) {
     const elementStyle = getCachedComputedStyle(element);
-    const thisVisibility = elementStyle.getPropertyValue('visibility');
-    const thisDisplay = elementStyle.getPropertyValue('display');
-    const invisibleStyle = ['hidden', 'collapse'];
-
-    return (thisDisplay !== 'none' && !invisibleStyle.includes(thisVisibility));
+    return elementStyle.getPropertyValue('display') !== 'none' &&
+      !INVISIBLE_VISIBILITY.has(elementStyle.getPropertyValue('visibility'));
   }
 
-  /**
-   * Decide whether this element is entirely or partially visible within the viewport.
-   * @function hitTest
-   * @param element {Node}
-   * @returns {boolean}
-   */
+  /** Decide whether this element is entirely or partially visible within the viewport. */
   function hitTest(element) {
     const elementRect = getBoundingClientRect(element);
     if (element.nodeName !== 'IFRAME' && (elementRect.top < 0 || elementRect.left < 0 ||
@@ -1197,13 +1068,7 @@
     return false;
   }
 
-  /**
-   * Decide whether a child element is entirely or partially Included within container visually.
-   * @function isInside
-   * @param containerRect {DOMRect}
-   * @param childRect {DOMRect}
-   * @returns {boolean}
-   */
+  /** Decide whether a child element is entirely or partially Included within container visually. */
   function isInside(containerRect, childRect) {
     const rightEdgeCheck = (containerRect.left <= childRect.right && containerRect.right >= childRect.right);
     const leftEdgeCheck = (containerRect.left <= childRect.left && containerRect.right >= childRect.left);
@@ -1213,13 +1078,8 @@
   }
 
   /**
-   * Decide whether this element is entirely or partially visible within the viewport.
-   * Note: rect1 is outside of rect2 for the dir
-   * @function isOutside
-   * @param rect1 {DOMRect}
-   * @param rect2 {DOMRect}
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {boolean}
+   * Decide whether this element is entirely or partially visible within the viewport. Note:
+   * rect1 is outside of rect2 for the dir
    */
   function isOutside(rect1, rect2, dir) {
     switch (dir) {
@@ -1263,13 +1123,9 @@
   }
 
   /**
-   * Get distance between the search origin and a candidate element along the direction when candidate element is inside the search origin.
+   * Get distance between the search origin and a candidate element along the direction when
+   * candidate element is inside the search origin.
    * @see {@link https://drafts.csswg.org/css-nav-1/#find-the-shortest-distance}
-   * @function getDistanceFromPoint
-   * @param point {Point} - The search origin
-   * @param element {DOMRect} - A candidate element
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {Number} The euclidian distance between the spatial navigation container and an element inside it
    */
   function getDistanceFromPoint(point, element, dir) {
     point = startingPoint;
@@ -1286,13 +1142,9 @@
   }
 
   /**
-   * Get distance between the search origin and a candidate element along the direction when candidate element is inside the search origin.
+   * Get distance between the search origin and a candidate element along the direction when
+   * candidate element is inside the search origin.
    * @see {@link https://drafts.csswg.org/css-nav-1/#find-the-shortest-distance}
-   * @function getInnerDistance
-   * @param rect1 {DOMRect} - The search origin
-   * @param rect2 {DOMRect} - A candidate element
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {Number} The euclidean distance between the spatial navigation container and an element inside it
    */
   function getInnerDistance(rect1, rect2, dir) {
     const baseEdgeForEachDirection = {left: 'right', right: 'left', up: 'bottom', down: 'top'};
@@ -1302,13 +1154,9 @@
   }
 
   /**
-   * Get the distance between the search origin and a candidate element considering the direction.
+   * Get the distance between the search origin and a candidate element considering the
+   * direction.
    * @see {@link https://drafts.csswg.org/css-nav-1/#calculating-the-distance}
-   * @function getDistance
-   * @param searchOrigin {DOMRect | Point} - The search origin
-   * @param candidateRect {DOMRect} - A candidate element
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {Number} The distance scoring between two elements
    */
   function getDistance(searchOrigin, candidateRect, dir) {
     const kOrthogonalWeightForLeftRight = 30;
@@ -1376,12 +1224,8 @@
   }
 
   /**
-   * Get the euclidean distance between the search origin and a candidate element considering the direction.
-   * @function getEuclideanDistance
-   * @param rect1 {DOMRect} - The search origin
-   * @param rect2 {DOMRect} - A candidate element
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {Number} The distance scoring between two elements
+   * Get the euclidean distance between the search origin and a candidate element
+   * considering the direction.
    */
   function getEuclideanDistance(rect1, rect2, dir) {
     // Get exit point, entry point
@@ -1397,12 +1241,8 @@
   }
 
   /**
-   * Get the absolute distance between the search origin and a candidate element considering the direction.
-   * @function getAbsoluteDistance
-   * @param rect1 {DOMRect} - The search origin
-   * @param rect2 {DOMRect} - A candidate element
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD)
-   * @returns {Number} The distance scoring between two elements
+   * Get the absolute distance between the search origin and a candidate element considering
+   * the direction.
    */
   function getAbsoluteDistance(rect1, rect2, dir) {
     // Get exit point, entry point
@@ -1413,21 +1253,9 @@
       Math.abs(points.entryPoint.x - points.exitPoint.x) : Math.abs(points.entryPoint.y - points.exitPoint.y);
   }
 
-  /**
-   * Get entry point and exit point of two elements considering the direction.
-   * @function getEntryAndExitPoints
-   * @param dir {SpatialNavigationDirection} - The directional information for the spatial navigation (e.g. LRUD). Default value for dir is 'down'.
-   * @param searchOrigin {DOMRect | Point} - The search origin which contains the exit point
-   * @param candidateRect {DOMRect} - One of candidates which contains the entry point
-   * @returns {Points} The exit point from the search origin and the entry point from a candidate
-   */
+  /** Get entry point and exit point of two elements considering the direction. */
   function getEntryAndExitPoints(dir = 'down', searchOrigin, candidateRect) {
-    /**
-     * User type definition for Point
-     * @typeof {Object} Points
-     * @property {Point} Points.entryPoint
-     * @property {Point} Points.exitPoint
-     */
+    /** User type definition for Point */
     const points = {entryPoint: {x: 0, y: 0}, exitPoint:{x: 0, y: 0}};
 
     if (startingPoint) {
@@ -1532,14 +1360,6 @@
   /**
    * Find focusable elements within the container
    * @see {@link https://drafts.csswg.org/css-nav-1/#find-the-shortest-distance}
-   * @function getIntersectionRect
-   * @param rect1 {DOMRect} - The search origin which contains the exit point
-   * @param rect2 {DOMRect} - One of candidates which contains the entry point
-   * @returns {IntersectionArea} The intersection area between two elements.
-   *
-   * @typeof {Object} IntersectionArea
-   * @property {Number} IntersectionArea.width
-   * @property {Number} IntersectionArea.height
    */
   function getIntersectionRect(rect1, rect2) {
     const intersection_rect = {width: 0, height: 0, area: 0};
@@ -1561,13 +1381,8 @@
   /**
    * Handle the spatial navigation behavior for HTMLInputElement, HTMLTextAreaElement
    * @see {@link https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input|HTMLInputElement (MDN)}
-   * @function handlingEditableElement
-   * @param e {Event} - keydownEvent
-   * @returns {boolean}
    */
   function handlingEditableElement(e) {
-    const SPINNABLE_INPUT_TYPES = ['email', 'date', 'month', 'number', 'time', 'week'],
-      TEXT_INPUT_TYPES = ['password', 'text', 'search', 'tel', 'url', null];
     const eventTarget = document.activeElement;
     const focusNavigableArrowKey = {left: false, up: false, right: false, down: false};
 
@@ -1576,10 +1391,10 @@
       return focusNavigableArrowKey;
     }
 
-    if (SPINNABLE_INPUT_TYPES.includes(eventTarget.getAttribute('type')) &&
+    if (SPINNABLE_INPUT_TYPES.has(eventTarget.getAttribute('type')) &&
       (dir === 'up' || dir === 'down')) {
       focusNavigableArrowKey[dir] = true;
-    } else if (TEXT_INPUT_TYPES.includes(eventTarget.getAttribute('type')) || eventTarget.nodeName === 'TEXTAREA') {
+    } else if (TEXT_INPUT_TYPES.has(eventTarget.getAttribute('type')) || eventTarget.nodeName === 'TEXTAREA') {
       // 20210606 fix selectionStart unavailable on checkboxes ~inf
       const startPosition = eventTarget.selectionStart;
       const endPosition = eventTarget.selectionEnd;
@@ -1600,16 +1415,11 @@
     return focusNavigableArrowKey;
   }
 
+  /** Get the DOMRect of an element */
   /**
-   * Get the DOMRect of an element
-   * @function getBoundingClientRect
-   * @param {Node} element 
-   * @returns {DOMRect}
-   */
-  /**
-   * getComputedStyle memoised for the duration of one navigation.
-   * Outside a navigation (mapOfComputedStyle === null) it falls through to a
-   * live read, so behaviour is unchanged for any other caller.
+   * getComputedStyle memoised for the duration of one navigation. Outside a navigation
+   * (mapOfComputedStyle === null) it falls through to a live read, so behaviour is
+   * unchanged for any other caller.
    */
   function getCachedComputedStyle(element) {
     if (!mapOfComputedStyle) return window.getComputedStyle(element, null);
@@ -1639,11 +1449,7 @@
     return rect;
   }
 
-  /**
-   * Get the candidates which is fully inside the target element in visual
-   * @param {Node} targetElement
-   * @returns {sequence<Node>}  overlappedCandidates
-   */
+  /** Get the candidates which is fully inside the target element in visual */
   function getOverlappedCandidates(targetElement) {      
     const container = targetElement.getSpatialNavigationContainer();
     const candidates = container.focusableAreas();
@@ -1658,10 +1464,7 @@
     return overlappedCandidates;
   }
 
-  /**
-   * Get the list of the experimental APIs
-   * @function getExperimentalAPI
-   */
+  /** Get the list of the experimental APIs */
   function getExperimentalAPI() {
     function canScroll(container, dir) {
       return (isScrollable(container, dir) && !isScrollBoundary(container, dir)) ||
@@ -1790,11 +1593,7 @@
     };
   }
 
-  /**
-   * Makes to use the experimental APIs.
-   * @function enableExperimentalAPIs
-   * @param option {boolean} - If it is true, the experimental APIs can be used or it cannot.
-   */
+  /** Makes to use the experimental APIs. */
   function enableExperimentalAPIs (option) {
     const currentKeyMode = window.__spatialNavigation__ && window.__spatialNavigation__.keyMode;
     window.__spatialNavigation__ = (option === false) ? getInitialAPIs() : Object.assign(getInitialAPIs(), getExperimentalAPI());
@@ -1802,21 +1601,17 @@
     Object.seal(window.__spatialNavigation__);
   }
 
-  /**
-   * Set the environment for using the spatial navigation polyfill.
-   * @function getInitialAPIs
-   */
+  /** Set the environment for using the spatial navigation polyfill. */
   function getInitialAPIs() {
     return {
       enableExperimentalAPIs,
       get keyMode() { return this._keymode ? this._keymode : 'ARROW'; },
-      set keyMode(mode) { this._keymode = (['SHIFTARROW', 'ARROW', 'NONE'].includes(mode)) ? mode : 'ARROW'; },
+      set keyMode(mode) { this._keymode = KEY_MODES.has(mode) ? mode : 'ARROW'; },
       /**
-       * Whether to keep the search-origin bookkeeping up to date from global
-       * focus/mouse events. A host that sets keyMode = 'NONE' and calls
-       * navigate() itself should enable this only while it will navigate;
-       * otherwise the focusin listener forces a layout on every keypress in
-       * the whole app to populate state nothing reads.
+       * Whether to keep the search-origin bookkeeping up to date from global focus/mouse
+       * events. A host that sets keyMode = 'NONE' and calls navigate() itself should enable
+       * this only while it will navigate; otherwise the focusin listener forces a layout on
+       * every keypress in the whole app to populate state nothing reads.
        */
       get trackFocus() { return trackFocus; },
       set trackFocus(value) { trackFocus = !!value; },
@@ -1833,7 +1628,7 @@
 })();
 
 /**
- * Force babel to interpret this file as ESM so it
- * polyfills with ESM imports instead of CommonJS.
+ * Force babel to interpret this file as ESM so it polyfills with ESM imports instead of
+ * CommonJS.
  */
 export {}

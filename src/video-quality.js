@@ -487,10 +487,8 @@ function handleNavigation(event) {
 function setupListeners() {
     window.addEventListener('yt-navigate-finish', handleNavigation);
 
-    // handleNavigation already falls back to isWatchPage() when the event
-    // carries no pageType — and ytaf-page-update never does. The old wrapper
-    // allocated a closure + object literal per navigation to compute a value
-    // that was then ignored.
+    // Passed directly: handleNavigation falls back to isWatchPage() when the
+    // event carries no pageType, and ytaf-page-update never does.
     window.addEventListener('ytaf-page-update', handleNavigation);
     
     if (document.readyState === 'loading') {

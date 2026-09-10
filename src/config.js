@@ -51,7 +51,7 @@ export const shortcutActions = {
   toggle_comments: 'Toggle Comments',
   toggle_description: 'Toggle Description',
   save_to_playlist: 'Save / Watch Later',
-  oled_toggle: 'Toggle OLED Care Mode',
+  oled_toggle: 'Toggle OLED Black Overlay',
   sb_manual_skip: 'Manual Skip / Jump to Highlight',
   config_menu: 'Open/Close Settings'
   //speed_up: 'Playback Speed +',
