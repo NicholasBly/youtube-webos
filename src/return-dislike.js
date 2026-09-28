@@ -225,7 +225,73 @@ class ReturnYouTubeDislike {
     valueElement.textContent = text;
     if (this.dislikeFactoidElement) {
       this.dislikeFactoidElement.setAttribute('aria-label', `${text} Dislikes`);
+      this.compensateHeaderGrowth(this.dislikeFactoidElement.parentElement);
     }
+  }
+
+  // YouTube measures each description row once, in the same task that renders
+  // it - before we can inject the dislike factoid and re-flow the stats with
+  // the .ryd-ready styles. The header row then grows, but YouTube keeps
+  // positioning every row below it with the old height, so they cover the
+  // Views/Date line. Push those rows down by the difference.
+  //
+  // Rows are absolutely positioned, so margin-top moves them without touching
+  // YouTube's inline height/transform. The value lives in our own stylesheet,
+  // keyed on attributes, so a YouTube re-render can't wipe it.
+  compensateHeaderGrowth(container) {
+    try {
+      const list = container && container.closest('yt-virtual-list');
+      const box = list && list.firstElementChild;
+      if (!box) return;
+
+      let row = container;
+      while (row && row.parentNode !== box) row = row.parentNode;
+      if (!row || !row.firstElementChild) return;
+
+      const inline = row.style.height || '';
+      const ytHeight = parseFloat(inline);
+      // 0 / unset = YouTube never measured this row (the #188 zero-height
+      // state); shifting against a bogus height would make things worse.
+      if (!ytHeight) return;
+      const unit = inline.indexOf('rem') !== -1
+        ? (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16)
+        : 1;
+      const delta = Math.round(row.firstElementChild.getBoundingClientRect().height - ytHeight * unit);
+
+      if (this.shiftedList && this.shiftedList !== list) this.clearHeaderShift();
+      this.shiftedList = list;
+      list.setAttribute('data-ryd-shift', '');
+      const rows = box.children;
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i] === row) rows[i].setAttribute('data-ryd-header', '');
+        else rows[i].removeAttribute('data-ryd-header');
+      }
+
+      let style = document.getElementById('ryd-shift-style');
+      if (!style) {
+        style = document.createElement('style');
+        style.id = 'ryd-shift-style';
+        document.head.appendChild(style);
+      }
+      const css = delta > 1
+        ? `yt-virtual-list[data-ryd-shift] > div > div:not([data-ryd-header]) { margin-top: ${delta}px !important; }`
+        : '';
+      if (style.textContent !== css) style.textContent = css;
+    } catch (error) {
+      this.log('error', 'Header shift error:', error);
+    }
+  }
+
+  clearHeaderShift() {
+    const list = this.shiftedList;
+    this.shiftedList = null;
+    if (list) {
+      list.removeAttribute('data-ryd-shift');
+      const hdr = list.querySelector('[data-ryd-header]');
+      if (hdr) hdr.removeAttribute('data-ryd-header');
+    }
+    const style = document.getElementById('ryd-shift-style');
+    if (style) style.textContent = '';
   }
 
   // --- Observer Logic ---
@@ -624,7 +690,12 @@ class ReturnYouTubeDislike {
     // factoid at all, and it only appeared later when some unrelated mutation
     // or focus change happened to re-run this - the "it shows up a couple of
     // seconds late" symptom. Inject now, fill in the number when it arrives.
-    if (document.getElementById('ryd-dislike-factoid')) return;
+    const existing = document.getElementById('ryd-dislike-factoid');
+    if (existing) {
+      // Rows can be re-rendered while the panel is open; keep the shift in sync.
+      this.compensateHeaderGrowth(existing.parentElement);
+      return;
+    }
 
     try {
       // Check if we already detected the mode. If so, skip the DOM queries.
@@ -673,6 +744,7 @@ class ReturnYouTubeDislike {
       likesElement.insertAdjacentElement('afterend', dislikeElement);
       container.classList.add('ryd-ready');
       this.initialInjectionDone = true;
+      this.compensateHeaderGrowth(container);
 
     } catch (error) {
       this.log('error', 'Injection error:', error);
@@ -696,7 +768,6 @@ class ReturnYouTubeDislike {
       ${SELECTORS.panel} .ryd-ready div[idomkey="factoid-2"] { margin-top: 0 !important; }
       ${SELECTORS.panel} .ryd-ready div[idomkey="factoid-2"] ${SELECTORS.stdValue}, ${SELECTORS.panel} .ryd-ready div[idomkey="factoid-2"] ${SELECTORS.cptValue} { display: inline-block !important; margin-right: 0.2rem !important; }
       ${SELECTORS.panel} .ryd-ready div[idomkey="factoid-2"] ${SELECTORS.stdLabel}, ${SELECTORS.panel} .ryd-ready div[idomkey="factoid-2"] ${SELECTORS.cptLabel} { display: inline-block !important; }
-      ${SELECTORS.panel} .TXB27d, ${SELECTORS.panel} .ytVirtualListItem, yt-rich-text-list-view-model .TXB27d, yt-rich-text-list-view-model .ytVirtualListItem { position: relative !important; height: auto !important; margin-bottom: 1rem !important; }
       #ryd-dislike-factoid { flex: 0 0 auto !important; }
     `;
     document.head.appendChild(styleElement);
@@ -723,6 +794,7 @@ class ReturnYouTubeDislike {
 
     const el = document.getElementById('ryd-dislike-factoid');
     if (el) el.remove();
+    this.clearHeaderShift();
     if (window.returnYouTubeDislike === this) {
         const styles = document.getElementById('ryd-persistent-styles');
         if (styles) styles.remove();
