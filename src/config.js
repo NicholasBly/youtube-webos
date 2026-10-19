@@ -53,10 +53,10 @@ export const shortcutActions = {
   save_to_playlist: 'Save / Watch Later',
   oled_toggle: 'Toggle OLED Black Overlay',
   sb_manual_skip: 'Manual Skip / Jump to Highlight',
-  config_menu: 'Open/Close Settings'
-  //speed_up: 'Playback Speed +',
-  //speed_down: 'Playback Speed -',
-  //speed_reset: 'Playback Speed Reset (1x)'
+  config_menu: 'Open/Close Settings',
+  speed_up: 'Playback Speed +',
+  speed_down: 'Playback Speed -',
+  speed_reset: 'Playback Speed Reset (1x)'
 };
 
 
@@ -136,7 +136,7 @@ const configOptions = new Map([
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],
   ['forceVideoCodec', { default: 'auto', desc: 'Force Video Codec' }],
-  //['enablePlaybackSpeed', { default: true, desc: 'Playback Speed Control' }],
+  ['enablePlaybackSpeed', { default: true, desc: 'Playback Speed Control' }],
   ['disableNotifications', { default: false, desc: 'Disable Notifications' }]
 ]);
 

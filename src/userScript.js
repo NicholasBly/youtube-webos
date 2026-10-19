@@ -5,6 +5,7 @@ import './perf_mon.js';
 import 'whatwg-fetch';
 import './polyfills.js';
 import './domrect-polyfill';
+import './playback-speed.js';
 import './adblock.js';
 import './hooks/json-stringify';
 import './force-codec.js';
