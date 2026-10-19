@@ -7,7 +7,7 @@ import './auto-login.js';
 import './return-dislike.js';
 import { initVideoQuality } from './video-quality.js';
 import { initLogoStyle } from './logo-style.js';
-// import { initPlaybackSpeed, stepSpeed, resetSpeed } from './playback-speed.js';
+import { initPlaybackSpeed, stepSpeed, resetSpeed } from './playback-speed.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo } from './utils.js';
 import { syncAdblockHook, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
@@ -112,10 +112,10 @@ const ACTION_SCOPES = {
     toggle_description: 'VIDEO',
     save_to_playlist: 'VIDEO',
     sb_skip_prev: 'VIDEO',
-    sb_manual_skip: 'VIDEO'
-    // speed_up: 'VIDEO',
-    // speed_down: 'VIDEO',
-    // speed_reset: 'VIDEO'
+    sb_manual_skip: 'VIDEO',
+    speed_up: 'VIDEO',
+    speed_down: 'VIDEO',
+    speed_reset: 'VIDEO'
 };
 
 function updateShortcutCache(key) {
@@ -606,7 +606,7 @@ function createOptionsPanel() {
 
   pageMain.appendChild(createSection('Video Player',
   [createConfigCheckbox('forceHighResVideo'),
-  //createConfigCheckbox('enablePlaybackSpeed'),
+  createConfigCheckbox('enablePlaybackSpeed'),
   createVideoCodecControl(),
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
@@ -1219,17 +1219,17 @@ function handleShortcutAction(action) {
         playPauseLogic(video);
         break;
 
-    // case 'speed_up':
-        // stepSpeed(1);
-        // break;
+    case 'speed_up':
+        stepSpeed(1);
+        break;
 
-    // case 'speed_down':
-        // stepSpeed(-1);
-        // break;
+    case 'speed_down':
+        stepSpeed(-1);
+        break;
 
-    // case 'speed_reset':
-        // resetSpeed();
-        // break;
+    case 'speed_reset':
+        resetSpeed();
+        break;
     case 'toggle_subs':
         // Resolved here rather than above the switch: only this one action
         // needs it, and the .html5-video-player fallback is a full-document
@@ -1500,7 +1500,7 @@ if (!menuKeyExists) {
 initGlobalStyles();
 initVideoQuality();
 initLogoStyle();
-// initPlaybackSpeed();
+initPlaybackSpeed();
 
 // Initial apply (will skip UI elements if they don't exist yet, but handle global styles)
 applyOledMode(configRead('enableOledCareMode'));
