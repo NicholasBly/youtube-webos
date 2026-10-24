@@ -75,10 +75,24 @@ function boot(cfg) {
   win.Image = class {
     set src(url) {
       images.push(url);
+      this._src = url;
       const ok = url.indexOf('time=12.5') !== -1 || url.indexOf('i.ytimg.com') !== -1;
-      setTimeout(() => (ok ? this.onload && (this.naturalWidth = 320, this.onload()) : this.onerror && this.onerror()), 0);
+      // DeArrow serves 1280x720 frames, YouTube's hq1-3 are 480x360 (4:3).
+      const ytimg = url.indexOf('i.ytimg.com') !== -1;
+      this.naturalWidth = ytimg ? 480 : 1280;
+      this.naturalHeight = ytimg ? 360 : 720;
+      setTimeout(() => (ok ? this.onload && this.onload() : this.onerror && this.onerror()), 0);
     }
   };
+  // jsdom has no canvas: record the downscale and return a data URL that
+  // names its source, as Chromium 38 (no toBlob) would get.
+  const draws = [];
+  win.HTMLCanvasElement.prototype.getContext = function () {
+    const canvas = this;
+    return { drawImage: (img, ...args) => { canvas._src = img._src; draws.push({ w: canvas.width, h: canvas.height, args }); } };
+  };
+  win.HTMLCanvasElement.prototype.toBlob = undefined;
+  win.HTMLCanvasElement.prototype.toDataURL = function () { return 'data:image/jpeg;base64,SMALL#' + encodeURIComponent(this._src); };
 
   win.localStorage.setItem('ytaf-configuration', JSON.stringify(Object.assign({
     enableAdBlock: true, enableLegacyEmojiFix: false, enableSponsorBlock: false,
@@ -90,7 +104,7 @@ function boot(cfg) {
   // polyfill leaves an existing fetch alone.
   win.fetch = mockFetch;
   win.eval(fs.readFileSync(bundlePath, 'utf8'));
-  return { win, fetched, images };
+  return { win, fetched, images, draws };
 }
 
 function render(win, data) {
@@ -98,6 +112,7 @@ function render(win, data) {
   for (const item of data.contents) {
     const t = item.tileRenderer;
     const el = win.document.createElement('ytlr-tile-renderer');
+    el.setAttribute('data-test-id', t.contentId);
     el.innerHTML = '<ytlr-thumbnail-details></ytlr-thumbnail-details>' +
       '<ytlr-tile-metadata-renderer><div><yt-formatted-string></yt-formatted-string></div></ytlr-tile-metadata-renderer>';
     el.querySelector('ytlr-thumbnail-details').style.backgroundImage = `url("${t.header.tileHeaderRenderer.thumbnail.thumbnails[0].url}")`;
@@ -107,11 +122,13 @@ function render(win, data) {
 }
 
 function shown(win, id) {
-  const el = [...win.document.querySelectorAll('ytlr-tile-renderer')]
-    .find((e) => e.querySelector('ytlr-thumbnail-details').style.backgroundImage.indexOf(id) !== -1);
+  const el = win.document.querySelector(`ytlr-tile-renderer[data-test-id="${id}"]`);
+  const thumb = el && el.querySelector('ytlr-thumbnail-details').style.backgroundImage;
   return el && {
     title: el.querySelector('yt-formatted-string').textContent,
-    thumb: el.querySelector('ytlr-thumbnail-details').style.backgroundImage
+    // Downscaled copies name their source after '#'; originals are plain URLs.
+    thumb: thumb && decodeURIComponent(thumb),
+    small: !!thumb && thumb.indexOf('SMALL#') !== -1
   };
 }
 
@@ -121,7 +138,7 @@ const t = (n, ok, extra) => { if (ok) { pass++; console.log('PASS ' + n); }
   else { fail++; console.log('FAIL ' + n + (extra ? '\n     ' + extra : '')); } };
 
 (async () => {
-  const { win, fetched, images } = boot({});
+  const { win, fetched, images, draws } = boot({});
   await wait(50);
 
   const response = JSON.stringify({ responseContext: {}, contents: [
@@ -139,10 +156,15 @@ const t = (n, ok, extra) => { if (ok) { pass++; console.log('PASS ' + n); }
   const a = shown(win, 'custom00001');
   t('crowdsourced title, ">" markers removed', a && a.title === 'the iPhone review', a && a.title);
   t('submitted thumbnail shown', a && a.thumb.indexOf('getThumbnail?videoID=custom00001&time=12.5') !== -1, a && a.thumb);
+  t('...as a downscaled copy, not the 1280x720 original', a && a.small, a && a.thumb);
+  t('every thumbnail drawn at tile size (320x180)', draws.length > 0 && draws.every((d) => d.w === 320 && d.h === 180
+    && d.args[6] === 320 && d.args[7] === 180), JSON.stringify(draws.slice(0, 2)));
+  const hq = draws.find((d) => d.args[2] === 480 && d.args[3] === 270);
+  t('4:3 auto-generated frame cropped to 16:9 (letterbox removed)', !!hq && hq.args[1] === 45, JSON.stringify(draws.map((d) => d.args.slice(0, 4))));
 
   const b = shown(win, 'downvoted01');
   t('downvoted title ignored', b && b.title === 'Original title', b && b.title);
-  t('random frame not ready -> auto-generated start frame', b && b.thumb.indexOf('/vi/downvoted01/hq1.jpg') !== -1, b && b.thumb);
+  t('random frame not ready -> auto-generated start frame', b && b.small && b.thumb.indexOf('/vi/downvoted01/hq1.jpg') !== -1, b && b.thumb);
   t('random frame requested at randomTime * duration with generateNow',
     images.some((u) => u.indexOf('videoID=downvoted01&time=100&generateNow=true') !== -1));
 
