@@ -28,6 +28,7 @@
   "homepage": "https://github.com/NicholasBly/youtube-webos#readme",
   "dependencies": {
     "@twemoji/api": "16.0.1",
+    "seedrandom": "^3.0.5",
     "tiny-sha256": "^1.0.2",
     "whatwg-fetch": "^3.6.20"
   },

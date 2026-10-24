@@ -47,7 +47,7 @@ const t = (name, ok, extra) => {
   if (ok) { pass++; console.log('PASS ' + name); }
   else { fail++; console.log('FAIL ' + name + (extra ? '\n     ' + extra : '')); }
 };
-const PAGES = ['#ytaf-page-main', '#ytaf-page-sponsor', '#ytaf-page-shortcuts', '#ytaf-page-ui-tweaks'];
+const PAGES = ['#ytaf-page-main', '#ytaf-page-sponsor', '#ytaf-page-dearrow', '#ytaf-page-shortcuts', '#ytaf-page-ui-tweaks'];
 
 setTimeout(() => {
   // ---- Case 1: user hits a tab BEFORE the idle chain gets there ----
@@ -61,13 +61,13 @@ setTimeout(() => {
       'sponsor page count ' + win.document.querySelectorAll(PAGES[1]).length);
 
     const tabs = panel.querySelectorAll('.ytaf-tab-btn');
-    t('four tab buttons', tabs.length === 4, 'got ' + tabs.length);
+    t('five tab buttons', tabs.length === 5, 'got ' + tabs.length);
 
     // No frames pumped yet: jump straight to Shortcuts (page 3).
     let threw = null;
-    try { tabs[2].click(); } catch (e) { threw = e; }
+    try { tabs[3].click(); } catch (e) { threw = e; }
     t('tab press before idle build does not throw', !threw, threw && threw.message);
-    const shortcuts = win.document.querySelector(PAGES[2]);
+    const shortcuts = win.document.querySelector(PAGES[3]);
     t('Shortcuts page built on demand', !!shortcuts);
     t('Shortcuts page is the visible one', shortcuts && shortcuts.style.display === 'block',
       shortcuts && shortcuts.style.display);
@@ -100,8 +100,8 @@ setTimeout(() => {
       const el = win.document.querySelector(s);
       return el ? el.getElementsByTagName('*').length : -1;
     });
-    t('all four pages built after idle frames',
-      counts.length === 4 && counts.every((n) => n > 10), JSON.stringify(counts));
+    t('all five pages built after idle frames',
+      counts.length === 5 && counts.every((n) => n > 10), JSON.stringify(counts));
     // The deferred build must produce the same tree an all-synchronous one
     // would: every page's elements accounted for, nothing dropped or doubled.
     const pageSum = counts.reduce((a, b) => a + b, 0);
