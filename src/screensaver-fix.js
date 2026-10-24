@@ -185,6 +185,39 @@ const updateState = async () => {
 
 window.addEventListener('ytaf-page-update', updateState);
 
+/**
+ * A video screensaver takes the hardware decoder away from our paused <video>
+ * (UMS "resource released by policy action") without telling the page. On
+ * play the element fires 'playing' but no frames decode until YouTube's own
+ * stall watchdog rebuilds the player ~20s later. Spot that frozen state early
+ * and seek in place: the stale pipeline errors out and YouTube rebuilds it
+ * right away.
+ */
+const STALL_CHECK_MS = 2000;
+let lastStallNudge = 0;
+
+function onPlaying(evt) {
+  const video = evt.target;
+  if (!(video instanceof HTMLVideoElement)) return;
+  const startTime = video.currentTime;
+
+  setTimeout(() => {
+    // Real buffering drops readyState and fires 'waiting'; this is "ready,
+    // playing, yet the clock never moved".
+    if (video.paused || video.seeking || video.readyState < 3) return;
+    if (video.currentTime !== startTime) return;
+    // Don't loop if the nudge didn't help; leave it to YouTube's watchdog.
+    if (Date.now() - lastStallNudge < 10000) return;
+    lastStallNudge = Date.now();
+
+    console.info('[ScreensaverFix] Playback frozen (decoder lost?), reloading at', startTime);
+    video.currentTime = startTime;
+  }, STALL_CHECK_MS);
+}
+
+// Media events don't bubble; capture on document covers every <video>.
+document.addEventListener('playing', onPlaying, true);
+
 // Initial Check
 if(document.body) updateState();
 else document.addEventListener('DOMContentLoaded', updateState);
@@ -192,6 +225,7 @@ else document.addEventListener('DOMContentLoaded', updateState);
 window.addEventListener('beforeunload', () => {
   playerCtrlObs.disconnect();
   window.removeEventListener('ytaf-page-update', updateState);
+  document.removeEventListener('playing', onPlaying, true);
   currentVideoElement = null;
   setShortsKeepAlive(false);
 });
