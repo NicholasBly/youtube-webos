@@ -48,6 +48,10 @@ document.addEventListener(
         console.info('[Main] Relaunch detected on Account Selector. Triggering bypass.');
         attemptActiveBypass(true);
     }
+    // Plain relaunch (returning from another app): keep whatever is playing.
+    // Navigating to #/ here leaves YouTube on the video but kills SponsorBlock.
+    const { target, contentTarget } = evt.detail ?? {};
+    if (!target && !contentTarget) return;
     handleLaunch(evt.detail);
   },
   true
