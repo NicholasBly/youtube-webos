@@ -47,7 +47,7 @@ setTimeout(() => {
   // --- HOME_BROWSE: ads, Shorts shelves, titled shelves ---
   const browse = {
     responseContext: { visitorData: 'x', _pad: pad },
-    contents: { tvBrowseRenderer: { content: { tvSurfaceContentRenderer: { content: { sectionListRenderer: { contents: [
+    contents: { tvBrowseRenderer: { content: { tvSurfaceContentRenderer: { trackingParams: 'tp-surface', content: { sectionListRenderer: { contents: [
       { shelfRenderer: { title: { runs: [{ text: 'Keep me' }] }, content: { horizontalListRenderer: { items: [
         { tileRenderer: { style: 'TILE_STYLE_YTLR_DEFAULT', trackingParams: 'tp-tile' } },
         { tileRenderer: { style: 'TILE_STYLE_YTLR_SHORTS' } },
@@ -71,6 +71,8 @@ setTimeout(() => {
   t('browse: nested ad + shorts tile removed', inner.length === 1, 'got ' + inner.length + ' tiles');
   t('browse: trackingParams blanked at root', b.trackingParams === '');
   t('browse: trackingParams blanked nested', inner[0]?.tileRenderer?.trackingParams === '');
+  t('browse: tvSurfaceContentRenderer trackingParams preserved',
+    b.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.trackingParams === 'tp-surface');
 
   // --- PLAYER: ads, endcards, attestation, QR overlay ---
   const player = {
@@ -134,6 +136,26 @@ setTimeout(() => {
   t('continuation: shorts + ads filtered from grid',
     c.continuationContents.gridContinuation.items.length === 1,
     'got ' + c.continuationContents.gridContinuation.items.length);
+
+  // --- CONTINUATION tv surface (a Subscriptions channel tab loading) ---
+  // The TV client matches this response to its tab by the surface's
+  // trackingParams, so that one value must survive while the rest are blanked.
+  const surfaceCont = {
+    responseContext: { _pad: pad },
+    continuationContents: { tvSurfaceContentContinuation: {
+      trackingParams: 'tp-continuation',
+      content: { sectionListRenderer: { contents: [
+        { shelfRenderer: { title: { runs: [{ text: 'Channel videos' }] }, content: { horizontalListRenderer: { items: [
+          { tileRenderer: { style: 'TILE_STYLE_YTLR_DEFAULT', trackingParams: 'tp-tile' } }
+        ] } } } }
+      ] } }
+    } },
+    trackingParams: 'tp-root'
+  };
+  const sc = P(nativeStringify(surfaceCont)).continuationContents.tvSurfaceContentContinuation;
+  t('surface continuation: trackingParams preserved', sc.trackingParams === 'tp-continuation');
+  t('surface continuation: descendant trackingParams blanked',
+    sc.content.sectionListRenderer.contents[0]?.shelfRenderer?.content?.horizontalListRenderer?.items?.[0]?.tileRenderer?.trackingParams === '');
 
   // --- ACTION: appended continuation items ---
   const action = {

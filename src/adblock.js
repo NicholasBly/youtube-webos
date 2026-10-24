@@ -254,6 +254,12 @@ function processTextFieldsInPlace(obj) {
   }
 }
 
+// trackingParams that must survive stripping. The TV client keys each
+// Subscriptions channel tab's lazily loaded content on these renderers'
+// trackingParams; blanked, every tab shares the key '' and a response that
+// arrives after focus has moved on is rendered into the wrong channel's tab.
+const KEEP_TRACKING_PARAMS = new Set(['tvSurfaceContentRenderer', 'tvSurfaceContentContinuation']);
+
 // Depth-limited walk doing emoji text processing (doEmoji) and/or trackingParams
 // stripping (doTracking) in one traversal rather than two.
 function walkAndProcess(obj, doEmoji, doTracking, maxDepth, currentDepth = 0) {
@@ -276,7 +282,14 @@ function walkAndProcess(obj, doEmoji, doTracking, maxDepth, currentDepth = 0) {
     // without allocating an array at every node of the response tree.
     for (const k in obj) {
       const v = obj[k];
-      if (v && typeof v === 'object') walkAndProcess(v, doEmoji, doTracking, maxDepth, nextDepth);
+      if (!v || typeof v !== 'object') continue;
+      if (doTracking && KEEP_TRACKING_PARAMS.has(k)) {
+        const kept = v.trackingParams;
+        walkAndProcess(v, doEmoji, doTracking, maxDepth, nextDepth);
+        if (kept !== undefined) v.trackingParams = kept;
+      } else {
+        walkAndProcess(v, doEmoji, doTracking, maxDepth, nextDepth);
+      }
     }
   }
 }
