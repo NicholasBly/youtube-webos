@@ -10,7 +10,6 @@
 const fs = require('fs');
 const path = require('path');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const alea = require('seedrandom/lib/alea');
 const { applyChrome38Downgrade, UA, setUserAgent } = require('./chrome38-env.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -28,7 +27,7 @@ const BRANDING = {
     titles: [{ title: 'Bad', original: false, votes: -1, locked: false }],
     thumbnails: [], randomTime: 0.5, videoDuration: 200
   },
-  // No server randomTime: the time comes from alea(videoID), like the extension.
+  // No server randomTime (lookup failed): no random frame, auto-generated stays.
   norandom001: { titles: [], thumbnails: [], randomTime: null, videoDuration: 300 },
   // No submissions at all: the API answers 404, yet randomTime/videoDuration
   // in that body are what the random frame must use (not the tile's rounded
@@ -171,10 +170,10 @@ const t = (n, ok, extra) => { if (ok) { pass++; console.log('PASS ' + n); }
   t('random frame requested at randomTime * duration with generateNow',
     images.some((u) => u.indexOf('videoID=downvoted01&time=100&generateNow=true') !== -1));
 
-  let expected = alea('norandom001')();
-  if (expected > 0.9) expected -= 0.9;
-  t('missing randomTime falls back to alea(videoID), as in the extension',
-    images.some((u) => u.indexOf('videoID=norandom001&time=' + expected * 300) !== -1),
+  const c = shown(win, 'norandom001');
+  t('missing randomTime -> auto-generated frame, no random frame request',
+    c && c.small && c.thumb.indexOf('/vi/norandom001/hq1.jpg') !== -1
+    && !images.some((u) => u.indexOf('getThumbnail?videoID=norandom001') !== -1),
     images.filter((u) => u.indexOf('norandom001') !== -1).join(' '));
 
   t('404 "no submissions" body still used for the random frame time',
