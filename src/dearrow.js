@@ -146,7 +146,8 @@ function loadThumb(url, videoId) {
         if (canvas.toBlob) {
           canvas.toBlob((blob) => finish(blob ? URL.createObjectURL(blob) : null), 'image/jpeg', 0.85);
         } else {
-          finish(canvas.toDataURL('image/jpeg', 0.85));
+          // Tag it: two videos with identical frames would share a data URL.
+          finish(canvas.toDataURL('image/jpeg', 0.85) + '#videoID=' + videoId);
         }
       } catch {
         // Tainted canvas or out of memory: keep YouTube's thumbnail.
@@ -326,6 +327,8 @@ function setText(el, text) {
  * every original we replaced (DeArrow switched off).
  */
 function sweepTiles(restoreAll) {
+  // A pending sweep would re-apply what restoreAll just put back.
+  clearTimeout(sweepTimer);
   sweepTimer = null;
   if (videos.size === 0) return;
 
@@ -387,6 +390,8 @@ export function applyDeArrow(data) {
       if (video?.resolved) applyToTile(tile, video);
       else if (!video) {
         if (videos.size >= CACHE_LIMIT) {
+          // Put originals back while we still know them; the blobs go next.
+          sweepTiles(true);
           videos.clear();
           forgetThumbs();
         }

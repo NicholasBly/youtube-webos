@@ -194,7 +194,8 @@ const t = (n, ok, extra) => { if (ok) { pass++; console.log('PASS ' + n); }
   if (tab) tab.click();
   const enable = win.document.querySelector('#ytaf-page-dearrow input[type="checkbox"]');
   if (enable) enable.click();
-  await wait(50);
+  // Past SWEEP_DELAY: the key press scheduled a sweep that must not re-apply.
+  await wait(400);
   const off = shown(win, 'custom00001');
   t('switching off restores the original title', off && off.title === 'You WON\'T believe THIS phone', off && off.title);
   t('switching off restores the original thumbnail', off && off.thumb.indexOf('/vi/custom00001/hqdefault.jpg') !== -1, off && off.thumb);
