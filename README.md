@@ -111,6 +111,19 @@ npm install
 npm run build && npm run package
 ```
 
+- Building needs Node.js 22.22.3 or newer (or Node.js 24+). `npm run build:modern` builds the webOS 22+ version.
+
+- Run the test suite (formatting, lint, type checks, both builds and every test script against a simulated webOS browser) before a release:
+
+```sh
+npm test
+
+# Faster: only the webOS 22+ build and the tests that need no build
+npm run test:quick
+```
+
+- How the code is organised: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the overview, and [docs/CODEMAP.md](docs/CODEMAP.md) maps every module and function (what it does, what calls it, which settings and YouTube elements it touches). After changing code, run `npm run codemap` to update the map. Updating dependencies safely: [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
+
 ## Development TV setup
 
 These instructions use the [webOS CLI tools](https://github.com/webos-tools/cli).

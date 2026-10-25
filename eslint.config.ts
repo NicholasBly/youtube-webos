@@ -1,15 +1,9 @@
-import assert from 'node:assert';
-
 import eslintJs from '@eslint/js';
-import type { ESLint, Linter } from 'eslint';
-import stylistic from '@stylistic/eslint-plugin';
+import tsParser from '@typescript-eslint/parser';
+import type { Linter } from 'eslint';
 import prettierConfig from 'eslint-config-prettier';
 import * as regexpPlugin from 'eslint-plugin-regexp';
 import globals from 'globals';
-import pkgJson from './package.json' with { type: 'json' };
-
-const defaultSourceType: Linter.SourceType = 'module';
-assert(pkgJson.type === defaultSourceType);
 
 const configs = [
   eslintJs.configs.recommended,
@@ -17,31 +11,27 @@ const configs = [
   regexpPlugin.configs['flat/recommended'],
 
   {
-    plugins: {
-      // Cast needed due to type mismatch even though this is the recommmended way to use the plugin.
-      '@stylistic': stylistic as ESLint.Plugin
-    },
-
     linterOptions: {
       reportUnusedDisableDirectives: 'error'
     },
 
     languageOptions: {
-      sourceType: defaultSourceType,
       parserOptions: {
         ecmaFeatures: {
           impliedStrict: true
         }
-      },
-      globals: {
-        ...globals.nodeBuiltin
       }
     },
 
     rules: {
       'no-var': 'error',
+      'prefer-const': 'error',
+      // `== null` is the one loose comparison worth keeping: null or undefined in one test.
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
+      curly: ['error', 'multi-line'],
+      'default-case': 'error',
+      'no-nested-ternary': 'error',
       'no-await-in-loop': 'error',
-      'no-implicit-globals': ['error'],
       'no-unused-vars': ['error', { vars: 'local', argsIgnorePattern: '^_' }],
       'no-useless-rename': ['error'],
       'no-useless-computed-key': 'error',
@@ -49,19 +39,14 @@ const configs = [
       'no-useless-return': 'error',
       'arrow-body-style': ['error', 'as-needed'],
       'no-lonely-if': 'error',
-      'prefer-object-has-own': 'error',
+      // Off: the webOS 22+ bundle targets Chrome 87, which has no Object.hasOwn.
+      'prefer-object-has-own': 'off',
       'prefer-exponentiation-operator': 'error',
       'prefer-regex-literals': ['error', { disallowRedundantWrapping: true }],
-      'array-callback-return': [
-        'error',
-        { checkForEach: true, allowVoid: true }
-      ],
+      'array-callback-return': ['error', { checkForEach: true, allowVoid: true }],
       'no-constructor-return': 'error',
       'no-unmodified-loop-condition': 'error',
       'no-useless-assignment': 'error',
-
-      // @stylistic rules - needed as prettier doesn't handle these
-      '@stylistic/quotes': ['error', 'single', { avoidEscape: true }],
 
       /* eslint-plugin-regexp */
       'regexp/prefer-character-class': ['error', { minAlternatives: 2 }],
@@ -80,28 +65,101 @@ const configs = [
       globals: {
         ...globals.browser
       }
+    },
+    rules: {
+      // Everything logs through core/log.js, which has the runtime switch.
+      'no-console': 'error',
+      // A relative import names its file, as an ES module import does in the
+      // browser: webpack adds no extension and no index.js to them either.
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^\\.{1,2}(?:/[^/]+)*/[^/.]+$|^\\.{1,2}/?$',
+              message: 'Name the file: its extension, or /index.js for a folder.'
+            }
+          ]
+        }
+      ],
+      // Warnings, not errors: a function above these is a candidate for splitting, not a build break.
+      complexity: ['warn', 30],
+      'max-lines-per-function': ['warn', { max: 120, skipBlankLines: true, skipComments: true }]
     }
   },
 
   {
-    // Why doesn't ESLint do this by default is beyond me.
+    // The logger itself, and the dev-only diagnostics tool with its own console UI.
+    files: ['src/core/log.js', 'src/dev/perf-mon.js'],
+    rules: {
+      'no-console': 'off'
+    }
+  },
+
+  {
+    // Ports of specifications and the dev tool are not split along these lines.
+    files: ['src/polyfills/**/*', 'src/dev/perf-mon.js'],
+    rules: {
+      complexity: 'off',
+      'max-lines-per-function': 'off'
+    }
+  },
+
+  {
+    // The TypeScript sources and this file, through the TypeScript parser with
+    // the rules the JavaScript has.
+    files: ['**/*.ts'],
+    languageOptions: {
+      parser: tsParser
+    }
+  },
+
+  {
+    // Two rules are tsc's (tsconfig.json, which checks src/) rather than
+    // ESLint's, whose core rules read no types: no-undef (the DOM's type-only
+    // names, declarations) and no-unused-vars (the parameter names in a
+    // function type, an interface merged into Window), which noUnusedLocals
+    // and noUnusedParameters check instead. This file keeps both.
+    files: ['src/**/*.ts'],
+    rules: {
+      'no-undef': 'off',
+      'no-unused-vars': 'off'
+    }
+  },
+
+  {
+    // Node's own globals where Node runs the code: the configurations in the
+    // root, tools/ and tests/. src/ is the TV's, with the browser's only.
+    files: ['*.{js,ts,mjs,cjs}', 'tools/**/*', 'tests/**/*'],
+    languageOptions: {
+      globals: {
+        ...globals.nodeBuiltin
+      }
+    }
+  },
+
+  {
+    // ESLint takes the module kind from the extension: .cjs is CommonJS, the rest ES modules.
     files: ['**/*.cjs'],
     languageOptions: {
-      sourceType: 'commonjs'
+      globals: {
+        ...globals.node
+      }
     }
   },
 
   {
-    // Why doesn't ESLint do this by default is beyond me.
-    files: ['**/*.mjs'],
-    languageOptions: {
-      sourceType: 'module'
+    // Test scripts step through sequential scenarios on purpose.
+    files: ['tests/**/*'],
+    rules: {
+      'no-await-in-loop': 'off'
     }
   },
 
   {
-    // `ignores` field must be in the very bottom config.
-    ignores: ['dist/**/*', '**/*-polyfill.*']
+    // A block with nothing but `ignores` is a global ignore list, wherever it sits.
+    // Dot-directories hold local tools' files (worktrees, scratch files).
+    ignores: ['dist/**/*', '.*/**']
   }
 ] as const satisfies Linter.Config[];
 

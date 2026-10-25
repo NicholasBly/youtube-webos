@@ -1,0 +1,48 @@
+/* The clock in the top right corner (features/watch). It follows the look of
+   YouTube's floating chips: translucent by default, black under OLED-care
+   mode (html.ytaf-oled, which leaves the chips themselves alone), and the
+   Liquid Glass recipe of global.css under html.ytaf-remove-borders on the
+   watch page, where the player UI it sits beside is glass too (elsewhere the
+   clock keeps the plain look); there it wins over OLED as it does for the
+   chips. */
+.ytaf-watch {
+  position: fixed;
+  right: 0;
+  top: 0;
+  margin: 1rem 2rem;
+  background-color: rgba(15, 15, 15, 0.3);
+  border-radius: 0.5rem;
+  padding: 0.4rem;
+  font-size: 1.2rem;
+  letter-spacing: 0.05rem;
+  z-index: 1199;
+  pointer-events: none;
+  /* The fallback fade; the clock takes YouTube's own when it can read it from
+     the player (index.js sets it inline). */
+  transition: opacity 0.2s ease;
+}
+
+/* Away with YouTube's player UI (index.js). */
+.ytaf-watch.ytaf-watch-hidden {
+  opacity: 0;
+}
+
+html.ytaf-oled .ytaf-watch {
+  background-color: #000;
+}
+
+/* WEB_PAGE_TYPE_WATCH: YouTube's own body class for the watch page (SELECTORS.WATCH_PAGE_CLASS). */
+html.ytaf-remove-borders body.WEB_PAGE_TYPE_WATCH .ytaf-watch {
+  background-color: rgba(45, 45, 45, 0.45);
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Hidden with the controls while a pause or the kick dismisses them (ui/hide-controls.js). */
+body.ytaf-hide-controls .ytaf-watch {
+  opacity: 0 !important;
+}

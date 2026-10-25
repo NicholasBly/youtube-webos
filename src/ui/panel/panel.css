@@ -1,0 +1,167 @@
+/* The options panel: container, heading and logo, pages and their scrollbar,
+   checkboxes and the focus highlight, the tab menu. The rows' metrics and the
+   page layout are in pages.css, the cycle rows' value side in
+   controls/controls.css; the red-theme and OLED variants in
+   styles/theme-red.css and styles/theme-oled.css. */
+
+.ytaf-ui-container {
+  position: fixed;
+  top: 5vh;
+  left: 30%;
+  transform: translateX(-50%);
+  /* A width of its own: sized to its content the panel changed width, and
+     recentred, with every tab. */
+  width: 41.6vw;
+  max-height: 95vh;
+  color: #ffffff;
+  /* The TV has none of the first three and draws Roboto; the webOS TV
+     Simulator on Windows draws Segoe UI, as the README screenshots show. */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 4.44vh;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: #001a2e;
+  background-image:
+    linear-gradient(rgba(0, 212, 255, 0.15) 0.09vh, transparent 0.09vh),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.15) 0.09vh, transparent 0.09vh);
+  background-size: 3.7vh 3.7vh;
+  background-position: -0.09vh -0.09vh;
+  border: 0.09vh solid rgba(0, 212, 255, 0.4);
+  border-radius: 1.5vh;
+}
+
+.ytaf-ui-container h1 {
+  margin: 0;
+  padding: 1.5vh 3vh 1.1vh;
+  text-align: center;
+  font-size: 3.89vh;
+  font-weight: 600;
+  border-bottom: 0.09vh solid rgba(0, 212, 255, 0.3);
+  color: #00d4ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* The logo in the heading: the blue one here, the red and dark ones under
+   their theme classes (theme-red.css, theme-oled.css). */
+.ytaf-ui-container .ytaf-logo {
+  width: 5.55vh;
+  height: 5.55vh;
+  object-fit: contain;
+  margin-left: 1.1vh;
+}
+
+.ytaf-ui-container .ytaf-logo-red,
+.ytaf-ui-container .ytaf-logo-dark {
+  display: none;
+}
+
+/* A page scrolls rather than clips if a future row ever overflows 95vh. */
+.ytaf-ui-container > div.ytaf-settings-page {
+  padding: 0 3vh 2.2vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+.ytaf-ui-container > div::-webkit-scrollbar {
+  width: 0.75vh;
+}
+
+.ytaf-ui-container > div::-webkit-scrollbar-track {
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.ytaf-ui-container > div::-webkit-scrollbar-thumb {
+  background: #0099cc;
+  border-radius: 0.4vh;
+}
+
+.ytaf-ui-container input[type='checkbox'] {
+  width: 1.85vh;
+  height: 1.85vh;
+  margin: 0;
+  margin-right: 1.1vh;
+  appearance: none;
+  background: rgba(0, 50, 80, 0.8);
+  border: 0.19vh solid rgba(0, 150, 200, 0.5);
+  border-radius: 0.4vh;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ytaf-ui-container input[type='checkbox']:checked {
+  background: #00d4ff;
+  border-color: #00d4ff;
+}
+
+.ytaf-ui-container input[type='checkbox']:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 1.3vh;
+  font-weight: bold;
+}
+
+.ytaf-ui-container input[type='checkbox']:focus {
+  outline: 0.19vh solid #00d4ff;
+  outline-offset: 0.19vh;
+}
+
+/* The focused row: a cycle row by :focus, a checkbox row by the class that
+   stands in for :focus-within, which Chrome 38 to 59 lack (panel/keyboard.js
+   sets it). */
+.ytaf-ui-container .ytaf-cycle-row:focus,
+.ytaf-ui-container label.ytaf-focused {
+  background: rgba(0, 212, 255, 0.2);
+  box-shadow: 0 0 0 0.19vh #00d4ff;
+  outline: none;
+}
+
+/* Tab Menu */
+.ytaf-tab-menu {
+  display: flex;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 0.19vh solid rgba(0, 212, 255, 0.3);
+  padding: 0.5vh 1vh;
+  flex-shrink: 0;
+  margin-bottom: 1vh;
+}
+
+.ytaf-tab-btn {
+  flex: 1;
+  margin: 0 0.5vh;
+  background: transparent;
+  border: none;
+  color: #5599aa;
+  font-size: 2.1vh;
+  font-weight: 600;
+  padding: 1vh 2vh;
+  border-radius: 0.75vh;
+  cursor: pointer;
+  outline: none;
+  /* No transition: each tab move would repaint both buttons for a dozen
+     frames, over the panel's gradient grid, on the slowest TVs. */
+  font-family: inherit;
+}
+
+.ytaf-tab-btn.ytaf-active {
+  color: #00d4ff;
+  background: rgba(0, 212, 255, 0.15);
+}
+
+.ytaf-tab-btn:focus {
+  background: rgba(0, 212, 255, 0.3);
+  box-shadow: 0 0 0 0.19vh #00d4ff;
+  color: #ffffff;
+}

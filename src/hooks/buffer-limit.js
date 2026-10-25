@@ -7,37 +7,33 @@
  * which kills the app with the "restarting to free memory" toast.
  *
  * Chromium only garbage-collects a SourceBuffer once it hits its own internal
- * ceiling (150MB video / 12MB audio on these builds). We trim well below that.
+ * ceiling (150MB video / 12MB audio on these builds). The trim keeps well below that.
  *
- * Written ES5-style on purpose: no addEventListener option bags, no arrow
- * functions in hot paths -- webOS 3 is Chromium 38.
+ * No addEventListener option bags: webOS 3 is Chromium 38, which reads an
+ * options object as `useCapture: true`. Syntax is not a concern, Babel lowers
+ * the legacy build to ES5.
  */
 
-var DEBUG = false;
+import { createLogger, isDebugEnabled } from '../core/log.js';
 
 // Seconds of already-played media to retain. Seeking back further re-buffers.
-var RETAIN_BEHIND_SECS = 30;
+const RETAIN_BEHIND_SECS = 30;
 
 // Don't bother removing slivers; each remove() costs an async round trip.
-var MIN_TRIM_SECS = 10;
+const MIN_TRIM_SECS = 10;
 
-var TRIM_INTERVAL_MS = 5000;
+const TRIM_INTERVAL_MS = 5000;
 
-var mediaSources = [];
-var trimming = '__ytafTrimming';
+const mediaSources = [];
+const trimming = '__ytafTrimming';
 
-function log() {
-  if (!DEBUG) return;
-  var args = Array.prototype.slice.call(arguments);
-  args.unshift('[BufferLimit]');
-  console.info.apply(console, args);
-}
+const log = createLogger('BufferLimit');
 
 /** Find the currentTime of the <video> driving this MediaSource. */
 function currentTimeFor(ms) {
-  var videos = document.getElementsByTagName('video');
-  for (var i = 0; i < videos.length; i++) {
-    var v = videos[i];
+  const videos = document.getElementsByTagName('video');
+  for (let i = 0; i < videos.length; i++) {
+    const v = videos[i];
     if (v.srcObject === ms) return v.currentTime;
     if (ms.__ytafObjectUrl && v.currentSrc === ms.__ytafObjectUrl) {
       return v.currentTime;
@@ -50,66 +46,76 @@ function currentTimeFor(ms) {
   return -1;
 }
 
+/**
+ * Removes what lies more than RETAIN_BEHIND_SECS behind the playhead from one SourceBuffer, unless
+ * it is busy or the slice is too small to bother.
+ */
 function trimSourceBuffer(sb, now) {
   // JS is single-threaded, so checking `updating` and calling `remove()` in the
   // same synchronous block means the player cannot slip an append in between.
   if (sb.updating) return;
 
-  var buffered;
+  let buffered;
   try {
     buffered = sb.buffered;
-  } catch (e) {
+  } catch {
     return; // buffer was detached mid-iteration
   }
   if (!buffered || buffered.length === 0) return;
 
-  var start = buffered.start(0);
-  var safeEnd = now - RETAIN_BEHIND_SECS;
+  const start = buffered.start(0);
+  const safeEnd = now - RETAIN_BEHIND_SECS;
 
   if (safeEnd - start < MIN_TRIM_SECS) return;
 
   try {
     sb[trimming] = true;
     sb.remove(start, safeEnd);
-    log('trimmed', start.toFixed(1), '->', safeEnd.toFixed(1));
+    log.debug('trimmed', start.toFixed(1), '->', safeEnd.toFixed(1));
   } catch (e) {
     sb[trimming] = false;
-    log('remove failed', e && e.message);
+    log.debug('remove failed', e && e.message);
   }
 }
 
 /**
  * webOS 3 (Chromium 38) does not expose the `SourceBuffer` interface object as
- * a global, so we cannot touch `SourceBuffer.prototype` directly. Instances
- * exist regardless, so we lift the prototype off the first one we're handed.
+ * a global, so `SourceBuffer.prototype` is out of reach directly. Instances
+ * exist regardless, so the prototype is lifted off the first one seen.
  *
- * Without this, an append landing while our remove() is in flight throws
+ * Without this, an append landing while the trim remove() is in flight throws
  * InvalidStateError and playback stalls.
  */
-var appendPatched = false;
+let appendPatched = false;
 
+/**
+ * Patches appendBuffer on the SourceBuffer prototype (once), so an append that arrives while a trim
+ * is running waits for it instead of throwing.
+ */
 function patchAppend(sb) {
   if (appendPatched) return;
 
-  var proto = Object.getPrototypeOf ? Object.getPrototypeOf(sb) : sb.__proto__;
+  const proto = Object.getPrototypeOf(sb);
   if (!proto || typeof proto.appendBuffer !== 'function') {
-    log('could not resolve SourceBuffer prototype; append deferral disabled');
+    log.debug('could not resolve SourceBuffer prototype; append deferral disabled');
     return;
   }
 
   appendPatched = true;
-  var origAppend = proto.appendBuffer;
+  const origAppend = proto.appendBuffer;
 
+  /** appendBuffer that defers itself to the trim's updateend when a trim is in progress. */
   proto.appendBuffer = function (data) {
-    var self = this;
+    const self = this;
     if (self.updating && self[trimming]) {
-      var onDone = function () {
+      /** Runs the deferred append once the trim has finished. */
+      const onDone = function () {
         self.removeEventListener('updateend', onDone); // no {once:true} on CR38
         self[trimming] = false;
         try {
           origAppend.call(self, data);
         } catch (e) {
-          log('deferred append failed', e && e.message);
+          log.debug('deferred append failed', e && e.message);
         }
       };
       self.addEventListener('updateend', onDone);
@@ -119,12 +125,15 @@ function patchAppend(sb) {
     return origAppend.call(self, data);
   };
 
-  log('appendBuffer patched via instance prototype');
+  log.debug('appendBuffer patched via instance prototype');
 }
 
+/**
+ * Every TRIM_INTERVAL_MS: trims the buffers of every open MediaSource and forgets the closed ones.
+ */
 function tick() {
-  for (var i = mediaSources.length - 1; i >= 0; i--) {
-    var ms = mediaSources[i];
+  for (let i = mediaSources.length - 1; i >= 0; i--) {
+    const ms = mediaSources[i];
 
     if (ms.readyState === 'closed') {
       mediaSources.splice(i, 1); // player tore this one down
@@ -132,72 +141,79 @@ function tick() {
     }
     if (ms.readyState !== 'open') continue;
 
-    var now = currentTimeFor(ms);
+    const now = currentTimeFor(ms);
     if (now <= RETAIN_BEHIND_SECS) continue;
 
-    var buffers = ms.sourceBuffers;
-    for (var j = 0; j < buffers.length; j++) {
+    const buffers = ms.sourceBuffers;
+    for (let j = 0; j < buffers.length; j++) {
       trimSourceBuffer(buffers[j], now);
     }
   }
 }
 
-export function initBufferLimit(options) {
+// On-device verification, with diagnostics on (localStorage ytaf-debug=1 and
+// a reload): run __ytafBufferStats() in the console while a video plays.
+// `behind` should hold near RETAIN_BEHIND_SECS instead of climbing with
+// playback position.
+function bufferStats() {
+  const out = [];
+  for (let i = 0; i < mediaSources.length; i++) {
+    const ms = mediaSources[i];
+    const now = currentTimeFor(ms);
+    for (let j = 0; j < ms.sourceBuffers.length; j++) {
+      const sb = ms.sourceBuffers[j];
+      const b = sb.buffered;
+      if (!b || !b.length) continue;
+      out.push({
+        state: ms.readyState,
+        currentTime: +now.toFixed(1),
+        start: +b.start(0).toFixed(1),
+        end: +b.end(b.length - 1).toFixed(1),
+        behind: +(now - b.start(0)).toFixed(1),
+        ahead: +(b.end(b.length - 1) - now).toFixed(1)
+      });
+    }
+  }
+  return { appendPatched: appendPatched, buffers: out };
+}
+
+/**
+ * Installs the buffer cap: tracks MediaSources as the player creates them, remembers their blob
+ * URLs, and starts the trim timer.
+ */
+export function installBufferLimit() {
   if (typeof MediaSource === 'undefined' || !MediaSource.prototype.addSourceBuffer) {
     return;
   }
 
-  options = options || {};
-  if (options.retainBehindSecs) RETAIN_BEHIND_SECS = options.retainBehindSecs;
-  if (options.minTrimSecs) MIN_TRIM_SECS = options.minTrimSecs;
-  if (options.trimIntervalMs) TRIM_INTERVAL_MS = options.trimIntervalMs;
+  // MediaSources are tracked so their SourceBuffers can be reached later.
+  const origAdd = MediaSource.prototype.addSourceBuffer;
 
-  // Track MediaSources so we can reach their SourceBuffers later.
-  var origAdd = MediaSource.prototype.addSourceBuffer;
+  /** addSourceBuffer that also tracks the MediaSource and patches the new buffer's appends. */
   MediaSource.prototype.addSourceBuffer = function (mime) {
-    var sb = origAdd.call(this, mime);
+    const sb = origAdd.call(this, mime);
     if (mediaSources.indexOf(this) === -1) mediaSources.push(this);
     patchAppend(sb);
     return sb;
   };
 
-  // On-device verification: run __ytafBufferStats() in the console while a
-  // video plays. `behind` should hold near RETAIN_BEHIND_SECS instead of
-  // climbing with playback position.
-  window.__ytafBufferStats = function () {
-    var out = [];
-    for (var i = 0; i < mediaSources.length; i++) {
-      var ms = mediaSources[i];
-      var now = currentTimeFor(ms);
-      for (var j = 0; j < ms.sourceBuffers.length; j++) {
-        var sb = ms.sourceBuffers[j];
-        var b = sb.buffered;
-        if (!b || !b.length) continue;
-        out.push({
-          state: ms.readyState,
-          currentTime: +now.toFixed(1),
-          start: +b.start(0).toFixed(1),
-          end: +b.end(b.length - 1).toFixed(1),
-          behind: +(now - b.start(0)).toFixed(1),
-          ahead: +(b.end(b.length - 1) - now).toFixed(1)
-        });
-      }
-    }
-    return { appendPatched: appendPatched, buffers: out };
-  };
+  if (isDebugEnabled()) window.__ytafBufferStats = bufferStats;
 
-  // Remember the blob URL so we can match a MediaSource to its <video>.
+  // The blob URL matches a MediaSource to its <video>.
   if (typeof URL !== 'undefined' && URL.createObjectURL) {
-    var origCreate = URL.createObjectURL;
+    const origCreate = URL.createObjectURL;
+
+    /**
+     * createObjectURL that remembers a MediaSource's blob URL, which is how currentTimeFor() finds
+     * its <video>.
+     */
     URL.createObjectURL = function (obj) {
-      var url = origCreate.call(URL, obj);
-      if (typeof MediaSource !== 'undefined' && obj instanceof MediaSource) {
-        obj.__ytafObjectUrl = url;
-      }
+      const url = origCreate.call(URL, obj);
+      if (obj instanceof MediaSource) obj.__ytafObjectUrl = url;
       return url;
     };
   }
 
   setInterval(tick, TRIM_INTERVAL_MS);
-  log('installed, retaining', RETAIN_BEHIND_SECS, 'sec behind');
+  log.debug('installed, retaining', RETAIN_BEHIND_SECS, 'sec behind');
 }

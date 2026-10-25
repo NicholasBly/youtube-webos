@@ -1,0 +1,5 @@
+/* The "hidden" logo style: the class is set on <html> by logo-style.js. */
+html.ytaf-hide-logo ytlr-redux-connect-ytlr-logo-entity,
+html.ytaf-hide-logo ytlr-logo-entity {
+  visibility: hidden !important;
+}

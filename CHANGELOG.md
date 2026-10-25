@@ -4,6 +4,197 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.5] - 2026/10/17
+
+A big one under the hood. Most of this release is based on @mirijanristic's fork (https://github.com/mirijanristic/youtube-webos): the codebase is now split into small modules with an automated test suite, both .ipk files are smaller, and a long list of bugs is fixed. Thanks!
+
+## Added
+
++ "Load Rows Ahead" (UI Tweaks, on by default): the home screen, browse tabs and search results now load the next rows when you're 4 rows from the bottom instead of only when you reach the last row, so scrolling down fast no longer lands on empty rows. Turn it off to get YouTube's default behavior back
+
++ "Max Thumbnail Quality" now has a third strategy, "Smooth (SD)": shows the 640x480 sddefault thumbnail from the first frame, so tiles never swap from low to high quality while you scroll. Each new tile downloads and decodes one image instead of two, and sddefault has a third of maxres's pixels to decode. "Original" is still the default
+
++ "UI Theme" row on the UI Tweaks page - switch between Blue and Classic Red with the remote (before, only clicking the logo with the Magic Remote pointer did it)
+
++ Back button now closes the settings panel
+
++ "Fix Search Results Font" (UI Tweaks, on by default): video titles on the search page now use the TV's LG Display font like every other page, instead of the Roboto font the stock YouTube app switches to there
+
+### SponsorBlock
+
++ Fixed "Allow segments that mute audio" - broke from a previous update that removed audio mute/unmute at the end of video playback for some webOS versions
+
++ "Show an icon when a video is entirely an advertisement" now works for "Exclusive Access" videos - that category was never requested from the API
+
++ If both SponsorBlock servers fail, it now tries again after 2 and 4 seconds
+
+## Performance Improvements
+
++ Smaller builds | 115.9kb → 103.0kb for the legacy .ipk, and 89.9kb → 84.0kb for the webOS22+ .ipk
+
++ Settings panel: removed the Spatial Navigation Polyfill (both versions, 109kb of source). The panel moves focus with the arrow keys on its own now, so there's no more global focus listener forcing a layout on every focus change while the panel is open
+
++ JSON Filtering Engine: the JSON.parse hook is installed once and switched by flags, with the cheapest checks first. Functions that run on every response no longer contain a try/catch (webOS 3's engine won't optimize a function that has one)
+
++ Reduce Telemetry & Tracking: trackingParams are now blanked with one regex over the response text before it's parsed, instead of walking the whole parsed object
+
++ webOS 3/4 emoji fix: only walks responses that actually contain an emoji, and keeps skin tones, flags, keycaps and ZWJ families together as one image
+
++ Each .ipk only carries its own code: the webOS22+ build drops the webOS 3/4 emoji rewrite and polyfills, and the legacy build drops the webOS 25 code
+
++ All CSS goes into the page as one style element at startup (was 9)
+
++ Max Thumbnail Quality: thumbnail checks pause for 350ms after each arrow key press so they don't compete with scrolling, and the check queue no longer scans the whole queue to pick the next probe
+
++ SponsorBlock: videos without segments no longer hook into the player or watch the progress bar, and videos with only a whole-video label skip the segment bar completely
+
++ Display Time in UI: visibility check debounced from 50ms to 200ms, so holding an arrow key doesn't run a page-wide lookup on every press
+
++ webOS 3/4 emoji fix: the check for emoji in each response runs about a third faster (one character class instead of four patterns). On a response without emoji that check cost about as much as parsing the response itself
+
++ Settings panel and popups: building each element takes about half the JavaScript work on webOS 3-6 (no more Object.entries polyfill and helper call per property)
+
++ webOS 3/4 emoji fix: the emoji drawing queue no longer runs through a helper that webOS 3's engine can't optimize
+
+## Changes
+
++ "Reduce Telemetry & Tracking" only runs while Ad Blocking is on. The settings panel already greyed it out without Ad Blocking, but it was still running
+
++ "Video shelf opacity" is greyed out unless OLED-Care Mode is on, since it only applies there
+
++ Bypass Nag Screens: the account selector is only auto-bypassed in the first 15 seconds after launching (or relaunching) the app, so opening "Who's watching" yourself later works
+
++ If no key opens the settings anymore, closing the panel binds the Green button back to "Open/Close Settings" (with a notification) so you can't lock yourself out
+
++ Opening the settings panel takes down the OLED black overlay
+
++ Removed the "OLED Mode Activated" notification - it showed up underneath the black overlay, so it was never visible
+
++ Display Time in UI: the clock now hides and shows at the same moment as YouTube's own controls, with the same fade, instead of up to 200ms later. Its look follows your theme: black in OLED-Care Mode, the glass look of the player with the New Liquid Glass UI while a video plays, and the translucent dark box from 0.8.4 otherwise
+
+## Fixes
+
+### SponsorBlock
+
++ Fixed "Non-Music Section" never being fetched - the API calls it music_offtopic, we were requesting musicofftopic
+
++ Fixed wrong jumps with overlapping or nested segments (the segment lookup was a binary search that missed overlaps)
+
++ Fixed an auto skip repeating its notification on every time update when a manual segment sat inside it
+
++ Fixed a malformed entry from the API breaking SponsorBlock for the whole video
+
++ Fixed a stalled SponsorBlock server never falling back to the second server - the timeout stopped counting once the headers arrived. A 404 now means "no segments" instead of asking the second server too
+
++ Fixed a segment staying cut short when the video first reported a too-short duration
+
++ Fixed the automatic jump to a highlight being lost when the video loaded late
+
++ Fixed the segment bar losing track of the progress bar when YouTube replaced the video element
+
++ Fixed the chain of segments at the start of a video looping on a manual or muted segment
+
++ Turning SponsorBlock on or off now applies to the current video right away
+
+### Force Max Quality
+
++ Fixed Force Max Quality silently stopping after a year - the stored 4320p preference is now renewed 30 days before it expires
+
++ Turning Force Max Quality off now removes the 4320p preference it wrote, instead of leaving the app stuck at 4320p
+
++ The player search no longer gives up after 10 seconds on slow TVs
+
+### Max Thumbnail Quality
+
++ Fixed a network error (e.g. a TV that just woke up) locking a video's thumbnail at low quality for good
+
++ Videos running a thumbnail A/B test ("Test & Compare") now show their main thumbnail in high quality instead of the small 320x180 test image
+
+### Return YouTube Dislike
+
++ Fixed Enter acting on the wrong item after YouTube changed the description panel
+
++ Fixed counts just under a million showing as "1000k" instead of "1m"
+
+### General
+
++ Fixed pausing with a shortcut on a Shorts page hiding the controls bar, clock and player shadow for the rest of the session
+
++ Fixed Bypass Nag Screens pressing Enter on the account selector at launch even with the setting turned off
+
++ Fixed turning off "Display Time in UI" within its first minute leaving a timer running in the background
+
++ Fixed Display Time in UI showing no clock at all when the system language tag has a format the TV's Intl can't read (it falls back to the default format now)
+
++ Fixed the burst seek losing part of the jump when you pressed the other direction
+
++ Fixed OK on the Magic Remote with the pointer showing (and a left click in the webOS simulator) toggling a setting twice: once on press, once on release. Enter now clicks the highlighted setting only when you're using the arrow keys; with the pointer, the click goes to what the pointer is on
+
++ Fixed the SponsorBlock on/off switch being unreachable with the arrow keys - Down from the SponsorBlock tab skipped straight to the first segment row
+
++ Fixed webOS 26 (2026) TVs not being in the version table, so they could be detected as the simulator and lose the Cast block
+
++ Fixed a stored Force Video Codec value the build doesn't know refusing every codec - it falls back to Auto now
+
++ Ad Blocking: rows that load later and items appended to a page are filtered like the main content, and bare search results no longer slip through
+
+### webOS 3/4
+
++ Fixed requests with a form body being sent as "[object Object]" on webOS 3 - the fetch polyfill loaded before the URLSearchParams polyfill
+
++ Fixed the settings panel focus highlight not showing on webOS 3/4 (:focus-within isn't supported there), including in the Classic Red theme
+
++ Fixed Video shelf opacity not working on webOS 3 (CSS variables aren't supported there)
+
+## Development
+
++ Codebase split into small modules: src/core (config, selectors, page state, logging), src/features (one folder per feature), src/ui (panel, shortcuts, styles), src/hooks and src/polyfills
+
++ Test suite: npm test runs formatting, lint, type checks, both builds and 81 test scripts (~2,890 checks) against simulated webOS browsers (Chrome 38, 79 and 87). npm run test:quick for a faster run. The Build & Test workflow runs it on every push
+
++ Updated Babel 7 → 8, ESLint 9 → 10, TypeScript 5.8 → 6.0 (strict), webpack 5.103 → 5.112, cssnano 7 → 9, prettier 3.9. Removed packages that are no longer needed: style-loader, css-loader, postcss-preset-env, transform-async-modules-webpack-plugin, husky, lint-staged and @stylistic/eslint-plugin. Building needs Node.js 22.22.3+ or 24+
+
++ Each build targets its own browser (Chrome 38 for legacy, Chrome 87 for webOS22+) in Babel, autoprefixer and cssnano
+
++ Debug logging: set localStorage "ytaf-debug" to "1" from the web inspector (or window.__ytaf_debug__ = true). Diagnostic counters: window.__ytafQualityStats, __ytafAdblockStats, __ytafThumbStats and __ytafContinuationStats
+
++ perf_mon moved to src/dev/perf-mon.js. The perf build now keeps function names, so the function registry can actually name what's running
+
++ Building no longer deletes the .ipk files in dist/
+
++ Code map: docs/CODEMAP.md maps every module and function in src/ - what it does, what it calls and what calls it, and which settings, events, YouTube selectors and browser hooks it touches - with one page per folder and a JSON copy for tools. docs/ARCHITECTURE.md is the overview (builds, start-up order, hooks, how a response goes through the filters). Every function now has a comment saying what it does. Run npm run codemap after changing code; npm test fails while the map is out of date
+
++ Dependencies: npm audit went from 49 findings to 6 (all six are inside LG's webOS CLI tools, used on your computer only, and need an update from LG). The four packages that end up on the TV are pinned to exact versions. docs/DEPENDENCIES.md explains what each package is for and why updating them made 0.6.3 slow on webOS 3
+
++ npm run bundle:snapshot before updating dependencies and npm run bundle:compare after it tell you whether the code that runs on the TV changed, and which modules
+
++ The Build & Test workflow installs packages without running their install scripts
+
+## [0.8.4] - 2026/09/29
+
+## Added
+### SponsorBlock
+
++ Added "Show time with skips removed" toggle. Puts the video time in parenthesis including your auto skipped segments to show an accurate video duration
+
+<img width="138" height="81" alt="webOS_TV_25_Simulator_1 4 3_0TEyp1NkYO" src="https://github.com/user-attachments/assets/d4f8420e-ef08-4a11-b8cc-e8b87a82246e" />
+
++ Added "Show an icon when a video is entirely an advertisement" toggle. On SponsorBlock desktop, it shows as a banner in the video title and tells you when the entire video has been labeled as "Sponsor", "Self Promo", or "Exclusive Access". Only shown in the video's title on video pages and not on the home screen - would be too much to query SponsorBlock API for hundreds of videos and inject them while scrolling.
+
+<img width="648" height="152" alt="webOS_TV_25_Simulator_1 4 3_clVxiXuxhO" src="https://github.com/user-attachments/assets/242bd0d6-9720-4db7-ab26-bb907cf7d87e" />
+
+## Performance Improvements
+
++ Spatial Navigation Polyfill performance improvements for legacy build (webOS 3-6)
+
+## Changes
+
++ "Toggle OLED Care Mode" renamed to "Toggle OLED Black Overlay" to better differentiate from OLED Care Mode, which blacks out a lot of elements for OLED TVs
+
+## Fixes
++ Add patch to fix https://github.com/NicholasBly/youtube-webos/issues/188 caused by a YouTube update.
++ Patch also fixes scrolling in some Description panels caused by button objects - https://github.com/NicholasBly/youtube-webos/issues/154
+
 ## [0.8.3] - 2026/08/30
 
 ### New Features

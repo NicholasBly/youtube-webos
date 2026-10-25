@@ -1,0 +1,126 @@
+/* The static stylesheet behind the UI tweaks on YouTube's own UI. Each section
+   is switched by a class on <html> (styles/html-classes.js).
+   body.ytaf-hide-controls is the exception: ui/hide-controls.js puts it on
+   <body> for a moment (a pause, the webOS 25 kick), short enough that YouTube
+   rewriting body.className (styles/html-classes.js) costs at most the rest of
+   that moment; the clock's own rule for it is in watch.css. YouTube class
+   names are literal here, as in yt-fixes.css; CSS is the one place the
+   selector table does not reach (GLc3cc is the controls bar, .AmQJbe is
+   SELECTORS.OVERLAY_PANEL). */
+
+/* Each selector here ends in a class: the bare [idomkey='shadow'] is hidden
+   inline by ui/hide-controls.js. */
+body.ytaf-hide-controls .GLc3cc,
+body.ytaf-hide-controls .ytLrWatchDefaultShadow,
+body.ytaf-hide-controls .ytLrWatchDefault2025Shadow {
+  opacity: 0 !important;
+}
+
+/* OLED-care mode (html.ytaf-oled): black behind YouTube's surfaces. The rules
+   that only apply above 50 % shelf opacity sit under
+   html.ytaf-oled-transparent-shelf. */
+html.ytaf-oled #container,
+html.ytaf-oled .ytLrGuideResponseMask,
+html.ytaf-oled .geClSe,
+html.ytaf-oled .hsdF6b,
+html.ytaf-oled .ytLrAnimatedOverlayContainer,
+html.ytaf-oled .ZghAqf,
+html.ytaf-oled .RAE3Re .AmQJbe,
+html.ytaf-oled .tVp1L,
+html.ytaf-oled .app-quality-root .DnwJH,
+html.ytaf-oled .qRdzpd.stQChb .TYE3Ed,
+html.ytaf-oled .k82tDb {
+  background-color: #000 !important;
+}
+html.ytaf-oled .ytLrGuideResponseGradient {
+  display: none;
+}
+html.ytaf-oled .iha0pc {
+  color: #000 !important;
+}
+/* The shelf backdrop (.Jx9xPc) is written by styles/html-classes.js with the
+   configured opacity: Chromium 38 has no custom properties. */
+html.ytaf-oled .p0DeOc {
+  background-color: #000 !important;
+  background-image: none !important;
+}
+html.ytaf-oled ytlr-player-focus-ring {
+  border: 0.375rem solid rgb(200, 200, 200) !important;
+}
+html.ytaf-oled ytlr-surface-page {
+  background-image: none !important;
+  background-color: #000 !important;
+}
+html.ytaf-oled.ytaf-oled-transparent-shelf .app-quality-root .UGcxnc .dxLAmd,
+html.ytaf-oled.ytaf-oled-transparent-shelf .app-quality-root .UGcxnc .Dc2Zic .JkDfAc {
+  background-color: rgba(0, 0, 0, 0) !important;
+}
+
+/* Fix Multiline Titles */
+html.ytaf-fix-titles .app-quality-root .SK1srf .WVWtef,
+html.ytaf-fix-titles .app-quality-root .SK1srf .niS3yd {
+  padding-bottom: 0.37vh !important;
+  padding-top: 0.37vh !important;
+}
+
+/* Fix Search Results Font: on the search page YouTube sets the video titles
+   (.prqC5c) in Roboto, where every other page draws them in the TV's own
+   font, LG Display. WEB_PAGE_TYPE_SEARCH is YouTube's body class for the page
+   (SELECTORS.SEARCH_PAGE_CLASS). Off an LG TV (the simulator) the font is
+   missing and Roboto stays. */
+html.ytaf-fix-search-font body.WEB_PAGE_TYPE_SEARCH .prqC5c {
+  font-family:
+    'LG Display-Regular', 'LG Display', Roboto, 'Noto Sans CJK ZH-HK', 'Noto Sans Thai', Arial,
+    Helvetica, sans-serif !important;
+}
+
+/* Remove Black Borders */
+html.ytaf-remove-borders yt-formatted-string {
+  background: none !important;
+  box-shadow: none !important;
+}
+html.ytaf-remove-borders .app-quality-root .boSXqb .QFqCxd:before,
+html.ytaf-remove-borders .app-quality-root .V7jTHe,
+html.ytaf-remove-borders .app-quality-root .g6XRz,
+html.ytaf-remove-borders .app-quality-root .UGcxnc .sjENQb {
+  background-color: transparent !important;
+}
+html.ytaf-remove-borders .ltewod.BZ345e {
+  background-color: #f1f1f1 !important;
+}
+/* The metadata pills keep their dim backdrop in yt-fixes.css; this is the
+   gradient variant that goes with Remove Black Borders. */
+html.ytaf-remove-borders .MIiKQd.CgA6bd,
+html.ytaf-remove-borders .clJQEe,
+html.ytaf-remove-borders .dySudf,
+html.ytaf-remove-borders .ltewod {
+  background-color: rgba(45, 45, 45, 0.45) !important;
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0) 100%
+  ) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* The player shadow overlays: laid out and tinted here, always on. Any
+   element with the shadow idomkey, as in 0.8.4: a rule that is never toggled
+   costs little, and a tag in front would miss a shadow YouTube draws as
+   something other than a div. */
+body .ytLrWatchDefaultShadow,
+body [idomkey='shadow'] {
+  display: block !important;
+  height: 100% !important;
+  width: 100% !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0.8) 90%
+  ) !important;
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
+body .ytLrWatchDefault2025Shadow {
+  background-color: rgba(11, 11, 11, 0.5) !important;
+}

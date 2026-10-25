@@ -1,5 +1,31 @@
-*.ipk
-/node_modules/
-/dist/
+# Dependencies
+node_modules/
+
+# Build output (webpack). The packaged .ipk files in dist/ are committed for
+# each release, everything else in it is rebuilt.
+dist/*
+!dist/*.ipk
+
+# Release manifest written by `npm run manifest`
+*.manifest.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*
+
+# Editors and operating systems
+.idea/
+*.swp
 .DS_Store
-/.vscode/
+Thumbs.db
+desktop.ini
+
+# Local build helper (build-local modern.cmd)
+_ipk_stash/
+
+# npm run bundle:snapshot (tools/bundle-snapshot.mjs)
+.bundle-snapshot/

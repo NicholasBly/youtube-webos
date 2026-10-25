@@ -2,9 +2,9 @@ name: Build & Test
 
 on:
   push:
-    branches: [main, test]
+    branches: [main]
   pull_request:
-    branches: [main, test]
+    branches: [main]
 
 jobs:
   build:
@@ -19,13 +19,28 @@ jobs:
           node-version: lts/*
           cache: npm
 
-      - run: npm ci
+      # No install scripts: only the webOS CLI has any (an optional native SSH
+      # binding), and the build and tests do not need it.
+      - run: npm ci --ignore-scripts
+
+      # Formatting, lint, types, both builds and every test script
+      - run: npm test
+
+      # Legacy (webOS 3-6) package
       - run: npm run build
       - run: npm run package
+
+      # webOS 22+ package, renamed the same way "build-local modern.cmd" does
+      - run: npm run build:modern
+      - name: Package webOS 22+ build
+        run: |
+          mkdir -p modern
+          npx ares-package -n dist -o modern
+          for f in modern/*.ipk; do mv "$f" "dist/$(basename "${f%.ipk}")_webOS22+.ipk"; done
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: youtube_adfree_ipk
           path: |
-            ${{github.workspace}}/youtube.leanback.v4_*_all.ipk
+            ${{github.workspace}}/dist/youtube.leanback.v4_*_all*.ipk

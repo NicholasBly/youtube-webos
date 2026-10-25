@@ -1,0 +1,108 @@
+/* The Classic Red theme, under html.ytaf-theme-red (styles/html-classes.js):
+   every rule that differs from the default blue theme, for the options panel,
+   its controls and the toasts. */
+
+.ytaf-theme-red .ytaf-ui-container {
+  background-color: #1a1a1a;
+  background-image: none;
+  border-color: #3f3f3f;
+}
+
+.ytaf-theme-red .ytaf-ui-container h1 {
+  color: #ff4444;
+  border-bottom-color: #3f3f3f;
+}
+
+.ytaf-theme-red .ytaf-ui-container > div::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ytaf-theme-red .ytaf-ui-container > div::-webkit-scrollbar-thumb {
+  background: #cc0000;
+}
+
+.ytaf-theme-red .ytaf-ui-container input[type='checkbox'] {
+  background: #2a2a2a;
+  border-color: #4a4a4a;
+}
+
+.ytaf-theme-red .ytaf-ui-container input[type='checkbox']:checked {
+  background: #cc0000;
+  border-color: #ff0000;
+}
+
+.ytaf-theme-red .ytaf-ui-container input[type='checkbox']:focus {
+  outline: 0.19vh solid #ff0000;
+  border-color: #ff0000;
+}
+
+.ytaf-theme-red .ytaf-ui-container .ytaf-cycle-row:focus,
+.ytaf-theme-red .ytaf-ui-container label.ytaf-focused {
+  background: rgba(255, 0, 0, 0.1);
+  box-shadow: 0 0 0 0.19vh rgba(255, 0, 0, 0.5);
+  outline: none;
+}
+
+.ytaf-theme-red .ytaf-ui-container blockquote {
+  border-left-color: #ff0000;
+  background: rgba(255, 0, 0, 0.05);
+}
+
+.ytaf-theme-red .ytaf-ui-container small {
+  border-top-color: #3f3f3f;
+}
+
+.ytaf-theme-red .ytaf-tab-menu {
+  border-bottom-color: #3f3f3f;
+}
+
+.ytaf-theme-red .ytaf-tab-btn {
+  color: #aaaaaa;
+}
+
+.ytaf-theme-red .ytaf-tab-btn.ytaf-active {
+  color: #ff4444;
+  background: rgba(255, 0, 0, 0.15);
+}
+
+.ytaf-theme-red .ytaf-tab-btn:focus {
+  background: rgba(255, 0, 0, 0.3);
+  box-shadow: 0 0 0 0.19vh #ff0000;
+  color: #ffffff;
+}
+
+.ytaf-theme-red .ytaf-cycle-label {
+  color: #e0e0e0;
+}
+
+.ytaf-theme-red .ytaf-cycle-value .ytaf-arrow {
+  color: #ff4444;
+}
+
+.ytaf-theme-red .ytaf-color-reset {
+  background: #4f4f4f;
+  border-color: #666666;
+}
+
+.ytaf-theme-red .ytaf-ui-container input[type='color'] {
+  border-color: #4a4a4a;
+}
+
+.ytaf-theme-red .ytaf-settings-section > .ytaf-section-title {
+  color: #bbb;
+}
+
+.ytaf-theme-red .ytaf-toast {
+  background: #1a1a1a;
+  border-color: #3f3f3f;
+  border-left-color: #ff0000;
+}
+
+/* The panel logo: the red one (OLED mode shows the dark one instead). */
+.ytaf-theme-red:not(.ytaf-oled) .ytaf-ui-container .ytaf-logo-blue {
+  display: none;
+}
+
+.ytaf-theme-red:not(.ytaf-oled) .ytaf-ui-container .ytaf-logo-red {
+  display: inline;
+}

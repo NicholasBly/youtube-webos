@@ -1,0 +1,33 @@
+/* The SponsorBlock segment overlay drawn over the progress bar (#previewbar). */
+
+#previewbar {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  z-index: 2000 !important;
+  overflow: visible !important;
+  transition: opacity 0.2s ease !important;
+}
+
+.previewbar {
+  position: absolute !important;
+  height: 100% !important;
+  top: 0 !important;
+  display: block !important;
+  z-index: 2001 !important;
+}
+
+.previewbar.highlight {
+  min-width: 5.47px !important;
+  max-width: 5.47px !important;
+}
+
+/* Hidden with YouTube's own bar, in the same style recalc, before the
+   overlay's attribute observer syncs its opacity (overlay.js). As in 0.8.4. */
+ytlr-progress-bar.zylon-hidden ~ #previewbar {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
