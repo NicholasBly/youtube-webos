@@ -194,11 +194,23 @@ window.addEventListener('ytaf-page-update', updateState);
  * right away.
  */
 const STALL_CHECK_MS = 2000;
+// A screensaver only starts after a long pause, so leave first plays, seeks,
+// rebuffers and short pauses alone: a slow but healthy start must not be
+// seeked, and must not burn the cooldown for a real stall.
+// ponytail: fixed lower bound, well under the TV's screensaver delay.
+const MIN_PAUSE_MS = 30000;
 let lastStallNudge = 0;
+
+function onPause(evt) {
+  if (evt.target instanceof HTMLVideoElement) evt.target._ytafPausedAt = Date.now();
+}
 
 function onPlaying(evt) {
   const video = evt.target;
   if (!(video instanceof HTMLVideoElement)) return;
+  const pausedAt = video._ytafPausedAt;
+  video._ytafPausedAt = 0;
+  if (!pausedAt || Date.now() - pausedAt < MIN_PAUSE_MS) return;
   const startTime = video.currentTime;
 
   setTimeout(() => {
@@ -216,6 +228,7 @@ function onPlaying(evt) {
 }
 
 // Media events don't bubble; capture on document covers every <video>.
+document.addEventListener('pause', onPause, true);
 document.addEventListener('playing', onPlaying, true);
 
 // Initial Check
@@ -225,6 +238,7 @@ else document.addEventListener('DOMContentLoaded', updateState);
 window.addEventListener('beforeunload', () => {
   playerCtrlObs.disconnect();
   window.removeEventListener('ytaf-page-update', updateState);
+  document.removeEventListener('pause', onPause, true);
   document.removeEventListener('playing', onPlaying, true);
   currentVideoElement = null;
   setShortsKeepAlive(false);

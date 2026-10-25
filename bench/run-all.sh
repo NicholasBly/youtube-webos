@@ -9,6 +9,7 @@ echo "--- polyfill conformance ---";  node bench/polyfill-conformance.cjs 2>&1 |
 echo "--- launcher URL cases ---";    node bench/launch-test.cjs 2>&1 | tail -2
 echo "--- bundle smoke (webOS 3) ---"; node bench/smoke.cjs dist/webOSUserScripts/userScript.js legacy 2>&1 | tail -2
 echo "--- adblock filters (webOS 3) ---"; node bench/adblock-test.cjs dist/webOSUserScripts/userScript.js legacy 2>&1 | tail -2
+echo "--- screensaver stall nudge (webOS 3) ---"; node bench/screensaver-test.cjs dist/webOSUserScripts/userScript.js 2>&1 | tail -1
 echo "--- modern build smoke (webOS 23+) ---"
 npx webpack --mode=production --env modern > /tmp/mod.log 2>&1
 ME=$(grep -c "^ERROR" /tmp/mod.log); [ "$ME" != "0" ] && { echo "MODERN BUILD ERRORS: $ME"; grep "^ERROR" /tmp/mod.log | head -3; }
