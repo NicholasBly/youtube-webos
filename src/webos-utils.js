@@ -47,11 +47,21 @@ export function getWebOSVersion() {
   const chromeMatch = ua.match(/Chrome\/(\d+)/);
   if (chromeMatch) {
     const chromeVersion = parseInt(chromeMatch[1], 10);
-    console.info(`[WebOSUtils] Detected Chrome version: ${chromeVersion} (simulator mode)`);
-    simulatorMode = true;
+    // Without the netcast UA rewrite the user agent may carry no webOS
+    // version token even on a TV. A TV-specific UA still identifies the
+    // platform, so don't force simulator mode there.
+    const isDeviceUA = /Web0S|WebAppManager|SmartTV/i.test(ua);
+    console.info(
+      `[WebOSUtils] Detected Chrome version: ${chromeVersion} ` +
+      `(${isDeviceUA ? 'device UA' : 'simulator'})`
+    );
+    simulatorMode = !isDeviceUA;
 
     if (chromeVersion >= 120) {
       cachedWebOSVersion = 25;
+    } else if (chromeVersion >= 87) {
+      // Covers webOS 22-24; every current version gate only needs <=4/<=6/>=25.
+      cachedWebOSVersion = 22;
     } else if (chromeVersion <= 53) { // webOS 4
       cachedWebOSVersion = 4;
     } else {

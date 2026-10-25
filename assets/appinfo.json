@@ -30,7 +30,6 @@
   "inAppVoiceIntent": "{\"target\":{\"intent\":\"$INTENT\",\"intentParam\":\"$INTENT_PARAM\",\"languageCode\":\"$LANG_CODE\"}}",
   "supportQueryRouting": "{\"amazonAlexa\":true,\"googleAssistant\":true}",
   "enablePigScreenSaver": false,
-  "trustLevel": "netcast",
   "privilegedJail": true,
   "supportQuickStart": true,
   "dialAppName": "YouTube",
