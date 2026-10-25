@@ -15,9 +15,14 @@ let cachedLaunchParams = null;
 export function extractLaunchParams() {
   if (cachedLaunchParams) return cachedLaunchParams;
 
-  if (window.launchParams) {
+  // window.launchParams is only provided by the netcast trust level; without
+  // it, the platform exposes the same JSON on PalmSystem.
+  const rawLaunchParams =
+    window.launchParams ||
+    (window.PalmSystem && window.PalmSystem.launchParams);
+  if (rawLaunchParams) {
     try {
-      cachedLaunchParams = JSON.parse(window.launchParams);
+      cachedLaunchParams = JSON.parse(rawLaunchParams);
       return cachedLaunchParams;
     } catch (e) {
       console.warn('Failed to parse launchParams', e);
