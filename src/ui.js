@@ -317,6 +317,8 @@ function createAlignedCycleControl(configKey, displayMap) {
       }
     });
     dummyBox.setAttribute('type', 'checkbox');
+    // Spacer only: never a focus target (Up from the tab bar wraps to it).
+    dummyBox.tabIndex = -1;
     
     label.textContent = '';
     label.appendChild(dummyBox);

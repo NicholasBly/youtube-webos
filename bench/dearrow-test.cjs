@@ -64,7 +64,7 @@ function boot(cfg) {
   const mockFetch = (url) => {
     fetched.push(url);
     const id = /videoID=([\w-]{11})/.exec(url)?.[1];
-    const body = BRANDING[id] || { titles: [], thumbnails: [], randomTime: null, videoDuration: null };
+    const body = BRANDING[id] || { titles: [], thumbnails: [], randomTime: 0.5, videoDuration: 60 };
     // Like the real API: no submissions -> 404, but with the usual body.
     const none = !body.titles.length && !body.thumbnails.length;
     return Promise.resolve({ ok: !none, status: none ? 404 : 200, json: () => Promise.resolve(JSON.parse(JSON.stringify(body))) });
@@ -145,12 +145,15 @@ const t = (n, ok, extra) => { if (ok) { pass++; console.log('PASS ' + n); }
     tile('custom00001', 'You WON\'T believe THIS phone'),
     tile('downvoted01', 'Original title'),
     tile('norandom001', 'Another one'),
-    tile('nosubmit001', 'No submissions')
+    tile('nosubmit001', 'No submissions'),
+    // More than MAX_CONCURRENT videos whose random frames never render: the
+    // retries must not hold the lookup workers.
+    ...Array.from({ length: 8 }, (_, i) => tile('filler00000' + i, 'Filler ' + i))
   ], padding: 'x'.repeat(600) });
   render(win, win.JSON.parse(response));
   await wait(800);
 
-  t('one branding request per video', fetched.length === 4, JSON.stringify(fetched));
+  t('one branding request per video, past the 4 workers', fetched.length === 12, JSON.stringify(fetched));
   t('requests use ?videoID= (not the 20 KB hash-prefix list)', fetched.every((u) => u.indexOf('/api/branding?videoID=') !== -1));
 
   const a = shown(win, 'custom00001');
@@ -199,6 +202,12 @@ const t = (n, ok, extra) => { if (ok) { pass++; console.log('PASS ' + n); }
   const off = shown(win, 'custom00001');
   t('switching off restores the original title', off && off.title === 'You WON\'T believe THIS phone', off && off.title);
   t('switching off restores the original thumbnail', off && off.thumb.indexOf('/vi/custom00001/hqdefault.jpg') !== -1, off && off.thumb);
+  // YouTube re-renders cached pages from responses it already parsed.
+  const kept = again.contents[0].tileRenderer;
+  t('switching off restores YouTube\'s stored response too',
+    kept.metadata.tileMetadataRenderer.title.simpleText === 'You WON\'T believe THIS phone'
+    && kept.header.tileHeaderRenderer.thumbnail.thumbnails[0].url.indexOf('/vi/custom00001/hqdefault.jpg') !== -1,
+    JSON.stringify(kept.metadata.tileMetadataRenderer.title));
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
