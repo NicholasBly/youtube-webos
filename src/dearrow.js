@@ -311,10 +311,11 @@ function applyToTile(tile, video) {
   const thumbnail = video.thumb && tile.header?.tileHeaderRenderer?.thumbnail;
   if (!title && !thumbnail) return;
   // Only the two small objects are kept, not the tile or the response.
-  const patch = { title: null, runs: undefined, thumbnail: null, thumbnails: null };
+  const patch = { title: null, simpleText: undefined, runs: undefined, thumbnail: null, thumbnails: null };
   if (title) {
     video.shownTitle = video.title;
     patch.title = title;
+    patch.simpleText = title.simpleText;
     patch.runs = title.runs;
     title.simpleText = video.title;
     delete title.runs;
@@ -335,7 +336,8 @@ function unpatchResponses() {
     if (!video.patches) return;
     video.patches.forEach((patch) => {
       if (patch.title) {
-        patch.title.simpleText = video.original;
+        if (patch.simpleText === undefined) delete patch.title.simpleText;
+        else patch.title.simpleText = patch.simpleText;
         if (patch.runs) patch.title.runs = patch.runs;
       }
       if (patch.thumbnail) patch.thumbnail.thumbnails = patch.thumbnails;
