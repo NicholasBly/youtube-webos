@@ -1,7 +1,9 @@
 // Keeps the screensaver off. On webOS it kicks in when the <video> does not
 // fill the screen, so this file resizes the watch-page <video> to the screen
-// whenever its inline style changes; shorts-keep-alive.js handles Shorts.
+// whenever its inline style changes; shorts-keep-alive.js handles Shorts, and
+// decoder-stall.js the frozen picture after a video screensaver did run.
 
+import './decoder-stall.js';
 import { SELECTORS } from '../../core/selectors.js';
 import { isWatchPage, isShortsPage } from '../../core/page-state.js';
 import { waitForChildAdd, getVideo } from '../../core/dom.js';
@@ -63,6 +65,12 @@ const playerCtrlObs = new MutationObserver((mutations) => {
     if (!v || !v.isConnected || lastPageType !== 'WATCH') return;
     if (isPlayerHidden(v)) return;
 
+    // Read at startup, before the window had a size: read again, and with
+    // still no size leave the <video> alone rather than shrink it to nothing.
+    if (screenSize.w === '0px' || screenSize.h === '0px') {
+      readScreenSize();
+      if (screenSize.w === '0px' || screenSize.h === '0px') return;
+    }
     const style = v.style;
     const tw = screenSize.w;
     const th = screenSize.h;

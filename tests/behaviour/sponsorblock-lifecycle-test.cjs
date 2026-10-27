@@ -760,5 +760,32 @@ const legacy = flavour === 'legacy';
     );
   }
 
+  // ---- back from another app: a plain relaunch keeps the handler ----------------------
+  {
+    const p = sponsorBlockPage([seg('sponsor', 20, 30)], {}, 5);
+    await p.ready();
+    const before = p.sb();
+    // The URL the app runs under on a TV: the start URL's flags, the video in
+    // the hash. A relaunch that went to the start URL would change the hash only.
+    p.win.history.replaceState(
+      null,
+      '',
+      'https://www.youtube.com/tv?env_forceFullAnimation=1&env_enableWebSpeech=1&env_enableVoice=1#/watch?v=' +
+        VIDEO
+    );
+    p.win.document.dispatchEvent(new p.win.CustomEvent('webOSRelaunch', { detail: {} }));
+    await wait(150);
+    t(
+      'a relaunch without a target stays on the video: same handler, no new request',
+      !!before && p.sb() === before && p.requests.length === 1,
+      p.win.location.hash + ' / ' + p.requests.length
+    );
+    t(
+      'a relaunch without a target leaves the hash alone',
+      p.win.location.hash === '#/watch?v=' + VIDEO,
+      p.win.location.hash
+    );
+  }
+
   report.finish();
 })();

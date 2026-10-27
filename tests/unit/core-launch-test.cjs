@@ -15,9 +15,12 @@ const t = report.check;
 (async () => {
   // ---- core/launch.js ----------------------------------------------------------------
   {
-    const loadLaunch = (launchParams) => {
+    const loadLaunch = (launchParams, extra) => {
       const { createLogger, lines } = loggerStub();
-      const win = { launchParams, location: { href: 'https://example.com/' } };
+      const win = Object.assign(
+        { launchParams, location: { href: 'https://example.com/' } },
+        extra
+      );
       const { sandbox } = loadSources([CORE('launch.js')], {
         createLogger,
         URL,
@@ -53,6 +56,25 @@ const t = report.check;
       'no launchParams give an empty object without a warning',
       JSON.stringify(r.sb.extractLaunchParams()) === '{}' && r.lines.warn.length === 0
     );
+
+    // hasLaunchTarget: what a relaunch must open, and what it must leave alone.
+    {
+      const has = loadLaunch().sb.hasLaunchTarget;
+      t(
+        'hasLaunchTarget: a deep link, a cast or a voice intent has a target',
+        has({ contentTarget: 'v=abc' }) &&
+          has({ target: 'q=cats' }) &&
+          has({ contentTarget: { intent: 'SearchContent', intentParam: 'cats' } })
+      );
+      t(
+        'hasLaunchTarget: a plain relaunch has none (no params, empty, other keys, empty strings)',
+        !has(undefined) &&
+          !has(null) &&
+          !has({}) &&
+          !has({ displayAffinity: 0 }) &&
+          !has({ contentTarget: '', target: '' })
+      );
+    }
 
     let u = loadLaunch().launch({});
     t(

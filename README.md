@@ -23,7 +23,9 @@ An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
 
 - Toggle display on/off with red button on LG remote for OLED TVs + persistent keepalive
 - Return YouTube Dislike - added to description tab in video
-- Display Time in UI: Smart clock that hides during fullscreen and when description panel is open
+- [DeArrow](https://dearrow.ajay.app/): crowdsourced titles and thumbnails instead of clickbait (off by default, its own settings tab)
+- Playback Speed (experimental, webOS 23 and newer): 0.25x to 2x with the pitch kept, from YouTube's own Speed menu or a button mapping
+- Display Time in UI: Smart clock (time, or date and time in your TV's language) that hides during fullscreen and when description panel is open
 - YouTube app fixes - Full video description panel hack to restore visual elements and enable full navigation
 - Customizable YouTube UI fixes such as multiline titles and video shelf opacity for better visibility
 - Bug fixes, UI fixes
@@ -112,6 +114,8 @@ npm run build && npm run package
 ```
 
 - Building needs Node.js 22.22.3 or newer (or Node.js 24+). `npm run build:modern` builds the webOS 22+ version.
+
+- Test builds: `npm run build -- --env build=2` (or `npm run build:modern -- --env build=2`) shows "YouTube Extended 0.8.5 b2" in the settings heading. Pushing to the `test` branch with a commit title like "0.8.5 build 2" makes GitHub build and post the test build by itself (docs/ARCHITECTURE.md, "Working on the project").
 
 - Run the test suite (formatting, lint, type checks, both builds and every test script against a simulated webOS browser) before a release:
 

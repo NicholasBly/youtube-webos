@@ -60,9 +60,12 @@
   display: none;
 }
 
-/* A page scrolls rather than clips if a future row ever overflows 95vh. */
+/* A page scrolls rather than clips if a future row ever overflows 95vh. The
+   0.4vh at the top (taken from the tab menu's margin, so nothing moves) keeps
+   the focus ring of a first row that is not in a section inside the scrolling
+   box: SponsorBlock's and DeArrow's switches. */
 .ytaf-ui-container > div.ytaf-settings-page {
-  padding: 0 3vh 2.2vh;
+  padding: 0.4vh 3vh 2.2vh;
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1;
@@ -135,18 +138,21 @@
   border-bottom: 0.19vh solid rgba(0, 212, 255, 0.3);
   padding: 0.5vh 1vh;
   flex-shrink: 0;
-  margin-bottom: 1vh;
+  margin-bottom: 0.6vh;
 }
 
+/* Five tabs on one line: each as wide as its name plus equal room, never
+   wrapped (with 2vh sides "UI Tweaks" broke onto two lines). */
 .ytaf-tab-btn {
-  flex: 1;
-  margin: 0 0.5vh;
+  flex: 1 1 auto;
+  margin: 0 0.4vh;
   background: transparent;
   border: none;
   color: #5599aa;
   font-size: 2.1vh;
   font-weight: 600;
-  padding: 1vh 2vh;
+  white-space: nowrap;
+  padding: 1vh 1.2vh;
   border-radius: 0.75vh;
   cursor: pointer;
   outline: none;

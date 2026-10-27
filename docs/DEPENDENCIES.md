@@ -17,6 +17,12 @@ through what it writes into the bundle.
 | `@twemoji/api` | legacy (webOS 3/4) | Emoji images for the Emoji + Characters Fix | 16.0.1 |
 | `tiny-sha256` | both | SponsorBlock's privacy hash of the video id | 1.0.2 |
 
+Two pieces of third-party code are not npm packages but copied into
+`src/vendor/` (0.8.5 build 2), so they change only when someone copies a new
+version in: DeArrow's title formatter (GPL-3.0, webOS 22+ build only) and the
+playback speed engine (GPL-3.0, webOS 22+ build only). Where each came from is
+in `src/vendor/README.md`.
+
 They are pinned to exact versions on purpose: a routine `npm update` must not
 change TV code without a decision. `@twemoji/api` stays on 16.0.1 because the
 emoji image URLs it builds have to match the image set it loads (see 0.8.2 in

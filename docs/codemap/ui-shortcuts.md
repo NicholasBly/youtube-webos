@@ -10,14 +10,14 @@ Modules: [ui/shortcuts/actions.js](#mod-actions-js), [ui/shortcuts/bindings.js](
 
 > What each shortcut does. A `global` action runs anywhere, with nothing passed; the others run on a watch or Shorts page with a &lt;video>, which `run` receives. `burst` marks the seeks, which batch rapid presses instead of being debounced.
 
-76 lines · imports [ui/toast/index.js](ui-toast.md#mod-index-js), [core/selectors.js](core.md#mod-selectors-js), [core/page-state.js](core.md#mod-page-state-js), [ui/panel/panel.js](ui-panel.md#mod-panel-js), [ui/shortcuts/seek.js](#mod-seek-js), [ui/shortcuts/playback.js](#mod-playback-js), [ui/shortcuts/panels.js](#mod-panels-js), [ui/shortcuts/page.js](#mod-page-js), [ui/shortcuts/oled.js](#mod-oled-js), [features/sponsorblock/bootstrap.js](features-sponsorblock.md#mod-bootstrap-js) · imported by [ui/shortcuts/router.js](#mod-router-js)
+81 lines · imports [ui/toast/index.js](ui-toast.md#mod-index-js), [core/selectors.js](core.md#mod-selectors-js), [core/page-state.js](core.md#mod-page-state-js), [ui/panel/panel.js](ui-panel.md#mod-panel-js), [ui/shortcuts/seek.js](#mod-seek-js), [ui/shortcuts/playback.js](#mod-playback-js), [ui/shortcuts/panels.js](#mod-panels-js), [ui/shortcuts/page.js](#mod-page-js), [ui/shortcuts/oled.js](#mod-oled-js), [features/sponsorblock/bootstrap.js](features-sponsorblock.md#mod-bootstrap-js), [features/playback-speed/index.js](features-playback-speed.md#mod-index-js) · imported by [ui/shortcuts/router.js](#mod-router-js)
 
 **At load:**
 
-- **Calls:** [ui/shortcuts/seek.js › skipChapter](#fn-seek-js-skipchapter), [ui/shortcuts/seek.js › performBurstSeek](#fn-seek-js-performburstseek), [ui/shortcuts/playback.js › playPause](#fn-playback-js-playpause)
+- **Calls:** [ui/shortcuts/seek.js › skipChapter](#fn-seek-js-skipchapter), [ui/shortcuts/seek.js › performBurstSeek](#fn-seek-js-performburstseek), [ui/shortcuts/playback.js › playPause](#fn-playback-js-playpause), [features/playback-speed/index.js › stepSpeed](features-playback-speed.md#fn-index-js-stepspeed)
 
 <a id="fn-actions-js-withsponsorblock"></a>
-**`withSponsorBlock(fn)`** · function · L17–21
+**`withSponsorBlock(fn)`** · function · L18–22
 
 Runs `fn` with the live SponsorBlock handler, or says there is none.
 
@@ -25,21 +25,21 @@ Runs `fn` with the live SponsorBlock handler, or says there is none.
 - **Called by:** [ACTIONS.sb_manual_skip.run](#fn-actions-js-actions-sb-manual-skip-run), [ACTIONS.sb_skip_prev.run](#fn-actions-js-actions-sb-skip-prev-run)
 
 <a id="fn-actions-js-actions-config-menu-run"></a>
-**`ACTIONS.config_menu.run()`** · property · L29–33
+**`ACTIONS.config_menu.run()`** · property · L30–34
 
 Opens or closes the options panel, ending the OLED overlay first (it would cover the panel).
 
 - **Calls:** [ui/panel/panel.js › isOptionsPanelVisible](ui-panel.md#fn-panel-js-isoptionspanelvisible), [ui/panel/panel.js › showOptionsPanel](ui-panel.md#fn-panel-js-showoptionspanel), [ui/shortcuts/oled.js › isOledOverlayActive](#fn-oled-js-isoledoverlayactive), [ui/shortcuts/oled.js › toggleOledOverlay](#fn-oled-js-toggleoledoverlay)
 
 <a id="fn-actions-js-actions-refresh-page-run"></a>
-**`ACTIONS.refresh_page.run()`** · property · L40–43
+**`ACTIONS.refresh_page.run()`** · property · L41–44
 
 Soft-reloads the page, except on a player page, where it only says it cannot.
 
 - **Calls:** [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [core/page-state.js › isWatchPage](core.md#fn-page-state-js-iswatchpage), [ui/shortcuts/page.js › refreshPage](#fn-page-js-refreshpage), [ui/toast/index.js › showNotification](ui-toast.md#fn-index-js-shownotification)
 
 <a id="fn-actions-js-actions-toggle-subs-run"></a>
-**`ACTIONS.toggle_subs.run()`** · property · L53–57
+**`ACTIONS.toggle_subs.run()`** · property · L54–58
 
 The player lookup is here rather than in the router: only this action needs it, and the fallback is a full-document class-selector walk.
 
@@ -48,14 +48,14 @@ The player lookup is here rather than in the router: only this action needs it, 
 - **Browser:** `querySelector`
 
 <a id="fn-actions-js-actions-sb-skip-prev-run"></a>
-**`ACTIONS.sb_skip_prev.run()`** · property · L64–67
+**`ACTIONS.sb_skip_prev.run()`** · property · L65–68
 
 Jumps back to the start of the last SponsorBlock segment passed.
 
 - **Calls:** [withSponsorBlock](#fn-actions-js-withsponsorblock), [ui/toast/index.js › showNotification](ui-toast.md#fn-index-js-shownotification)
 
 <a id="fn-actions-js-actions-sb-manual-skip-run"></a>
-**`ACTIONS.sb_manual_skip.run()`** · property · L71–74
+**`ACTIONS.sb_manual_skip.run()`** · property · L72–75
 
 Skips the segment SponsorBlock is offering, or jumps to the highlight.
 

@@ -117,7 +117,7 @@ function boot(cfg, more) {
     );
 
     // The opacity row: a burst of steps is one rewrite of the rule, after 150 ms.
-    d.querySelectorAll('.ytaf-tab-btn')[3].click();
+    d.querySelectorAll('.ytaf-tab-btn')[4].click();
     const row = cycleRow(win, 'Video shelf opacity', '#ytaf-page-ui-tweaks');
     t('setup: the opacity row is on the UI tweaks page', !!row);
     row.focus();

@@ -31,7 +31,8 @@ export const cfgFlags = {
   enableLegacyEmojiFix: false,
   hideEndcards: false,
   upgradeThumbnails: false,
-  enableRowsAhead: false
+  enableRowsAhead: false,
+  enableDeArrow: false
 };
 
 // cfgFlags with the legacy emoji fix off: what the filters get for a response
@@ -68,6 +69,8 @@ function recomputeFilterFlags() {
   cfgFlags.enableLegacyEmojiFix = !!cfgSnapshot[CONFIG_KEYS.EMOJI_FIX] && getWebOSVersion() <= 4;
   cfgFlags.hideEndcards = !!cfgSnapshot[CONFIG_KEYS.ENDCARDS];
   cfgFlags.upgradeThumbnails = !!cfgSnapshot[CONFIG_KEYS.THUMBNAILS];
+  // DeArrow's titles and thumbnails (features/dearrow), after the thumbnail pass.
+  cfgFlags.enableDeArrow = !!cfgSnapshot[CONFIG_KEYS.DEARROW];
   // Rows ahead is not a filter: it runs before the filter gate in parse-hook.js.
   cfgFlags.enableRowsAhead = !!cfgSnapshot[CONFIG_KEYS.ROWS_AHEAD];
 
@@ -81,7 +84,8 @@ function recomputeFilterFlags() {
   filterState.anyFilterEnabled = !!(
     filterState.anyContentFilter ||
     cfgFlags.enableTrackingBlock ||
-    cfgFlags.upgradeThumbnails
+    cfgFlags.upgradeThumbnails ||
+    cfgFlags.enableDeArrow
   );
   // Last: a listener sees every switch above already recomputed.
   for (let i = 0; i < flagListeners.length; i++) flagListeners[i]();

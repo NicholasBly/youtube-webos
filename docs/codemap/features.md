@@ -2,7 +2,7 @@
 
 Part of the [code map](../CODEMAP.md), generated from the source by `tools/codemap.mjs`: do not edit it by hand.
 
-Modules: [features/block-webos-cast-absent.js](#mod-block-webos-cast-absent-js), [features/block-webos-cast.ts](#mod-block-webos-cast-ts), [features/comments-fix.js](#mod-comments-fix-js), [features/lang-settings-fix.ts](#mod-lang-settings-fix-ts), [features/logo-style.js](#mod-logo-style-js), [features/rows-ahead.js](#mod-rows-ahead-js)
+Modules: [features/block-webos-cast-absent.js](#mod-block-webos-cast-absent-js), [features/block-webos-cast.ts](#mod-block-webos-cast-ts), [features/comments-fix.js](#mod-comments-fix-js), [features/lang-settings-fix.ts](#mod-lang-settings-fix-ts), [features/logo-style.js](#mod-logo-style-js), [features/playback-speed-absent.js](#mod-playback-speed-absent-js), [features/rows-ahead.js](#mod-rows-ahead-js)
 
 <a id="mod-block-webos-cast-absent-js"></a>
 
@@ -212,6 +212,26 @@ The app shell may not have painted yet: a short poll, and past it every page cha
 
 - **Calls:** [applyLogoStyle](#fn-logo-style-js-applylogostyle)
 - **Called by:** [initLogoStyle](#fn-logo-style-js-initlogostyle)
+
+<a id="mod-playback-speed-absent-js"></a>
+
+## features/playback-speed-absent.js
+
+> What the legacy build (webOS 3 to 6) has in place of features/playback-speed (webpack.config.js): the speed engine needs WebCodecs, which none of those TVs have, so the shortcuts only say so and the panel shows no row.
+
+15 lines · imports [ui/toast/index.js](ui-toast.md#mod-index-js)
+
+<a id="fn-playback-speed-absent-js-stepspeed"></a>
+**`stepSpeed()`** · function, exported · L10–12
+
+The Playback Speed + and - shortcuts: says the TV cannot.
+
+- **Calls:** [ui/toast/index.js › showNotification](ui-toast.md#fn-index-js-shownotification)
+
+<a id="fn-playback-speed-absent-js-resetspeed"></a>
+**`resetSpeed()`** · function, exported · L15–15
+
+The Playback Speed 1x shortcut: nothing to reset.
 
 <a id="mod-rows-ahead-js"></a>
 

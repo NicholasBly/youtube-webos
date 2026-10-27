@@ -135,7 +135,7 @@ const toasts = (win) =>
   Array.from(win.document.querySelectorAll('.ytaf-toasts .ytaf-toast')).map((m) => m.textContent);
 
 /**
- * Opens the options panel through the test hook and resolves once all four
+ * Opens the options panel through the test hook and resolves once all five
  * pages are built (one per frame) and the panel takes toggles (it ignores
  * them for 500 ms after its first build), as its other hook says. `target` is the page (createPage's, whose frames it pumps, or
  * sponsorBlockPage's) or a window, with `pump` when its frames are queued.
@@ -148,10 +148,10 @@ async function showPanel(target, pump) {
   win.ytaf_showOptionsPanel(true);
   const built = await waitFor(() => {
     if (pumpFrames) pumpFrames();
-    return win.document.querySelectorAll('.ytaf-settings-page').length === 4;
+    return win.document.querySelectorAll('.ytaf-settings-page').length === 5;
   }, 3000);
   if (!built) {
-    throw new Error('showPanel: the four panel pages were not built (frames not pumped?)');
+    throw new Error('showPanel: the five panel pages were not built (frames not pumped?)');
   }
   await waitFor(() => win.ytaf_panelTakesToggles(), 10000);
   return win.document.querySelector('.ytaf-ui-container');

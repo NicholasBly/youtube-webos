@@ -10,11 +10,11 @@ Modules: [features/adblock/constants.js](#mod-constants-js), [features/adblock/e
 
 > String tables shared by the adblock modules.
 
-53 lines · imported by [features/adblock/flags.js](#mod-flags-js), [features/adblock/item-filters.js](#mod-item-filters-js), [features/adblock/nav-filters.js](#mod-nav-filters-js), [features/adblock/parse-hook.js](#mod-parse-hook-js), [features/adblock/tracking-block.js](#mod-tracking-block-js)
+54 lines · imported by [features/adblock/flags.js](#mod-flags-js), [features/adblock/item-filters.js](#mod-item-filters-js), [features/adblock/nav-filters.js](#mod-nav-filters-js), [features/adblock/parse-hook.js](#mod-parse-hook-js), [features/adblock/tracking-block.js](#mod-tracking-block-js)
 
 **At load:**
 
-- **Settings:** uses `enableAdBlock`, `enableTrackingBlock`, `removeGlobalShorts`, `removeLiveVideos`, `removeTopLiveGames`, `removeMostRelevant`, `hideGuestSignInPrompts`, `enableLegacyEmojiFix`, `hideEndcards`, `upgradeThumbnails`, `enableRowsAhead`
+- **Settings:** uses `enableAdBlock`, `enableTrackingBlock`, `removeGlobalShorts`, `removeLiveVideos`, `removeTopLiveGames`, `removeMostRelevant`, `hideGuestSignInPrompts`, `enableLegacyEmojiFix`, `hideEndcards`, `upgradeThumbnails`, `enableRowsAhead`, `enableDeArrow`
 
 <a id="mod-emoji-wrap-absent-js"></a>
 
@@ -158,7 +158,7 @@ A large body no schema path matched: the content and guide filters over whatever
 
 > The filter switches as one mutable snapshot, refreshed when a setting changes rather than re-read on every JSON.parse.
 
-93 lines · imports [core/config.js](core.md#mod-config-js), [core/webos.js](core.md#mod-webos-js), [features/adblock/constants.js](#mod-constants-js) · imported by [features/adblock/parse-hook.js](#mod-parse-hook-js), [features/adblock/stringify-hook.ts](#mod-stringify-hook-ts), [features/adblock/tracking-block.js](#mod-tracking-block-js)
+97 lines · imports [core/config.js](core.md#mod-config-js), [core/webos.js](core.md#mod-webos-js), [features/adblock/constants.js](#mod-constants-js) · imported by [features/adblock/parse-hook.js](#mod-parse-hook-js), [features/adblock/stringify-hook.ts](#mod-stringify-hook-ts), [features/adblock/tracking-block.js](#mod-tracking-block-js)
 
 **At load:**
 
@@ -166,20 +166,20 @@ A large body no schema path matched: the content and guide filters over whatever
 - **Settings:** uses `(all)`
 
 <a id="fn-flags-js-onflagschange"></a>
-**`onFlagsChange(fn)`** · function, exported · L45–47
+**`onFlagsChange(fn)`** · function, exported · L46–48
 
 Calls `fn` whenever the flags were recomputed (a setting changed).
 
 - **Called by:** [features/adblock/tracking-block.js › startTrackingBlock](#fn-tracking-block-js-starttrackingblock)
 
 <a id="fn-flags-js-recomputefilterflags"></a>
-**`recomputeFilterFlags()`** · function · L53–88
+**`recomputeFilterFlags()`** · function · L54–92
 
 Recomputes cfgFlags, cfgFlagsNoEmoji and filterState from the settings, then calls the onFlagsChange listeners. Runs at load and on every change of a key in CONFIG_KEYS.
 
 - **Calls:** [core/webos.js › getWebOSVersion](core.md#fn-webos-js-getwebosversion)
 - **Called by:** [at load](#mod-flags-js)
-- **Settings:** uses `enableAdBlock`, `enableTrackingBlock`, `removeGlobalShorts`, `removeLiveVideos`, `removeTopLiveGames`, `removeMostRelevant`, `hideGuestSignInPrompts`, `enableLegacyEmojiFix`, `hideEndcards`, `upgradeThumbnails`, `enableRowsAhead`
+- **Settings:** uses `enableAdBlock`, `enableTrackingBlock`, `removeGlobalShorts`, `removeLiveVideos`, `removeTopLiveGames`, `removeMostRelevant`, `hideGuestSignInPrompts`, `enableLegacyEmojiFix`, `hideEndcards`, `upgradeThumbnails`, `enableDeArrow`, `enableRowsAhead`
 
 <a id="mod-index-js"></a>
 
@@ -357,17 +357,24 @@ Drops blocked entries from each list, and from each section's own tabs or items.
 
 > The JSON.parse hook: classifies each InnerTube response and runs the filters, the thumbnail rewrite and the text fixes over it before the app sees it.
 
-169 lines · imports [core/page-state.js](core.md#mod-page-state-js), [core/log.js](core.md#mod-log-js), [features/thumbnail-quality/index.js](features-thumbnail-quality.md#mod-index-js), [features/rows-ahead.js](features.md#mod-rows-ahead-js), [features/adblock/constants.js](#mod-constants-js), [core/innertube.js](core.md#mod-innertube-js), [features/adblock/search.js](#mod-search-js), [features/adblock/text-fixes.js](#mod-text-fixes-js), [features/adblock/emoji-wrap.js](#mod-emoji-wrap-js), [features/adblock/response-filters.js](#mod-response-filters-js), [features/adblock/fallback.js](#mod-fallback-js), [features/adblock/flags.js](#mod-flags-js), [features/force-codec/hooks.js](features-force-codec.md#mod-hooks-js), [features/force-codec/state.js](features-force-codec.md#mod-state-js), [features/adblock/log.js](#mod-log-js)
+182 lines · imports [core/page-state.js](core.md#mod-page-state-js), [core/log.js](core.md#mod-log-js), [features/thumbnail-quality/index.js](features-thumbnail-quality.md#mod-index-js), [features/dearrow/index.js](features-dearrow.md#mod-index-js), [features/rows-ahead.js](features.md#mod-rows-ahead-js), [features/adblock/constants.js](#mod-constants-js), [core/innertube.js](core.md#mod-innertube-js), [features/adblock/search.js](#mod-search-js), [features/adblock/text-fixes.js](#mod-text-fixes-js), [features/adblock/emoji-wrap.js](#mod-emoji-wrap-js), [features/adblock/response-filters.js](#mod-response-filters-js), [features/adblock/fallback.js](#mod-fallback-js), [features/adblock/flags.js](#mod-flags-js), [features/force-codec/hooks.js](features-force-codec.md#mod-hooks-js), [features/force-codec/state.js](features-force-codec.md#mod-state-js), [features/adblock/log.js](#mod-log-js) · imported by [features/playback-speed/index.js](features-playback-speed.md#mod-index-js)
+
+<a id="fn-parse-hook-js-setparsedobjectstep"></a>
+**`setParsedObjectStep(fn)`** · function, exported · L27–29
+
+Sets the step run on every object parsed past the size gate (null: none).
+
+- **Called by:** [features/playback-speed/index.js › install](features-playback-speed.md#fn-index-js-install)
 
 <a id="fn-parse-hook-js-logschemamiss"></a>
-**`logSchemaMiss(data, textLength)`** · function · L22–26
+**`logSchemaMiss(data, textLength)`** · function · L32–36
 
 Debug log for a large response no schema recognised (the fallback filters ran instead).
 
 - **Called by:** [filterResponse](#fn-parse-hook-js-filterresponse)
 
 <a id="fn-parse-hook-js-wrapemojiinframeworkupdates"></a>
-**`wrapEmojiInFrameworkUpdates(data, flags)`** · function · L32–36
+**`wrapEmojiInFrameworkUpdates(data, flags)`** · function · L42–46
 
 The legacy emoji rewrite over frameworkUpdates, the one part of a response the content filters never reach.
 
@@ -375,14 +382,14 @@ The legacy emoji rewrite over frameworkUpdates, the one part of a response the c
 - **Called by:** [filterResponse](#fn-parse-hook-js-filterresponse)
 
 <a id="fn-parse-hook-js-hookedparse"></a>
-**`hookedParse(text, reviver)`** · function · L48–57
+**`hookedParse(text, reviver)`** · function · L58–67
 
 The JSON.parse replacement. Texts under 500 characters (YouTube's many small blobs) go straight to the native parse; the rest through parseAndFilter.
 
 - **Calls:** [parseAndFilter](#fn-parse-hook-js-parseandfilter)
 
 <a id="fn-parse-hook-js-parseandfilter"></a>
-**`parseAndFilter(text, reviver)`** · function · L63–88
+**`parseAndFilter(text, reviver)`** · function · L73–99
 
 Parses a large text (with tracking parameters blanked first when Tracking Block is on) and, when it is an InnerTube response, runs the filters on it in place.
 
@@ -390,7 +397,7 @@ Parses a large text (with tracking parameters blanked first when Tracking Block 
 - **Called by:** [hookedParse](#fn-parse-hook-js-hookedparse)
 
 <a id="fn-parse-hook-js-filtersafely"></a>
-**`filterSafely(data, textLength, flags)`** · function · L94–100
+**`filterSafely(data, textLength, flags)`** · function · L105–111
 
 filterResponse, with an error logged instead of thrown: a filter bug must never break YouTube's parse.
 
@@ -398,19 +405,19 @@ filterResponse, with an error logged instead of thrown: a filter bug must never 
 - **Called by:** [parseAndFilter](#fn-parse-hook-js-parseandfilter)
 
 <a id="fn-parse-hook-js-filterresponse"></a>
-**`filterResponse(data, textLength, flags)`** · function · L107–147
+**`filterResponse(data, textLength, flags)`** · function · L118–160
 
-Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade and the emoji wrap.
+Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade, DeArrow and the emoji wrap.
 
-- **Calls:** [core/innertube.js › detectResponseType](core.md#fn-innertube-js-detectresponsetype), [core/log.js › isDebugEnabled](core.md#fn-log-js-isdebugenabled), [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [features/adblock/fallback.js › applyFallbackFilters](#fn-fallback-js-applyfallbackfilters), [features/adblock/fallback.js › removeBlockedNavEntries](#fn-fallback-js-removeblockednaventries), [logSchemaMiss](#fn-parse-hook-js-logschemamiss), [wrapEmojiInFrameworkUpdates](#fn-parse-hook-js-wrapemojiinframeworkupdates), [features/adblock/response-filters.js › applySchemaFilters](#fn-response-filters-js-applyschemafilters), [features/force-codec/hooks.js › filterParsedResponse](features-force-codec.md#fn-hooks-js-filterparsedresponse), [features/rows-ahead.js › raiseRowsAhead](features.md#fn-rows-ahead-js-raiserowsahead), [features/thumbnail-quality/dispatch.js › upgradeResponseThumbnails](features-thumbnail-quality.md#fn-dispatch-js-upgraderesponsethumbnails)
+- **Calls:** [core/innertube.js › detectResponseType](core.md#fn-innertube-js-detectresponsetype), [core/log.js › isDebugEnabled](core.md#fn-log-js-isdebugenabled), [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [features/adblock/fallback.js › applyFallbackFilters](#fn-fallback-js-applyfallbackfilters), [features/adblock/fallback.js › removeBlockedNavEntries](#fn-fallback-js-removeblockednaventries), [logSchemaMiss](#fn-parse-hook-js-logschemamiss), [wrapEmojiInFrameworkUpdates](#fn-parse-hook-js-wrapemojiinframeworkupdates), [features/adblock/response-filters.js › applySchemaFilters](#fn-response-filters-js-applyschemafilters), [features/dearrow/index.js › applyDeArrow](features-dearrow.md#fn-index-js-applydearrow), [features/force-codec/hooks.js › filterParsedResponse](features-force-codec.md#fn-hooks-js-filterparsedresponse), [features/rows-ahead.js › raiseRowsAhead](features.md#fn-rows-ahead-js-raiserowsahead), [features/thumbnail-quality/dispatch.js › upgradeResponseThumbnails](features-thumbnail-quality.md#fn-dispatch-js-upgraderesponsethumbnails)
 - **Called by:** [filterSafely](#fn-parse-hook-js-filtersafely)
 
 <a id="fn-parse-hook-js-installparsehook"></a>
-**`installParseHook()`** · function, exported · L157–169
+**`installParseHook()`** · function, exported · L170–182
 
 Installs the hook, once, for the life of the page.
 
-Every switch that lives on it (ads, Shorts, guest prompts, endcards, trackingParams, the legacy emoji rewrite, the thumbnail upgrade) is a flag in flags.js, and filterResponse stops after the rows-ahead pass (its own switch, Load Rows Ahead) while none of them is on; force-codec's offer filter runs inside it as well.
+Every switch that lives on it (ads, Shorts, guest prompts, endcards, trackingParams, the legacy emoji rewrite, the thumbnail upgrade, DeArrow) is a flag in flags.js, and filterResponse stops after the rows-ahead pass (its own switch, Load Rows Ahead) while none of them is on; force-codec's offer filter runs inside it as well.
 
 - **Called by:** [userScript.js (at load)](app.md#mod-userscript-js)
 - **Hooks:** `JSON.parse`, `window.__ytafAdblockStats`
@@ -644,13 +651,43 @@ Installs the hook once, for the life of the page.
 
 > Text work on a response: trackingParams blanked in the JSON text before the parse. The legacy emoji fix's rewrite is emoji-wrap.js.
 
-21 lines · imported by [features/adblock/parse-hook.js](#mod-parse-hook-js)
+131 lines · imported by [features/adblock/parse-hook.js](#mod-parse-hook-js)
+
+<a id="fn-text-fixes-js-firstindexof"></a>
+**`firstIndexOf(text, keys)`** · function · L23–30
+
+The offset of the first of `keys` in `text`, or -1.
+
+- **Called by:** [stripTrackingParams](#fn-text-fixes-js-striptrackingparams)
+
+<a id="fn-text-fixes-js-isspace"></a>
+**`isSpace(code)`** · arrow · L33–33
+
+Whether whitespace (space, tab, newline, carriage return) is at `code`.
+
+- **Called by:** [keptTrackingParams](#fn-text-fixes-js-kepttrackingparams)
+
+<a id="fn-text-fixes-js-kepttrackingparams"></a>
+**`keptTrackingParams(text, from)`** · function · L42–94
+
+The offsets of the trackingParams keys that belong to a kept renderer itself (not to anything inside it), in order: one pass over the text from the first kept renderer, a string at a time (indexOf finds its end), with a stack that says which open objects are kept renderers. Brackets that close objects opened before the scan started find the stack empty and are ignored.
+
+- **Calls:** [isSpace](#fn-text-fixes-js-isspace)
+- **Called by:** [stripTrackingParams](#fn-text-fixes-js-striptrackingparams)
+
+<a id="fn-text-fixes-js-stripallbut"></a>
+**`stripAllBut(text, kept)`** · function · L97–113
+
+`text` with every trackingParams blanked but those at the `kept` offsets (ascending).
+
+- **Called by:** [stripTrackingParams](#fn-text-fixes-js-striptrackingparams)
 
 <a id="fn-text-fixes-js-striptrackingparams"></a>
-**`stripTrackingParams(text)`** · function, exported · L18–21
+**`stripTrackingParams(text)`** · function, exported · L123–131
 
-The JSON text with every string trackingParams blanked, at any depth: one native pass over the text, where a walk of the parsed tree cost more than the parse itself on a browse response and stopped at a depth limit. The same string comes back when the key does not occur.
+The JSON text with every string trackingParams blanked, at any depth: one native pass over the text, where a walk of the parsed tree cost more than the parse itself on a browse response and stopped at a depth limit. The same string comes back when the key does not occur. A response with tabs keeps the trackingParams of its tab renderers (KEPT_RENDERER_KEYS), found by one more pass over the text.
 
+- **Calls:** [firstIndexOf](#fn-text-fixes-js-firstindexof), [keptTrackingParams](#fn-text-fixes-js-kepttrackingparams), [stripAllBut](#fn-text-fixes-js-stripallbut)
 - **Called by:** [features/adblock/parse-hook.js › parseAndFilter](#fn-parse-hook-js-parseandfilter)
 
 <a id="mod-tracking-block-js"></a>

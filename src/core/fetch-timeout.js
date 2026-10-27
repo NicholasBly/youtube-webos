@@ -6,13 +6,14 @@ import { HAS_ABORT_CONTROLLER } from './webos.js';
 
 /**
  * Starts the request; `promise` resolves with `{ ok, status, data }` (the
- * parsed body of a 2xx answer, null otherwise, its body unread) or rejects
- * like fetch(), with Error('timeout') once the deadline passes, headers or
- * body, and `abort()` drops it early (an AbortError then). Without an
- * AbortController (webOS 3 and 4) the request itself runs on, but its answer
- * is never handed out after a timeout or an abort.
+ * parsed body of a 2xx answer, or of an answer whose status is in
+ * `readStatuses`; null otherwise, its body unread) or rejects like fetch(),
+ * with Error('timeout') once the deadline passes, headers or body, and
+ * `abort()` drops it early (an AbortError then). Without an AbortController
+ * (webOS 3 and 4) the request itself runs on, but its answer is never handed
+ * out after a timeout or an abort.
  */
-export function fetchJsonWithTimeout(url, timeoutMs) {
+export function fetchJsonWithTimeout(url, timeoutMs, readStatuses) {
   const controller = HAS_ABORT_CONTROLLER ? new AbortController() : null;
   let timer = null;
   let cut = null;
@@ -27,8 +28,8 @@ export function fetchJsonWithTimeout(url, timeoutMs) {
   });
   const request = (controller ? fetch(url, { signal: controller.signal }) : fetch(url)).then(
     (response) =>
-      response.ok
-        ? response.json().then((data) => ({ ok: true, status: response.status, data }))
+      response.ok || (readStatuses && readStatuses.indexOf(response.status) !== -1)
+        ? response.json().then((data) => ({ ok: response.ok, status: response.status, data }))
         : { ok: false, status: response.status, data: null }
   );
   const promise = Promise.race([request, cutoff]).then(

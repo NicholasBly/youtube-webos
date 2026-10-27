@@ -69,7 +69,10 @@ function upgradeListInto(items, tally) {
 /**
  * The shelves of a section list. The list itself does not count as found
  * (state.listsSeen): a list whose shelves the walk does not know holds no
- * item list it can reach, and is scanned.
+ * item list it can reach, and is scanned. A section in which the walk found
+ * no thumbnail at all (an item section, a vertical list, a renderer it does
+ * not know: the search page's results) gets a bounded scan of its own, so
+ * one shelf the walk does read cannot hide the rest of the page.
  */
 function upgradeSectionList(contents) {
   if (!Array.isArray(contents)) return 0;
@@ -78,11 +81,13 @@ function upgradeSectionList(contents) {
   for (let i = 0; i < contents.length; i++) {
     const section = contents[i];
     if (!section) continue;
+    const before = state.containersSeen;
     // The same walk through the shelf shapes the filters use; a section that
     // holds no list is a bare item (search interleaves them among the shelves).
     if (forEachItemList(section, upgradeListInto, tally) === 0 && !section.shelfRenderer) {
       tally.changed += upgradeItem(section);
     }
+    if (state.containersSeen === before) tally.changed += scanForThumbnails(section);
   }
   return tally.changed;
 }
@@ -247,7 +252,7 @@ function scanForThumbnails(root) {
 // Where the scan of a type starts: as far down its section-list path as the
 // response still goes. From the root a home tile's container sits at depth
 // 17, a browse tab's deeper, past SCAN_MAX_DEPTH; from there they are within it.
-const SCAN_FROM = { HOME_BROWSE: P.HOME, BROWSE_TABS: P.TABS };
+const SCAN_FROM = { HOME_BROWSE: P.HOME, BROWSE_TABS: P.TABS, SEARCH: P.SEARCH };
 
 /**
  * Where the thumbnail scan of a response type starts: down SCAN_FROM's path as far as it exists.
@@ -336,6 +341,7 @@ export function upgradeResponseThumbnails(data, responseType, textLength) {
   // scroll gate is inert and probes drain straight into an active scroll.
   state.lastParseAt = performance.now();
   state.listsSeen = 0;
+  state.containersSeen = 0;
 
   // Before the type: any response type can carry a continuation alongside its
   // own contents, and the type it gets classified as depends on whichever

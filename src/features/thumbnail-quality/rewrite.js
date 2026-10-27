@@ -121,6 +121,7 @@ export function upgradeContainer(container) {
   const list = container.thumbnails || container.sources;
   if (!Array.isArray(list) || list.length === 0) return 0;
   state.listsSeen++;
+  state.containersSeen++;
 
   // One pass matches every URL and records (entry, videoId, rank), and finds
   // the highest rung YouTube itself put in this container. Anything it shipped

@@ -147,6 +147,73 @@ const pad = PAD; // keeps every payload over the 500-byte gate
     );
   }
 
+  // ---- trackingParams: a channel tab keeps its own (Subscriptions, channel pages) ----
+  {
+    const tile = { tileRenderer: { style: 'TILE_STYLE_YTLR_DEFAULT', trackingParams: 'tp-tile' } };
+    const surface = (n) => ({
+      tvSurfaceContentRenderer: {
+        content: {
+          sectionListRenderer: {
+            contents: [
+              { shelfRenderer: { content: { horizontalListRenderer: { items: [tile] } } } }
+            ]
+          }
+        },
+        trackingParams: 'tp-surface-' + n
+      }
+    });
+    const subs = {
+      responseContext: { _pad: pad },
+      contents: {
+        tvBrowseRenderer: {
+          content: {
+            tvSecondaryNavRenderer: {
+              sections: [
+                {
+                  tvSecondaryNavSectionRenderer: {
+                    tabs: [1, 2].map((n) => ({
+                      tabRenderer: { content: surface(n), trackingParams: 'tp-tab' }
+                    }))
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      trackingParams: 'tp-root'
+    };
+    const out = P(nativeStringify(subs));
+    const tabs =
+      out.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections[0]
+        .tvSecondaryNavSectionRenderer.tabs;
+    const s = (i) => tabs[i].tabRenderer.content.tvSurfaceContentRenderer;
+    t(
+      'subscriptions: each channel tab surface keeps its own trackingParams',
+      s(0).trackingParams === 'tp-surface-1' && s(1).trackingParams === 'tp-surface-2',
+      s(0).trackingParams + ' ' + s(1).trackingParams
+    );
+    t(
+      'subscriptions: the rest is blanked (root, tabs, tiles inside the surface)',
+      out.trackingParams === '' &&
+        tabs[0].tabRenderer.trackingParams === '' &&
+        s(0).content.sectionListRenderer.contents[0].shelfRenderer.content.horizontalListRenderer
+          .items[0].tileRenderer.trackingParams === ''
+    );
+    const cont = P(
+      nativeStringify({
+        responseContext: { _pad: pad },
+        continuationContents: { tvSurfaceContentContinuation: surface(3).tvSurfaceContentRenderer },
+        trackingParams: 'tp-root'
+      })
+    ).continuationContents.tvSurfaceContentContinuation;
+    t(
+      'subscriptions: a tab loading later keeps its own trackingParams',
+      cont.trackingParams === 'tp-surface-3',
+      String(cont.trackingParams)
+    );
+  }
+
   // ---- PLAYER: ads, endcards, attestation, QR overlay ----
   const player = {
     responseContext: { visitorData: 'x', _pad: pad },

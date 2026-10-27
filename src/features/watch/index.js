@@ -1,12 +1,13 @@
-// The clock in the top right corner (Display Time in UI).
+// The clock in the top right corner (Display Time in UI): the time, or the
+// date and time, in the TV's language and its date order ("10/27 12:49 AM"
+// in American English, "27/10 00:49" in British English).
 //
 // On the watch page it comes and goes with YouTube's own player UI. YouTube
 // switches between the video alone and the video with its controls by setting
 // hybridnavfocusable="true" on the player shell (ytlr-watch-default) while the
 // video holds the focus; the clock watches that attribute with a
-// MutationObserver, so it changes in the same task YouTube does, and fades
-// with the timing YouTube's controls fade with (read from their computed
-// transition once per player). Focus, player-state and page events cover the
+// MutationObserver, so it shows and hides in the same task YouTube does, at
+// once (no fade). Focus, player-state and page events cover the
 // rest: a side panel opening over the player, the focus resting on the player
 // itself or nowhere, and a player that mounts after the page changes.
 //
@@ -33,18 +34,14 @@ const HIDDEN_CLASS = 'ytaf-watch-hidden';
 // a burst of presses coalesces into a single check once the user stops. The
 // attribute YouTube flips is watched directly and is not delayed.
 const DEBOUNCE_DELAY = 200;
-// Tries at reading YouTube's fade before the clock settles for its own
-// (watch.css): the controls may not be rendered the first time the attribute
-// changes.
-const FADE_READ_TRIES = 3;
 
 /**
- * Hours and minutes in the TV's language. Intl is in Chrome 24+, so webOS 3
- * has it; a language tag Intl refuses (a POSIX suffix such as "en-US@posix")
- * would throw and leave no clock at all, so it falls back to the default locale.
+ * A formatter for `options` in the TV's language. Intl is in Chrome 24+, so
+ * webOS 3 has it; a language tag Intl refuses (a POSIX suffix such as
+ * "en-US@posix") would throw and leave no clock at all, so it falls back to
+ * the default locale.
  */
-function createTimeFormatter() {
-  const options = { hour: 'numeric', minute: 'numeric' };
+function createFormatter(options) {
   try {
     return new Intl.DateTimeFormat(navigator.language, options);
   } catch {
@@ -53,55 +50,32 @@ function createTimeFormatter() {
   }
 }
 
-/** The comma-separated items of a computed transition longhand; parentheses keep their commas. */
-function listItems(value) {
-  return (value || '').match(/(?:[^,(]|\([^)]*\))+/g) || [];
-}
-
 /**
- * YouTube's own fade for its player UI: the first opacity (or all) transition
- * on the controls, the player shadow, or an ancestor of either up to the
- * player shell. '' when none of them has one (or they are not rendered yet).
+ * The clock's text for `mode` ('time' or 'datetime'), as a function of a Date.
+ * The date is its own short format (month and day, in the language's order)
+ * joined to the time by a space: formatted together, most languages put a
+ * comma between them ("10/27, 12:49 AM").
  */
-function readPlayerFade(player) {
-  const starts = [
-    player.querySelector(SELECTORS.CONTROLS),
-    player.querySelector(SELECTORS.PLAYER_SHADOWS)
-  ];
-  for (let s = 0; s < starts.length; s++) {
-    for (let el = starts[s]; el && el !== player.parentNode; el = el.parentNode) {
-      const cs = window.getComputedStyle(el);
-      const props = listItems(cs.transitionProperty);
-      const durations = listItems(cs.transitionDuration);
-      const timings = listItems(cs.transitionTimingFunction);
-      for (let i = 0; i < props.length; i++) {
-        const prop = props[i].trim();
-        if (prop !== 'opacity' && prop !== 'all') continue;
-        const duration = (durations[i % durations.length] || '').trim();
-        if (!(parseFloat(duration) > 0)) continue;
-        const timing = (timings[i % timings.length] || 'ease').trim();
-        return duration + ' ' + timing;
-      }
-    }
-  }
-  return '';
+function createClockText(mode) {
+  const time = createFormatter({ hour: 'numeric', minute: 'numeric' });
+  if (mode !== 'datetime') return (now) => time.format(now);
+  const date = createFormatter({ month: 'numeric', day: 'numeric' });
+  return (now) => date.format(now) + ' ' + time.format(now);
 }
 
 class Watch {
   /**
-   * The clock: builds the element, starts the minute ticks and the listeners, and adds it to the
-   * page.
+   * The clock showing `mode` ('time' or 'datetime'): builds the element, starts the minute ticks
+   * and the listeners, and adds it to the page.
    */
-  constructor() {
+  constructor(mode) {
+    this.mode = mode;
     this.el = null;
     this.cachedPlayer = null;
     this.cachedOverlay = null;
     // The player whose attribute is observed, and the observer.
     this.observedPlayer = null;
     this.playerObserver = null;
-    // YouTube's fade, as read for observedPlayer; null until read.
-    this.fade = null;
-    this.fadeTries = 0;
     // Everything destroy() has to undo.
     this.bag = createDisposables();
 
@@ -113,7 +87,6 @@ class Watch {
     this.createClock();
     this.startClock();
     this.setupGlobalListeners();
-    // Placed before it is drawn: the first state does not fade in.
     document.body.appendChild(this.el);
   }
 
@@ -130,12 +103,12 @@ class Watch {
    * foreground.
    */
   startClock() {
-    const formatter = createTimeFormatter();
+    const clockText = createClockText(this.mode);
 
     // Its timer and listener go with the bag, before the element: no tick
     // runs after destroy().
     const setTime = () => {
-      this.el.textContent = formatter.format(new Date());
+      this.el.textContent = clockText(new Date());
       // The visibility is checked again with every tick.
       this.updateVisibility();
     };
@@ -158,15 +131,11 @@ class Watch {
     });
   }
 
-  /** Watches `player`'s focus attribute (null: none), reading the fade again for a new one. */
+  /** Watches `player`'s focus attribute (null: none). */
   observePlayer(player) {
     if (player === this.observedPlayer) return;
     if (this.playerObserver) this.playerObserver.disconnect();
     this.observedPlayer = player;
-    this.fade = null;
-    this.fadeTries = 0;
-    // Back to watch.css's fade until this player's is read.
-    if (this.el) this.el.style.transition = '';
     if (!player) return;
     if (!this.playerObserver) {
       this.playerObserver = new MutationObserver(() => this.onPlayerToggle());
@@ -174,20 +143,10 @@ class Watch {
     this.playerObserver.observe(player, { attributes: true, attributeFilter: [FOCUS_ATTRIBUTE] });
   }
 
-  /** YouTube showed or hid its player UI: follow it now, with its fade. */
+  /** YouTube showed or hid its player UI: follow it now. */
   onPlayerToggle() {
     const player = this.observedPlayer;
     if (!this.el || !player || !player.isConnected) return;
-    if (this.fade === null && this.fadeTries < FADE_READ_TRIES) {
-      this.fadeTries++;
-      const fade = readPlayerFade(player);
-      if (fade || this.fadeTries === FADE_READ_TRIES) {
-        this.fade = fade;
-        // '' keeps watch.css's own fade.
-        this.el.style.transition = fade ? 'opacity ' + fade : '';
-        log.debug('Fade:', fade || 'none found on the player, using the default');
-      }
-    }
     const videoOnly = player.getAttribute(FOCUS_ATTRIBUTE) === 'true';
     // The attribute decides the controls part; a side panel keeps it hidden.
     this.setHidden(videoOnly || this.isOverlayOpen());
@@ -201,7 +160,7 @@ class Watch {
     return !!this.cachedOverlay;
   }
 
-  /** Hides or shows the clock (a class, so the fade applies). */
+  /** Hides or shows the clock (a class; no fade). */
   setHidden(hidden) {
     if (this.el.classList.contains(HIDDEN_CLASS) !== hidden) {
       this.el.classList.toggle(HIDDEN_CLASS, hidden);
@@ -275,20 +234,18 @@ class Watch {
 
 let watchInstance = null;
 
-/** Creates or destroys the clock to match Display Time in UI. */
-function toggleWatch(show) {
-  if (show) {
-    if (!watchInstance) {
-      watchInstance = new Watch();
-    }
-  } else if (watchInstance) {
+/** Creates, rebuilds or destroys the clock to match Display Time in UI ('off', 'time', 'datetime'). */
+function setClockMode(mode) {
+  const show = mode === 'time' || mode === 'datetime';
+  if (watchInstance && (!show || watchInstance.mode !== mode)) {
     watchInstance.destroy();
     watchInstance = null;
   }
+  if (show && !watchInstance) watchInstance = new Watch(mode);
 }
 
-toggleWatch(configRead('showWatch'));
+setClockMode(configRead('showWatch'));
 
 configAddChangeListener('showWatch', (evt) => {
-  toggleWatch(evt.detail.newValue);
+  setClockMode(evt.detail.newValue);
 });

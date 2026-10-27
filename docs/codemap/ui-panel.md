@@ -18,14 +18,14 @@ Modules: [ui/panel/controls/checkbox.js](#mod-controls-checkbox-js), [ui/panel/c
 A checkbox row for boolean setting `key`, labelled with its description; it writes the setting when toggled and follows changes made elsewhere.
 
 - **Calls:** [core/config.js › configAddChangeListener](core.md#fn-config-js-configaddchangelistener), [core/config.js › configGetDesc](core.md#fn-config-js-configgetdesc), [core/config.js › configRead](core.md#fn-config-js-configread), [core/config.js › configWrite](core.md#fn-config-js-configwrite), [ui/dom.js › createElement](ui.md#fn-dom-js-createelement)
-- **Called by:** [ui/panel/pages.js › buildMainPage](#fn-pages-js-buildmainpage), [ui/panel/pages.js › buildSponsorPage](#fn-pages-js-buildsponsorpage), [ui/panel/pages.js › buildUITweaksPage](#fn-pages-js-builduitweakspage)
+- **Called by:** [ui/panel/pages.js › buildDeArrowPage](#fn-pages-js-builddearrowpage), [ui/panel/pages.js › buildMainPage](#fn-pages-js-buildmainpage), [ui/panel/pages.js › buildSponsorPage](#fn-pages-js-buildsponsorpage), [ui/panel/pages.js › buildUITweaksPage](#fn-pages-js-builduitweakspage)
 
 <a id="fn-controls-checkbox-js-setunavailable"></a>
 **`setUnavailable(row, on)`** · function, exported · L41–47
 
 Greys a row out and drops it from the focus order, or restores it: the setting it carries does nothing right now (Tracking Block without Ad Blocking, the thumbnail strategy without the upgrade). Greyed out and kept in place rather than hidden, so the user sees why and the rows below do not jump.
 
-- **Called by:** [ui/panel/controls/cycle-row.js › createOpacityControl.sync](#fn-controls-cycle-row-js-createopacitycontrol-sync), [ui/panel/controls/cycle-row.js › createThumbnailQualityControl.sync](#fn-controls-cycle-row-js-createthumbnailqualitycontrol-sync), [ui/panel/pages.js › buildMainPage.updateDependencyState](#fn-pages-js-buildmainpage-updatedependencystate)
+- **Called by:** [ui/panel/controls/cycle-row.js › createOpacityControl.sync](#fn-controls-cycle-row-js-createopacitycontrol-sync), [ui/panel/controls/cycle-row.js › createThumbnailQualityControl.sync](#fn-controls-cycle-row-js-createthumbnailqualitycontrol-sync), [ui/panel/pages.js › buildDeArrowPage.sync](#fn-pages-js-builddearrowpage-sync), [ui/panel/pages.js › buildMainPage.updateDependencyState](#fn-pages-js-buildmainpage-updatedependencystate)
 - **Browser:** `querySelector`
 
 <a id="mod-controls-color-picker-js"></a>
@@ -50,7 +50,7 @@ A colour input and an R (reset to default) button for colour setting `colorKey`;
 
 > The left/right cycle rows, each bound to a config key, and the rows built from them for particular settings. Every control registers its config listeners once and never removes them: the panel is built once and lives for the session.
 
-231 lines · imports [core/config.js](core.md#mod-config-js), [core/remote.js](core.md#mod-remote-js), [ui/dom.js](ui.md#mod-dom-js), [ui/panel/controls/color-picker.js](#mod-controls-color-picker-js), [ui/panel/controls/checkbox.js](#mod-controls-checkbox-js)
+238 lines · imports [core/config.js](core.md#mod-config-js), [core/remote.js](core.md#mod-remote-js), [ui/dom.js](ui.md#mod-dom-js), [ui/panel/controls/color-picker.js](#mod-controls-color-picker-js), [ui/panel/controls/checkbox.js](#mod-controls-checkbox-js)
 
 <a id="fn-controls-cycle-row-js-createcontrolrow"></a>
 **`createControlRow(labelText, displayValueGetter, stepLeft, stepRight, extraElements)`** · function · L31–109
@@ -126,10 +126,18 @@ Writes the next (step 1) or previous (-1) value in `modes`, wrapping around.
 A cycle row that sits among checkbox rows. Its label is indented by one checkbox (the ytaf-aligned rule in controls.css) and starts with the same no-break space the checkbox labels use, so the text lines up with them.
 
 - **Calls:** [core/config.js › configGetDesc](core.md#fn-config-js-configgetdesc), [createCycleControl](#fn-controls-cycle-row-js-createcyclecontrol)
-- **Called by:** [createLogoControl](#fn-controls-cycle-row-js-createlogocontrol), [createThemeControl](#fn-controls-cycle-row-js-createthemecontrol), [createThumbnailQualityControl](#fn-controls-cycle-row-js-createthumbnailqualitycontrol), [createVideoCodecControl](#fn-controls-cycle-row-js-createvideocodeccontrol)
+- **Called by:** [createChoiceControl](#fn-controls-cycle-row-js-createchoicecontrol), [createLogoControl](#fn-controls-cycle-row-js-createlogocontrol), [createThemeControl](#fn-controls-cycle-row-js-createthemecontrol), [createThumbnailQualityControl](#fn-controls-cycle-row-js-createthumbnailqualitycontrol), [createVideoCodecControl](#fn-controls-cycle-row-js-createvideocodeccontrol)
+
+<a id="fn-controls-cycle-row-js-createchoicecontrol"></a>
+**`createChoiceControl(configKey, displayMap)`** · arrow, exported · L157–158
+
+A row among checkbox rows that cycles `configKey` through the values of `displayMap` (value -> label): the DeArrow choices and the clock.
+
+- **Calls:** [createAlignedCycleControl](#fn-controls-cycle-row-js-createalignedcyclecontrol)
+- **Called by:** [ui/panel/pages.js › buildDeArrowPage](#fn-pages-js-builddearrowpage), [ui/panel/pages.js › buildMainPage](#fn-pages-js-buildmainpage)
 
 <a id="fn-controls-cycle-row-js-createlogocontrol"></a>
-**`createLogoControl()`** · arrow, exported · L154–154
+**`createLogoControl()`** · arrow, exported · L161–161
 
 The YouTube Logo row (Default, Premium, Hidden).
 
@@ -138,7 +146,7 @@ The YouTube Logo row (Default, Premium, Hidden).
 - **Settings:** uses `logoStyle`
 
 <a id="fn-controls-cycle-row-js-createvideocodeccontrol"></a>
-**`createVideoCodecControl()`** · arrow, exported · L157–158
+**`createVideoCodecControl()`** · arrow, exported · L164–165
 
 The Force Video Codec row.
 
@@ -147,7 +155,7 @@ The Force Video Codec row.
 - **Settings:** uses `forceVideoCodec`
 
 <a id="fn-controls-cycle-row-js-createthemecontrol"></a>
-**`createThemeControl()`** · arrow, exported · L161–161
+**`createThemeControl()`** · arrow, exported · L168–168
 
 The UI Theme row.
 
@@ -156,7 +164,7 @@ The UI Theme row.
 - **Settings:** uses `uiTheme`
 
 <a id="fn-controls-cycle-row-js-createthumbnailqualitycontrol"></a>
-**`createThumbnailQualityControl()`** · function, exported · L164–171
+**`createThumbnailQualityControl()`** · function, exported · L171–178
 
 The Thumbnail Strategy row, greyed out while Max Thumbnail Quality is off.
 
@@ -165,7 +173,7 @@ The Thumbnail Strategy row, greyed out while Max Thumbnail Quality is off.
 - **Settings:** listens to `upgradeThumbnails`; uses `thumbnailQualityMode`
 
 <a id="fn-controls-cycle-row-js-createthumbnailqualitycontrol-sync"></a>
-**`createThumbnailQualityControl.sync()`** · arrow · L167–167
+**`createThumbnailQualityControl.sync()`** · arrow · L174–174
 
 The strategy only means anything while the feature it tunes is on.
 
@@ -174,7 +182,7 @@ The strategy only means anything while the feature it tunes is on.
 - **Settings:** reads `upgradeThumbnails`
 
 <a id="fn-controls-cycle-row-js-createsegmentcontrol"></a>
-**`createSegmentControl(key)`** · function, exported · L177–183
+**`createSegmentControl(key)`** · function, exported · L184–190
 
 The row of one SponsorBlock category (`sbMode_<category>`): its modes, with the category's colour picker.
 
@@ -183,7 +191,7 @@ The row of one SponsorBlock category (`sbMode_<category>`): its modes, with the 
 - **Settings:** uses `sbMode_highlight`, `*Color`
 
 <a id="fn-controls-cycle-row-js-createshortcutcontrol"></a>
-**`createShortcutControl(keyIdentifier)`** · function, exported · L186–190
+**`createShortcutControl(keyIdentifier)`** · function, exported · L193–197
 
 The row of one shortcut key (0-9, red, green, blue): the action it runs.
 
@@ -192,7 +200,7 @@ The row of one shortcut key (0-9, red, green, blue): the action it runs.
 - **Settings:** uses `shortcut_key_*`
 
 <a id="fn-controls-cycle-row-js-createpreviewcontrol"></a>
-**`createPreviewControl(key)`** · function, exported · L193–200
+**`createPreviewControl(key)`** · function, exported · L200–207
 
 The Force Previews row (Disabled, Force On, Force Off).
 
@@ -200,7 +208,7 @@ The Force Previews row (Disabled, Force On, Force Off).
 - **Called by:** [ui/panel/pages.js › buildUITweaksPage](#fn-pages-js-builduitweakspage)
 
 <a id="fn-controls-cycle-row-js-createopacitycontrol"></a>
-**`createOpacityControl(key)`** · function, exported · L206–231
+**`createOpacityControl(key)`** · function, exported · L213–238
 
 A 0-100 % row in steps of 5 for setting `key` (the video shelf opacity), greyed out while OLED-Care Mode is off.
 
@@ -209,7 +217,7 @@ A 0-100 % row in steps of 5 for setting `key` (the video shelf opacity), greyed 
 - **Settings:** listens to `enableOledCareMode`
 
 <a id="fn-controls-cycle-row-js-createopacitycontrol-changevalue"></a>
-**`createOpacityControl.changeValue(delta)`** · arrow · L212–215
+**`createOpacityControl.changeValue(delta)`** · arrow · L219–222
 
 Adds `delta` to the stored value, kept within 0-100.
 
@@ -217,7 +225,7 @@ Adds `delta` to the stored value, kept within 0-100.
 - **Called by:** [createOpacityControl](#fn-controls-cycle-row-js-createopacitycontrol)
 
 <a id="fn-controls-cycle-row-js-createopacitycontrol-sync"></a>
-**`createOpacityControl.sync()`** · arrow · L227–227
+**`createOpacityControl.sync()`** · arrow · L234–234
 
 The shelf opacity applies under OLED-Care Mode only (ui/styles/html-classes.js).
 
@@ -231,7 +239,7 @@ The shelf opacity applies under OLED-Care Mode only (ui/styles/html-classes.js).
 
 > The building blocks of the options panel: checkboxes, sections, the left/right cycle rows and the colour picker, each bound to a config key.
 
-16 lines · imported by [ui/panel/pages.js](#mod-pages-js)
+17 lines · imported by [ui/panel/pages.js](#mod-pages-js)
 
 <a id="mod-controls-section-js"></a>
 
@@ -247,7 +255,7 @@ The shelf opacity applies under OLED-Care Mode only (ui/styles/html-classes.js).
 A titled group of rows; `variant` adds a class (ytaf-section-2col lays the rows out in two columns).
 
 - **Calls:** [ui/dom.js › createElement](ui.md#fn-dom-js-createelement)
-- **Called by:** [ui/panel/pages.js › buildMainPage](#fn-pages-js-buildmainpage), [ui/panel/pages.js › buildUITweaksPage](#fn-pages-js-builduitweakspage)
+- **Called by:** [ui/panel/pages.js › buildDeArrowPage](#fn-pages-js-builddearrowpage), [ui/panel/pages.js › buildMainPage](#fn-pages-js-buildmainpage), [ui/panel/pages.js › buildUITweaksPage](#fn-pages-js-builduitweakspage)
 
 <a id="mod-focus-trap-js"></a>
 
@@ -463,28 +471,36 @@ Stops handling keys (the panel closed).
 
 ## ui/panel/pages.js
 
-> The four pages of the options panel. Each builder returns its page element; the panel appends it and decides when it is built (Main up front, the rest one per frame once the panel is on screen).
+> The five pages of the options panel. Each builder returns its page element; the panel appends it and decides when it is built (Main up front, the rest one per frame once the panel is on screen).
 
-180 lines · imports [core/config.js](core.md#mod-config-js), [core/guest-mode.js](core.md#mod-guest-mode-js), [core/webos.js](core.md#mod-webos-js), [ui/dom.js](ui.md#mod-dom-js), [core/config-options.js](core.md#mod-config-options-js), [ui/panel/controls/index.js](#mod-controls-index-js) · imported by [ui/panel/panel.js](#mod-panel-js)
+249 lines · imports [core/config.js](core.md#mod-config-js), [features/dearrow/index.js](features-dearrow.md#mod-index-js), [features/playback-speed/index.js](features-playback-speed.md#mod-index-js), [core/guest-mode.js](core.md#mod-guest-mode-js), [core/webos.js](core.md#mod-webos-js), [ui/dom.js](ui.md#mod-dom-js), [core/config-options.js](core.md#mod-config-options-js), [ui/panel/controls/index.js](#mod-controls-index-js) · imported by [ui/panel/panel.js](#mod-panel-js)
 
 <a id="fn-pages-js-helpline"></a>
-**`helpLine(text)`** · arrow · L25–25
+**`helpLine(text)`** · arrow · L34–34
 
 A line of small help text under a row.
 
 - **Calls:** [ui/dom.js › createElement](ui.md#fn-dom-js-createelement)
-- **Called by:** [buildUITweaksPage](#fn-pages-js-builduitweakspage)
+- **Called by:** [buildDeArrowPage](#fn-pages-js-builddearrowpage), [buildUITweaksPage](#fn-pages-js-builduitweakspage)
+
+<a id="fn-pages-js-footnote"></a>
+**`footNote(text)`** · arrow · L37–37
+
+The centred small print at the foot of a page: what the feature is and where it comes from.
+
+- **Calls:** [ui/dom.js › createElement](ui.md#fn-dom-js-createelement)
+- **Called by:** [buildDeArrowPage](#fn-pages-js-builddearrowpage), [buildSponsorPage](#fn-pages-js-buildsponsorpage)
 
 <a id="fn-pages-js-buildmainpage"></a>
-**`buildMainPage()`** · function, exported · L32–88
+**`buildMainPage()`** · function, exported · L44–100
 
 The Main page: Cosmetic Filtering (Ad Blocking and the filters that depend on it, greyed out while it is off), then the other features.
 
-- **Calls:** [core/config.js › configAddChangeListener](core.md#fn-config-js-configaddchangelistener), [core/guest-mode.js › isGuestMode](core.md#fn-guest-mode-js-isguestmode), [ui/dom.js › createElement](ui.md#fn-dom-js-createelement), [ui/panel/controls/checkbox.js › createConfigCheckbox](#fn-controls-checkbox-js-createconfigcheckbox), [ui/panel/controls/cycle-row.js › createLogoControl](#fn-controls-cycle-row-js-createlogocontrol), [ui/panel/controls/cycle-row.js › createThumbnailQualityControl](#fn-controls-cycle-row-js-createthumbnailqualitycontrol), [ui/panel/controls/cycle-row.js › createVideoCodecControl](#fn-controls-cycle-row-js-createvideocodeccontrol), [ui/panel/controls/section.js › createSection](#fn-controls-section-js-createsection), [buildMainPage.updateDependencyState](#fn-pages-js-buildmainpage-updatedependencystate)
+- **Calls:** [core/config.js › configAddChangeListener](core.md#fn-config-js-configaddchangelistener), [core/guest-mode.js › isGuestMode](core.md#fn-guest-mode-js-isguestmode), [ui/dom.js › createElement](ui.md#fn-dom-js-createelement), [ui/panel/controls/checkbox.js › createConfigCheckbox](#fn-controls-checkbox-js-createconfigcheckbox), [ui/panel/controls/cycle-row.js › createChoiceControl](#fn-controls-cycle-row-js-createchoicecontrol), [ui/panel/controls/cycle-row.js › createLogoControl](#fn-controls-cycle-row-js-createlogocontrol), [ui/panel/controls/cycle-row.js › createThumbnailQualityControl](#fn-controls-cycle-row-js-createthumbnailqualitycontrol), [ui/panel/controls/cycle-row.js › createVideoCodecControl](#fn-controls-cycle-row-js-createvideocodeccontrol), [ui/panel/controls/section.js › createSection](#fn-controls-section-js-createsection), [buildMainPage.updateDependencyState](#fn-pages-js-buildmainpage-updatedependencystate)
 - **Settings:** listens to `enableAdBlock`; uses `enableTrackingBlock`, `removeGlobalShorts`, `removeLiveVideos`, `removeTopLiveGames`, `removeMostRelevant`, `hideGuestSignInPrompts`, `forceHighResVideo`, `hideEndcards`, `enableReturnYouTubeDislike`, `enableAutoLogin`, `upgradeThumbnails`, `showWatch`, `enableOledCareMode`, `disableNotifications`
 
 <a id="fn-pages-js-buildmainpage-updatedependencystate"></a>
-**`buildMainPage.updateDependencyState()`** · arrow · L58–63
+**`buildMainPage.updateDependencyState()`** · arrow · L70–75
 
 Greys out the rows that depend on Ad Blocking while it is off.
 
@@ -493,27 +509,44 @@ Greys out the rows that depend on Ad Blocking while it is off.
 - **Settings:** reads `enableAdBlock`
 
 <a id="fn-pages-js-buildsponsorpage"></a>
-**`buildSponsorPage()`** · function, exported · L92–129
+**`buildSponsorPage()`** · function, exported · L104–135
 
 The SponsorBlock page: the switch, one row per category, and the SponsorBlock options.
 
-- **Calls:** [ui/dom.js › createElement](ui.md#fn-dom-js-createelement), [ui/panel/controls/checkbox.js › createConfigCheckbox](#fn-controls-checkbox-js-createconfigcheckbox), [ui/panel/controls/cycle-row.js › createSegmentControl](#fn-controls-cycle-row-js-createsegmentcontrol)
+- **Calls:** [ui/dom.js › createElement](ui.md#fn-dom-js-createelement), [ui/panel/controls/checkbox.js › createConfigCheckbox](#fn-controls-checkbox-js-createconfigcheckbox), [ui/panel/controls/cycle-row.js › createSegmentControl](#fn-controls-cycle-row-js-createsegmentcontrol), [footNote](#fn-pages-js-footnote)
 - **Settings:** uses `enableSponsorBlock`, `sbMode_sponsor`, `sbMode_intro`, `sbMode_outro`, `sbMode_interaction`, `sbMode_selfpromo`, `sbMode_musicofftopic`, `sbMode_filler`, `sbMode_hook`, `sbMode_preview`, `sbMode_highlight`, `enableMutedSegments`, `skipSegmentsOnce`, `sbFullVideoLabel`, `sbShowTimeWithSkips`
 
+<a id="fn-pages-js-builddearrowpage"></a>
+**`buildDeArrowPage()`** · function, exported · L143–186
+
+The DeArrow page: the switch and the logo, then the title and thumbnail options, greyed out while it is off (and the thumbnail fallback while crowdsourced thumbnails are). Title formatting is in the webOS 22+ build only (features/dearrow/titles.js): the legacy one gets no formatting rows.
+
+- **Calls:** [core/config.js › configAddChangeListener](core.md#fn-config-js-configaddchangelistener), [ui/dom.js › createElement](ui.md#fn-dom-js-createelement), [ui/panel/controls/checkbox.js › createConfigCheckbox](#fn-controls-checkbox-js-createconfigcheckbox), [ui/panel/controls/cycle-row.js › createChoiceControl](#fn-controls-cycle-row-js-createchoicecontrol), [ui/panel/controls/section.js › createSection](#fn-controls-section-js-createsection), [buildDeArrowPage.sync](#fn-pages-js-builddearrowpage-sync), [footNote](#fn-pages-js-footnote), [helpLine](#fn-pages-js-helpline)
+- **Settings:** listens to `enableDeArrow`, `dearrowCrowdThumbnails`; uses `dearrowShowBadge`, `dearrowCrowdTitles`, `dearrowTitleFormatting`, `dearrowCleanEmojis`, `dearrowThumbnailFallback`
+
+<a id="fn-pages-js-builddearrowpage-sync"></a>
+**`buildDeArrowPage.sync()`** · arrow · L174–181
+
+Greys out the rows while DeArrow is off, and the fallback while crowdsourced thumbnails are.
+
+- **Calls:** [core/config.js › configRead](core.md#fn-config-js-configread), [ui/panel/controls/checkbox.js › setUnavailable](#fn-controls-checkbox-js-setunavailable)
+- **Called by:** [buildDeArrowPage](#fn-pages-js-builddearrowpage)
+- **Settings:** reads `enableDeArrow`, `dearrowCrowdThumbnails`
+
 <a id="fn-pages-js-buildshortcutspage"></a>
-**`buildShortcutsPage()`** · function, exported · L133–143
+**`buildShortcutsPage()`** · function, exported · L190–200
 
 The Shortcuts page: one row per configurable key.
 
 - **Calls:** [ui/dom.js › createElement](ui.md#fn-dom-js-createelement), [ui/panel/controls/cycle-row.js › createShortcutControl](#fn-controls-cycle-row-js-createshortcutcontrol)
 
 <a id="fn-pages-js-builduitweakspage"></a>
-**`buildUITweaksPage()`** · function, exported · L150–180
+**`buildUITweaksPage()`** · function, exported · L207–249
 
-The UI Tweaks page: shelf opacity, previews, titles, rows ahead, Liquid Glass, the theme, and the emoji fix on webOS 3/4.
+The UI Tweaks page: shelf opacity, previews, titles, rows ahead, Liquid Glass, the theme, the emoji fix on webOS 3/4, and playback speed where the TV can (webOS 23 and newer).
 
 - **Calls:** [core/webos.js › getWebOSVersion](core.md#fn-webos-js-getwebosversion), [ui/dom.js › createElement](ui.md#fn-dom-js-createelement), [ui/panel/controls/checkbox.js › createConfigCheckbox](#fn-controls-checkbox-js-createconfigcheckbox), [ui/panel/controls/cycle-row.js › createOpacityControl](#fn-controls-cycle-row-js-createopacitycontrol), [ui/panel/controls/cycle-row.js › createPreviewControl](#fn-controls-cycle-row-js-createpreviewcontrol), [ui/panel/controls/cycle-row.js › createThemeControl](#fn-controls-cycle-row-js-createthemecontrol), [ui/panel/controls/section.js › createSection](#fn-controls-section-js-createsection), [helpLine](#fn-pages-js-helpline)
-- **Settings:** uses `videoShelfOpacity`, `forcePreviews`, `fixMultilineTitles`, `fixSearchFont`, `enableRowsAhead`, `removeBlackBorders`, `enableLegacyEmojiFix`
+- **Settings:** uses `videoShelfOpacity`, `forcePreviews`, `fixMultilineTitles`, `fixSearchFont`, `enableRowsAhead`, `removeBlackBorders`, `enableLegacyEmojiFix`, `enablePlaybackSpeed`
 
 <a id="mod-panel-js"></a>
 
@@ -521,28 +554,28 @@ The UI Tweaks page: shelf opacity, previews, titles, rows ahead, Liquid Glass, t
 
 > The options panel: the container and its tab menu, showing and hiding it and keeping focus inside it.
 
-285 lines · imports [core/config.js](core.md#mod-config-js), [core/page-state.js](core.md#mod-page-state-js), [features/sponsorblock/popup.js](features-sponsorblock.md#mod-popup-js), [ui/dom.js](ui.md#mod-dom-js), [ui/panel/pages.js](#mod-pages-js), [ui/panel/keyboard.js](#mod-keyboard-js), [ui/panel/focus-trap.js](#mod-focus-trap-js), [core/log.js](core.md#mod-log-js), [ui/shortcuts/bindings.js](ui-shortcuts.md#mod-bindings-js) · imported by [ui/shortcuts/actions.js](ui-shortcuts.md#mod-actions-js), [ui/shortcuts/router.js](ui-shortcuts.md#mod-router-js)
+296 lines · imports [core/config.js](core.md#mod-config-js), [core/page-state.js](core.md#mod-page-state-js), [features/sponsorblock/popup.js](features-sponsorblock.md#mod-popup-js), [ui/dom.js](ui.md#mod-dom-js), [ui/panel/pages.js](#mod-pages-js), [ui/panel/keyboard.js](#mod-keyboard-js), [ui/panel/focus-trap.js](#mod-focus-trap-js), [core/log.js](core.md#mod-log-js), [ui/shortcuts/bindings.js](ui-shortcuts.md#mod-bindings-js), [core/version.js](core.md#mod-version-js) · imported by [ui/shortcuts/actions.js](ui-shortcuts.md#mod-actions-js), [ui/shortcuts/router.js](ui-shortcuts.md#mod-router-js)
 
 **At load:**
 
 - **Calls:** [core/log.js › createLogger](core.md#fn-log-js-createlogger)
 
 <a id="fn-panel-js-createdeferredbuilder"></a>
-**`createDeferredBuilder(pages, container)`** · function · L34–63
+**`createDeferredBuilder(pages, container)`** · function · L42–71
 
 The pages, built lazily into `container`: `elements[i]` is page i once built, `ensure(i)` builds it now, `startDeferred()` builds the rest one per animation frame. A builder never runs twice.
 
 - **Called by:** [createOptionsPanel](#fn-panel-js-createoptionspanel)
 
 <a id="fn-panel-js-createdeferredbuilder-ensure"></a>
-**`createDeferredBuilder.ensure(index)`** · arrow · L39–45
+**`createDeferredBuilder.ensure(index)`** · arrow · L47–53
 
 Builds page `index` now, if it is not built yet, and adds it to the panel.
 
 - **Called by:** [createDeferredBuilder.startDeferred.step](#fn-panel-js-createdeferredbuilder-startdeferred-step)
 
 <a id="fn-panel-js-createdeferredbuilder-startdeferred"></a>
-**`createDeferredBuilder.startDeferred()`** · arrow · L50–61
+**`createDeferredBuilder.startDeferred()`** · arrow · L58–69
 
 Builds the pages not built yet, one per animation frame, so opening the panel does not wait for all of them.
 
@@ -550,7 +583,7 @@ Builds the pages not built yet, one per animation frame, so opening the panel do
 - **Browser:** `requestAnimationFrame`
 
 <a id="fn-panel-js-createdeferredbuilder-startdeferred-step"></a>
-**`createDeferredBuilder.startDeferred.step()`** · arrow · L54–59
+**`createDeferredBuilder.startDeferred.step()`** · arrow · L62–67
 
 Builds the next unbuilt page and asks for another frame.
 
@@ -559,7 +592,7 @@ Builds the next unbuilt page and asks for another frame.
 - **Browser:** `requestAnimationFrame`
 
 <a id="fn-panel-js-createtabmenu"></a>
-**`createTabMenu(pages, onPick, activeIndex)`** · function · L70–95
+**`createTabMenu(pages, onPick, activeIndex)`** · function · L78–103
 
 The tab bar: a button per page, the first one active; `onPick(index)` on a click, and the pointer leaving the bar puts focus back on the open tab (`activeIndex()`). Returns the bar and its buttons.
 
@@ -567,14 +600,14 @@ The tab bar: a button per page, the first one active; `onPick(index)` on a click
 - **Called by:** [createOptionsPanel](#fn-panel-js-createoptionspanel)
 
 <a id="fn-panel-js-isoptionspanelvisible"></a>
-**`isOptionsPanelVisible()`** · function, exported · L104–106
+**`isOptionsPanelVisible()`** · function, exported · L112–114
 
 Whether the options panel is currently shown.
 
 - **Called by:** [ui/shortcuts/actions.js › ACTIONS.config_menu.run](ui-shortcuts.md#fn-actions-js-actions-config-menu-run), [ui/shortcuts/router.js › onKeyDown](ui-shortcuts.md#fn-router-js-onkeydown)
 
 <a id="fn-panel-js-createheading"></a>
-**`createHeading(afterToggle)`** · function · L114–142
+**`createHeading(afterToggle)`** · function · L122–153
 
 The heading with the logo. A logo click (a Magic Remote pointer affordance; the logo is not in the focus order) flips the theme and hands focus back through `afterToggle`; the UI Theme row on the UI Tweaks page is the key path. There is one drawn logo per look (blue, red, dark): the &lt;html> theme classes pick the one shown (panel.css, theme-red.css, theme-oled.css). A CSS filter on the blue image came out orange for red and too bright for OLED.
 
@@ -582,7 +615,7 @@ The heading with the logo. A logo click (a Magic Remote pointer affordance; the 
 - **Called by:** [createOptionsPanel](#fn-panel-js-createoptionspanel)
 
 <a id="fn-panel-js-createheading-toggletheme"></a>
-**`createHeading.toggleTheme()`** · arrow · L116–121
+**`createHeading.toggleTheme()`** · arrow · L124–129
 
 Switches to the next UI theme (a click on the logo).
 
@@ -590,7 +623,7 @@ Switches to the next UI theme (a click on the logo).
 - **Settings:** reads `uiTheme`; writes `uiTheme`
 
 <a id="fn-panel-js-createheading-logo"></a>
-**`createHeading.logo(src, variant)`** · arrow · L126–133
+**`createHeading.logo(src, variant)`** · arrow · L134–141
 
 One of the heading's logos (one per theme; CSS shows the current one); a click switches the theme.
 
@@ -598,7 +631,7 @@ One of the heading's logos (one per theme; CSS shows the current one); a click s
 - **Called by:** [createHeading](#fn-panel-js-createheading)
 
 <a id="fn-panel-js-createoptionspanel"></a>
-**`createOptionsPanel()`** · function · L148–226
+**`createOptionsPanel()`** · function · L159–237
 
 Builds the options panel: heading, tab bar, the Main page (the others are built later), the keyboard handler and the focus trap. Returns the element and its controls.
 
@@ -606,7 +639,7 @@ Builds the options panel: heading, tab bar, the Main page (the others are built 
 - **Called by:** [showOptionsPanel](#fn-panel-js-showoptionspanel)
 
 <a id="fn-panel-js-createoptionspanel-syncpopup"></a>
-**`createOptionsPanel.syncPopup()`** · arrow · L161–161
+**`createOptionsPanel.syncPopup()`** · arrow · L172–172
 
 Shows the SponsorBlock segment popup beside the panel while its page is open on a watch page.
 
@@ -614,7 +647,7 @@ Shows the SponsorBlock segment popup beside the panel while its page is open on 
 - **Called by:** [createOptionsPanel.setActivePage](#fn-panel-js-createoptionspanel-setactivepage)
 
 <a id="fn-panel-js-createoptionspanel-setactivepage"></a>
-**`createOptionsPanel.setActivePage(pageIndex)`** · arrow · L167–185
+**`createOptionsPanel.setActivePage(pageIndex)`** · arrow · L178–196
 
 Shows page `pageIndex` (building it first if needed), marks its tab, and moves the focus into it unless the user is on the tab bar.
 
@@ -622,12 +655,12 @@ Shows page `pageIndex` (building it first if needed), marks its tab, and moves t
 - **Called by:** [createOptionsPanel](#fn-panel-js-createoptionspanel)
 
 <a id="fn-panel-js-createoptionspanel-activetab"></a>
-**`createOptionsPanel.activeTab()`** · property · L220–220
+**`createOptionsPanel.activeTab()`** · property · L231–231
 
 The tab button of the open page.
 
 <a id="fn-panel-js-showoptionspanel"></a>
-**`showOptionsPanel(visible)`** · function, exported · L232–278
+**`showOptionsPanel(visible)`** · function, exported · L243–289
 
 Opens (building it the first time) or closes the options panel, with its keyboard handler, focus trap and popup. Toggles are ignored for 500 ms after the first build.
 
@@ -636,6 +669,6 @@ Opens (building it the first time) or closes the options panel, with its keyboar
 - **Browser:** `setTimeout`
 
 <a id="fn-panel-js-window-ytaf-paneltakestoggles"></a>
-**`window.ytaf_panelTakesToggles()`** · assigned · L285–285
+**`window.ytaf_panelTakesToggles()`** · assigned · L296–296
 
 Test hook: whether the panel takes toggles again (the first build's 500 ms block is over).

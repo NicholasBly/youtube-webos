@@ -16,7 +16,7 @@ Modules: [dev/perf-mon.js](#mod-perf-mon-js)
 >
 > REMOTE   Press 0 three times within 1.5s to toggle the cluster. LEFT/RIGHT tab. UP/DOWN scroll. OK emits a report. BACK closes. (YELLOW is NOT used: YouTube's own leanback UI claims it, and screensaver-fix.js synthesises a YELLOW press every 30s on Shorts.) CONSOLE  __PERF.help(), __PERF.toggle()
 
-4739 lines · imported by [userScript.js](app.md#mod-userscript-js)
+4741 lines · imported by [userScript.js](app.md#mod-userscript-js)
 
 **At load:**
 
@@ -120,49 +120,49 @@ Modules: [dev/perf-mon.js](#mod-perf-mon-js)
 - <a id="fn-perf-mon-js-countdom"></a>`countDom()` · L1922–1950 · getElementsByTagName('\*') stops at a shadow boundary, and YouTube's ytlr-\* elements are custom elements that may hold their subtree in a shadow root.
 - <a id="fn-perf-mon-js-observersfrom"></a>`observersFrom(moduleName)` · L1952–1959
 - <a id="fn-perf-mon-js-parsetypeseen"></a>`parseTypeSeen(type, withinMs)` · L1960–1965
-- <a id="fn-perf-mon-js-allfeatures"></a>`allFeatures()` · L2700–2702
-- <a id="fn-perf-mon-js-featureenabled"></a>`featureEnabled(f)` · L2704–2709
-- <a id="fn-perf-mon-js-evaluatefeature"></a>`evaluateFeature(f, page)` · L2715–2764 · Evaluate one feature against the current page.
-- <a id="fn-perf-mon-js-evaluateall"></a>`evaluateAll(page)` · L2766–2772
-- <a id="fn-perf-mon-js-evaluateallcached"></a>`evaluateAllCached(ttl)` · L2781–2788
-- <a id="fn-perf-mon-js-dedupe"></a>`dedupe(list)` · L2797–2806
-- <a id="fn-perf-mon-js-runsweep"></a>`runSweep(page, reason)` · L2808–2856
-- <a id="fn-perf-mon-js-logsweep"></a>`logSweep(sweep)` · L2868–2932
-- <a id="fn-perf-mon-js-findbottlenecks"></a>`findBottlenecks()` · L3228–3239
-- <a id="fn-perf-mon-js-buildreport"></a>`buildReport()` · L3245–3424
-- <a id="fn-perf-mon-js-coverage"></a>`coverage()` · L3426–3448
-- <a id="fn-perf-mon-js-emitreport"></a>`emitReport(reason)` · L3453–3503
-- <a id="fn-perf-mon-js-maybeemitreport"></a>`maybeEmitReport(reason)` · L3505–3520
-- <a id="fn-perf-mon-js-installvitals"></a>`installVitals()` · L3526–3606
-- <a id="fn-perf-mon-js-installvitals-loop"></a>`installVitals.loop()` · L3531–3543
-- <a id="fn-perf-mon-js-el"></a>`el(tag, styles, text)` · L3641–3651 · All elements are created here so they can all carry the `twemoji-injected` marker: emoji-font.js treats that class as "already processed" and skips the subtree, which keeps the monitor out of the observer it is measur...
-- <a id="fn-perf-mon-js-svg"></a>`svg(tag, attrs)` · L3653–3661
-- <a id="fn-perf-mon-js-polar"></a>`polar(cx, cy, r, deg)` · L3666–3669
-- <a id="fn-perf-mon-js-arcpath"></a>`arcPath(cx, cy, r, a0, a1)` · L3671–3691
-- <a id="fn-perf-mon-js-makegauge"></a>`makeGauge(o)` · L3697–3831 · @param {object} o {size, label, unit, max, redFrom, invert} invert: low values are the problem (used for FPS)
-- <a id="fn-perf-mon-js-makegauge-set"></a>`makeGauge.set(v, displayText)` · L3821–3829
-- <a id="fn-perf-mon-js-makelamp"></a>`makeLamp(label)` · L3833–3848
-- <a id="fn-perf-mon-js-buildui"></a>`buildUI()` · L3860–4007
-- <a id="fn-perf-mon-js-setrow"></a>`setRow(container, cells)` · L4009–4029
-- <a id="fn-perf-mon-js-renderengine"></a>`renderEngine(c)` · L4031–4093
-- <a id="fn-perf-mon-js-renderfeatures"></a>`renderFeatures(c)` · L4095–4133
-- <a id="fn-perf-mon-js-renderfunctions"></a>`renderFunctions(c)` · L4135–4165
-- <a id="fn-perf-mon-js-rendersystems"></a>`renderSystems(c)` · L4167–4255
-- <a id="fn-perf-mon-js-updateui"></a>`updateUI()` · L4257–4329
-- <a id="fn-perf-mon-js-show"></a>`show()` · L4333–4344
-- <a id="fn-perf-mon-js-hide"></a>`hide()` · L4346–4353
-- <a id="fn-perf-mon-js-toggle"></a>`toggle()` · L4355–4358
-- <a id="fn-perf-mon-js-issynthetickey"></a>`isSyntheticKey(evt)` · L4410–4413
-- <a id="fn-perf-mon-js-istogglepress"></a>`isTogglePress(evt, code)` · L4415–4432
-- <a id="fn-perf-mon-js-consume"></a>`consume(evt)` · L4442–4446 · ui.js binds its shortcut router with document.addEventListener('keydown', handler, true) - the same node and the same phase as us.
-- <a id="fn-perf-mon-js-installremote"></a>`installRemote()` · L4448–4495
-- <a id="fn-perf-mon-js-boot"></a>`boot()` · L4512–4571
-- <a id="fn-perf-mon-js-armouter"></a>`armOuter()` · L4575–4580 · Outer probes go on last, once every other module in the bundle has installed its own hooks — that is what makes the parse sandwich work.
-- <a id="fn-perf-mon-js-window-perf-report"></a>`window.__PERF.report(reason)` · L4601–4603 · Full machine-readable snapshot, also printed to the console.
-- <a id="fn-perf-mon-js-window-perf-sweep"></a>`window.__PERF.sweep()` · L4607–4609 · Re-run the feature expectation sweep right now.
-- <a id="fn-perf-mon-js-window-perf-features"></a>`window.__PERF.features()` · L4611–4623 · What every feature should be doing on this page, and whether it is.
-- <a id="fn-perf-mon-js-window-perf-functions"></a>`window.__PERF.functions(windowMs)` · L4625–4630 · Hottest instrumented functions in the last N ms.
-- <a id="fn-perf-mon-js-window-perf-registry"></a>`window.__PERF.registry()` · L4632–4634 · Everything the monitor knows about the codebase.
-- <a id="fn-perf-mon-js-window-perf-calibrate"></a>`window.__PERF.calibrate(samples, iterations)` · L4653–4693 · Definitive measurement of what the mod's JSON filtering actually costs.
-- <a id="fn-perf-mon-js-window-perf-wrapprotos"></a>`window.__PERF.__wrapProtos()` · L4696–4701 · Force a prototype-instrumentation pass (normally polled every 2s).
-- <a id="fn-perf-mon-js-window-perf-help"></a>`window.__PERF.help()` · L4705–4737
+- <a id="fn-perf-mon-js-allfeatures"></a>`allFeatures()` · L2702–2704
+- <a id="fn-perf-mon-js-featureenabled"></a>`featureEnabled(f)` · L2706–2711
+- <a id="fn-perf-mon-js-evaluatefeature"></a>`evaluateFeature(f, page)` · L2717–2766 · Evaluate one feature against the current page.
+- <a id="fn-perf-mon-js-evaluateall"></a>`evaluateAll(page)` · L2768–2774
+- <a id="fn-perf-mon-js-evaluateallcached"></a>`evaluateAllCached(ttl)` · L2783–2790
+- <a id="fn-perf-mon-js-dedupe"></a>`dedupe(list)` · L2799–2808
+- <a id="fn-perf-mon-js-runsweep"></a>`runSweep(page, reason)` · L2810–2858
+- <a id="fn-perf-mon-js-logsweep"></a>`logSweep(sweep)` · L2870–2934
+- <a id="fn-perf-mon-js-findbottlenecks"></a>`findBottlenecks()` · L3230–3241
+- <a id="fn-perf-mon-js-buildreport"></a>`buildReport()` · L3247–3426
+- <a id="fn-perf-mon-js-coverage"></a>`coverage()` · L3428–3450
+- <a id="fn-perf-mon-js-emitreport"></a>`emitReport(reason)` · L3455–3505
+- <a id="fn-perf-mon-js-maybeemitreport"></a>`maybeEmitReport(reason)` · L3507–3522
+- <a id="fn-perf-mon-js-installvitals"></a>`installVitals()` · L3528–3608
+- <a id="fn-perf-mon-js-installvitals-loop"></a>`installVitals.loop()` · L3533–3545
+- <a id="fn-perf-mon-js-el"></a>`el(tag, styles, text)` · L3643–3653 · All elements are created here so they can all carry the `twemoji-injected` marker: emoji-font.js treats that class as "already processed" and skips the subtree, which keeps the monitor out of the observer it is measur...
+- <a id="fn-perf-mon-js-svg"></a>`svg(tag, attrs)` · L3655–3663
+- <a id="fn-perf-mon-js-polar"></a>`polar(cx, cy, r, deg)` · L3668–3671
+- <a id="fn-perf-mon-js-arcpath"></a>`arcPath(cx, cy, r, a0, a1)` · L3673–3693
+- <a id="fn-perf-mon-js-makegauge"></a>`makeGauge(o)` · L3699–3833 · @param {object} o {size, label, unit, max, redFrom, invert} invert: low values are the problem (used for FPS)
+- <a id="fn-perf-mon-js-makegauge-set"></a>`makeGauge.set(v, displayText)` · L3823–3831
+- <a id="fn-perf-mon-js-makelamp"></a>`makeLamp(label)` · L3835–3850
+- <a id="fn-perf-mon-js-buildui"></a>`buildUI()` · L3862–4009
+- <a id="fn-perf-mon-js-setrow"></a>`setRow(container, cells)` · L4011–4031
+- <a id="fn-perf-mon-js-renderengine"></a>`renderEngine(c)` · L4033–4095
+- <a id="fn-perf-mon-js-renderfeatures"></a>`renderFeatures(c)` · L4097–4135
+- <a id="fn-perf-mon-js-renderfunctions"></a>`renderFunctions(c)` · L4137–4167
+- <a id="fn-perf-mon-js-rendersystems"></a>`renderSystems(c)` · L4169–4257
+- <a id="fn-perf-mon-js-updateui"></a>`updateUI()` · L4259–4331
+- <a id="fn-perf-mon-js-show"></a>`show()` · L4335–4346
+- <a id="fn-perf-mon-js-hide"></a>`hide()` · L4348–4355
+- <a id="fn-perf-mon-js-toggle"></a>`toggle()` · L4357–4360
+- <a id="fn-perf-mon-js-issynthetickey"></a>`isSyntheticKey(evt)` · L4412–4415
+- <a id="fn-perf-mon-js-istogglepress"></a>`isTogglePress(evt, code)` · L4417–4434
+- <a id="fn-perf-mon-js-consume"></a>`consume(evt)` · L4444–4448 · ui.js binds its shortcut router with document.addEventListener('keydown', handler, true) - the same node and the same phase as us.
+- <a id="fn-perf-mon-js-installremote"></a>`installRemote()` · L4450–4497
+- <a id="fn-perf-mon-js-boot"></a>`boot()` · L4514–4573
+- <a id="fn-perf-mon-js-armouter"></a>`armOuter()` · L4577–4582 · Outer probes go on last, once every other module in the bundle has installed its own hooks — that is what makes the parse sandwich work.
+- <a id="fn-perf-mon-js-window-perf-report"></a>`window.__PERF.report(reason)` · L4603–4605 · Full machine-readable snapshot, also printed to the console.
+- <a id="fn-perf-mon-js-window-perf-sweep"></a>`window.__PERF.sweep()` · L4609–4611 · Re-run the feature expectation sweep right now.
+- <a id="fn-perf-mon-js-window-perf-features"></a>`window.__PERF.features()` · L4613–4625 · What every feature should be doing on this page, and whether it is.
+- <a id="fn-perf-mon-js-window-perf-functions"></a>`window.__PERF.functions(windowMs)` · L4627–4632 · Hottest instrumented functions in the last N ms.
+- <a id="fn-perf-mon-js-window-perf-registry"></a>`window.__PERF.registry()` · L4634–4636 · Everything the monitor knows about the codebase.
+- <a id="fn-perf-mon-js-window-perf-calibrate"></a>`window.__PERF.calibrate(samples, iterations)` · L4655–4695 · Definitive measurement of what the mod's JSON filtering actually costs.
+- <a id="fn-perf-mon-js-window-perf-wrapprotos"></a>`window.__PERF.__wrapProtos()` · L4698–4703 · Force a prototype-instrumentation pass (normally polled every 2s).
+- <a id="fn-perf-mon-js-window-perf-help"></a>`window.__PERF.help()` · L4707–4739

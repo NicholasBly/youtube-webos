@@ -63,7 +63,9 @@ const configs = [
     files: ['src/**/*'],
     languageOptions: {
       globals: {
-        ...globals.browser
+        ...globals.browser,
+        // A build constant, written by webpack's DefinePlugin (webpack.config.js).
+        __YTAF_VERSION__: 'readonly'
       }
     },
     rules: {
@@ -159,7 +161,7 @@ const configs = [
   {
     // A block with nothing but `ignores` is a global ignore list, wherever it sits.
     // Dot-directories hold local tools' files (worktrees, scratch files).
-    ignores: ['dist/**/*', '.*/**']
+    ignores: ['dist/**/*', '.*/**', 'src/vendor/**/*']
   }
 ] as const satisfies Linter.Config[];
 

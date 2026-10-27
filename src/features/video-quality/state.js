@@ -2,6 +2,7 @@
 // and the per-session flags. Scalars live on `vq` so every module reads and
 // writes the same value; the Set is exported directly.
 import { isWebOS25 } from '../../core/webos.js';
+import { isQualityCappedBySpeed } from '../../core/speed-cap.js';
 
 // Every label the player reports once it has negotiated a quality, from
 // 'highres' down to 'tiny'. "Known" means the player has settled, not that the
@@ -58,8 +59,11 @@ export const qualitySetForVideo = new Set();
 export const qualityStats = { apiUpgrades: 0, intercepts: 0 };
 
 /**
- * Whether quality is forced now: Force Max Quality is on and the player is not an inline preview.
+ * Whether quality is forced now: Force Max Quality is on, the player is not an inline preview, and
+ * the playback speed does not hold the video at 1080p (core/speed-cap.js).
  */
 export function isForceEnabled() {
-  return vq.shouldForce && (!vq.player?.isInline || !vq.player.isInline());
+  return (
+    vq.shouldForce && (!vq.player?.isInline || !vq.player.isInline()) && !isQualityCappedBySpeed()
+  );
 }

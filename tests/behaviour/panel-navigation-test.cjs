@@ -99,12 +99,14 @@ function expectFocus(what, expected) {
   for (let i = 0; i < tabs.length; i++) place(tabs[i], i * 200, 0, 180, 80);
   const pages = panel.querySelectorAll('.ytaf-settings-page');
   for (let i = 0; i < pages.length; i++) layoutPage(pages[i]);
-  t('setup: all four pages are laid out', pages.length === 4, String(pages.length));
+  t('setup: all five pages are laid out', pages.length === 5, String(pages.length));
 
   // ---- the tab bar -------------------------------------------------------------
   expectFocus('opening the panel', 'tab Main');
   press(KEYS.RIGHT);
   expectFocus('Right from Main', 'tab SponsorBlock');
+  press(KEYS.RIGHT);
+  expectFocus('Right from SponsorBlock', 'tab DeArrow');
   press(KEYS.RIGHT);
   press(KEYS.RIGHT);
   expectFocus('Right twice more', 'tab UI Tweaks');
@@ -115,7 +117,8 @@ function expectFocus(what, expected) {
   press(KEYS.LEFT);
   press(KEYS.LEFT);
   press(KEYS.LEFT);
-  expectFocus('Left three times more', 'tab Main');
+  press(KEYS.LEFT);
+  expectFocus('Left four times more', 'tab Main');
   t(
     'the Main page is still the open one',
     d.querySelector('#ytaf-page-main').style.display !== 'none'

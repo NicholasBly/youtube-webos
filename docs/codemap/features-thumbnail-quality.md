@@ -92,7 +92,7 @@ Saves a pending change now (the app is going to the background).
 
 > Where each InnerTube response type keeps its thumbnails: the known paths per type, the bounded scan for shapes no path matched, and the entry point the JSON.parse hook calls.
 
-356 lines · imports [features/thumbnail-quality/constants.js](#mod-constants-js), [core/innertube.js](core.md#mod-innertube-js), [features/thumbnail-quality/state.js](#mod-state-js), [features/thumbnail-quality/probes.js](#mod-probes-js), [features/thumbnail-quality/promotion.js](#mod-promotion-js), [features/thumbnail-quality/rewrite.js](#mod-rewrite-js), [features/thumbnail-quality/log.js](#mod-log-js)
+362 lines · imports [features/thumbnail-quality/constants.js](#mod-constants-js), [core/innertube.js](core.md#mod-innertube-js), [features/thumbnail-quality/state.js](#mod-state-js), [features/thumbnail-quality/probes.js](#mod-probes-js), [features/thumbnail-quality/promotion.js](#mod-promotion-js), [features/thumbnail-quality/rewrite.js](#mod-rewrite-js), [features/thumbnail-quality/log.js](#mod-log-js)
 
 <a id="fn-dispatch-js-upgradeitem"></a>
 **`upgradeItem(item)`** · function · L26–53
@@ -119,22 +119,22 @@ One shelf list upgraded, its changes added to `tally` (forEachItemList's argumen
 - **Called by:** [upgradeSectionList](#fn-dispatch-js-upgradesectionlist)
 
 <a id="fn-dispatch-js-upgradesectionlist"></a>
-**`upgradeSectionList(contents)`** · function · L74–88
+**`upgradeSectionList(contents)`** · function · L77–93
 
-The shelves of a section list. The list itself does not count as found (state.listsSeen): a list whose shelves the walk does not know holds no item list it can reach, and is scanned.
+The shelves of a section list. The list itself does not count as found (state.listsSeen): a list whose shelves the walk does not know holds no item list it can reach, and is scanned. A section in which the walk found no thumbnail at all (an item section, a vertical list, a renderer it does not know: the search page's results) gets a bounded scan of its own, so one shelf the walk does read cannot hide the rest of the page.
 
-- **Calls:** [core/innertube.js › forEachItemList](core.md#fn-innertube-js-foreachitemlist), [upgradeItem](#fn-dispatch-js-upgradeitem), [upgradeListInto](#fn-dispatch-js-upgradelistinto)
+- **Calls:** [core/innertube.js › forEachItemList](core.md#fn-innertube-js-foreachitemlist), [scanForThumbnails](#fn-dispatch-js-scanforthumbnails), [upgradeItem](#fn-dispatch-js-upgradeitem), [upgradeListInto](#fn-dispatch-js-upgradelistinto)
 - **Called by:** [upgradeBrowseTabs](#fn-dispatch-js-upgradebrowsetabs), [upgradeByType](#fn-dispatch-js-upgradebytype), [upgradeContinuation](#fn-dispatch-js-upgradecontinuation)
 
 <a id="fn-dispatch-js-isthumbnailfreecontinuation"></a>
-**`isThumbnailFreeContinuation(contents)`** · function · L100–107
+**`isThumbnailFreeContinuation(contents)`** · function · L105–112
 
 Whether every key of the continuation is one known to hold no thumbnails.
 
 - **Called by:** [upgradeByType](#fn-dispatch-js-upgradebytype)
 
 <a id="fn-dispatch-js-upgradeautoplaysets"></a>
-**`upgradeAutoplaySets(sets)`** · function · L137–147
+**`upgradeAutoplaySets(sets)`** · function · L142–152
 
 Upgrades the next-video item of each autoplay set.
 
@@ -142,7 +142,7 @@ Upgrades the next-video item of each autoplay set.
 - **Called by:** [upgradeAutoplay](#fn-dispatch-js-upgradeautoplay)
 
 <a id="fn-dispatch-js-upgradeautoplay"></a>
-**`upgradeAutoplay(autoplay)`** · function · L153–160
+**`upgradeAutoplay(autoplay)`** · function · L158–165
 
 Upgrades the autoplay suggestions of a watch response: the sets, the modified sets and the replay card.
 
@@ -150,7 +150,7 @@ Upgrades the autoplay suggestions of a watch response: the sets, the modified se
 - **Called by:** [upgradeByType](#fn-dispatch-js-upgradebytype)
 
 <a id="fn-dispatch-js-upgradebrowsetabs"></a>
-**`upgradeBrowseTabs(sections)`** · function · L163–179
+**`upgradeBrowseTabs(sections)`** · function · L168–184
 
 Upgrades the sections of every tab of a browse page's secondary navigation.
 
@@ -158,7 +158,7 @@ Upgrades the sections of every tab of a browse page's secondary navigation.
 - **Called by:** [upgradeByType](#fn-dispatch-js-upgradebytype)
 
 <a id="fn-dispatch-js-upgradeactions"></a>
-**`upgradeActions(actions)`** · function · L182–192
+**`upgradeActions(actions)`** · function · L187–197
 
 Upgrades the items that reload or append actions (continuations) carry.
 
@@ -166,7 +166,7 @@ Upgrades the items that reload or append actions (continuations) carry.
 - **Called by:** [upgradeByType](#fn-dispatch-js-upgradebytype)
 
 <a id="fn-dispatch-js-upgradecontinuation"></a>
-**`upgradeContinuation(data)`** · function · L204–211
+**`upgradeContinuation(data)`** · function · L209–216
 
 Continuation payloads, in all four shapes.
 
@@ -176,22 +176,22 @@ Called for every response rather than only for responseType 'CONTINUATION', beca
 - **Called by:** [upgradeResponseThumbnails](#fn-dispatch-js-upgraderesponsethumbnails)
 
 <a id="fn-dispatch-js-scanforthumbnails"></a>
-**`scanForThumbnails(root)`** · function · L218–245
+**`scanForThumbnails(root)`** · function · L223–250
 
 Last-resort bounded walk, used only when the schema paths produced nothing. Keeps the module working through an InnerTube reshuffle instead of silently doing nothing, without ever putting a full traversal on the hot path.
 
 - **Calls:** [features/thumbnail-quality/rewrite.js › upgradeContainer](#fn-rewrite-js-upgradecontainer)
-- **Called by:** [upgradeByType](#fn-dispatch-js-upgradebytype)
+- **Called by:** [upgradeByType](#fn-dispatch-js-upgradebytype), [upgradeSectionList](#fn-dispatch-js-upgradesectionlist)
 
 <a id="fn-dispatch-js-scanroot"></a>
-**`scanRoot(data, type)`** · function · L255–264
+**`scanRoot(data, type)`** · function · L260–269
 
 Where the thumbnail scan of a response type starts: down SCAN_FROM's path as far as it exists.
 
 - **Called by:** [upgradeByType](#fn-dispatch-js-upgradebytype)
 
 <a id="fn-dispatch-js-upgradebytype"></a>
-**`upgradeByType(data, type, textLength)`** · function · L272–322
+**`upgradeByType(data, type, textLength)`** · function · L277–327
 
 The thumbnails at the known paths of `type`, rewritten; the count. A type whose paths reach no item list at all gets the bounded scan, an unknown type gets it when the body is large enough to be worth one, and a type with nothing to find gets neither.
 
@@ -199,7 +199,7 @@ The thumbnails at the known paths of `type`, rewritten; the count. A type whose 
 - **Called by:** [upgradeResponseThumbnails](#fn-dispatch-js-upgraderesponsethumbnails)
 
 <a id="fn-dispatch-js-upgraderesponsethumbnails"></a>
-**`upgradeResponseThumbnails(data, responseType, textLength)`** · function, exported · L330–356
+**`upgradeResponseThumbnails(data, responseType, textLength)`** · function, exported · L335–362
 
 Entry point called from the JSON.parse hook in adblock/parse-hook.js. `responseType` is the type adblock already detected, so this costs no extra detection pass; `textLength` is the length of the JSON text, which the hook already has.
 
@@ -556,7 +556,7 @@ Whether two sets hold the same ids.
 
 > Rewrites one thumbnail URL, and every URL in one thumbnail container, to the best rung the current mode may emit; schedules a probe when that is unproven.
 
-168 lines · imports [features/thumbnail-quality/constants.js](#mod-constants-js), [features/thumbnail-quality/ladder.js](#mod-ladder-js), [features/thumbnail-quality/state.js](#mod-state-js), [features/thumbnail-quality/probes.js](#mod-probes-js) · imported by [features/thumbnail-quality/dispatch.js](#mod-dispatch-js)
+169 lines · imports [features/thumbnail-quality/constants.js](#mod-constants-js), [features/thumbnail-quality/ladder.js](#mod-ladder-js), [features/thumbnail-quality/state.js](#mod-state-js), [features/thumbnail-quality/probes.js](#mod-probes-js) · imported by [features/thumbnail-quality/dispatch.js](#mod-dispatch-js)
 
 <a id="fn-rewrite-js-upgradevideo"></a>
 **`upgradeVideo(matched, from, to, videoId, proven)`** · function · L32–86
@@ -576,7 +576,7 @@ The entries of a video we gambled on, for the write-back (each followed by the r
 - **Called by:** [upgradeVideo](#fn-rewrite-js-upgradevideo)
 
 <a id="fn-rewrite-js-upgradecontainer"></a>
-**`upgradeContainer(container)`** · function, exported · L119–168
+**`upgradeContainer(container)`** · function, exported · L119–169
 
 Rewrite every URL in a thumbnail container in place. Handles both `{ thumbnails: [...] }` (tileRenderer and friends) and `{ sources: [...] }` (the newer \*ViewModel schema).
 
@@ -589,7 +589,7 @@ Rewrite every URL in a thumbnail container in place. Handles both `{ thumbnails:
 
 > Everything the thumbnail modules share and mutate: the current mode, the verification caches and queues, timers and budgets. Scalars live on `state` so every module reads the same value; collections are exported directly.
 
-87 lines · imports [core/config.js](core.md#mod-config-js), [features/thumbnail-quality/ladder.js](#mod-ladder-js) · imported by [features/thumbnail-quality/cache.js](#mod-cache-js), [features/thumbnail-quality/dispatch.js](#mod-dispatch-js), [features/thumbnail-quality/index.js](#mod-index-js), [features/thumbnail-quality/navigation-pause.js](#mod-navigation-pause-js), [features/thumbnail-quality/probe-transport.js](#mod-probe-transport-js), [features/thumbnail-quality/probes.js](#mod-probes-js), [features/thumbnail-quality/promotion.js](#mod-promotion-js), [features/thumbnail-quality/rendered.js](#mod-rendered-js), [features/thumbnail-quality/rewrite.js](#mod-rewrite-js)
+90 lines · imports [core/config.js](core.md#mod-config-js), [features/thumbnail-quality/ladder.js](#mod-ladder-js) · imported by [features/thumbnail-quality/cache.js](#mod-cache-js), [features/thumbnail-quality/dispatch.js](#mod-dispatch-js), [features/thumbnail-quality/index.js](#mod-index-js), [features/thumbnail-quality/navigation-pause.js](#mod-navigation-pause-js), [features/thumbnail-quality/probe-transport.js](#mod-probe-transport-js), [features/thumbnail-quality/probes.js](#mod-probes-js), [features/thumbnail-quality/promotion.js](#mod-promotion-js), [features/thumbnail-quality/rendered.js](#mod-rendered-js), [features/thumbnail-quality/rewrite.js](#mod-rewrite-js)
 
 **At load:**
 
@@ -597,7 +597,7 @@ Rewrite every URL in a thumbnail container in place. Handles both `{ thumbnails:
 - **Settings:** reads `thumbnailQualityMode`, `upgradeThumbnails`
 
 <a id="fn-state-js-clearstatetimer"></a>
-**`clearStateTimer(name)`** · function, exported · L53–58
+**`clearStateTimer(name)`** · function, exported · L56–61
 
 Clears the timer in `state[name]`, if one is set.
 

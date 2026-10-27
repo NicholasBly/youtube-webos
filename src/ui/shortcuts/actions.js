@@ -12,6 +12,7 @@ import { toggleComments, toggleDescription, saveToPlaylist } from './panels.js';
 import { refreshPage } from './page.js';
 import { toggleOledOverlay, isOledOverlayActive } from './oled.js';
 import { getSponsorBlock } from '../../features/sponsorblock/bootstrap.js';
+import { stepSpeed, resetSpeed } from '../../features/playback-speed/index.js';
 
 /** Runs `fn` with the live SponsorBlock handler, or says there is none. */
 function withSponsorBlock(fn) {
@@ -72,5 +73,9 @@ export const ACTIONS = {
       withSponsorBlock((sb) => {
         if (!sb.manualSkipOrHighlight()) showNotification('No action available');
       })
-  }
+  },
+  // Playback speed (features/playback-speed; the legacy build says it cannot).
+  speed_up: { run: () => stepSpeed(1) },
+  speed_down: { run: () => stepSpeed(-1) },
+  speed_reset: { run: resetSpeed }
 };

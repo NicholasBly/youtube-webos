@@ -84,6 +84,15 @@ const t = report.check;
       'Chrome between 54 and 119 alone is the webOS 6 simulator',
       r.sb.getWebOSVersion() === 6 && r.get('simulatorMode') === true && r.sb.isLegacyWebOS()
     );
+    r = detect(base + 'Chrome/94.0.4606.31 Safari/537.36');
+    t(
+      'Chrome 87 to 119 alone is the webOS 22 to 24 simulator: 22, neither legacy nor 25',
+      r.sb.getWebOSVersion() === 22 &&
+        r.get('simulatorMode') === true &&
+        !r.sb.isLegacyWebOS() &&
+        !r.sb.isWebOS25()
+    );
+
     r = detect(base + 'Chrome/130.0.0.0 Safari/537.36 WebAppManager webOS.TV-2026');
     t(
       'webOS.TV-2026 is webOS 26 by the year: a real set, not the simulator',

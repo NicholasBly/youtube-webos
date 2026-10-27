@@ -1760,7 +1760,7 @@
     hideEndcards: false,
     enableAutoLogin: true,
     logoStyle: 'default',
-    showWatch: false,
+    showWatch: 'off',
     enableOledCareMode: false,
     videoShelfOpacity: 100,
     fixMultilineTitles: true,
@@ -2455,6 +2455,8 @@
     {
       key: 'showWatch',
       label: 'Display Time in UI',
+      // 'off', 'time' or 'datetime' (true or false as 0.8.4 stored it).
+      enabledWhen: (v) => !!v && v !== 'off',
       lamp: 'CLOCK',
       module: 'features/watch',
       pages: ALL_PAGES,

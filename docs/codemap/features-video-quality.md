@@ -223,15 +223,16 @@ A video already playing without a quality: pause, force, resume.
 
 > Everything the video-quality modules share: the constants, the player handle and the per-session flags. Scalars live on `vq` so every module reads and writes the same value; the Set is exported directly.
 
-65 lines · imports [core/webos.js](core.md#mod-webos-js) · imported by [features/video-quality/index.js](#mod-index-js), [features/video-quality/kickstart.js](#mod-kickstart-js), [features/video-quality/player-state.js](#mod-player-state-js), [features/video-quality/quality.js](#mod-quality-js)
+69 lines · imports [core/webos.js](core.md#mod-webos-js), [core/speed-cap.js](core.md#mod-speed-cap-js) · imported by [features/video-quality/index.js](#mod-index-js), [features/video-quality/kickstart.js](#mod-kickstart-js), [features/video-quality/player-state.js](#mod-player-state-js), [features/video-quality/quality.js](#mod-quality-js)
 
 **At load:**
 
 - **Calls:** [core/webos.js › isWebOS25](core.md#fn-webos-js-iswebos25)
 
 <a id="fn-state-js-isforceenabled"></a>
-**`isForceEnabled()`** · function, exported · L63–65
+**`isForceEnabled()`** · function, exported · L65–69
 
-Whether quality is forced now: Force Max Quality is on and the player is not an inline preview.
+Whether quality is forced now: Force Max Quality is on, the player is not an inline preview, and the playback speed does not hold the video at 1080p (core/speed-cap.js).
 
+- **Calls:** [core/speed-cap.js › isQualityCappedBySpeed](core.md#fn-speed-cap-js-isqualitycappedbyspeed)
 - **Called by:** [features/video-quality/quality.js › interceptAndUpgradeQuality](#fn-quality-js-interceptandupgradequality), [features/video-quality/quality.js › setLocalStorageQuality](#fn-quality-js-setlocalstoragequality), [features/video-quality/quality.js › setQualityOnPlayer](#fn-quality-js-setqualityonplayer)

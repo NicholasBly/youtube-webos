@@ -684,7 +684,8 @@ function fakePlayer(d) {
     await wait(120);
     press(DIGIT(7));
     t('setup: open again', panel().style.display === 'block');
-    win.document.querySelectorAll('.ytaf-tab-btn')[2].click();
+    // The Shortcuts tab (Main, SponsorBlock, DeArrow, Shortcuts, UI Tweaks).
+    win.document.querySelectorAll('.ytaf-tab-btn')[3].click();
     const row = Array.from(win.document.querySelectorAll('.ytaf-cycle-row')).find(
       (r) => r.querySelector('.ytaf-cycle-label').textContent.trim() === 'Key 7'
     );

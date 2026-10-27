@@ -10,6 +10,9 @@ repo.json
 # Test data kept as the build that wrote it left it
 tests/fixtures/
 
+# Third-party code, kept as its authors wrote it (src/vendor/README.md)
+src/vendor/
+
 # Kept as the maintainer writes them
 .github/
 .vscode/

@@ -1,5 +1,6 @@
 import CopyPlugin from 'copy-webpack-plugin';
 import TerserPlugin from 'terser-webpack-plugin';
+import webpack from 'webpack';
 import { createRequire } from 'module';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -9,12 +10,29 @@ const __dirname = path.dirname(__filename);
 
 const requireCjs = createRequire(import.meta.url);
 const { AssertNoBareRequirePlugin } = requireCjs('./tools/assert-no-bare-require.cjs');
+const { version } = requireCjs('./package.json');
+
+/**
+ * The test build number: `--env build=N`, else the YTAF_BUILD environment
+ * variable (the test-build workflow sets it from the commit title), else none
+ * (a release). A number or nothing; anything else stops the build.
+ */
+function testBuildNumber(env) {
+  const raw = String((env && env.build) || process.env.YTAF_BUILD || '').trim();
+  if (raw && !/^\d+$/.test(raw)) {
+    throw new Error(`The test build number must be a whole number, got "${raw}"`);
+  }
+  return raw;
+}
 
 /** @type {(env: Record<string, string>) => (import('webpack').Configuration)[]} */
 const makeConfig = (env) => {
   const isModern = env && env.modern;
   // Dev-only instrumentation; see src/dev/perf-mon.js. Off unless `--env perf`.
   const withPerfMon = !!(env && env.perf);
+  const build = testBuildNumber(env);
+  // What the panel heading shows (src/core/version.js): 0.8.5, 0.8.5 b2.
+  const versionLabel = version + (build ? ` b${build}` : '');
   // The engine each build is for, as a browserslist query. Every tool that
   // asks browserslist (autoprefixer, cssnano, Babel's preset-env) reads it from
   // the environment, so the CSS and the JS aim at the same browser; one build
@@ -70,6 +88,16 @@ const makeConfig = (env) => {
                 [path.resolve(__dirname, 'src/features/video-quality/kickstart.js')]: path.resolve(
                   __dirname,
                   'src/features/video-quality/kickstart-absent.js'
+                ),
+                // DeArrow's title formatter: 48 KiB here, usable on webOS 5 and 6 only.
+                [path.resolve(__dirname, 'src/features/dearrow/formatter.js')]: path.resolve(
+                  __dirname,
+                  'src/features/dearrow/formatter-absent.js'
+                ),
+                // The speed engine needs WebCodecs (Chrome 94, webOS 23).
+                [path.resolve(__dirname, 'src/features/playback-speed/index.js')]: path.resolve(
+                  __dirname,
+                  'src/features/playback-speed-absent.js'
                 )
               }
         )
@@ -166,6 +194,9 @@ const makeConfig = (env) => {
         // Catches the "ReferenceError: require is not defined" failure mode at
         // build time instead of on the TV. See the plugin for the full story.
         new AssertNoBareRequirePlugin(),
+        new webpack.DefinePlugin({
+          __YTAF_VERSION__: JSON.stringify(versionLabel)
+        }),
         new CopyPlugin({
           patterns: [
             // icon.svg is the source the PNG icons are drawn from; the TV

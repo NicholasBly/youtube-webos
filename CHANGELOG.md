@@ -20,6 +20,14 @@ A big one under the hood. Most of this release is based on @mirijanristic's fork
 
 + "Fix Search Results Font" (UI Tweaks, on by default): video titles on the search page now use the TV's LG Display font like every other page, instead of the Roboto font the stock YouTube app switches to there
 
++ DeArrow (its own tab in the settings, off by default): crowdsourced titles and thumbnails replace clickbait ones on the home screen, browse pages, channel tabs and the rows under a video (https://dearrow.ajay.app). Two switches (crowdsourced titles, crowdsourced thumbnails), and without a crowdsourced thumbnail it shows a random frame from the video (YouTube's start frame stands in while that renders), YouTube's start, middle or end frame, the original, or nothing. Title formatting (Title Case, Sentence case...) applies to every title, crowdsourced or YouTube's, and is in the webOS22+ build; the legacy build shows titles as they were written, which keeps 48kb of code off the oldest TVs. Its thumbnails are drawn as sharp as Max Thumbnail Quality makes the tiles around them (hqdefault's size while it's off, up to 1280x720 in Original and Fast), with a memory budget so dozens of them don't use up the TV's memory. Videos with a crowdsourced title or thumbnail get the DeArrow logo next to the 4K tag ("Show the DeArrow logo...", on by default). Thanks @magicsk (#200)
+
++ Playback Speed (experimental, UI Tweaks → Experimental, off by default, webOS 23 and newer): 0.25x to 2x with the pitch kept, from YouTube's own Settings → Speed menu in the player or the new "Playback Speed +", "Playback Speed -" and "Playback Speed 1x" button mappings. webOS ignores the browser's playback speed, so the video's own timeline is rescaled and the sound plays through a time-stretching audio engine. Above 1.25x the video is held at 1080p (2160p can't decode fast enough), and Force Max Quality waits meanwhile. Restart the app after turning it on. Thanks @Schmiddisen (#194), @GiacomoCa (webosbrew#484), and foxi69 and gorrdy for their fixes on top of it
+
++ The settings heading shows the version: "YouTube Extended 0.8.5", and the build number on test builds ("YouTube Extended 0.8.5 b2"). The tabs stay on one line, and the first row of a page no longer has its highlight cut off at the top
+
++ "Display Time in UI" is now a left/right choice: Off, Time, or Date + Time ("10/27 12:49 AM"), with the date in your TV language's order ("27/10 00:49" in British English). If the clock was on, it stays on as Time
+
 ### SponsorBlock
 
 + Fixed "Allow segments that mute audio" - broke from a previous update that removed audio mute/unmute at the end of video playback for some webOS versions
@@ -30,7 +38,7 @@ A big one under the hood. Most of this release is based on @mirijanristic's fork
 
 ## Performance Improvements
 
-+ Smaller builds | 115.9kb → 103.0kb for the legacy .ipk, and 89.9kb → 84.0kb for the webOS22+ .ipk
++ Smaller builds | 115.9kb → 103.0kb for the legacy .ipk, and 89.9kb → 84.0kb for the webOS22+ .ipk, before the features of build 2. With DeArrow and Playback Speed: 110.0kb and 112.0kb (the speed engine and DeArrow's title formatter are in the webOS22+ build only)
 
 + Settings panel: removed the Spatial Navigation Polyfill (both versions, 109kb of source). The panel moves focus with the arrow keys on its own now, so there's no more global focus listener forcing a layout on every focus change while the panel is open
 
@@ -70,11 +78,13 @@ A big one under the hood. Most of this release is based on @mirijanristic's fork
 
 + Removed the "OLED Mode Activated" notification - it showed up underneath the black overlay, so it was never visible
 
-+ Display Time in UI: the clock now hides and shows at the same moment as YouTube's own controls, with the same fade, instead of up to 200ms later. Its look follows your theme: black in OLED-Care Mode, the glass look of the player with the New Liquid Glass UI while a video plays, and the translucent dark box from 0.8.4 otherwise
++ Display Time in UI: the clock now hides and shows at the same moment as YouTube's own controls, instantly (no fade), instead of up to 200ms later. Its look follows your theme: black in OLED-Care Mode, the glass look of the player with the New Liquid Glass UI while a video plays, and the translucent dark box from 0.8.4 otherwise
 
 ## Fixes
 
 ### SponsorBlock
+
++ Fixed SponsorBlock turning off (no skips, no segments on the progress bar) after switching to another app and back. Coming back to the app no longer sends YouTube to its start page underneath the video. Thanks @magicsk (#197)
 
 + Fixed "Non-Music Section" never being fetched - the API calls it music_offtopic, we were requesting musicofftopic
 
@@ -106,6 +116,8 @@ A big one under the hood. Most of this release is based on @mirijanristic's fork
 
 ### Max Thumbnail Quality
 
++ Fixed search results never getting the higher quality thumbnails: results in a section shape the thumbnail engine didn't know were skipped whenever the page also had a shelf it did know. Any section where nothing was found now gets its own quick scan
+
 + Fixed a network error (e.g. a TV that just woke up) locking a video's thumbnail at low quality for good
 
 + Videos running a thumbnail A/B test ("Test & Compare") now show their main thumbnail in high quality instead of the small 320x180 test image
@@ -117,6 +129,10 @@ A big one under the hood. Most of this release is based on @mirijanristic's fork
 + Fixed counts just under a million showing as "1000k" instead of "1m"
 
 ### General
+
++ Fixed the picture staying frozen for about 20 seconds when you press play after a video screensaver (Aerial, the gallery) ran: the video now restarts in place within a few seconds. Thanks @magicsk (#198)
+
++ Reduce Telemetry & Tracking: fixed Subscriptions channel tabs (and channel page tabs) showing another channel's videos. The tabs keep the one tracking value YouTube matches their content with. Thanks @anilkusaksiz (#196)
 
 + Fixed pausing with a shortcut on a Shorts page hiding the controls bar, clock and player shadow for the rest of the session
 
@@ -150,7 +166,7 @@ A big one under the hood. Most of this release is based on @mirijanristic's fork
 
 + Codebase split into small modules: src/core (config, selectors, page state, logging), src/features (one folder per feature), src/ui (panel, shortcuts, styles), src/hooks and src/polyfills
 
-+ Test suite: npm test runs formatting, lint, type checks, both builds and 81 test scripts (~2,890 checks) against simulated webOS browsers (Chrome 38, 79 and 87). npm run test:quick for a faster run. The Build & Test workflow runs it on every push
++ Test suite: npm test runs formatting, lint, type checks, both builds and 87 test script runs (~3,080 checks) against simulated webOS browsers (Chrome 38, 79 and 87). npm run test:quick for a faster run. The Build & Test workflow runs it on every push
 
 + Updated Babel 7 → 8, ESLint 9 → 10, TypeScript 5.8 → 6.0 (strict), webpack 5.103 → 5.112, cssnano 7 → 9, prettier 3.9. Removed packages that are no longer needed: style-loader, css-loader, postcss-preset-env, transform-async-modules-webpack-plugin, husky, lint-staged and @stylistic/eslint-plugin. Building needs Node.js 22.22.3+ or 24+
 
@@ -169,6 +185,10 @@ A big one under the hood. Most of this release is based on @mirijanristic's fork
 + npm run bundle:snapshot before updating dependencies and npm run bundle:compare after it tell you whether the code that runs on the TV changed, and which modules
 
 + The Build & Test workflow installs packages without running their install scripts
+
++ Test builds are built by GitHub: push to the test branch with a commit title like "0.8.5 build 2" (the body is the patch notes) and the Auto-Post Test Updates workflow runs the tests, builds both .ipk files with the build number in them, puts them on a pre-release (v0.8.5-b2) and posts the links in the "0.8.5 test builds" discussion. No more building and committing .ipk files for a test build. A local build can carry a number too: npm run build -- --env build=2
+
++ Third-party code lives in src/vendor/ (DeArrow's title formatter, the playback speed engine), kept as its authors wrote it, with its origin and license in src/vendor/README.md
 
 ## [0.8.4] - 2026/09/29
 

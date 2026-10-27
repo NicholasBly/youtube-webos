@@ -34,6 +34,17 @@ export function extractLaunchParams() {
 }
 
 /**
+ * Whether launch parameters ask for something to open: a deep link, a cast
+ * (DIAL), a search or a voice intent, all of which come as `target` or
+ * `contentTarget`. A plain relaunch (back from another app, or the app icon
+ * pressed again) carries neither.
+ */
+export function hasLaunchTarget(params) {
+  const { target, contentTarget } = params ?? {};
+  return !!(target || contentTarget);
+}
+
+/**
  * The YouTube TV start URL, with the flags the app always sets (full animation, web speech, voice).
  */
 function getYTURL() {

@@ -46,6 +46,46 @@ function bootShorts(initialState, timers) {
 }
 
 (async () => {
+  // ---- a window with no size yet at startup --------------------------------------
+  {
+    let size = 0;
+    const { win, pump } = createPage({
+      page: 'watch',
+      layout: true,
+      setup(w) {
+        Object.defineProperty(w, 'innerWidth', {
+          get: () => (size ? 1920 : 0),
+          configurable: true
+        });
+        Object.defineProperty(w, 'innerHeight', {
+          get: () => (size ? 1080 : 0),
+          configurable: true
+        });
+      }
+    });
+    await wait(50);
+    const video = win.document.querySelector('#ytlr-player__player-container video');
+    video.style.width = '640px';
+    await flush();
+    pump();
+    await flush();
+    t(
+      'no window size yet: the <video> is left alone, not shrunk to 0px',
+      video.style.width === '640px',
+      video.style.cssText
+    );
+    size = 1;
+    video.style.left = '5px';
+    await flush();
+    pump();
+    await flush();
+    t(
+      'once the window has a size it is read again and the <video> fills it',
+      video.style.width === '1920px' && video.style.height === '1080px',
+      video.style.cssText
+    );
+  }
+
   // ---- the watch-page <video>: origin, size, one frame per burst ------------------
   {
     const { win, pump } = createPage({ page: 'watch', layout: true });
@@ -340,6 +380,99 @@ function bootShorts(initialState, timers) {
       keys.length === 0,
       keys.join(',')
     );
+  }
+
+  // ---- a frozen picture after a video screensaver: one seek in place ---------------
+  {
+    // The 2 s check at a twentieth (100 ms); Date.now() is the test's own clock.
+    let now = 1e12;
+    const { win } = createPage({
+      page: 'watch',
+      timers: { scale: 20, from: 1500 },
+      setup(w) {
+        w.Date.now = () => now;
+      }
+    });
+    await wait(50);
+    const d = win.document;
+    // A <video> standing at 5 s (or moving, with `moving`), with `readyState`; counts the seeks.
+    const makeVideo = ({ moving = false, readyState = 4 } = {}) => {
+      const v = d.createElement('video');
+      d.body.appendChild(v);
+      const rec = { v, seeks: [], time: 5 };
+      Object.defineProperty(v, 'paused', { get: () => false });
+      Object.defineProperty(v, 'seeking', { get: () => false });
+      Object.defineProperty(v, 'readyState', { get: () => readyState });
+      Object.defineProperty(v, 'currentTime', {
+        get: () => (moving ? (rec.time += 0.25) : rec.time),
+        set: (value) => {
+          rec.seeks.push(value);
+        }
+      });
+      return rec;
+    };
+    const fire = (v, type) => v.dispatchEvent(new win.Event(type));
+    // Paused for `pauseFor` ms (none: a first play), then playing; the seeks after the check.
+    const resume = async (pauseFor, options) => {
+      const rec = makeVideo(options);
+      if (pauseFor != null) {
+        fire(rec.v, 'pause');
+        now += pauseFor;
+      }
+      fire(rec.v, 'playing');
+      await wait(250);
+      rec.v.remove();
+      return rec;
+    };
+
+    t('a first play is left alone', (await resume(null)).seeks.length === 0);
+    t('a resume after a short pause (5 s) is left alone', (await resume(5000)).seeks.length === 0);
+    const frozen = await resume(120000);
+    t(
+      'a resume after a long pause that stands still: one seek, to where it stands',
+      frozen.seeks.length === 1 && frozen.seeks[0] === 5,
+      JSON.stringify(frozen.seeks)
+    );
+    t(
+      'a resume after a long pause whose clock moves is left alone',
+      (await resume(120000, { moving: true })).seeks.length === 0
+    );
+    t(
+      'buffering for real (readyState 2) is left to YouTube',
+      (await resume(120000, { readyState: 2 })).seeks.length === 0
+    );
+
+    // A pause before the check runs cancels it.
+    {
+      const rec = makeVideo();
+      fire(rec.v, 'pause');
+      now += 120000;
+      fire(rec.v, 'playing');
+      fire(rec.v, 'pause');
+      await wait(250);
+      t(
+        'paused again before the check: no seek',
+        rec.seeks.length === 0,
+        JSON.stringify(rec.seeks)
+      );
+      rec.v.remove();
+    }
+    // The nudge's own 'playing' is not checked again: no loop.
+    {
+      const rec = makeVideo();
+      fire(rec.v, 'pause');
+      now += 120000;
+      fire(rec.v, 'playing');
+      await wait(250);
+      fire(rec.v, 'playing');
+      await wait(250);
+      t(
+        "the 'playing' after the nudge is not nudged again",
+        rec.seeks.length === 1,
+        JSON.stringify(rec.seeks)
+      );
+      rec.v.remove();
+    }
   }
 
   report.finish();

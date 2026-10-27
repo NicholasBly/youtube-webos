@@ -17,12 +17,9 @@
   letter-spacing: 0.05rem;
   z-index: 1199;
   pointer-events: none;
-  /* The fallback fade; the clock takes YouTube's own when it can read it from
-     the player (index.js sets it inline). */
-  transition: opacity 0.2s ease;
 }
 
-/* Away with YouTube's player UI (index.js). */
+/* Away with YouTube's player UI (index.js), at once: no fade. */
 .ytaf-watch.ytaf-watch-hidden {
   opacity: 0;
 }

@@ -339,6 +339,38 @@ const boot = (cfg, more) =>
       probedFor('renamedshl1')
     );
 
+    // A search response with one shelf the walk reads and results in shapes
+    // it does not (an item section, a vertical list): the known shelf must
+    // not hide them, each such section gets its own scan.
+    const search = {
+      responseContext: { _pad: PAD },
+      contents: {
+        sectionListRenderer: {
+          contents: [
+            shelfOf([tile('srchshelf01')]),
+            { itemSectionRenderer: { contents: [tile('srchitems01'), tile('srchitems02')] } },
+            {
+              shelfRenderer: {
+                content: { verticalListRenderer: { items: [tile('srchvlist01')] } }
+              }
+            }
+          ]
+        }
+      }
+    };
+    win.JSON.parse(win.JSON.stringify(search));
+    await waitFor(
+      () => ['srchshelf01', 'srchitems01', 'srchitems02', 'srchvlist01'].every(probedFor),
+      3000
+    );
+    t(
+      'search: results in an item section and a vertical list are reached beside a known shelf',
+      ['srchshelf01', 'srchitems01', 'srchitems02', 'srchvlist01'].every(probedFor),
+      ['srchshelf01', 'srchitems01', 'srchitems02', 'srchvlist01']
+        .filter((id) => !probedFor(id))
+        .join(' ')
+    );
+
     // No known path: the bounded scan finds the container at depth 4 and
     // stops before one buried at depth 20.
     const nest = (node, depth) => {

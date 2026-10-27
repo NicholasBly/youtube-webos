@@ -38,7 +38,10 @@ export const state = {
   // stays on hqdefault until its probe lands, and a list may hold no
   // thumbnails at all, so a response can be fully understood and still
   // rewrite nothing.
-  listsSeen: 0
+  listsSeen: 0,
+  // Thumbnail lists alone (upgradeContainer), so a section of a shape the
+  // walk does not know can be told from one it read (dispatch.js).
+  containersSeen: 0
 };
 
 // Read on the TV from the web inspector as window.__ytafThumbStats (index.js):

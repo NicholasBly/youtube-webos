@@ -23,13 +23,14 @@ export const SELECTORS = {
   PLAYER_CONTAINER: 'ytlr-player__player-container',
   // The watch page's player shell; the clock hides while it holds focus.
   WATCH_PLAYER: 'ytlr-watch-default',
-  // The shadows YouTube fades in behind its player controls (also literals in
-  // ui/styles/global.css and ui/hide-controls.js).
-  PLAYER_SHADOWS: '.ytLrWatchDefault2025Shadow, .ytLrWatchDefaultShadow, [idomkey="shadow"]',
   // Older player root, tried when PLAYER_ID is not on the page.
   HTML5_PLAYER_FALLBACK: '.html5-video-player',
   LOGO: 'ytlr-logo-entity',
   THUMBNAIL_TILE: 'ytlr-thumbnail-details',
+  // A tile of a shelf or grid, and the title text inside one (DeArrow).
+  TILE: 'ytlr-tile-renderer',
+  TILE_METADATA: 'ytlr-tile-metadata-renderer',
+  TILE_TITLE: 'ytlr-tile-metadata-renderer yt-formatted-string',
   // Everything that can carry a thumbnail image; thumbnail-quality rescans these.
   THUMBNAIL_NODES: 'ytlr-thumbnail-details, ytlr-surface-page, thumbnail image',
   // The elements whose text can hold emoji, as localName values (emoji-font).

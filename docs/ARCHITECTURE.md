@@ -30,6 +30,12 @@ Each release is built twice from the same source:
 | legacy | `npm run build` | webOS 3 to 6 | Chromium 38 to 79, compiled to ES5 |
 | webOS 22+ | `npm run build:modern` | webOS 22, 23, 24, 25 | Chromium 87 or newer |
 
+`--env build=N` (or the `YTAF_BUILD` environment variable, which the
+test-build workflow sets from a commit title like "0.8.5 build 2") makes it
+test build N: the settings heading reads "YouTube Extended 0.8.5 bN"
+(`core/version.js`, written by webpack's DefinePlugin). Without it, a release:
+"YouTube Extended 0.8.5".
+
 `resolve.alias` in `webpack.config.js` leaves out what a build does not need.
 A module imported by name gets a stand-in with the same exports
 (`*-absent.js`); one imported for its side effects maps to nothing:
@@ -41,6 +47,8 @@ A module imported by name gets a stand-in with the same exports
 | `hooks/buffer-limit.js` | in | out (the memory problem is webOS 3/4 only) |
 | `features/block-webos-cast.ts` | `block-webos-cast-absent.js` | in (webOS 25) |
 | `features/video-quality/kickstart.js` | `kickstart-absent.js` | in (webOS 25) |
+| `features/playback-speed/` (and `vendor/playback-speed/`) | `playback-speed-absent.js` | in (needs WebCodecs: webOS 23 and newer) |
+| `features/dearrow/formatter.js` (and `vendor/dearrow/`) | `formatter-absent.js` (48 KiB there, and only webOS 5/6 could use it) | in |
 | `dev/perf-mon.js` | out unless `--env perf` | out unless `--env perf` |
 
 `babel.config.js` has one branch per build (`envName` legacy or modern). There
@@ -57,6 +65,7 @@ group per file, each feature-detected (the reason is in DEPENDENCIES.md).
 | `src/ui/` | The options panel (`panel/`), the remote shortcuts (`shortcuts/`), the toasts (`toast/`), the theme classes on `<html>` (`styles/`). |
 | `src/polyfills/` | What Chromium 38 lacks and the code uses (legacy build only). |
 | `src/dev/` | The perf monitor, a development tool (`npm run build:perf`). |
+| `src/vendor/` | Third-party code kept as its authors wrote it: DeArrow's title formatter and the playback speed engine. Origins and licenses in `src/vendor/README.md`; lint, Prettier and the code map's description check skip it. |
 | `tools/` | Build helpers (the CSS collector, the bare-require check), the code map generator, the bundle snapshot. |
 | `tests/` | `run-all.mjs` runs everything: unit tests, behaviour tests on simulated webOS pages (jsdom, with a Chromium 38 profile for the legacy build), smoke tests on the built bundles, benchmarks. |
 
@@ -86,7 +95,9 @@ flowchart TD
    inside the parse hook, so it must exist first).
 5. **Launch handling**: the account-selector bypass for a launch with
    parameters, and the `webOSRelaunch` listener (the app was opened again while
-   running, for example from a voice search).
+   running, for example from a voice search). A relaunch without a target
+   (back from another app) leaves the page alone: going to `#/` would end
+   SponsorBlock and the dislike counter for the video still playing.
 
 `src/ui/index.js` (imported among the features) makes sure a key opens the
 settings, sets the `<html>` theme classes and greets the user with a toast.
@@ -98,7 +109,7 @@ and the browser:
 
 | Hook | Installed by | Used for |
 | --- | --- | --- |
-| `JSON.parse` | `features/adblock/parse-hook.js` | Every InnerTube response YouTube parses: ad removal, the Shorts/Live/shelf filters, endcards, Load Rows Ahead, the codec filter, thumbnail upgrades, the emoji wrap. |
+| `JSON.parse` | `features/adblock/parse-hook.js` | Every InnerTube response YouTube parses: ad removal, the Shorts/Live/shelf filters, endcards, Load Rows Ahead, the codec filter, thumbnail upgrades, DeArrow, the emoji wrap; and, with Playback Speed on, YouTube's Speed button. |
 | `JSON.stringify` | `features/adblock/stringify-hook.ts` | Outgoing player requests: marks them `isInlinePlaybackNoAd` while Ad Blocking is on. |
 | `window.fetch` | `hooks/fetch.ts` (`FetchRegistry`) | Listeners can see and cancel requests: Tracking Block cancels telemetry. Without listeners the original fetch is called directly. |
 | `window.fetch` (second wrapper) | `features/block-webos-cast.ts` | webOS 25: fails the request that wakes the cast receiver. A plain string check, not a registry listener, so other requests stay on the fast path. |
@@ -106,6 +117,7 @@ and the browser:
 | `resolveCommand` on YouTube's app object | `hooks/resolve-command.ts` | `features/lang-settings-fix.ts`: a language change in YouTube's settings is written to the `PREF` cookie and the page reloads, which the TV app does not do by itself. |
 | `MediaSource.isTypeSupported`, `HTMLMediaElement.prototype.canPlayType` | `features/force-codec/hooks.js` | Force Video Codec: declines the codecs the setting rules out. |
 | `MediaSource.prototype.addSourceBuffer`, `SourceBuffer.prototype.appendBuffer`, `URL.createObjectURL` | `hooks/buffer-limit.js` | webOS 3/4: trims already-played video from the buffers so the TV does not run out of memory. |
+| `MediaSource.prototype.addSourceBuffer`, `URL.createObjectURL` / `revokeObjectURL`, `HTMLMediaElement.prototype.src`; `Object.prototype` accessors `enableSpeedOptions` and `setPlaybackRate` | `vendor/playback-speed/mse-hook.js`, `features/playback-speed/native-menu.js` | Playback Speed (webOS 23+, installed only once the setting is on): a MediaSource created at a speed other than 1x gets its video timeline rescaled and its audio played by the engine; YouTube's speed menu is offered and its picks reach the controller. At 1x everything passes through. |
 
 The table of every hook with the function that installs it is in
 [CODEMAP.md](CODEMAP.md#hooks-and-diagnostics).
@@ -121,7 +133,8 @@ flowchart TD
   S -- no --> N[native parse, return]
   S -- yes --> T[Tracking Block on: blank trackingParams in the text]
   T --> Q[native parse]
-  Q --> R{InnerTube response?<br/>responseContext, playerResponse<br/>or continuationContents}
+  Q --> Q2[Playback Speed on: switch on YouTube's Speed button]
+  Q2 --> R{InnerTube response?<br/>responseContext, playerResponse<br/>or continuationContents}
   R -- no --> X[return]
   R -- yes --> F[filterResponse]
   F --> F1[codec filter, if Force Video Codec is set]
@@ -130,7 +143,7 @@ flowchart TD
   F3 --> F4{any filter on?}
   F4 -- no --> X
   F4 -- yes --> F5[content filters: by schema, else the fallback search,<br/>else the guide's nav entries]
-  F5 --> F6[thumbnail upgrade, emoji wrap]
+  F5 --> F6[thumbnail upgrade, DeArrow, emoji wrap]
   F6 --> X
 ```
 
@@ -249,6 +262,11 @@ and look for breaks of them when optimising:
   dependencies: it says whether the code that runs on the TV changed
   (DEPENDENCIES.md).
 - `npm run bench`: the hook and panel benchmarks.
+- Test builds: push to `test` with a commit title like "0.8.5 build 2" (the
+  body is the patch notes). `.github/workflows/auto-discussion.yml` runs the
+  tests, builds both .ipk files (legacy and webOS 22+) with the build number
+  in them, puts them on a pre-release
+  (`v0.8.5-b2`) and posts the links in the "0.8.5 test builds" discussion.
 
 ### For AI agents
 

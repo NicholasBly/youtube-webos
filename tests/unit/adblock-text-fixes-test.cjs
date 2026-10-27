@@ -117,6 +117,157 @@ function leftover(obj) {
   eq('a number value is left alone', out.number.trackingParams, 7);
 }
 
+// ---- the tab renderers keep their own trackingParams (Subscriptions channel tabs) ----
+{
+  // A Subscriptions browse: the tab bar, three channel tabs, the first one's
+  // content inline; strings with braces, brackets, escaped quotes and a
+  // look-alike key in a value, which the scan must read as text.
+  const tab = (n, content) => ({
+    tabRenderer: {
+      title: 'Channel {' + n + '} [x] "q"',
+      content: {
+        tvSurfaceContentRenderer: Object.assign({ trackingParams: 'SURF_' + n }, content)
+      },
+      trackingParams: 'TAB_' + n
+    }
+  });
+  const shelf = {
+    shelfRenderer: {
+      title: { runs: [{ text: '"trackingParams":"fake" } ] {' }] },
+      content: {
+        horizontalListRenderer: {
+          items: [{ tileRenderer: { trackingParams: 'TILE_1' } }],
+          trackingParams: 'LIST_1'
+        }
+      },
+      trackingParams: 'SHELF_1'
+    }
+  };
+  const browse = {
+    responseContext: {},
+    contents: {
+      tvBrowseRenderer: {
+        content: {
+          tvSecondaryNavRenderer: {
+            sections: [
+              {
+                tvSecondaryNavSectionRenderer: {
+                  tabs: [
+                    tab(1, { content: { sectionListRenderer: { contents: [shelf] } } }),
+                    tab(2, {}),
+                    tab(3, { continuation: { token: 'abc' } })
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        trackingParams: 'BROWSE'
+      }
+    },
+    trackingParams: 'ROOT'
+  };
+  const text = JSON.stringify(browse);
+  const out = JSON.parse(stripTrackingParams(text));
+  const tabs =
+    out.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections[0]
+      .tvSecondaryNavSectionRenderer.tabs;
+  eq(
+    'every tab surface keeps its own trackingParams',
+    tabs.map((x) => x.tabRenderer.content.tvSurfaceContentRenderer.trackingParams).join(),
+    'SURF_1,SURF_2,SURF_3'
+  );
+  eq(
+    'the tabs themselves, the browse and the root are blanked',
+    [
+      tabs[0].tabRenderer.trackingParams,
+      out.contents.tvBrowseRenderer.trackingParams,
+      out.trackingParams
+    ].join(),
+    ',,'
+  );
+  const s1 =
+    tabs[0].tabRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents[0]
+      .shelfRenderer;
+  eq(
+    'inside a kept surface, its shelves, lists and tiles are blanked',
+    [
+      s1.trackingParams,
+      s1.content.horizontalListRenderer.trackingParams,
+      s1.content.horizontalListRenderer.items[0].tileRenderer.trackingParams
+    ].join(),
+    ',,'
+  );
+  eq(
+    'a look-alike key inside a string stays text',
+    s1.title.runs[0].text,
+    '"trackingParams":"fake" } ] {'
+  );
+  eq(
+    'titles with braces, brackets and quotes come through',
+    tabs[1].tabRenderer.title,
+    'Channel {2} [x] "q"'
+  );
+
+  // A tab's content loading later: the continuation keeps its own.
+  const cont = {
+    responseContext: {},
+    continuationContents: {
+      tvSurfaceContentContinuation: {
+        content: { sectionListRenderer: { contents: [shelf] } },
+        trackingParams: 'CONT_OWN'
+      }
+    },
+    trackingParams: 'ROOT'
+  };
+  const outCont = JSON.parse(stripTrackingParams(JSON.stringify(cont, null, 2)));
+  eq(
+    'a tab continuation (pretty-printed) keeps its own trackingParams',
+    outCont.continuationContents.tvSurfaceContentContinuation.trackingParams,
+    'CONT_OWN'
+  );
+  eq(
+    'and blanks everything inside it and the root',
+    [
+      outCont.trackingParams,
+      outCont.continuationContents.tvSurfaceContentContinuation.content.sectionListRenderer
+        .contents[0].shelfRenderer.trackingParams
+    ].join(),
+    ','
+  );
+
+  // The home browse has a surface but no tabs: the fast path, everything blanked.
+  const home = {
+    contents: {
+      tvBrowseRenderer: { content: { tvSurfaceContentRenderer: { trackingParams: 'HOME' } } }
+    }
+  };
+  eq(
+    'a surface outside tabs (the home browse) is blanked as before',
+    JSON.parse(stripTrackingParams(JSON.stringify(home))).contents.tvBrowseRenderer.content
+      .tvSurfaceContentRenderer.trackingParams,
+    ''
+  );
+  // A kept surface whose value the pattern does not blank stays as sent, and the rest still goes.
+  const odd = {
+    continuationContents: {
+      tvSurfaceContentContinuation: {
+        trackingParams: 'has a " quote',
+        inner: { trackingParams: 'GONE' }
+      }
+    }
+  };
+  const outOdd = JSON.parse(stripTrackingParams(JSON.stringify(odd)));
+  eq(
+    'a kept value with an escaped quote stays, its insides are still blanked',
+    [
+      outOdd.continuationContents.tvSurfaceContentContinuation.trackingParams,
+      outOdd.continuationContents.tvSurfaceContentContinuation.inner.trackingParams
+    ].join('|'),
+    'has a " quote|'
+  );
+}
+
 // ---- the emoji walk carries no tracking mode any more ----
 {
   const obj = { trackingParams: 'CAEQ_keep', title: { simpleText: 'Hi 😀' } };

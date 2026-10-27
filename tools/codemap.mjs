@@ -43,10 +43,11 @@ const DOCS = join(ROOT, 'docs');
 const PAGES = join(DOCS, 'codemap');
 const CHECK = process.argv.includes('--check');
 // Folders whose functions need no description of their own: the perf monitor,
-// a development tool that is not in release builds.
-const UNDESCRIBED_OK = ['dev/'];
+// a development tool that is not in release builds, and third-party code kept
+// as its authors wrote it (vendor/).
+const UNDESCRIBED_OK = ['dev/', 'vendor/'];
 // Folders listed in short form (one line per function); the JSON has them in full.
-const COMPACT = ['dev/'];
+const COMPACT = ['dev/', 'vendor/'];
 const TOP = '(top level)';
 
 const posix = (p) => p.split(sep).join('/');

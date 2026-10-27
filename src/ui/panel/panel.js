@@ -8,11 +8,18 @@ import logoBlueUrl from '../icons/logo-blue.png';
 import logoRedUrl from '../icons/logo-red.png';
 import logoDarkUrl from '../icons/logo-dark.png';
 import { createElement } from '../dom.js';
-import { buildMainPage, buildSponsorPage, buildShortcutsPage, buildUITweaksPage } from './pages.js';
+import {
+  buildMainPage,
+  buildSponsorPage,
+  buildDeArrowPage,
+  buildShortcutsPage,
+  buildUITweaksPage
+} from './pages.js';
 import { createPanelKeyboard, pageFocusables } from './keyboard.js';
 import { createFocusTrap } from './focus-trap.js';
 import { createLogger } from '../../core/log.js';
 import { ensureMenuKey } from '../shortcuts/bindings.js';
+import { VERSION_LABEL } from '../../core/version.js';
 
 const log = createLogger('Panel');
 
@@ -22,6 +29,7 @@ const log = createLogger('Panel');
 const PAGES = [
   { name: 'Main', build: buildMainPage },
   { name: 'SponsorBlock', build: buildSponsorPage, hasPopup: true },
+  { name: 'DeArrow', build: buildDeArrowPage },
   { name: 'Shortcuts', build: buildShortcutsPage },
   { name: 'UI Tweaks', build: buildUITweaksPage }
 ];
@@ -134,7 +142,10 @@ function createHeading(afterToggle) {
   return createElement(
     'h1',
     {},
-    createElement('span', { text: 'YouTube Extended' }),
+    // "YouTube Extended 0.8.5", or "... 0.8.5 b2" on a test build (core/version.js).
+    // A + rather than a template: the legacy build's ES5 turns a template into
+    // a concat() call, which the minifier does not fold into one string.
+    createElement('span', { text: 'YouTube Extended ' + VERSION_LABEL }),
     logo(logoBlueUrl, 'blue'),
     logo(logoRedUrl, 'red'),
     logo(logoDarkUrl, 'dark')

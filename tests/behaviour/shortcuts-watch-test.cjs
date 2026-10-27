@@ -4,7 +4,7 @@
  * not applied yet), chapter skip reads the progress bar (markers of no width
  * are no chapters), play/pause toggles the video, shortcuts respect their page scope, the
  * clock shows and hides with YouTube's player UI (its focus attribute at once,
- * with YouTube's own fade, and the player state and focus), keeps the look of
+ * with no fade, and the player state and focus), keeps the look of
  * the theme classes, and turning Display Time off at runtime destroys the
  * clock with its timers.
  *
@@ -21,11 +21,11 @@ const {
   toasts: toastsOf,
   videoModel,
   progressBar,
-  panelCheckbox,
   DIGIT,
   showPanel,
   clock,
-  flush
+  flush,
+  cycleRow
 } = require('../harness/fixtures.cjs');
 
 const report = createReport();
@@ -409,12 +409,12 @@ function boot(cfg, bodyClass, timers) {
     t('focus back on another element: clock shows again', !hidden());
   }
 
-  // ---- the clock follows YouTube's own switch at once, with YouTube's fade ----------
+  // ---- the clock follows YouTube's own switch at once, with no fade ------------------
   {
     const { win } = boot({}, 'WEB_PAGE_TYPE_WATCH');
     const d = win.document;
     const player = d.createElement('ytlr-watch-default');
-    // The controls fade as YouTube fades them (longhands: what the engine computes).
+    // The controls fade as YouTube fades them; the clock does not copy it.
     player.innerHTML =
       '<div class="fader" style="transition-property: transform, opacity; transition-duration: 0.5s, 0.35s; ' +
       'transition-timing-function: ease, cubic-bezier(0.4, 0, 0.2, 1)">' +
@@ -430,9 +430,13 @@ function boot(cfg, bodyClass, timers) {
     await flush();
     t('the attribute alone hides the clock, in the same turn (no debounce)', hidden());
     t(
-      "the clock fades with the controls' own opacity transition",
-      clock.style.transition === 'opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-      clock.style.transition
+      "the clock does not take the controls' fade: it shows and hides at once",
+      clock.style.transition === '' &&
+        win
+          .getComputedStyle(clock)
+          .transitionDuration.split(',')
+          .every((d) => parseFloat(d) === 0 || d.trim() === ''),
+      clock.style.transition + ' / ' + win.getComputedStyle(clock).transitionDuration
     );
     player.setAttribute('hybridnavfocusable', 'false');
     await flush();
@@ -460,7 +464,7 @@ function boot(cfg, bodyClass, timers) {
     await flush();
     t('a re-mounted player is watched too', hidden());
     t(
-      'with no fade on the new player the clock keeps its own',
+      'a re-mounted player sets no fade on the clock either',
       clock.style.transition === '',
       clock.style.transition
     );
@@ -520,6 +524,75 @@ function boot(cfg, bodyClass, timers) {
   {
     const { win } = boot({ showWatch: false }, 'WEB_PAGE_TYPE_BROWSE');
     t('showWatch off: no clock element', !win.document.querySelector('.ytaf-watch'));
+  }
+  {
+    const { win } = boot({ showWatch: 'off' }, 'WEB_PAGE_TYPE_BROWSE');
+    t("Display Time in UI 'off': no clock element", !win.document.querySelector('.ytaf-watch'));
+  }
+
+  // ---- Date + Time, in the TV's language and date order ------------------------------
+  {
+    /** The clock's text on a page whose language is `lang`, showing `mode`. */
+    const clockIn = (lang, mode) => {
+      const page = createPage({
+        html: '<!doctype html><html><body class="WEB_PAGE_TYPE_BROWSE"><ytlr-app></ytlr-app></body></html>',
+        config: { showWatch: mode },
+        setup(w) {
+          Object.defineProperty(w.navigator, 'language', { get: () => lang });
+          // 27 October, 00:49 local time.
+          const fixed = new Date(2026, 9, 27, 0, 49).getTime();
+          const RealDate = w.Date;
+          w.Date = class extends RealDate {
+            constructor(...args) {
+              super(...(args.length ? args : [fixed]));
+            }
+            static now() {
+              return fixed;
+            }
+          };
+        }
+      });
+      const el = page.win.document.querySelector('.ytaf-watch');
+      return { page, text: el && el.textContent };
+    };
+    const us = clockIn('en-US', 'datetime').text;
+    t('Date + Time in American English: "10/27 12:49 AM"', us === '10/27 12:49 AM', us);
+    const gb = clockIn('en-GB', 'datetime').text;
+    t(
+      'Date + Time in British English: day first, 24-hour: "27/10 00:49"',
+      gb === '27/10 00:49',
+      gb
+    );
+    const de = clockIn('de-DE', 'datetime').text;
+    t('Date + Time in German: "27.10. 00:49"', de === '27.10. 00:49', de);
+    const time = clockIn('en-US', 'time').text;
+    t('Time alone: "12:49 AM"', time === '12:49 AM', time);
+
+    // Switching in the panel rebuilds the clock with the date.
+    const { page } = clockIn('en-US', 'time');
+    const w = page.win;
+    pressOn(w, KEYS.GREEN, w.document.body);
+    for (let i = 0; i < 20; i++) page.pump();
+    const row = cycleRow(w, 'Display Time in UI', '#ytaf-page-main');
+    row.focus();
+    pressOn(w, KEYS.RIGHT, row);
+    t(
+      'setup: the row now reads Date + Time',
+      /Date \+ Time/.test(row.textContent),
+      row.textContent
+    );
+    const clocks = w.document.querySelectorAll('.ytaf-watch');
+    t(
+      'switched to Date + Time in the panel: one clock, now with the date',
+      clocks.length === 1 && clocks[0].textContent === '10/27 12:49 AM',
+      clocks.length + ' ' + (clocks[0] && clocks[0].textContent)
+    );
+    pressOn(w, KEYS.RIGHT, row);
+    t(
+      'and Off removes it',
+      /Off/.test(row.textContent) && !w.document.querySelector('.ytaf-watch'),
+      row.textContent
+    );
   }
 
   // ---- the clock keeps to the minute, and is right again on return ----
@@ -639,9 +712,13 @@ function boot(cfg, bodyClass, timers) {
       String(formats.n)
     );
     await showPanel(win);
-    const box = panelCheckbox(win, 'Display Time in UI');
-    t('setup: the Display Time in UI checkbox is on', !!box && box.checked === true);
-    box.click();
+    const row = cycleRow(win, 'Display Time in UI', '#ytaf-page-main');
+    t(
+      'setup: the Display Time in UI row reads Time',
+      !!row && row.querySelector('.ytaf-value').textContent === 'Time'
+    );
+    row.focus();
+    pressOn(win, KEYS.LEFT, row);
     await wait(20);
     t('turned off at runtime: the clock element is removed', !d.querySelector('.ytaf-watch'));
     const ticksAtDestroy = formats.n;
@@ -656,7 +733,7 @@ function boot(cfg, bodyClass, timers) {
       'a focus change after the destroy does not bring the clock back',
       !d.querySelector('.ytaf-watch')
     );
-    box.click();
+    pressOn(win, KEYS.RIGHT, row);
     await wait(20);
     const again = d.querySelector('.ytaf-watch');
     t(

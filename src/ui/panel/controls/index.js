@@ -5,6 +5,7 @@ import './controls.css';
 export { createConfigCheckbox, setUnavailable } from './checkbox.js';
 export { createSection } from './section.js';
 export {
+  createChoiceControl,
   createLogoControl,
   createVideoCodecControl,
   createThemeControl,

@@ -92,6 +92,8 @@ const full = [
   test(null, 'tests/unit/shortcut-actions-test.cjs'),
   test(null, 'tests/unit/hide-controls-test.cjs'),
   test(null, 'tests/unit/core-log-test.cjs'),
+  test(null, 'tests/unit/playback-speed-test.cjs'),
+  test(null, 'tests/unit/build-config-test.cjs'),
   { build: 'build', flavour: 'legacy', title: 'legacy build (webOS 3 to 6)' },
   test('legacy', 'tests/smoke/bundle-check.cjs'),
   // Each build's launcher page under its own engine.
@@ -130,6 +132,8 @@ const full = [
   test('legacy', 'tests/behaviour/screensaver-fix-test.cjs'),
   test('legacy', 'tests/behaviour/logo-style-test.cjs'),
   test('legacy', 'tests/behaviour/hooks-and-fixes-test.cjs'),
+  test('legacy', 'tests/behaviour/dearrow-test.cjs'),
+  test('legacy', 'tests/behaviour/playback-speed-test.cjs'),
   { build: 'build:modern', flavour: 'modern', title: 'webOS 22+ build' },
   test('modern', 'tests/smoke/bundle-check.cjs'),
   { test: 'tests/smoke/launch-test.cjs', needs: 'modern', args: [launcher, 'modern'] },
@@ -156,7 +160,9 @@ const full = [
   test('modern', 'tests/behaviour/video-quality-test.cjs'),
   test('modern', 'tests/behaviour/screensaver-fix-test.cjs'),
   test('modern', 'tests/behaviour/logo-style-test.cjs'),
-  test('modern', 'tests/behaviour/hooks-and-fixes-test.cjs')
+  test('modern', 'tests/behaviour/hooks-and-fixes-test.cjs'),
+  test('modern', 'tests/behaviour/dearrow-test.cjs'),
+  test('modern', 'tests/behaviour/playback-speed-test.cjs')
 ];
 
 const scriptName = (script) => script.replace(/^tests\//, '').replace(/\.cjs$/, '');

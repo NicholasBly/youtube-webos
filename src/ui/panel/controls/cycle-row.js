@@ -150,6 +150,13 @@ function createAlignedCycleControl(configKey, displayMap) {
   return control;
 }
 
+/**
+ * A row among checkbox rows that cycles `configKey` through the values of
+ * `displayMap` (value -> label): the DeArrow choices and the clock.
+ */
+export const createChoiceControl = (configKey, displayMap) =>
+  createAlignedCycleControl(configKey, displayMap);
+
 /** The YouTube Logo row (Default, Premium, Hidden). */
 export const createLogoControl = () => createAlignedCycleControl('logoStyle', logoStyles);
 

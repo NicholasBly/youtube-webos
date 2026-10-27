@@ -24,9 +24,12 @@ const flavour = process.argv[3] || 'legacy';
 // budget: the size in bytes the built file must stay under.
 // iifeLimit: how many function expressions called on the spot may sit inside
 // another function (see the check below).
+// The webOS 22+ budget went from 175 to 255 KiB with 0.8.5 b2: the playback
+// speed engine (~45 KiB, src/vendor/playback-speed) and DeArrow's title
+// formatter (~33 KiB, src/vendor/dearrow) are in that build only.
 const FLAVOURS = {
   legacy: { ecmaVersion: 5, budget: 240 * 1024, iifeLimit: 40 },
-  modern: { ecmaVersion: 2022, budget: 175 * 1024, iifeLimit: 20 }
+  modern: { ecmaVersion: 2022, budget: 255 * 1024, iifeLimit: 20 }
 };
 
 const report = createReport();
@@ -196,6 +199,15 @@ for (const [what, marker] of ALIASED_AWAY[otherFlavour]) {
     marker
   );
 }
+
+// The panel heading's version (src/core/version.js), as webpack wrote it: the
+// test-build workflow sets YTAF_BUILD, and the label carries it then.
+const { version } = require(path.join(ROOT, 'package.json'));
+const label = version + (process.env.YTAF_BUILD ? ` b${process.env.YTAF_BUILD.trim()}` : '');
+report.check(
+  `the bundle names its version in the panel heading ("YouTube Extended ${label}")`,
+  source.indexOf(`YouTube Extended ${label}`) !== -1
+);
 
 report.note(`${flavour} bundle: ${bytes} bytes (${kb(bytes)}), budget ${kb(spec.budget)}`);
 report.check(

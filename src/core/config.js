@@ -13,7 +13,10 @@ export {
   sbModesHighlight,
   forcePreviewModes,
   videoCodecModes,
-  uiThemes
+  uiThemes,
+  dearrowTitleFormats,
+  dearrowThumbnailFallbacks,
+  clockModes
 } from './config-options.js';
 
 const CONFIG_KEY = 'ytaf-configuration';
@@ -33,15 +36,19 @@ function loadStoredConfig() {
 }
 
 /**
- * Every option of this build: the stored value where there is one, else the
- * default. A key the store holds that this build does not have (a setting
- * from an older one) is left out, so the next write drops it from storage.
+ * Every option of this build: the stored value where there is one (through the
+ * option's `upgrade` when it has one: a value an older build stored), else the
+ * default. A key the store holds that this build does not have (a setting from
+ * an older one) is left out, so the next write drops it from storage.
  */
 function buildConfig(stored) {
   const config = {};
   for (const [key, option] of configOptions) {
-    config[key] =
-      stored && Object.prototype.hasOwnProperty.call(stored, key) ? stored[key] : option.default;
+    if (stored && Object.prototype.hasOwnProperty.call(stored, key)) {
+      config[key] = option.upgrade ? option.upgrade(stored[key]) : stored[key];
+    } else {
+      config[key] = option.default;
+    }
   }
   if (stored && typeof stored === 'object') {
     const leftover = Object.keys(stored).filter((key) => !configOptions.has(key));

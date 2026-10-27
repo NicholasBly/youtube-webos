@@ -22,7 +22,7 @@ import { installCodecHooks } from './features/force-codec/index.js';
 import { installBufferLimit } from './hooks/buffer-limit.js';
 
 import { SELECTORS } from './core/selectors.js';
-import { handleLaunch, extractLaunchParams } from './core/launch.js';
+import { handleLaunch, extractLaunchParams, hasLaunchTarget } from './core/launch.js';
 import { attemptActiveBypass, resetActiveBypass } from './features/auto-login/index.js';
 import { isWebOS25, simulatorMode, getWebOSVersion } from './core/webos.js';
 import { initBlockWebOSCast } from './features/block-webos-cast.ts';
@@ -38,6 +38,8 @@ import './features/screensaver-fix/index.js';
 import './features/comments-fix.js';
 import './features/watch/index.js';
 import './features/lang-settings-fix.ts';
+// Installs itself once its setting is on; the legacy build has a stand-in.
+import './features/playback-speed/index.js';
 import { createLogger } from './core/log.js';
 
 const log = createLogger('Main');
@@ -75,7 +77,11 @@ document.addEventListener(
       log.info('Relaunch detected on Account Selector. Triggering bypass.');
       attemptActiveBypass(true);
     }
-    handleLaunch(evt.detail);
+    // A plain relaunch has nothing to open: going to #/ would leave YouTube on
+    // the video it is playing but end SponsorBlock and the dislike counter
+    // for it (core/per-video.js sees a page without a video).
+    if (hasLaunchTarget(evt.detail)) handleLaunch(evt.detail);
+    else log.info('Plain relaunch: staying on the current page');
   },
   true
 );
