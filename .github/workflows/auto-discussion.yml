@@ -1,84 +1,169 @@
 name: Auto-Post Test Updates
+
+# A push to `test` whose commit title reads "0.8.5 build 2" is test build 2 of
+# 0.8.5: this workflow tests it, builds the packages with the build number in
+# them (the settings panel heading then reads "YouTube Extended 0.8.5 b2"),
+# puts them on a pre-release (tag v0.8.5-b2), and posts the links and the
+# commit's patch notes (its body) in the "0.8.5 test builds" discussion.
+# Any other commit title: nothing is built or posted.
+#
+# The packages are built here, so there is no need to build them on your PC or
+# commit them in dist/ for a test build any more. A pre-release made by this
+# workflow starts no other workflow (GitHub does not run workflows for what a
+# workflow's own token does), so the Homebrew repository is never updated
+# with a test build; build_repo.yml also skips pre-releases.
+
 on:
   push:
     branches:
       - test
 
 permissions:
-  contents: read
+  contents: write # the pre-release and its tag
   discussions: write
 
+# One test build at a time, in push order.
+concurrency:
+  group: test-builds
+  cancel-in-progress: false
+
 jobs:
-  post-comment:
+  test-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Post to Discussion Thread
+      - name: Read the version and build number from the commit title
+        id: title
+        run: |
+          TITLE=$(git log -1 --pretty=%s)
+          # "0.8.5 build 2" (or "0.8.5 b2"), at the start of the title.
+          if [[ "$TITLE" =~ ^([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]+(build|b)[[:space:]]*([0-9]+) ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            BUILD="${BASH_REMATCH[3]}"
+            {
+              echo "version=$VERSION"
+              echo "build=$BUILD"
+              echo "tag=v$VERSION-b$BUILD"
+            } >> "$GITHUB_OUTPUT"
+            echo "Test build $BUILD of $VERSION"
+            PKG_VERSION=$(node -p "require('./package.json').version")
+            if [ "$PKG_VERSION" != "$VERSION" ]; then
+              echo "::warning::The commit title says $VERSION but package.json says $PKG_VERSION: the panel will show $PKG_VERSION b$BUILD."
+            fi
+          else
+            echo "No 'X.Y.Z build N' at the start of the commit title ($TITLE): nothing to build or post."
+          fi
+
+      - name: Set up Node.js
+        if: steps.title.outputs.build != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      # No install scripts: only the webOS CLI has any (an optional native SSH
+      # binding), and the build, the tests and ares-package do not need it.
+      - name: Install
+        if: steps.title.outputs.build != ''
+        run: npm ci --ignore-scripts
+
+      # Formatting, lint, types, the code map, both builds and every test
+      # script. When this fails, nothing is posted: run `npm run format` and
+      # `npm run codemap` on your PC (or ask for the failure to be fixed),
+      # commit, and push again.
+      - name: Test
+        if: steps.title.outputs.build != ''
+        env:
+          YTAF_BUILD: ${{ steps.title.outputs.build }}
+        run: npm test
+
+      - name: Build the packages
+        if: steps.title.outputs.build != ''
+        env:
+          YTAF_BUILD: ${{ steps.title.outputs.build }}
+          VERSION: ${{ steps.title.outputs.version }}
+        run: |
+          mkdir -p out
+          # Packages committed in dist/ would be packed into the new ones.
+          rm -f dist/*.ipk
+          BASE="youtube.leanback.v4_${VERSION}_b${YTAF_BUILD}_all"
+          # webpack empties dist/ (its .ipk files aside) on every build, and
+          # ares-package names the package from appinfo.json, so each one is
+          # packaged into a folder of its own and renamed.
+          pack() {
+            rm -rf pkg && mkdir pkg
+            npx ares-package -n dist -o pkg
+            mv pkg/*.ipk "out/$1.ipk"
+          }
+          npx webpack --mode=production && pack "$BASE"
+          npx webpack --mode=production --env modern && pack "${BASE}_webOS22+"
+          ls -l out
+
+      - name: Publish the pre-release
+        if: steps.title.outputs.build != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.title.outputs.tag }}
+          VERSION: ${{ steps.title.outputs.version }}
+          BUILD: ${{ steps.title.outputs.build }}
         run: |
-          # 1. Get commit title and body (patch notes)
+          # The same build pushed again replaces its pre-release.
+          gh release delete "$TAG" --repo "${{ github.repository }}" --cleanup-tag --yes 2>/dev/null || true
+          git log -1 --pretty=%b > notes.md
+          gh release create "$TAG" out/*.ipk \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --prerelease \
+            --title "$VERSION build $BUILD (test)" \
+            --notes-file notes.md
+
+      - name: Post to Discussion Thread
+        if: steps.title.outputs.build != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.title.outputs.tag }}
+          VERSION: ${{ steps.title.outputs.version }}
+        run: |
           TITLE=$(git log -1 --pretty=%s)
           BODY=$(git log -1 --pretty=%b)
-
-          # 2. Extract the version number (e.g., grabs "0.8.2" from "0.8.2 build 1")
-          VERSION=$(echo "$TITLE" | grep -oP '^[0-9]+\.[0-9]+\.[0-9]+' || true)
-
-          if [ -z "$VERSION" ]; then
-            echo "Could not find a version number in the title: $TITLE"
-            exit 0
-          fi
 
           TARGET_TITLE="$VERSION test builds"
           echo "Looking for discussion thread titled: $TARGET_TITLE"
 
-          # 3. Search for the existing discussion thread
           DISCUSSIONS_JSON=$(gh discussion list --repo ${{ github.repository }} --category "General" --limit 100 --json number,title)
-          
-          # 4. Safely extract the discussion number
           DISCUSSION_NUMBER=$(echo "$DISCUSSIONS_JSON" | jq -r '.. | objects | select(.title == "'"$TARGET_TITLE"'") | .number' | head -n 1)
 
-          # If the thread doesn't exist yet, create it automatically
+          # The thread is created the first time.
           if [ -z "$DISCUSSION_NUMBER" ] || [ "$DISCUSSION_NUMBER" == "null" ]; then
             echo "Thread '$TARGET_TITLE' not found. Creating it now..."
             NEW_URL=$(gh discussion create --repo ${{ github.repository }} \
               --category "General" \
               --title "$TARGET_TITLE" \
               --body "Running list of test builds for version $VERSION.")
-            
-            # gh create outputs the URL. We grab the number at the end
             DISCUSSION_NUMBER=$(echo "$NEW_URL" | awk -F'/' '{print $NF}')
           fi
 
-          # Final safety check before posting
           if [ -z "$DISCUSSION_NUMBER" ]; then
             echo "Critical Error: Could not determine Discussion Number."
             exit 1
           fi
 
-          # 5. Find the updated .ipk files inside the dist/ folder
-          MODERN_PATH=$(ls dist/*"${VERSION}"*webOS22*.ipk 2>/dev/null | head -n 1 || true)
-          STD_PATH=$(ls dist/*"${VERSION}"*.ipk 2>/dev/null | grep -v "webOS22" | head -n 1 || true)
+          # The download links as GitHub gives them for the pre-release's files.
+          gh release view "$TAG" --repo ${{ github.repository }} --json assets \
+            --jq '.assets[] | [.name, .url] | @tsv' | sort > assets.tsv
+          {
+            echo "$TITLE - https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+            echo
+            while IFS=$'\t' read -r NAME URL; do
+              echo "[$NAME]($URL)"
+              echo
+            done < assets.tsv
+            echo "### Patch Notes"
+            echo
+            echo "$BODY"
+          } > comment_body.md
 
-          # Extract just the filename for clean markdown link labels
-          MODERN_NAME=$(basename "$MODERN_PATH" 2>/dev/null || true)
-          STD_NAME=$(basename "$STD_PATH" 2>/dev/null || true)
-
-          # 6. Construct the layout for the comment
-          cat <<EOF > comment_body.md
-          $TITLE - https://github.com/${{ github.repository }}/commit/${{ github.sha }}
-
-          [$STD_NAME](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/$STD_PATH?raw=true)
-          
-          [$MODERN_NAME](https://github.com/${{ github.repository }}/blob/${{ github.sha }}/$MODERN_PATH?raw=true)
-
-          ### Patch Notes
-
-          $BODY
-          EOF
-
-          # 7. Post the comment into the thread
-          gh discussion comment $DISCUSSION_NUMBER --repo ${{ github.repository }} --body-file comment_body.md
+          gh discussion comment "$DISCUSSION_NUMBER" --repo ${{ github.repository }} --body-file comment_body.md
           echo "Successfully posted to discussion thread #$DISCUSSION_NUMBER"
