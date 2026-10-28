@@ -21,6 +21,7 @@ function applyChrome38Downgrade(win) {
   rm(win.Object, 'values', 'Object.values');              // Chrome 54
   rm(win.Object, 'fromEntries', 'Object.fromEntries');    // Chrome 73
   rm(win.Object, 'getOwnPropertyDescriptors', 'Object.getOwnPropertyDescriptors'); // 54
+  rm(win.Object, 'hasOwn', 'Object.hasOwn');              // Chrome 93
   rm(win.Array, 'from', 'Array.from');                    // Chrome 45
   rm(win.Array, 'of', 'Array.of');                        // Chrome 45
   rm(win.String, 'raw', 'String.raw');                    // Chrome 41

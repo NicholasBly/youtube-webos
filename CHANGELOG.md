@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+## Added
+### Cosmetic Filtering
+
+- "Remove AI Videos" and "Mark AI Videos" (both off by default and mutually exclusive). Removal requires Ad Blocking and applies on the same browse surfaces as Remove Live Videos, using a list of AI labels learned from previously rendered videos; a newly encountered AI-labelled card is briefly visible and receives the "AI" badge before it can be removed on later visits. "Mark AI Videos" draws an "AI" badge over thumbnails on every page, independent of Ad Blocking. Neither feature affects the playing video.
+
 ## [0.8.4] - 2026/09/29
 
 ## Added

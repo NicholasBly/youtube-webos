@@ -3,6 +3,8 @@ import { isShortsPage } from './utils';
 import { getWebOSVersion } from './webos-utils';
 import { FetchRegistry } from './hooks';
 import { upgradeResponseThumbnails, thumbnailHookRequired } from './thumbnail-quality.js';
+import { extractAiVideoId } from './ai-video-id.js';
+import { isAiVideoStored } from './ai-video-store.js';
 
 const DEBUG = false;
 const EMOJI_DEBUG = false; 
@@ -52,6 +54,7 @@ const CONFIG_KEYS = {
   TRACKING: 'enableTrackingBlock',
   SHORTS: 'removeGlobalShorts',
   LIVE: 'removeLiveVideos',
+  AI: 'removeAiVideos',
   LIVE_GAMES: 'removeTopLiveGames',
   MOST_RELEVANT: 'removeMostRelevant',
   GUEST_PROMPTS: 'hideGuestSignInPrompts',
@@ -86,6 +89,7 @@ const cfgFlags = {
   enableTrackingBlock: false,
   removeGlobalShorts: false,
   removeLiveVideos: false,
+  removeAiVideos: false,
   removeTopLiveGames: false,
   removeMostRelevant: false,
   hideGuestPrompts: false,
@@ -102,6 +106,7 @@ function recomputeFilterFlags() {
   cfgFlags.enableTrackingBlock = !!cfgSnapshot[CONFIG_KEYS.TRACKING];
   cfgFlags.removeGlobalShorts = !!cfgSnapshot[CONFIG_KEYS.SHORTS];
   cfgFlags.removeLiveVideos = !!cfgSnapshot[CONFIG_KEYS.LIVE];
+  cfgFlags.removeAiVideos = !!cfgSnapshot[CONFIG_KEYS.AI];
   cfgFlags.removeTopLiveGames = !!cfgSnapshot[CONFIG_KEYS.LIVE_GAMES];
   cfgFlags.removeMostRelevant = !!cfgSnapshot[CONFIG_KEYS.MOST_RELEVANT];
   cfgFlags.hideGuestPrompts = !!cfgSnapshot[CONFIG_KEYS.GUEST_PROMPTS];
@@ -114,6 +119,7 @@ function recomputeFilterFlags() {
     cfgFlags.enableTrackingBlock ||
     cfgFlags.removeGlobalShorts ||
     cfgFlags.removeLiveVideos ||
+    cfgFlags.removeAiVideos ||
     cfgFlags.removeTopLiveGames ||
     cfgFlags.removeMostRelevant ||
     cfgFlags.hideGuestPrompts ||
@@ -855,7 +861,7 @@ function processSectionListOptimized(contents, config, needsContentFiltering, co
 // 150 KB browse response meant ~10k redundant node visits per parse.
 function filterItemsOptimized(items, config, needsContentFiltering, skipEmoji) {
   if (!Array.isArray(items) || items.length === 0) return items;
-  const { enableAdBlock, removeGlobalShorts, removeLiveVideos, hideGuestPrompts } = config;
+  const { enableAdBlock, removeGlobalShorts, removeLiveVideos, removeAiVideos, hideGuestPrompts } = config;
   const enableLegacyEmojiFix = skipEmoji ? false : config.enableLegacyEmojiFix;
   if (!removeGlobalShorts && !removeLiveVideos && !needsContentFiltering) return items;
 
@@ -876,6 +882,10 @@ function filterItemsOptimized(items, config, needsContentFiltering, skipEmoji) {
     }
 
     if (keep && removeLiveVideos && isLiveItem(item, true)) keep = false;
+    if (keep && enableAdBlock && removeAiVideos) {
+      const videoId = extractAiVideoId(item);
+      if (videoId && isAiVideoStored(videoId)) keep = false;
+    }
 
     if (keep) {
       if (enableLegacyEmojiFix) findAndProcessText(item, 20);
