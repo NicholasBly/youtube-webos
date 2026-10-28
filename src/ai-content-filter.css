@@ -1,0 +1,22 @@
+/* A card with no positioning of its own gets a containing block for the badge. */
+[data-ytaf-ai-badge='static'] {
+  position: relative;
+}
+
+/* "AI" badge over the top-left corner of the thumbnail. Drawn as a pseudo-element
+   so nothing is inserted into YouTube's own markup. */
+[data-ytaf-ai-badge]::after {
+  content: 'AI';
+  position: absolute;
+  top: 1vh;
+  left: 1vh;
+  z-index: 10;
+  padding: 0.3vh 0.9vh;
+  border-radius: 0.6vh;
+  background: rgba(0, 0, 0, 0.8);
+  border: 0.2vh solid #fff;
+  color: #fff;
+  font: bold 2vh/1.2 Roboto, Arial, sans-serif;
+  letter-spacing: 0.1vh;
+  pointer-events: none;
+}
