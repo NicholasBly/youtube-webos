@@ -18,14 +18,13 @@ import { showNotification } from './notifications.js';
  *   Three levers, all of which only ever *narrow* what the player will accept:
  *
  *     1. MediaSource.isTypeSupported - the capability probe the player runs to
- *        decide which formats to ask the server for. This is the lever that
- *        actually changes the negotiation, because the answer feeds the codec
- *        list sent upstream.
+ *        decide which formats to ask the server for. Narrowed only for 'Avoid
+ *        AV1' (see narrowingProbes): the player also probes the platform itself
+ *        through H.264 and VP9 strings.
  *     2. HTMLMediaElement#canPlayType - the same question asked at the element,
- *        for the paths that go there instead.
+ *        for the paths that go there instead, narrowed under the same rule.
  *     3. streamingData.adaptiveFormats / .formats - the offer that comes back.
- *        Stripped as belt and braces, in case a path trusts the offer over its
- *        own probe.
+ *        This enforces a pinned codec: the player can only play what is offered.
  *
  *   Narrowing only is deliberate: a forced codec is never reported as supported
  *   when the platform says it is not. The worst this can do is leave the player
@@ -148,6 +147,18 @@ function narrowing() {
   return installed && mode !== 'auto' && !unsatisfiable;
 }
 
+/**
+ * Whether the capability probes are narrowed too. Only for 'no_av1': YouTube's
+ * player also uses H.264 and VP9 probes to test the platform itself (H.264 with
+ * one attribute at a time - width, height, framerate, bitrate, eotf - and VP9 at
+ * 3840x2160), so declining them under a pinned codec makes it conclude the set
+ * cannot do 4K and cap playback at 480p. A pinned codec is enforced through the
+ * format list alone, which is the only source of streams the player has.
+ */
+function narrowingProbes() {
+  return narrowing() && mode === 'no_av1';
+}
+
 /** Ask the platform, through the untouched probe, whether a codec is real here. */
 function platformSupports(codec) {
   const probes = CODEC_PROBES[codec];
@@ -258,7 +269,7 @@ function installHooks() {
   if (window.MediaSource && typeof MediaSource.isTypeSupported === 'function') {
     origIsTypeSupported = MediaSource.isTypeSupported;
     MediaSource.isTypeSupported = function (type) {
-      if (narrowing() && typeof type === 'string' && isVideoMime(type)) {
+      if (narrowingProbes() && typeof type === 'string' && isVideoMime(type)) {
         const codec = detectCodec(type);
         if (codec !== null && !allowsCodec(codec)) {
           debugLog('declined', type);
@@ -273,7 +284,7 @@ function installHooks() {
   if (window.HTMLMediaElement) {
     origCanPlayType = HTMLMediaElement.prototype.canPlayType;
     HTMLMediaElement.prototype.canPlayType = function (type) {
-      if (narrowing() && typeof type === 'string' && isVideoMime(type)) {
+      if (narrowingProbes() && typeof type === 'string' && isVideoMime(type)) {
         const codec = detectCodec(type);
         if (codec !== null && !allowsCodec(codec)) return '';
       }

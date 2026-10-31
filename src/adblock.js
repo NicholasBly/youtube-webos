@@ -158,6 +158,9 @@ const SCHEMA_REGISTRY = {
 
 let origParse = JSON.parse;
 let isHooked = false;
+// Whether hookedParse is in the JSON.parse chain. It stays there, passing calls through, when another
+// module (force-codec.js) has wrapped it since: restoring origParse would drop that module's hook too.
+let inChain = false;
 
 // --- CORE FUNCTIONS ---
 
@@ -398,7 +401,7 @@ function hookedParse(text, reviver) {
   // (localStorage reads, config, per-tile metadata) and none of them can be a
   // filterable response, so those calls must cost as close to nothing as
   // possible on top of the native parse.
-  if (!anyFilterEnabled || !text || text.length < 500) {
+  if (!isHooked || !anyFilterEnabled || !text || text.length < 500) {
     return origParse.call(this, text, reviver);
   }
 
@@ -1001,10 +1004,13 @@ export function initAdblock() {
   if (isHooked) return;
   if (DEBUG) console.info('[AdBlock] Initializing hybrid hook (Debug Mode: ' + DEBUG + ')');
 
-  origParse = JSON.parse;
-  // Assigned directly rather than wrapped in a forwarding closure: that
-  // wrapper added a call frame to every JSON.parse in the app.
-  JSON.parse = hookedParse;
+  if (!inChain) {
+    origParse = JSON.parse;
+    // Assigned directly rather than wrapped in a forwarding closure: that
+    // wrapper added a call frame to every JSON.parse in the app.
+    JSON.parse = hookedParse;
+    inChain = true;
+  }
   isHooked = true;
 }
 
@@ -1012,8 +1018,11 @@ export function destroyAdblock() {
   if (!isHooked) return;
   if (DEBUG) console.info('[AdBlock] Restoring JSON.parse');
   
-  JSON.parse = origParse;
   isHooked = false;
+  if (JSON.parse === hookedParse) {
+    JSON.parse = origParse;
+    inChain = false;
+  }
 }
 
 initAdblock();
