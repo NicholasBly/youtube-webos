@@ -473,7 +473,7 @@ Stops handling keys (the panel closed).
 
 > The five pages of the options panel. Each builder returns its page element; the panel appends it and decides when it is built (Main up front, the rest one per frame once the panel is on screen).
 
-249 lines · imports [core/config.js](core.md#mod-config-js), [features/dearrow/index.js](features-dearrow.md#mod-index-js), [features/playback-speed/index.js](features-playback-speed.md#mod-index-js), [core/guest-mode.js](core.md#mod-guest-mode-js), [core/webos.js](core.md#mod-webos-js), [ui/dom.js](ui.md#mod-dom-js), [core/config-options.js](core.md#mod-config-options-js), [ui/panel/controls/index.js](#mod-controls-index-js) · imported by [ui/panel/panel.js](#mod-panel-js)
+253 lines · imports [core/config.js](core.md#mod-config-js), [features/dearrow/index.js](features-dearrow.md#mod-index-js), [features/playback-speed/index.js](features-playback-speed.md#mod-index-js), [core/guest-mode.js](core.md#mod-guest-mode-js), [core/webos.js](core.md#mod-webos-js), [ui/dom.js](ui.md#mod-dom-js), [core/config-options.js](core.md#mod-config-options-js), [ui/panel/controls/index.js](#mod-controls-index-js) · imported by [ui/panel/panel.js](#mod-panel-js)
 
 <a id="fn-pages-js-helpline"></a>
 **`helpLine(text)`** · arrow · L34–34
@@ -541,12 +541,12 @@ The Shortcuts page: one row per configurable key.
 - **Calls:** [ui/dom.js › createElement](ui.md#fn-dom-js-createelement), [ui/panel/controls/cycle-row.js › createShortcutControl](#fn-controls-cycle-row-js-createshortcutcontrol)
 
 <a id="fn-pages-js-builduitweakspage"></a>
-**`buildUITweaksPage()`** · function, exported · L207–249
+**`buildUITweaksPage()`** · function, exported · L207–253
 
 The UI Tweaks page: shelf opacity, previews, titles, rows ahead, Liquid Glass, the theme, the emoji fix on webOS 3/4, and playback speed where the TV can (webOS 23 and newer).
 
 - **Calls:** [core/webos.js › getWebOSVersion](core.md#fn-webos-js-getwebosversion), [ui/dom.js › createElement](ui.md#fn-dom-js-createelement), [ui/panel/controls/checkbox.js › createConfigCheckbox](#fn-controls-checkbox-js-createconfigcheckbox), [ui/panel/controls/cycle-row.js › createOpacityControl](#fn-controls-cycle-row-js-createopacitycontrol), [ui/panel/controls/cycle-row.js › createPreviewControl](#fn-controls-cycle-row-js-createpreviewcontrol), [ui/panel/controls/cycle-row.js › createThemeControl](#fn-controls-cycle-row-js-createthemecontrol), [ui/panel/controls/section.js › createSection](#fn-controls-section-js-createsection), [helpLine](#fn-pages-js-helpline)
-- **Settings:** uses `videoShelfOpacity`, `forcePreviews`, `fixMultilineTitles`, `fixSearchFont`, `enableRowsAhead`, `removeBlackBorders`, `enableLegacyEmojiFix`, `enablePlaybackSpeed`
+- **Settings:** uses `videoShelfOpacity`, `forcePreviews`, `fixMultilineTitles`, `fixSearchFont`, `removeLowMemoryStyle`, `enableRowsAhead`, `removeBlackBorders`, `enableLegacyEmojiFix`, `enablePlaybackSpeed`
 
 <a id="mod-panel-js"></a>
 

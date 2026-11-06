@@ -35,6 +35,7 @@ import './ui/index.js';
 import './features/sponsorblock/index.js';
 import './features/emoji-font/index.js';
 import './features/screensaver-fix/index.js';
+import './features/app-quality-fix.js';
 import './features/comments-fix.js';
 import './features/watch/index.js';
 import './features/lang-settings-fix.ts';
