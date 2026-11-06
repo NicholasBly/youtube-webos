@@ -74,6 +74,8 @@ function boot(cfg, blob) {
   const fetched = [];
   const images = [];
   const draws = [];
+  // Blob URLs made and freed (`blob` only).
+  const blobs = { made: [], revoked: [] };
   const page = createPage({
     config: Object.assign({ enableDeArrow: true, dearrowTitleFormatting: 'disable' }, cfg),
     setup(win) {
@@ -120,9 +122,12 @@ function boot(cfg, blob) {
           const blobOf = { size: Math.round(this.width * this.height * 0.15), src: this._src };
           setTimeout(() => done(blobOf), 0);
         };
-        win.URL.createObjectURL = (b) =>
-          'blob:https://www.youtube.com/SMALL#' + encodeURIComponent(b.src);
-        win.URL.revokeObjectURL = () => {};
+        win.URL.createObjectURL = (b) => {
+          const url = 'blob:https://www.youtube.com/SMALL#' + encodeURIComponent(b.src);
+          blobs.made.push(url);
+          return url;
+        };
+        win.URL.revokeObjectURL = (url) => blobs.revoked.push(url);
       } else {
         // No toBlob, as on webOS 3 and 4: the data URL path, which names its source here,
         // as long as a real JPEG data URL of that size (about 0.3 characters a pixel).
@@ -134,7 +139,7 @@ function boot(cfg, blob) {
       }
     }
   });
-  return Object.assign(page, { fetched, images, draws });
+  return Object.assign(page, { fetched, images, draws, blobs });
 }
 
 /** Renders the tiles of a parsed response the way the TV app does: thumbnail as a background, title as text. */
@@ -316,6 +321,67 @@ function shown(win, id) {
     parsedOff.contents[0].tileRenderer.metadata.tileMetadataRenderer.title.simpleText ===
       "You WON'T believe THIS phone"
   );
+
+  // ---- switched off: the thumbnail copies are freed, not kept for the session --------
+  {
+    const p = boot({}, true);
+    await wait(50);
+    const text2 = response([tile('custom00001', 'Clickbait'), tile('downvoted01', 'Original')]);
+    render(p.win, p.win.JSON.parse(text2));
+    await waitFor(
+      () => shown(p.win, 'custom00001').small && shown(p.win, 'downvoted01').small,
+      2000
+    );
+    await wait(300);
+    const made = p.blobs.made.slice();
+    t('setup: the tiles show blob copies', made.length >= 2, String(made.length));
+    press(p.win, KEYS.GREEN, p.win.document.body);
+    for (let i = 0; i < 20; i++) p.pump();
+    Array.from(p.win.document.querySelectorAll('.ytaf-tab-btn'))
+      .find((x) => x.textContent === 'DeArrow')
+      .click();
+    const enable = p.win.document.querySelector('#ytaf-page-dearrow input[type="checkbox"]');
+    enable.click();
+    await wait(300);
+    t(
+      'switched off: the originals are back on screen',
+      shown(p.win, 'custom00001').thumb.indexOf('/vi/custom00001/hqdefault.jpg') !== -1 &&
+        shown(p.win, 'custom00001').title === 'Clickbait' &&
+        shown(p.win, 'downvoted01').thumb.indexOf('/vi/downvoted01/hqdefault.jpg') !== -1,
+      JSON.stringify([shown(p.win, 'custom00001'), shown(p.win, 'downvoted01')])
+    );
+    t(
+      'and every copy DeArrow made is freed',
+      made.every((u) => p.blobs.revoked.indexOf(u) !== -1),
+      JSON.stringify({ made: made.length, revoked: p.blobs.revoked.length })
+    );
+    const drawsOff = p.draws.length;
+    const fetchedOff = p.fetched.length;
+    await wait(300);
+    t(
+      'with nothing drawn or asked for after it',
+      p.draws.length === drawsOff && p.fetched.length === fetchedOff,
+      `${p.draws.length - drawsOff} draws, ${p.fetched.length - fetchedOff} lookups`
+    );
+    // Back on: what YouTube draws next is decided again.
+    enable.click();
+    render(p.win, p.win.JSON.parse(text2));
+    await waitFor(() => p.win.document.querySelectorAll('ytlr-tile-renderer').length === 4, 2000);
+    const latest = Array.from(
+      p.win.document.querySelectorAll('ytlr-tile-renderer[data-test-id="custom00001"]')
+    ).pop();
+    await waitFor(
+      () => latest.querySelector('yt-formatted-string').textContent === 'the iPhone review',
+      2000
+    );
+    t(
+      'switched back on: DeArrow works again on what YouTube draws next',
+      latest.querySelector('yt-formatted-string').textContent === 'the iPhone review' &&
+        latest.querySelector('ytlr-thumbnail-details').style.backgroundImage.indexOf('SMALL#') !==
+          -1,
+      latest.querySelector('yt-formatted-string').textContent
+    );
+  }
 
   // ---- the Blank and Original fallbacks, and a settings change ----------------------
   {

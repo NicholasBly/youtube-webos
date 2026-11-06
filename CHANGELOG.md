@@ -130,6 +130,8 @@ A big one under the hood. Most of this release is based on @mirijanristic's fork
 
 ### General
 
++ YouTube Logo: fixed the Premium logo turning back into the standard YouTube logo after the "Who's watching" screen or coming back to the app. "Default" now leaves the logo exactly as YouTube draws it - https://github.com/NicholasBly/youtube-webos/issues/214
+
 + Fixed the picture staying frozen for about 20 seconds when you press play after a video screensaver (Aerial, the gallery) ran: the video now restarts in place within a few seconds. Thanks @magicsk (#198)
 
 + Reduce Telemetry & Tracking: fixed Subscriptions channel tabs (and channel page tabs) showing another channel's videos. The tabs keep the one tracking value YouTube matches their content with. Thanks @anilkusaksiz (#196)

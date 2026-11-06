@@ -159,59 +159,33 @@ Called only for a command that has the key (hooks/resolve-command.ts).
 
 ## features/logo-style.js
 
-> YouTube wordmark selection.
+> YouTube wordmark selection (Interface -> YouTube Logo).
 >
 > YouTube ships two wordmarks and picks between them by account status:
 >
 > premium  .../livingroom/premium/wordmark_truncated/fullcolor_white_57_2x_v2.png default  .../livingroom/youtube/wordmark/fullcolor_white_57_2x_v2.png
 >
-> They are different widths, and the header positions the element with an absolute `left` that is calculated from that width, so swapping the image alone leaves it misaligned. Both values are set together.
->
-> Applied once: the element is rendered by the app shell rather than per page, so navigating or watching a video does not revert it. A short bounded wait, then the page changes, cover a shell that has not painted yet; nothing is left listening once it is applied.
+> Default leaves the header as YouTube draws it. Premium and Hidden are a class on &lt;html> that logo-style.css keys its rules on, never writes to the element: YouTube builds the header again after the profile picker and when the app comes back from the background, and a new header takes the rules as it is drawn, where styles written on the old element were lost with it (issue #214). The rules are !important, which outranks the inline left, width and background-image YouTube draws the logo with.
 
-99 lines · imports [core/config.js](core.md#mod-config-js), [core/dom.js](core.md#mod-dom-js), [core/selectors.js](core.md#mod-selectors-js) · imported by [userScript.js](app.md#mod-userscript-js)
-
-**At load:**
-
-- **Selectors:** `LOGO`, `THUMBNAIL_TILE`
-
-<a id="fn-logo-style-js-applytoelement"></a>
-**`applyToElement(logo, style)`** · function · L49–61
-
-Applies a logo style to one header logo (image, position, width), writing only what differs; false when the logo has no image yet.
-
-- **Called by:** [applyLogoStyle](#fn-logo-style-js-applylogostyle)
-- **Selectors:** `THUMBNAIL_TILE`
-- **Browser:** `querySelector`
+39 lines · imports [core/config.js](core.md#mod-config-js) · imported by [userScript.js](app.md#mod-userscript-js)
 
 <a id="fn-logo-style-js-applylogostyle"></a>
-**`applyLogoStyle()`** · function · L64–72
+**`applyLogoStyle()`** · function · L27–33
 
-Apply the configured style now, if the header exists yet.
+Sets the class of the configured style on &lt;html>, and takes the others off.
 
-- **Calls:** [core/config.js › configRead](core.md#fn-config-js-configread), [applyToElement](#fn-logo-style-js-applytoelement)
-- **Called by:** [initLogoStyle](#fn-logo-style-js-initlogostyle), [initLogoStyle.onPageUpdate](#fn-logo-style-js-initlogostyle-onpageupdate)
+- **Calls:** [core/config.js › configRead](core.md#fn-config-js-configread)
+- **Called by:** [initLogoStyle](#fn-logo-style-js-initlogostyle)
 - **Settings:** reads `logoStyle`
-- **Selectors:** `LOGO`
-- **Browser:** `querySelector`
 
 <a id="fn-logo-style-js-initlogostyle"></a>
-**`initLogoStyle()`** · function, exported · L78–99
+**`initLogoStyle()`** · function, exported · L36–39
 
-Applies the YouTube Logo setting now or, while the header is not painted yet, by a short poll and then on every page change until it takes; follows the setting.
+Applies the YouTube Logo setting, and follows it.
 
-- **Calls:** [core/config.js › configAddChangeListener](core.md#fn-config-js-configaddchangelistener), [core/dom.js › pollUntil](core.md#fn-dom-js-polluntil), [applyLogoStyle](#fn-logo-style-js-applylogostyle), [initLogoStyle.onPageUpdate](#fn-logo-style-js-initlogostyle-onpageupdate)
+- **Calls:** [core/config.js › configAddChangeListener](core.md#fn-config-js-configaddchangelistener), [applyLogoStyle](#fn-logo-style-js-applylogostyle)
 - **Called by:** [userScript.js (at load)](app.md#mod-userscript-js)
 - **Settings:** listens to `logoStyle`
-- **Events:** listens to `ytaf-page-update`
-
-<a id="fn-logo-style-js-initlogostyle-onpageupdate"></a>
-**`initLogoStyle.onPageUpdate()`** · arrow · L86–88
-
-The app shell may not have painted yet: a short poll, and past it every page change tries again (an account picked late, a slow cold start) until one applies, rather than a MutationObserver on the document for the life of the session.
-
-- **Calls:** [applyLogoStyle](#fn-logo-style-js-applylogostyle)
-- **Called by:** [initLogoStyle](#fn-logo-style-js-initlogostyle)
 
 <a id="mod-playback-speed-absent-js"></a>
 

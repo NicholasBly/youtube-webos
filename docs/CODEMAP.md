@@ -2,7 +2,7 @@
 
 Generated from the source by `tools/codemap.mjs`; do not edit it by hand. After changing code, run `npm run codemap` (`npm test` fails while the map is out of date). A function's description is the comment right above it in the source: improve it there.
 
-**167 modules, 1047 named functions**, 786 of them described (the perf monitor in `src/dev/` is a development tool, not in release builds, and is listed in short form). This page is the index; each folder has a page in [codemap/](codemap/) with every function of its modules. The overview (boot order, the hooks, how a response flows through the filters) is [ARCHITECTURE.md](ARCHITECTURE.md); the same data for scripts is [codemap.json](codemap.json).
+**167 modules, 1045 named functions**, 784 of them described (the perf monitor in `src/dev/` is a development tool, not in release builds, and is listed in short form). This page is the index; each folder has a page in [codemap/](codemap/) with every function of its modules. The overview (boot order, the hooks, how a response flows through the filters) is [ARCHITECTURE.md](ARCHITECTURE.md); the same data for scripts is [codemap.json](codemap.json).
 
 How to read it:
 
@@ -35,7 +35,7 @@ How to read it:
 | [core/per-video.js](codemap/core.md#mod-per-video-js) | 73 | 7 | One instance per watched video, shared by SponsorBlock and the dislike counter: created when the watch page shows a video, kept across hash changes within the same video, torn down when the video changes, off the watc... |
 | [core/player-state.js](codemap/core.md#mod-player-state-js) | 10 | 0 | The YouTube player API's playback states, as getPlayerState() reports them and as the `yt-player-state-change` event (features/video-quality) carries them. |
 | [core/remote.js](codemap/core.md#mod-remote-js) | 114 | 3 | The remote control: key codes, the colour-key lookup, and synthetic key presses dispatched on the app's behalf. |
-| [core/selectors.js](codemap/core.md#mod-selectors-js) | 99 | 0 | Class names, ids and tag names YouTube's leanback app puts on the page. |
+| [core/selectors.js](codemap/core.md#mod-selectors-js) | 98 | 0 | Class names, ids and tag names YouTube's leanback app puts on the page. |
 | [core/speed-cap.js](codemap/core.md#mod-speed-cap-js) | 14 | 2 | Whether the playback speed feature holds the video at 1080p: above 1.25x a TV cannot decode 2160p fast enough, so it caps the quality, and Force Max Quality (features/video-quality) waits meanwhile. |
 | [core/styles.js](codemap/core.md#mod-styles-js) | 20 | 2 | Every stylesheet of the bundle in one &lt;style> element, put in the page once. |
 | [core/text.js](codemap/core.md#mod-text-js) | 17 | 3 | Small string helpers shared across modules. |
@@ -70,7 +70,7 @@ How to read it:
 | [features/dearrow/constants.js](codemap/features-dearrow.md#mod-constants-js) | 70 | 0 | DeArrow's servers, limits and timings (features/dearrow). |
 | [features/dearrow/formatter-absent.js](codemap/features-dearrow.md#mod-formatter-absent-js) | 19 | 1 | What the legacy build (webOS 3 to 6) has in place of formatter.js (webpack.config.js): no title formatting, so the panel shows no formatting rows and titles keep the case they were written in. |
 | [features/dearrow/formatter.js](codemap/features-dearrow.md#mod-formatter-js) | 13 | 0 | DeArrow's title formatter (src/vendor/dearrow, GPL-3.0), as the feature uses it. |
-| [features/dearrow/index.js](codemap/features-dearrow.md#mod-index-js) | 121 | 6 | DeArrow (https://dearrow.ajay.app): crowdsourced titles and thumbnails in place of clickbait ones, on the tiles of shelves and grids. |
+| [features/dearrow/index.js](codemap/features-dearrow.md#mod-index-js) | 123 | 6 | DeArrow (https://dearrow.ajay.app): crowdsourced titles and thumbnails in place of clickbait ones, on the tiles of shelves and grids. |
 | [features/dearrow/log.js](codemap/features-dearrow.md#mod-log-js) | 4 | 0 | The logger of the feature's modules: their messages carry [DeArrow] (core/log.js). |
 | [features/dearrow/lookup.js](codemap/features-dearrow.md#mod-lookup-js) | 195 | 13 | Asking DeArrow about videos and deciding what their tiles show: a queue of lookups (four at a time, in screen order), the branding answer per video, then the title and the thumbnail, with each improvement handed to th... |
 | [features/dearrow/state.js](codemap/features-dearrow.md#mod-state-js) | 29 | 2 | What DeArrow knows, shared by its modules: the videos seen, and the generation that a settings change or a wipe bumps so that work started before it does not write stale output. |
@@ -90,7 +90,7 @@ How to read it:
 | [features/force-codec/log.js](codemap/features-force-codec.md#mod-log-js) | 4 | 0 | The logger of the feature's modules: their messages carry [ForceCodec] (core/log.js). |
 | [features/force-codec/state.js](codemap/features-force-codec.md#mod-state-js) | 25 | 0 | What the force-codec modules share: the pinned modes and the mutable state on `fc`: the active mode, whether the hooks are in, the saved originals and the per-video fallback flag. |
 | [features/lang-settings-fix.ts](codemap/features.md#mod-lang-settings-fix-ts) | 57 | 2 | Adapted from https://github.com/reisxd/TizenTube/blob/522f83cc012d5b1c75181b651e084a3afa280323/mods/resolveCommand.js |
-| [features/logo-style.js](codemap/features.md#mod-logo-style-js) | 99 | 4 | YouTube wordmark selection. |
+| [features/logo-style.js](codemap/features.md#mod-logo-style-js) | 39 | 2 | YouTube wordmark selection (Interface -> YouTube Logo). |
 | [features/playback-speed/controller.js](codemap/features-playback-speed.md#mod-controller-js) | 239 | 18 | The playback speed: what it is, changing it, and the audio engine that plays the sound at it. |
 | [features/playback-speed/index.js](codemap/features-playback-speed.md#mod-index-js) | 118 | 5 | Playback speed (experimental, off by default; webOS 23 and newer, the webOS 22+ build only). |
 | [features/playback-speed/log.js](codemap/features-playback-speed.md#mod-log-js) | 4 | 0 | The logger of the feature's modules: their messages carry [PlaybackSpeed] (core/log.js). |
@@ -287,7 +287,7 @@ Events the app creates and listens to: its own (`ytaf-*`), YouTube's and the bro
 | `waiting` |  | [vendor/playback-speed/audio-engine.js › AudioEngine.attachVideo](codemap/vendor-playback-speed.md#fn-audio-engine-js-audioengine-attachvideo) |
 | `webOSRelaunch` |  | [userScript.js (at load)](codemap/app.md#mod-userscript-js) |
 | `yt-player-state-change` | [features/video-quality/player-state.js › handleStateChange](codemap/features-video-quality.md#fn-player-state-js-handlestatechange) | [features/playback-speed/index.js › install](codemap/features-playback-speed.md#fn-index-js-install), [features/sponsorblock/video-events.js › bindWindowEvents](codemap/features-sponsorblock.md#fn-video-events-js-bindwindowevents), [features/watch/index.js › Watch.setupGlobalListeners](codemap/features-watch.md#fn-index-js-watch-setupgloballisteners) |
-| `ytaf-page-update` | [core/page-state.js › updatePageState](codemap/core.md#fn-page-state-js-updatepagestate) | [core/dom.js (at load)](codemap/core.md#mod-dom-js), [features/auto-login/whos-watching.js › setupActiveBypassListener](codemap/features-auto-login.md#fn-whos-watching-js-setupactivebypasslistener), [features/emoji-font/index.js (at load)](codemap/features-emoji-font.md#mod-index-js), [features/logo-style.js › initLogoStyle](codemap/features.md#fn-logo-style-js-initlogostyle), [features/screensaver-fix/index.js (at load)](codemap/features-screensaver-fix.md#mod-index-js), [features/video-quality/index.js › setupListeners](codemap/features-video-quality.md#fn-index-js-setuplisteners), [features/watch/index.js › Watch.setupGlobalListeners](codemap/features-watch.md#fn-index-js-watch-setupgloballisteners) |
+| `ytaf-page-update` | [core/page-state.js › updatePageState](codemap/core.md#fn-page-state-js-updatepagestate) | [core/dom.js (at load)](codemap/core.md#mod-dom-js), [features/auto-login/whos-watching.js › setupActiveBypassListener](codemap/features-auto-login.md#fn-whos-watching-js-setupactivebypasslistener), [features/emoji-font/index.js (at load)](codemap/features-emoji-font.md#mod-index-js), [features/screensaver-fix/index.js (at load)](codemap/features-screensaver-fix.md#mod-index-js), [features/video-quality/index.js › setupListeners](codemap/features-video-quality.md#fn-index-js-setuplisteners), [features/watch/index.js › Watch.setupGlobalListeners](codemap/features-watch.md#fn-index-js-watch-setupgloballisteners) |
 
 ## YouTube selectors
 
@@ -304,8 +304,7 @@ The `SELECTORS` table (`src/core/selectors.js`): what each entry matches, its no
 | `PLAYER_CONTAINER` | `ytlr-player__player-container` |  | [features/screensaver-fix/index.js › findWatchVideo](codemap/features-screensaver-fix.md#fn-index-js-findwatchvideo) |
 | `WATCH_PLAYER` | `ytlr-watch-default` | The watch page's player shell; the clock hides while it holds focus. | [features/watch/index.js (at load)](codemap/features-watch.md#mod-index-js), [features/watch/index.js › Watch.updateVisibility](codemap/features-watch.md#fn-index-js-watch-updatevisibility) |
 | `HTML5_PLAYER_FALLBACK` | `.html5-video-player` | Older player root, tried when PLAYER_ID is not on the page. | [features/playback-speed/index.js › getPlayer](codemap/features-playback-speed.md#fn-index-js-getplayer), [ui/shortcuts/actions.js › ACTIONS.toggle_subs.run](codemap/ui-shortcuts.md#fn-actions-js-actions-toggle-subs-run) |
-| `LOGO` | `ytlr-logo-entity` |  | [features/logo-style.js (at load)](codemap/features.md#mod-logo-style-js), [features/logo-style.js › applyLogoStyle](codemap/features.md#fn-logo-style-js-applylogostyle) |
-| `THUMBNAIL_TILE` | `ytlr-thumbnail-details` |  | [features/dearrow/sweep.js › sweepTiles](codemap/features-dearrow.md#fn-sweep-js-sweeptiles), [features/logo-style.js (at load)](codemap/features.md#mod-logo-style-js), [features/logo-style.js › applyToElement](codemap/features.md#fn-logo-style-js-applytoelement) |
+| `THUMBNAIL_TILE` | `ytlr-thumbnail-details` |  | [features/dearrow/sweep.js › sweepTiles](codemap/features-dearrow.md#fn-sweep-js-sweeptiles) |
 | `TILE` | `ytlr-tile-renderer` | A tile of a shelf or grid, and the title text inside one (DeArrow). | [features/dearrow/sweep.js › sweepTiles](codemap/features-dearrow.md#fn-sweep-js-sweeptiles) |
 | `TILE_METADATA` | `ytlr-tile-metadata-renderer` |  | [features/dearrow/sweep.js › sweepBadges](codemap/features-dearrow.md#fn-sweep-js-sweepbadges) |
 | `TILE_TITLE` | `ytlr-tile-metadata-renderer yt-formatted-string` |  | [features/dearrow/sweep.js › sweepTiles](codemap/features-dearrow.md#fn-sweep-js-sweeptiles) |

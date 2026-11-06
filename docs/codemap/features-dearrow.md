@@ -45,7 +45,7 @@ The title with the ">" markers taken out and the ends trimmed, as the formatter'
 >
 > A branding lookup takes a request per video, which the JSON.parse hook cannot wait for, so it works in two halves: 1. applyDeArrow() runs in the parse hook (adblock/parse-hook.js) and writes what is already decided into every tile of the response, so those render right the first time; videos not seen before are queued for a lookup (lookup.js). 2. When a lookup lands, the tiles already on screen are patched (sweep.js). Tiles are rebuilt as the user moves around, so the sweep also follows every parse and key press. What is shown follows the extension: the top title or thumbnail unless it is the original or voted below zero (a locked one always wins), with the extension's own title formatter (src/vendor/dearrow).
 
-121 lines · imports [core/config.js](core.md#mod-config-js), [features/dearrow/constants.js](#mod-constants-js), [features/dearrow/state.js](#mod-state-js), [features/dearrow/thumbs.js](#mod-thumbs-js), [features/dearrow/tiles.js](#mod-tiles-js), [features/dearrow/sweep.js](#mod-sweep-js), [features/dearrow/lookup.js](#mod-lookup-js), [features/dearrow/log.js](#mod-log-js) · imported by [features/adblock/parse-hook.js](features-adblock.md#mod-parse-hook-js), [ui/panel/pages.js](ui-panel.md#mod-pages-js)
+123 lines · imports [core/config.js](core.md#mod-config-js), [features/dearrow/constants.js](#mod-constants-js), [features/dearrow/state.js](#mod-state-js), [features/dearrow/thumbs.js](#mod-thumbs-js), [features/dearrow/tiles.js](#mod-tiles-js), [features/dearrow/sweep.js](#mod-sweep-js), [features/dearrow/lookup.js](#mod-lookup-js), [features/dearrow/log.js](#mod-log-js) · imported by [features/adblock/parse-hook.js](features-adblock.md#mod-parse-hook-js), [ui/panel/pages.js](ui-panel.md#mod-pages-js)
 
 **At load:**
 
@@ -75,15 +75,15 @@ Sweeps the rendered tiles SWEEP_DELAY from now, once however often it is asked.
 Puts YouTube's own titles and thumbnails back on screen; a pending sweep would undo it.
 
 - **Calls:** [cancelSweep](#fn-index-js-cancelsweep), [features/dearrow/sweep.js › sweepTiles](#fn-sweep-js-sweeptiles)
-- **Called by:** [onSettingsChange](#fn-index-js-onsettingschange), [wipe](#fn-index-js-wipe)
+- **Called by:** [wipe](#fn-index-js-wipe)
 
 <a id="fn-index-js-wipe"></a>
 **`wipe()`** · function · L56–64
 
-Forgets everything (too many videos remembered): originals back on screen and in the stored responses while they are still known, then the videos, the queue and the thumbnails.
+Forgets everything (too many videos remembered, or DeArrow switched off): originals back on screen and in the stored responses while they are still known, then the videos, the queue and the thumbnails, whose blobs are freed.
 
 - **Calls:** [restoreTiles](#fn-index-js-restoretiles), [features/dearrow/lookup.js › clearQueue](#fn-lookup-js-clearqueue), [features/dearrow/state.js › nextGeneration](#fn-state-js-nextgeneration), [features/dearrow/thumbs.js › forgetThumbs](#fn-thumbs-js-forgetthumbs), [features/dearrow/tiles.js › unpatchResponses](#fn-tiles-js-unpatchresponses)
-- **Called by:** [applyDeArrow](#fn-index-js-applydearrow)
+- **Called by:** [applyDeArrow](#fn-index-js-applydearrow), [onSettingsChange](#fn-index-js-onsettingschange)
 
 <a id="fn-index-js-applydearrow"></a>
 **`applyDeArrow(data, responseType)`** · function, exported · L72–80
@@ -94,11 +94,11 @@ The parse hook's step (adblock/parse-hook.js) for an InnerTube response: its vid
 - **Called by:** [features/adblock/parse-hook.js › filterResponse](features-adblock.md#fn-parse-hook-js-filterresponse)
 
 <a id="fn-index-js-onsettingschange"></a>
-**`onSettingsChange()`** · function · L87–101
+**`onSettingsChange()`** · function · L89–103
 
-A DeArrow setting changed: everything is decided again (answers already fetched are reused), newest first, since those are the videos likely on screen; turned off, YouTube's own come back everywhere.
+A DeArrow setting changed: everything is decided again (answers already fetched are reused), newest first, since those are the videos likely on screen. Turned off, YouTube's own come back everywhere and everything DeArrow kept goes with them: up to BLOB_BUDGET of thumbnail copies would otherwise stay in memory for the rest of the session.
 
-- **Calls:** [core/config.js › configRead](core.md#fn-config-js-configread), [restoreTiles](#fn-index-js-restoretiles), [features/dearrow/lookup.js › clearQueue](#fn-lookup-js-clearqueue), [features/dearrow/lookup.js › queueLookups](#fn-lookup-js-queuelookups), [features/dearrow/state.js › nextGeneration](#fn-state-js-nextgeneration), [features/dearrow/tiles.js › unpatchResponses](#fn-tiles-js-unpatchresponses)
+- **Calls:** [core/config.js › configRead](core.md#fn-config-js-configread), [wipe](#fn-index-js-wipe), [features/dearrow/lookup.js › clearQueue](#fn-lookup-js-clearqueue), [features/dearrow/lookup.js › queueLookups](#fn-lookup-js-queuelookups), [features/dearrow/state.js › nextGeneration](#fn-state-js-nextgeneration), [features/dearrow/tiles.js › unpatchResponses](#fn-tiles-js-unpatchresponses)
 - **Called by:** [at load](#mod-index-js)
 - **Settings:** reads `enableDeArrow`
 

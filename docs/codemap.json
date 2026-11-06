@@ -200,7 +200,6 @@
    "header": "DOM helpers shared by the features: the cached <video> lookup, waiting for a node to appear, and a plain debounce.",
    "imports": [],
    "importedBy": [
-    "features/logo-style.js",
     "features/return-dislike/panel-observer.js",
     "features/screensaver-fix/index.js",
     "features/sponsorblock/bar.js",
@@ -548,7 +547,7 @@
   },
   {
    "path": "core/selectors.js",
-   "lines": 99,
+   "lines": 98,
    "header": "Class names, ids and tag names YouTube's leanback app puts on the page. Everything that has to recognise a page, the player or a control goes through this one table, so a YouTube markup change is fixed here and nowhere else. Six-letter tokens are YouTube's obfuscated class names and change the most; the comment says what each was observed to be. The app's own ids and classes (ytaf-*, ryd-*) stay with the feature that creates them, and Return YouTube Dislike keeps its panel-internal selectors in its own table.\n\nRead an entry as SELECTORS.NAME, pass it on, iterate it or put it in a template string, but do not call a method on it directly (SELECTORS.NAME.map(...), SELECTORS.NAME.toUpperCase()): the minifier then keeps the whole table in the bundle instead of inlining the entries used.",
    "imports": [],
    "importedBy": [
@@ -557,7 +556,6 @@
     "features/comments-fix.js",
     "features/dearrow/sweep.js",
     "features/emoji-font/text-nodes.js",
-    "features/logo-style.js",
     "features/playback-speed/index.js",
     "features/return-dislike/constants.js",
     "features/return-dislike/injection.js",
@@ -2068,7 +2066,7 @@
   },
   {
    "path": "features/dearrow/index.js",
-   "lines": 121,
+   "lines": 123,
    "header": "DeArrow (https://dearrow.ajay.app): crowdsourced titles and thumbnails in place of clickbait ones, on the tiles of shelves and grids. Off by default; its own page in the options panel.\n\nA branding lookup takes a request per video, which the JSON.parse hook cannot wait for, so it works in two halves: 1. applyDeArrow() runs in the parse hook (adblock/parse-hook.js) and writes what is already decided into every tile of the response, so those render right the first time; videos not seen before are queued for a lookup (lookup.js). 2. When a lookup lands, the tiles already on screen are patched (sweep.js). Tiles are rebuilt as the user moves around, so the sweep also follows every parse and key press. What is shown follows the extension: the top title or thumbnail unless it is the original or voted below zero (a locked one always wins), with the extension's own title formatter (src/vendor/dearrow).",
    "imports": [
     {
@@ -2980,26 +2978,14 @@
   },
   {
    "path": "features/logo-style.js",
-   "lines": 99,
-   "header": "YouTube wordmark selection.\n\nYouTube ships two wordmarks and picks between them by account status:\n\npremium  .../livingroom/premium/wordmark_truncated/fullcolor_white_57_2x_v2.png default  .../livingroom/youtube/wordmark/fullcolor_white_57_2x_v2.png\n\nThey are different widths, and the header positions the element with an absolute `left` that is calculated from that width, so swapping the image alone leaves it misaligned. Both values are set together.\n\nApplied once: the element is rendered by the app shell rather than per page, so navigating or watching a video does not revert it. A short bounded wait, then the page changes, cover a shell that has not painted yet; nothing is left listening once it is applied.",
+   "lines": 39,
+   "header": "YouTube wordmark selection (Interface -> YouTube Logo).\n\nYouTube ships two wordmarks and picks between them by account status:\n\npremium  .../livingroom/premium/wordmark_truncated/fullcolor_white_57_2x_v2.png default  .../livingroom/youtube/wordmark/fullcolor_white_57_2x_v2.png\n\nDefault leaves the header as YouTube draws it. Premium and Hidden are a class on <html> that logo-style.css keys its rules on, never writes to the element: YouTube builds the header again after the profile picker and when the app comes back from the background, and a new header takes the rules as it is drawn, where styles written on the old element were lost with it (issue #214). The rules are !important, which outranks the inline left, width and background-image YouTube draws the logo with.",
    "imports": [
     {
      "from": "core/config.js",
      "names": [
       "configRead",
       "configAddChangeListener"
-     ]
-    },
-    {
-     "from": "core/dom.js",
-     "names": [
-      "pollUntil"
-     ]
-    },
-    {
-     "from": "core/selectors.js",
-     "names": [
-      "SELECTORS"
      ]
     },
     {
@@ -3013,17 +2999,10 @@
    "exports": [
     "initLogoStyle"
    ],
-   "atLoad": {
-    "selectors": [
-     "LOGO",
-     "THUMBNAIL_TILE"
-    ]
-   },
+   "atLoad": {},
    "functions": [
-    "features/logo-style.js#applyToElement",
     "features/logo-style.js#applyLogoStyle",
-    "features/logo-style.js#initLogoStyle",
-    "features/logo-style.js#initLogoStyle.onPageUpdate"
+    "features/logo-style.js#initLogoStyle"
    ]
   },
   {
@@ -8608,7 +8587,6 @@
     "setTimeout"
    ],
    "calledBy": [
-    "features/logo-style.js#initLogoStyle",
     "features/return-dislike/panel-observer.js#pollForPanel",
     "features/sponsorblock/bar.js#scheduleBarRetry",
     "features/video-quality/index.js#pollForPlayer"
@@ -14032,7 +14010,6 @@
     "features/dearrow/sweep.js#sweepTiles"
    ],
    "calledBy": [
-    "features/dearrow/index.js#onSettingsChange",
     "features/dearrow/index.js#wipe"
    ]
   },
@@ -14046,7 +14023,7 @@
     56,
     64
    ],
-   "description": "Forgets everything (too many videos remembered): originals back on screen and in the stored responses while they are still known, then the videos, the queue and the thumbnails.",
+   "description": "Forgets everything (too many videos remembered, or DeArrow switched off): originals back on screen and in the stored responses while they are still known, then the videos, the queue and the thumbnails, whose blobs are freed.",
    "calls": [
     "features/dearrow/index.js#restoreTiles",
     "features/dearrow/lookup.js#clearQueue",
@@ -14055,7 +14032,8 @@
     "features/dearrow/tiles.js#unpatchResponses"
    ],
    "calledBy": [
-    "features/dearrow/index.js#applyDeArrow"
+    "features/dearrow/index.js#applyDeArrow",
+    "features/dearrow/index.js#onSettingsChange"
    ]
   },
   {
@@ -14087,13 +14065,13 @@
    "params": "",
    "exported": false,
    "lines": [
-    87,
-    101
+    89,
+    103
    ],
-   "description": "A DeArrow setting changed: everything is decided again (answers already fetched are reused), newest first, since those are the videos likely on screen; turned off, YouTube's own come back everywhere.",
+   "description": "A DeArrow setting changed: everything is decided again (answers already fetched are reused), newest first, since those are the videos likely on screen. Turned off, YouTube's own come back everywhere and everything DeArrow kept goes with them: up to BLOB_BUDGET of thumbnail copies would otherwise stay in memory for the rest of the session.",
    "calls": [
     "core/config.js#configRead",
-    "features/dearrow/index.js#restoreTiles",
+    "features/dearrow/index.js#wipe",
     "features/dearrow/lookup.js#clearQueue",
     "features/dearrow/lookup.js#queueLookups",
     "features/dearrow/state.js#nextGeneration",
@@ -15608,55 +15586,26 @@
    ]
   },
   {
-   "id": "features/logo-style.js#applyToElement",
-   "name": "applyToElement",
-   "kind": "function",
-   "params": "logo, style",
-   "exported": false,
-   "lines": [
-    49,
-    61
-   ],
-   "description": "Applies a logo style to one header logo (image, position, width), writing only what differs; false when the logo has no image yet.",
-   "selectors": [
-    "THUMBNAIL_TILE"
-   ],
-   "browser": [
-    "querySelector"
-   ],
-   "calledBy": [
-    "features/logo-style.js#applyLogoStyle"
-   ]
-  },
-  {
    "id": "features/logo-style.js#applyLogoStyle",
    "name": "applyLogoStyle",
    "kind": "function",
    "params": "",
    "exported": false,
    "lines": [
-    64,
-    72
+    27,
+    33
    ],
-   "description": "Apply the configured style now, if the header exists yet.",
+   "description": "Sets the class of the configured style on <html>, and takes the others off.",
    "calls": [
-    "core/config.js#configRead",
-    "features/logo-style.js#applyToElement"
+    "core/config.js#configRead"
    ],
    "settings": {
     "read": [
      "logoStyle"
     ]
    },
-   "selectors": [
-    "LOGO"
-   ],
-   "browser": [
-    "querySelector"
-   ],
    "calledBy": [
-    "features/logo-style.js#initLogoStyle",
-    "features/logo-style.js#initLogoStyle.onPageUpdate"
+    "features/logo-style.js#initLogoStyle"
    ]
   },
   {
@@ -15666,46 +15615,21 @@
    "params": "",
    "exported": true,
    "lines": [
-    78,
-    99
+    36,
+    39
    ],
-   "description": "Applies the YouTube Logo setting now or, while the header is not painted yet, by a short poll and then on every page change until it takes; follows the setting.",
+   "description": "Applies the YouTube Logo setting, and follows it.",
    "calls": [
     "core/config.js#configAddChangeListener",
-    "core/dom.js#pollUntil",
-    "features/logo-style.js#applyLogoStyle",
-    "features/logo-style.js#initLogoStyle.onPageUpdate"
+    "features/logo-style.js#applyLogoStyle"
    ],
    "settings": {
     "listen": [
      "logoStyle"
     ]
    },
-   "events": {
-    "listen": [
-     "ytaf-page-update"
-    ]
-   },
    "calledBy": [
     "userScript.js#(top level)"
-   ]
-  },
-  {
-   "id": "features/logo-style.js#initLogoStyle.onPageUpdate",
-   "name": "initLogoStyle.onPageUpdate",
-   "kind": "arrow",
-   "params": "",
-   "exported": false,
-   "lines": [
-    86,
-    88
-   ],
-   "description": "The app shell may not have painted yet: a short poll, and past it every page change tries again (an account picked late, a slow cold start) until one applies, rather than a MutationObserver on the document for the life of the session.",
-   "calls": [
-    "features/logo-style.js#applyLogoStyle"
-   ],
-   "calledBy": [
-    "features/logo-style.js#initLogoStyle"
    ]
   },
   {
@@ -28470,7 +28394,6 @@
     "core/dom.js#(top level)",
     "features/auto-login/whos-watching.js#setupActiveBypassListener",
     "features/emoji-font/index.js#(top level)",
-    "features/logo-style.js#initLogoStyle",
     "features/screensaver-fix/index.js#(top level)",
     "features/video-quality/index.js#setupListeners",
     "features/watch/index.js#Watch.setupGlobalListeners"
@@ -28553,21 +28476,11 @@
     "ui/shortcuts/actions.js#ACTIONS.toggle_subs.run"
    ]
   },
-  "LOGO": {
-   "value": "ytlr-logo-entity",
-   "note": "",
-   "usedBy": [
-    "features/logo-style.js#(top level)",
-    "features/logo-style.js#applyLogoStyle"
-   ]
-  },
   "THUMBNAIL_TILE": {
    "value": "ytlr-thumbnail-details",
    "note": "",
    "usedBy": [
-    "features/dearrow/sweep.js#sweepTiles",
-    "features/logo-style.js#(top level)",
-    "features/logo-style.js#applyToElement"
+    "features/dearrow/sweep.js#sweepTiles"
    ]
   },
   "TILE": {

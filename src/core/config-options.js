@@ -41,8 +41,8 @@ export const uiThemes = {
   'classic-red': 'Classic Red'
 };
 
-// The header wordmark: YouTube's own, the Premium one, or none; what each
-// takes is in features/logo-style.js.
+// The header wordmark: YouTube's own (left as YouTube draws it), the Premium
+// one, or none; how each is applied is in features/logo-style.js.
 export const logoStyles = {
   default: 'Default',
   premium: 'Premium',
