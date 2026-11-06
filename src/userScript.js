@@ -19,6 +19,7 @@ import './ui.js'; // Registers the green-key handler, options panel, video-quali
 import './sponsorblock.js';
 import './emoji-font.js';
 import './screensaver-fix.js';
+import './app-quality-fix.js';
 import './yt-fixes.css';
 import './comments-fix.js';
 import './watch.js';
