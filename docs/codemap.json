@@ -21,7 +21,7 @@
   },
   {
    "path": "core/config-options.js",
-   "lines": 283,
+   "lines": 284,
    "header": "Every setting the app knows about, with its default and the label the options panel shows, plus the value tables the cycle controls choose from. An option's `upgrade(stored)` turns a value an older build stored into this build's (core/config.js applies it when the settings load).",
    "imports": [
     {
@@ -80,6 +80,7 @@
    "importedBy": [
     "core/per-video.js",
     "features/adblock/flags.js",
+    "features/app-quality-fix.js",
     "features/auto-login/index.js",
     "features/auto-login/previews.js",
     "features/auto-login/whos-watching.js",
@@ -200,6 +201,7 @@
    "header": "DOM helpers shared by the features: the cached <video> lookup, waiting for a node to appear, and a plain debounce.",
    "imports": [],
    "importedBy": [
+    "features/app-quality-fix.js",
     "features/logo-style.js",
     "features/return-dislike/panel-observer.js",
     "features/screensaver-fix/index.js",
@@ -359,6 +361,7 @@
     "core/webos.js",
     "features/adblock/log.js",
     "features/adblock/parse-hook.js",
+    "features/app-quality-fix.js",
     "features/auto-login/log.js",
     "features/block-webos-cast.ts",
     "features/comments-fix.js",
@@ -1651,6 +1654,54 @@
     "features/adblock/tracking-block.js#destroyTrackingBlock",
     "features/adblock/tracking-block.js#startTrackingBlock",
     "features/adblock/tracking-block.js#startTrackingBlock.sync"
+   ]
+  },
+  {
+   "path": "features/app-quality-fix.js",
+   "lines": 64,
+   "header": "Black boxes behind text. When YouTube's server sends the TV force_memory_saving_mode, YouTube puts `app-quality-root` on <body>, and its own stylesheet then swaps the soft text shadows for solid black boxes behind the player's title, channel line and timestamps. The flag is pushed from the server, so it can appear months after install and survives a reinstall.\n\nTaking the class off <body> brings back the normal styling. Only the CSS changes: the rest of YouTube's memory saving is decided in its own code and stays as it is. YouTube rewrites body.className on navigation, so an observer on <body>'s class attribute takes it off again each time.",
+   "imports": [
+    {
+     "from": "core/config.js",
+     "names": [
+      "configRead",
+      "configAddChangeListener"
+     ]
+    },
+    {
+     "from": "core/dom.js",
+     "names": [
+      "pollUntil"
+     ]
+    },
+    {
+     "from": "core/log.js",
+     "names": [
+      "createLogger"
+     ]
+    }
+   ],
+   "importedBy": [
+    "userScript.js"
+   ],
+   "exports": [],
+   "atLoad": {
+    "calls": [
+     "core/log.js#createLogger",
+     "features/app-quality-fix.js#sync",
+     "core/config.js#configAddChangeListener"
+    ],
+    "settings": {
+     "listen": [
+      "removeLowMemoryStyle"
+     ]
+    }
+   },
+   "functions": [
+    "features/app-quality-fix.js#strip",
+    "features/app-quality-fix.js#start",
+    "features/app-quality-fix.js#stop",
+    "features/app-quality-fix.js#sync"
    ]
   },
   {
@@ -6724,7 +6775,7 @@
   },
   {
    "path": "ui/panel/pages.js",
-   "lines": 249,
+   "lines": 253,
    "header": "The five pages of the options panel. Each builder returns its page element; the panel appends it and decides when it is built (Main up front, the rest one per frame once the panel is on screen).",
    "imports": [
     {
@@ -7644,7 +7695,7 @@
   },
   {
    "path": "userScript.js",
-   "lines": 92,
+   "lines": 93,
    "header": "The script webOS runs inside YouTube's TV site (built as webOSUserScripts/userScript.js). It loads every feature, installs the global hooks and handles launches and relaunches; the order of the imports below is the order things start in (docs/ARCHITECTURE.md).",
    "imports": [
     {
@@ -7742,6 +7793,10 @@
     },
     {
      "from": "features/screensaver-fix/index.js",
+     "names": []
+    },
+    {
+     "from": "features/app-quality-fix.js",
      "names": []
     },
     {
@@ -8324,6 +8379,7 @@
     "core/config.js#assertKey"
    ],
    "calledBy": [
+    "features/app-quality-fix.js#sync",
     "features/auto-login/index.js#initAutoLogin",
     "features/auto-login/previews.js#initPreviews",
     "features/auto-login/whos-watching.js#attemptActiveBypass",
@@ -8409,6 +8465,7 @@
    "calledBy": [
     "core/per-video.js#bootstrapPerVideo",
     "features/adblock/flags.js#(top level)",
+    "features/app-quality-fix.js#(top level)",
     "features/auto-login/index.js#(top level)",
     "features/dearrow/index.js#(top level)",
     "features/emoji-font/index.js#(top level)",
@@ -8608,6 +8665,7 @@
     "setTimeout"
    ],
    "calledBy": [
+    "features/app-quality-fix.js#sync",
     "features/logo-style.js#initLogoStyle",
     "features/return-dislike/panel-observer.js#pollForPanel",
     "features/sponsorblock/bar.js#scheduleBarRetry",
@@ -8997,6 +9055,7 @@
     "core/remote.js#(top level)",
     "core/webos.js#(top level)",
     "features/adblock/log.js#(top level)",
+    "features/app-quality-fix.js#(top level)",
     "features/auto-login/log.js#(top level)",
     "features/block-webos-cast.ts#(top level)",
     "features/comments-fix.js#(top level)",
@@ -13522,6 +13581,83 @@
    ],
    "calledBy": [
     "features/adblock/tracking-block.js#startTrackingBlock"
+   ]
+  },
+  {
+   "id": "features/app-quality-fix.js#strip",
+   "name": "strip",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    26,
+    32
+   ],
+   "description": "Takes the class off <body> if YouTube has put it there.",
+   "calledBy": [
+    "features/app-quality-fix.js#start"
+   ]
+  },
+  {
+   "id": "features/app-quality-fix.js#start",
+   "name": "start",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    35,
+    42
+   ],
+   "description": "Starts stripping the class and watching <body> for it; false while there is no <body> yet.",
+   "calls": [
+    "features/app-quality-fix.js#strip"
+   ],
+   "browser": [
+    "MutationObserver"
+   ],
+   "calledBy": [
+    "features/app-quality-fix.js#sync"
+   ]
+  },
+  {
+   "id": "features/app-quality-fix.js#stop",
+   "name": "stop",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    45,
+    52
+   ],
+   "description": "Stops watching and gives YouTube its class back if it had it.",
+   "calledBy": [
+    "features/app-quality-fix.js#sync"
+   ]
+  },
+  {
+   "id": "features/app-quality-fix.js#sync",
+   "name": "sync",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    55,
+    61
+   ],
+   "description": "Follows the setting: on starts the watch (waiting for <body> if needed), off stops it.",
+   "calls": [
+    "core/config.js#configRead",
+    "core/dom.js#pollUntil",
+    "features/app-quality-fix.js#start",
+    "features/app-quality-fix.js#stop"
+   ],
+   "settings": {
+    "read": [
+     "removeLowMemoryStyle"
+    ]
+   },
+   "calledBy": [
+    "features/app-quality-fix.js#(top level)"
    ]
   },
   {
@@ -23713,7 +23849,7 @@
    "exported": true,
    "lines": [
     207,
-    249
+    253
    ],
    "description": "The UI Tweaks page: shelf opacity, previews, titles, rows ahead, Liquid Glass, the theme, the emoji fix on webOS 3/4, and playback speed where the TV can (webOS 23 and newer).",
    "calls": [
@@ -23732,6 +23868,7 @@
      "forcePreviews",
      "fixMultilineTitles",
      "fixSearchFont",
+     "removeLowMemoryStyle",
      "enableRowsAhead",
      "removeBlackBorders",
      "enableLegacyEmojiFix",
@@ -28111,6 +28248,19 @@
    "other": [
     "ui/panel/pages.js#buildUITweaksPage",
     "ui/styles/html-classes.js#(top level)"
+   ]
+  },
+  "removeLowMemoryStyle": {
+   "label": "Remove Black Text Boxes",
+   "default": true,
+   "listen": [
+    "features/app-quality-fix.js#(top level)"
+   ],
+   "read": [
+    "features/app-quality-fix.js#sync"
+   ],
+   "other": [
+    "ui/panel/pages.js#buildUITweaksPage"
    ]
   },
   "removeBlackBorders": {
