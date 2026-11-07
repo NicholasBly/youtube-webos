@@ -27,6 +27,66 @@
   background-color: rgba(11, 11, 11, 0.5) !important;
 }
 
+/* YouTube positions virtualized shelves and cards with absolute offsets.
+   Scale their shared container so the offsets shrink with the cards. */
+.ytaf-scale-tiles .WEB_PAGE_TYPE_BROWSE ytlr-section-list-renderer > yt-virtual-list,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-section-list-renderer > yt-virtual-list {
+  zoom: var(--ytaf-thumbnail-scale);
+  width: calc(100vw / var(--ytaf-thumbnail-scale)) !important;
+}
+
+/* Keep the clipping windows at viewport size while their tracks are zoomed. */
+.ytaf-scale-tiles .WEB_PAGE_TYPE_BROWSE ytlr-section-list-renderer > yt-virtual-list {
+  min-height: calc((100vh - 6.75rem) / var(--ytaf-thumbnail-scale));
+}
+
+/* The Search results viewport reserves space for its controls above it. */
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-search-results ytlr-search-response-renderer,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-search-results ytlr-section-list-renderer,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-search-results ytlr-section-list-renderer > yt-virtual-list {
+  height: 100% !important;
+}
+
+.ytaf-scale-tiles .WEB_PAGE_TYPE_BROWSE ytlr-section-list-renderer ytlr-shelf-renderer,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-search-results ytlr-section-list-renderer ytlr-shelf-renderer,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_BROWSE ytlr-section-list-renderer ytlr-horizontal-list-renderer,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-search-results ytlr-section-list-renderer ytlr-horizontal-list-renderer,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_BROWSE ytlr-section-list-renderer ytlr-horizontal-list-renderer > yt-virtual-list,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-search-results ytlr-section-list-renderer ytlr-horizontal-list-renderer > yt-virtual-list {
+  width: calc(100vw / var(--ytaf-thumbnail-scale)) !important;
+}
+
+/* Keep the first card beyond the guide when the track scrolls back to its inset. */
+.ytaf-scale-tiles .WEB_PAGE_TYPE_BROWSE ytlr-section-list-renderer ytlr-horizontal-list-renderer > yt-virtual-list,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-search-results ytlr-section-list-renderer ytlr-horizontal-list-renderer > yt-virtual-list {
+  padding-left: calc(6.5rem / var(--ytaf-thumbnail-scale) - 6.5rem);
+  box-sizing: border-box;
+  clip-path: inset(0 0 0 calc(5.75rem / var(--ytaf-thumbnail-scale)));
+}
+
+/* Align shelf headings with the guide inset used by their cards. */
+.ytaf-scale-tiles .WEB_PAGE_TYPE_BROWSE ytlr-section-list-renderer ytlr-shelf-header,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-search-results ytlr-section-list-renderer ytlr-shelf-header {
+  position: relative;
+  left: calc(6.5rem / var(--ytaf-thumbnail-scale) - 6.5rem);
+}
+
+/* Compensate for inherited shelf zoom to reach the chosen text size. */
+.ytaf-scale-tiles .WEB_PAGE_TYPE_BROWSE ytlr-section-list-renderer ytlr-tile-metadata-renderer,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-section-list-renderer ytlr-tile-metadata-renderer,
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-section-list-renderer yt-lockup-metadata-view-model {
+  zoom: var(--ytaf-tile-text-scale);
+}
+
+/* Keep zoomed Search metadata within its own thumbnail column. */
+.ytaf-scale-tiles .WEB_PAGE_TYPE_SEARCH ytlr-section-list-renderer yt-lockup-view-model > yt-lockup-metadata-view-model {
+  box-sizing: border-box;
+  width: 100% !important;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+
 /* Fixes shorts thumbnails */
 .ytLrTileHeaderRendererShorts {
   z-index: -1;
