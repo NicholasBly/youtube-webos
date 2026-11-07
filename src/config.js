@@ -104,6 +104,8 @@ const configOptions = new Map([
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
   ['upgradeThumbnails', { default: false, desc: 'Max Thumbnail Quality' }],
   ['thumbnailQualityMode', { default: 'safe', desc: 'Thumbnail Strategy' }],
+  ['thumbnailScale', { default: '60', desc: 'Thumbnail Size' }],
+  ['tileTextScale', { default: '80', desc: 'Video Tile Text Size' }],
   ['removeGlobalShorts', { default: false, desc: 'Remove Shorts (Global)' }],
   ['removeLiveVideos', { default: false, desc: 'Remove Live Videos (Global)' }],
   ['removeTopLiveGames', { default: false, desc: 'Remove Top Live Games' }],

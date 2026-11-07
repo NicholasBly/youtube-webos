@@ -7,6 +7,7 @@ import './auto-login.js';
 import './return-dislike.js';
 import { initVideoQuality } from './video-quality.js';
 import { initLogoStyle } from './logo-style.js';
+import { reflowHomeShelves } from './home-shelves.js';
 // import { initPlaybackSpeed, stepSpeed, resetSpeed } from './playback-speed.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo } from './utils.js';
@@ -326,6 +327,93 @@ function createAlignedCycleControl(configKey, displayMap) {
 }
 
 const createLogoControl = () => createAlignedCycleControl('logoStyle', logoStyles);
+const tileScales = { 60: '60%', 70: '70%', 80: '80%', 90: '90%', 100: '100%' };
+
+function initTileScales() {
+  const resizedLists = new WeakMap();
+  const horizontalLists = new WeakSet();
+  let thumbnail = 1;
+  let frame = 0;
+
+  const resizeTileLists = () => {
+    frame = 0;
+    if (location.hash === '#/' || !location.hash) {
+      const home = document.querySelector('.WEB_PAGE_TYPE_BROWSE ytlr-section-list-renderer');
+      if (home) reflowHomeShelves(home, thumbnail);
+    }
+    const lists = document.querySelectorAll(
+      '.WEB_PAGE_TYPE_BROWSE ytlr-section-list-renderer yt-virtual-list, ' +
+      '.WEB_PAGE_TYPE_SEARCH ytlr-search-results ytlr-section-list-renderer yt-virtual-list'
+    );
+    for (const list of lists) {
+      // YouTube virtualizes against props.size in rem, independently of CSS.
+      const instance = list.__instance;
+      const props = instance?.props;
+      if (!Number.isFinite(props?.size) || !Array.isArray(props.items) ||
+          typeof props.getSize !== 'function' || typeof instance.A !== 'function') continue;
+
+      if (props.layout === 'horizontal' && !horizontalLists.has(instance)) {
+        const descriptor = Object.getOwnPropertyDescriptor(instance, 'props');
+        if (descriptor?.configurable && descriptor.writable) {
+          let current = props;
+          Object.defineProperty(instance, 'props', {
+            configurable: true,
+            enumerable: descriptor.enumerable,
+            get: () => current,
+            set: next => {
+              const previous = resizedLists.get(instance);
+              if (next === previous?.applied || !Number.isFinite(next?.size) ||
+                  next.layout !== 'horizontal' || thumbnail === 1) {
+                current = next;
+                return;
+              }
+              current = { ...next, size: next.size / thumbnail };
+              resizedLists.set(instance, { original: next, applied: current });
+            }
+          });
+          horizontalLists.add(instance);
+        }
+      }
+
+      const previous = resizedLists.get(instance);
+      const original = previous?.applied === props ? previous.original : props;
+      const size = original.size / thumbnail;
+      if (size === props.size) continue;
+
+      const applied = thumbnail === 1 ? original : { ...original, size };
+      resizedLists.set(instance, { applied, original });
+      instance.props = applied;
+      try {
+        instance.A();
+      } catch {
+        resizedLists.set(instance, { applied: props, original });
+        instance.props = props;
+      }
+    }
+  };
+
+  const scheduleResize = () => {
+    if (!frame) frame = requestAnimationFrame(resizeTileLists);
+  };
+  const observer = new MutationObserver(scheduleResize);
+  window.addEventListener('resize', scheduleResize);
+
+  const sync = () => {
+    thumbnail = Number(configRead('thumbnailScale')) / 100 || 1;
+    const text = Number(configRead('tileTextScale')) / 100 || 1;
+    const root = document.documentElement;
+    root.classList.toggle('ytaf-scale-tiles', thumbnail !== 1 || text !== 1);
+    root.style.setProperty('--ytaf-thumbnail-scale', thumbnail);
+    root.style.setProperty('--ytaf-tile-text-scale', text / thumbnail);
+    observer.disconnect();
+    if (thumbnail !== 1) observer.observe(document.body, { childList: true, subtree: true });
+    scheduleResize();
+  };
+  configAddChangeListener('thumbnailScale', sync);
+  configAddChangeListener('tileTextScale', sync);
+  sync();
+}
+
 const createVideoCodecControl = () => createAlignedCycleControl('forceVideoCodec', videoCodecModes);
 function createThumbnailQualityControl() {
   const control = createAlignedCycleControl('thumbnailQualityMode', thumbnailQualityModes);
@@ -610,7 +698,17 @@ function createOptionsPanel() {
   createVideoCodecControl(),
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
-  pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
+  pageMain.appendChild(createSection('Interface', [
+    createConfigCheckbox('enableAutoLogin'),
+    createConfigCheckbox('upgradeThumbnails'),
+    createThumbnailQualityControl(),
+    createAlignedCycleControl('thumbnailScale', tileScales),
+    createAlignedCycleControl('tileTextScale', tileScales),
+    createLogoControl(),
+    createConfigCheckbox('showWatch'),
+    createConfigCheckbox('enableOledCareMode'),
+    createConfigCheckbox('disableNotifications')
+  ]));
   elmContainer.appendChild(pageMain);
 
   // --- Pages 2-4: built off the critical path ---
@@ -1500,6 +1598,7 @@ if (!menuKeyExists) {
 initGlobalStyles();
 initVideoQuality();
 initLogoStyle();
+initTileScales();
 // initPlaybackSpeed();
 
 // Initial apply (will skip UI elements if they don't exist yet, but handle global styles)
