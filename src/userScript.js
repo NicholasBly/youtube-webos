@@ -10,6 +10,7 @@ import './hooks/json-stringify';
 import './force-codec.js';
 
 import { SELECTORS } from './utils';
+import { configAddChangeListener, configRead } from './config.js';
 import { handleLaunch, extractLaunchParams } from './launch.js';
 import { attemptActiveBypass, resetActiveBypass } from './auto-login.js';
 import { isWebOS25, simulatorMode } from './webos-utils.js';
@@ -26,6 +27,22 @@ import './lang-settings-fix';
 
 import { initBufferLimit } from './hooks/buffer-limit.js';
 import { getWebOSVersion } from './webos-utils.js';
+
+function syncFullAnimations() {
+  const url = new URL(window.location.href);
+  const flag = 'env_forceFullAnimation';
+  if (configRead('fullAnimations') && url.searchParams.get('theme') !== 'k') {
+    if (url.searchParams.get(flag) === '1') return;
+    url.searchParams.set(flag, '1');
+  } else {
+    if (!url.searchParams.has(flag)) return;
+    url.searchParams.delete(flag);
+  }
+  window.location.replace(url.toString());
+}
+
+configAddChangeListener('fullAnimations', syncFullAnimations);
+syncFullAnimations();
 
 if (typeof initBufferLimit === 'function' && getWebOSVersion() <= 4) {
 	initBufferLimit();

@@ -28,7 +28,6 @@ export function extractLaunchParams() {
 
 function getYTURL() {
   const ytURL = new URL('https://www.youtube.com/tv#/');
-  ytURL.searchParams.set('env_forceFullAnimation', '1');
   ytURL.searchParams.set('env_enableWebSpeech', '1');
   ytURL.searchParams.set('env_enableVoice', '1');
   return ytURL;
@@ -82,7 +81,6 @@ export function handleLaunch(params) {
   }
 
   if (ytURL.searchParams.get('theme') === 'k') {
-    ytURL.searchParams.delete('env_forceFullAnimation');
     ytURL.searchParams.delete('env_enableWebSpeech');
     ytURL.searchParams.delete('env_enableVoice');
   }

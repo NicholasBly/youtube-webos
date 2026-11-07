@@ -125,6 +125,7 @@ const configOptions = new Map([
   ['sbMode_highlight', { default: 'seek_bar', desc: 'Highlight' }],
   ['hideEndcards', { default: false, desc: 'Hide Endcards' }],
   ['enableAutoLogin', { default: true, desc: 'Bypass Nag Screens' }],
+  ['fullAnimations', { default: false, desc: 'Full Animations (reloads app)' }],
   ['logoStyle', { default: 'default', desc: 'YouTube Logo' }],
   ['showWatch', { default: false, desc: 'Display Time in UI' }],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],

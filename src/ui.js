@@ -610,7 +610,7 @@ function createOptionsPanel() {
   createVideoCodecControl(),
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
-  pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
+  pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('fullAnimations'), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
   elmContainer.appendChild(pageMain);
 
   // --- Pages 2-4: built off the critical path ---
