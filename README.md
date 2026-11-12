@@ -50,7 +50,7 @@ Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-we
 - [SponsorBlock](https://sponsor.ajay.app/) integration
 - [Autostart](#autostart)
 
-**Note:** Configuration screen can be opened by pressing 🟩 GREEN button on the remote.
+**Note:** Configuration screen can be opened by pressing 🟩 GREEN button on the remote. Magic Remotes without colour keys can use the colour buttons on the webOS on-screen number pad, or point at the gear icon in the bottom-right corner.
 
 ## Pre-requisites
 
@@ -67,6 +67,7 @@ Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-we
 ## Configuration
 
 Configuration screen can be opened by pressing 🟩 GREEN button on the remote.
+On a Magic Remote without colour keys, use the colour buttons on the webOS on-screen number pad, or move the pointer and click the gear icon that appears in the bottom-right corner.
 Black screen / OLED mode can be toggled by pressing 🟥 RED button on the remote.
 
 ### Autostart
