@@ -1525,6 +1525,7 @@ function initPointerSettingsButton() {
   else document.addEventListener('DOMContentLoaded', mount, { once: true });
 
   let hovered = false;
+  let cursorVisible = false;
   let idleTimer = null;
   let lastToggle = 0;
 
@@ -1550,13 +1551,19 @@ function initPointerSettingsButton() {
   const swallow = (e) => { e.preventDefault(); e.stopPropagation(); };
 
   document.addEventListener('cursorStateChange', (e) => {
-    if (e.detail && e.detail.visibility) poke();
+    cursorVisible = !!(e.detail && e.detail.visibility);
+    if (cursorVisible) poke();
     else setShown(false);
   });
-  document.addEventListener('mousemove', poke, true);
+  document.addEventListener('mousemove', () => { cursorVisible = true; poke(); }, true);
 
   gear.addEventListener('mouseenter', () => { hovered = true; });
-  gear.addEventListener('mouseleave', () => { hovered = false; poke(); });
+
+  // Hiding the cursor can fire mouseleave. Don't bring the gear back then.
+  gear.addEventListener('mouseleave', () => {
+    hovered = false;
+    if (cursorVisible) poke();
+  });
   gear.addEventListener('mousedown', swallow, true);
   gear.addEventListener('mouseup', swallow, true);
   gear.addEventListener('click', (e) => { swallow(e); toggle(); }, true);
