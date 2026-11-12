@@ -612,3 +612,32 @@
 .ytaf-settings-section .shortcut-control-row {
   margin: 0 0 0.2vh;
 }
+
+.ytaf-pointer-gear {
+  position: fixed;
+  right: 2.5vh;
+  bottom: 2.5vh;
+  width: 5.5vh;
+  height: 5.5vh;
+  padding: 1.1vh;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: #002840;
+  border: 0.09vh solid rgba(0, 212, 255, 0.4);
+  color: #fff;
+  z-index: 1300;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.ytaf-pointer-gear.shown {
+  opacity: 0.85;
+  pointer-events: auto;
+}
+
+.ytaf-pointer-gear.shown:hover {
+  opacity: 1;
+  transform: scale(1.12);
+  border-color: rgba(0, 212, 255, 0.9);
+}

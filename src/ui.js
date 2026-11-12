@@ -1496,8 +1496,91 @@ if (!menuKeyExists) {
     configWrite('shortcut_key_green', 'config_menu');
 }
 
+// --- Pointer settings button ---
+
+// Magic Remotes sold in some regions have no colour keys. This gear shows
+// only while the pointer is on screen, so button-only remotes never see it.
+
+const GEAR_PATH = 'M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.03 7.03 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 2.4h-3.84a.5.5 0 0 0-.49.42l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.67 8.88a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z';
+const GEAR_IDLE_MS = 6000;
+
+function initPointerSettingsButton() {
+  const gear = document.createElement('div');
+  gear.className = 'ytaf-pointer-gear';
+  // YouTube enforces Trusted Types, so build the icon without innerHTML.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', '100%');
+  svg.setAttribute('fill', 'currentColor');
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', GEAR_PATH);
+  svg.appendChild(path);
+  gear.appendChild(svg);
+
+  // The userscript can run before <body> exists.
+  const mount = () => document.body.appendChild(gear);
+  if (document.body) mount();
+  else document.addEventListener('DOMContentLoaded', mount, { once: true });
+
+  let hovered = false;
+  let cursorVisible = false;
+  let idleTimer = null;
+  let lastToggle = 0;
+
+  const setShown = (shown) => {
+    gear.classList.toggle('shown', shown);
+    if (!shown) hovered = false;
+  };
+
+  const poke = () => {
+    setShown(true);
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => { if (!hovered) setShown(false); }, GEAR_IDLE_MS);
+  };
+
+  // OK on the gear can arrive as a click, an Enter key, or both. Toggle once.
+  const toggle = () => {
+    const now = Date.now();
+    if (now - lastToggle < 400) return;
+    lastToggle = now;
+    showOptionsPanel(!optionsPanelVisible);
+  };
+
+  const swallow = (e) => { e.preventDefault(); e.stopPropagation(); };
+
+  document.addEventListener('cursorStateChange', (e) => {
+    cursorVisible = !!(e.detail && e.detail.visibility);
+    if (cursorVisible) poke();
+    else setShown(false);
+  });
+  document.addEventListener('mousemove', () => { cursorVisible = true; poke(); }, true);
+
+  gear.addEventListener('mouseenter', () => { hovered = true; });
+
+  // Hiding the cursor can fire mouseleave. Don't bring the gear back then.
+  gear.addEventListener('mouseleave', () => {
+    hovered = false;
+    if (cursorVisible) poke();
+  });
+  gear.addEventListener('mousedown', swallow, true);
+  gear.addEventListener('mouseup', swallow, true);
+  gear.addEventListener('click', (e) => { swallow(e); toggle(); }, true);
+
+  // Stop YouTube acting on the focused tile when OK lands on the gear.
+  for (const type of ['keydown', 'keyup']) {
+    window.addEventListener(type, (e) => {
+      if (!hovered || !gear.classList.contains('shown') || e.keyCode !== REMOTE_KEYS.ENTER.code) return;
+      swallow(e);
+      if (type === 'keyup') toggle();
+    }, true);
+  }
+}
+
 // --- Start-up ---
 initGlobalStyles();
+initPointerSettingsButton();
 initVideoQuality();
 initLogoStyle();
 // initPlaybackSpeed();
@@ -1540,4 +1623,4 @@ configAddChangeListener('videoShelfOpacity', () => {
 syncAdblockHook();
 syncTrackingBlock();
 
-setTimeout(() => showNotification('Press [GREEN] to open SponsorBlock configuration screen'), 2000);
+setTimeout(() => showNotification('Press [GREEN] to open settings. No colour keys? Use GREEN on the on-screen number pad, or point at the gear icon.', 6000), 2000);
