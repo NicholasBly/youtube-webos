@@ -13,16 +13,16 @@
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4",
-        "version": "0.8.4",
+        "version": "0.8.5",
         "type": "web",
         "title": "YouTube AdFree",
         "appDescription": "YouTube AdFree",
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.8.4/youtube.leanback.v4_0.8.4_all.ipk",
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.8.5/youtube.leanback.v4_0.8.5_all.ipk",
         "ipkHash": {
-          "sha256": "524570a54c391a1f5d40287c9462e9162840193df78e55fcae4c98eaef96eea3"
+          "sha256": "41b8a13e57093b120f47548befc919dc1b65e12440b610609988bab51a0f6128"
         }
       }
     },
@@ -33,16 +33,16 @@
       "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4.webos22",
-        "version": "0.8.4",
+        "version": "0.8.5",
         "type": "web",
         "title": "YouTube AdFree (webOS 22+)",
         "appDescription": "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware.",
         "iconUri": "https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/NicholasBly/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.8.4/youtube.leanback.v4_0.8.4_all_webOS22%2B.ipk",
+        "ipkUrl": "https://github.com/NicholasBly/youtube-webos/releases/download/0.8.5/youtube.leanback.v4_0.8.5_all_webOS22%2B.ipk",
         "ipkHash": {
-          "sha256": "c56c4e4a1a72dddc6a12f0adb8a81b70dbeecc1dde04a68228a8483b0b590ab4"
+          "sha256": "fca8855b7155aceb1d930002a4dd11e49b67e509e97e63b9b6e6f8d348dad987"
         }
       }
     }
