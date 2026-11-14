@@ -8,7 +8,7 @@ import {
   PROMOTION_DEBOUNCE
 } from './constants.js';
 import { SCHEMA_REGISTRY, getByPath, forEachItemList } from '../../core/innertube.js';
-import { state, pendingPromotions } from './state.js';
+import { state, pendingPromotions, thumbStats } from './state.js';
 import { deferProbes } from './probes.js';
 import { schedulePromotionSweep } from './promotion.js';
 import { upgradeContainer } from './rewrite.js';
@@ -215,13 +215,32 @@ function upgradeContinuation(data) {
   return changed;
 }
 
+// Every URL the ladder can rewrite is on this host (ladder.js THUMB_URL_RE).
+const THUMBNAIL_HOST = 'i.ytimg.com';
+
+/**
+ * Whether a fallback scan of the current response can find anything: its JSON
+ * text names the thumbnail host. One native scan of the text, made only when
+ * a scan is about to run and once per response, in place of walks of up to
+ * SCAN_MAX_NODES nodes each (one per section the paths could not read) over
+ * a response that holds no video thumbnail: a settings page, comments under a
+ * key no path names, a shelf of channels.
+ */
+function worthScanning() {
+  if (state.textNamesThumbnails === null) {
+    state.textNamesThumbnails = state.responseText.indexOf(THUMBNAIL_HOST) !== -1;
+    if (!state.textNamesThumbnails) thumbStats.scansSkipped++;
+  }
+  return state.textNamesThumbnails;
+}
+
 /**
  * Last-resort bounded walk, used only when the schema paths produced nothing.
  * Keeps the module working through an InnerTube reshuffle instead of silently
  * doing nothing, without ever putting a full traversal on the hot path.
  */
 function scanForThumbnails(root) {
-  if (!root || typeof root !== 'object') return 0;
+  if (!root || typeof root !== 'object' || !worthScanning()) return 0;
   const queue = [root, 0];
   let index = 0;
   let visited = 0;
@@ -330,10 +349,13 @@ function upgradeByType(data, type, textLength) {
  * Entry point called from the JSON.parse hook in adblock/parse-hook.js.
  * `responseType` is the type adblock already detected, so this costs no extra
  * detection pass; `textLength` is the length of the JSON text, which the hook
- * already has.
+ * already has, and `text` the text itself, which a fallback scan asks whether
+ * it is worth running (worthScanning).
  */
-export function upgradeResponseThumbnails(data, responseType, textLength) {
+export function upgradeResponseThumbnails(data, responseType, textLength, text) {
   if (!state.enabled || !data || typeof data !== 'object' || Array.isArray(data)) return 0;
+  state.responseText = text;
+  state.textNamesThumbnails = null;
 
   // Stamped on every parse, including ones that rewrite nothing: an empty
   // continuation is still evidence the surface is moving. admitToTier() reads
@@ -348,6 +370,9 @@ export function upgradeResponseThumbnails(data, responseType, textLength) {
   // signature detectResponseType() happens to test first.
   let changed = data.continuationContents ? upgradeContinuation(data) : 0;
   changed += upgradeByType(data, responseType, textLength);
+  // The text is the response's, not the module's to keep. (A pass that threw
+  // holds it until the next response replaces it.)
+  state.responseText = '';
 
   if (changed) log.debug(`${responseType || 'unknown'}: rewrote ${changed} thumbnail URLs`);
   // Not gated on `changed`: a response that rewrote nothing can still have

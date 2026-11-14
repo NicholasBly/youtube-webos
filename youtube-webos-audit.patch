@@ -1,0 +1,2857 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 0000000..83569a2
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,128 @@
++# AGENTS.md
++
++The entry point for an AI agent (or a new contributor) working on this
++repository. Short on purpose: it says what to run, what not to break and
++where the real documentation is.
++
++## What this is
++
++YouTube AdFree for LG webOS TVs: a user script injected into YouTube's TV
++site (`https://www.youtube.com/tv`) that blocks ads, skips sponsored
++segments, shows dislikes and tweaks the UI. It runs on TVs from 2016 on:
++webOS 3 is Chromium 38 (ES5, V8 3.28, about 1 GB of RAM). **Performance on
++that hardware is a feature**, and most rules below exist because of it.
++
++## Read first
++
++| For | Read |
++| --- | --- |
++| How it is put together: the two builds, boot order, the hooks, the rules for old TVs | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
++| Every module and function, what calls what, which settings, events, selectors and hooks each touches | [docs/CODEMAP.md](docs/CODEMAP.md), one page per folder in `docs/codemap/`, the same as JSON in `docs/codemap.json` (generated) |
++| Which combinations of fields are legal in the handlers, timers and observers | [docs/STATE-MACHINES.md](docs/STATE-MACHINES.md) |
++| What the hot paths cost, how to prove a change is faster, what was already tried | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) |
++| Dependencies and how to update them | [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) |
++
++## Commands
++
++```sh
++npm ci                                   # Node 22.22+ or 24.15+
++npm test                                 # everything: format, lint, types, code map, both builds, every test (about 2 min)
++npm run test:quick                       # the unit tests, then the webOS 22+ build and its tests
++node tests/run-all.mjs --only=sponsor    # the test scripts whose name contains "sponsor", with the build they need
++node tests/unit/core-config-test.cjs     # one unit test (needs no build)
++node tests/behaviour/dearrow-test.cjs dist/webOSUserScripts/userScript.js legacy   # one behaviour test on a built bundle
++npm run build                            # the legacy bundle (webOS 3 to 6) into dist/
++npm run build:modern                     # the webOS 22+ bundle into dist/ (the builds share dist/)
++npm run codemap                          # regenerate docs/CODEMAP.md, docs/codemap/, docs/codemap.json
++npm run format                           # prettier --write
++npm run bench                            # the hook, response and panel benchmarks
++```
++
++A change is done when `npm test` ends with `all steps passed`.
++
++## Rules that are easy to break
++
++1. **Two builds from one source.** `webpack.config.js` `resolve.alias` swaps
++   modules per build (`*-absent.js` stand-ins). Check the alias table in
++   ARCHITECTURE.md before assuming a module is in a bundle. A change to
++   shared code is tested on both flavours.
++2. **The legacy build is ES5 on Chromium 38.** No options object for
++   `addEventListener` (it reads as `useCapture: true`), no `{ once: true }`.
++   `for...of`, spread, rest parameters and destructuring become helper
++   calls: indexed loops and `arguments` on hot paths. What Chromium 38 lacks
++   and the code uses is hand-written in `src/polyfills/` (no core-js): a new
++   built-in needs a polyfill there and a case in
++   `tests/unit/polyfill-conformance-test.cjs`.
++3. **No `try` in a hot function** (V8 3.28 never optimises it): put it in a
++   helper only the rare case reaches.
++4. **Hot paths return early**, before any allocation or DOM query. The hot
++   paths are the `JSON.parse` and `JSON.stringify` hooks, focus and key
++   listeners, SponsorBlock's time listener and frame loop, and observer
++   callbacks.
++5. **Ask the text before walking the tree.** A pass over a parsed response
++   first checks with a native scan of the JSON text that there is anything
++   for it to find (the table in ARCHITECTURE.md).
++6. **YouTube's markup lives in one table**, `src/core/selectors.js`. Read an
++   entry, never call a method on one directly (the minifier then keeps the
++   whole table).
++7. **Every function has a comment right above it** saying what it does: that
++   comment is its entry in the code map, and `npm test` fails on a function
++   without one or on a map that is out of date (`npm run codemap`).
++8. **Everything an instance registers goes in its disposables bag**
++   (`src/core/disposables.js`) and `destroy()` undoes it.
++9. **Settings** are declared in `src/core/config-options.js`; `configRead`
++   throws on an unknown key. A hot path reads a snapshot (`flags.js`), not
++   `configRead`.
++10. **Imports name the file** (`./x.js`, `./dir/index.js`); lint rejects the
++    rest. `console` is not used in `src/`: `createLogger` (`src/core/log.js`).
++
++## State lives in plain fields
++
++There is no state-machine library here on purpose. Before adding or changing
++a field, a timer or an observer of a handler, read its machine in
++docs/STATE-MACHINES.md and keep its rules. SponsorBlock's rules run in the
++tests: `tests/harness/invariants.cjs` is checked after every event of every
++SponsorBlock behaviour test, and a new field that can disagree with an old
++one gets a rule there.
++
++## Tests
++
++- `tests/unit/` load source files directly into a `vm` context with the ESM
++  syntax stripped (`tests/harness/sandbox.cjs`): an import becomes a global
++  the test supplies, so a new import in a unit-tested module means a new
++  global in its test.
++- `tests/behaviour/` run a built bundle in jsdom (`tests/harness/page.cjs`),
++  with a Chromium 38 profile for the legacy flavour. The bundle is the first
++  argument, the flavour (`legacy`, `modern`, `webos6`) the second.
++- Every script ends with `report.finish()`, which prints `N passed, M
++  failed`; the runner fails a script that exits without that line.
++- Write the test first and watch it fail. For a behaviour test, "before" is
++  a bundle built before the change: run the new test against it (it must
++  fail for the reason you expect), then against the new build.
++- A change that should make something faster is shown with numbers from
++  before and after (docs/PERFORMANCE.md, "Measuring a change"), and a change
++  that should not alter behaviour with an equivalence check (the emoji
++  prefilter is checked against the exact class on all 65536 code units).
++- The tests cannot see wasted work. A counter on `window`
++  (`__ytafAdblockStats`, `__ytafDeArrowStats`, `__ytafThumbStats`,
++  `window.sponsorblock.barChecks`) is how a test, and the maintainer on the
++  TV, can.
++
++## Traps
++
++- **jsdom is not a TV.** A CPU profile taken in the harness overstates
++  global lookups and DOM access; Node's V8 is not V8 3.28. Trust removed
++  work over faster work.
++- **`dist/` is shared** by the two builds and emptied by each; `npm test`
++  leaves the webOS 22+ bundle there.
++- **The code map misses indirect calls** (`ACTIONS[name].run(video)`,
++  `sb.skipToPreviousSegment()`): search for the name as well.
++- **`src/vendor/`** is third-party code kept as written: not linted, not
++  formatted, not to be restyled.
++- **Markdown is not formatted by Prettier** (`.prettierignore`), and
++  `docs/CODEMAP.md`, `docs/codemap/` and `docs/codemap.json` are generated:
++  edit the source comments, not those files.
++- **Non-ASCII in source** is written as `\uXXXX` escapes (the emoji classes,
++  the sentinels), never as literal characters: several are invisible.
++- **Commit titles on the `test` branch** like "0.8.5 build 2" trigger a test
++  build and a pre-release (`.github/workflows/auto-discussion.yml`).
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 9fdf324..759b2a0 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
+ 
+ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+ 
++## [Unreleased]
++
++## Fixed
++
+++ SponsorBlock: changing a category's mode in the settings while its "Press Blue to skip" prompt was up left the prompt on screen, and the blue button still skipped the segment even when the category had just been set to "Show in Seek Bar" or "Disable". The prompt now follows the setting
++
+++ SponsorBlock: the "Press Blue to skip" prompt no longer shows twice for a moment when the video's duration is reported again while you are inside the segment
++
++## Performance
++
+++ "Emoji + Characters Fix" (webOS 3 and 4, on by default): the check that decides whether a page of results contains any emoji at all is about 3x faster on pages without one, which is most of them. That check runs on every response YouTube sends, so home, search and scrolling cost less on the oldest TVs
++
+++ DeArrow no longer walks through responses that contain no video tiles (comments, live chat, settings pages): on those it now does about 80% less work
++
+++ "Max Thumbnail Quality" no longer scans a response for thumbnails when the response contains none
++
++## Under the hood
++
+++ New docs for contributors and AI agents: AGENTS.md (commands, rules, traps), docs/STATE-MACHINES.md (the states each feature keeps and the rules between them) and docs/PERFORMANCE.md (what the hot paths cost, how to measure, what was already tried)
++
+++ SponsorBlock's state rules are now checked after every step of every SponsorBlock test (tests/harness/invariants.cjs), which is how the two prompt bugs above were pinned down
++
+++ `npm run bench` also times the JSON.parse hook per setting and per kind of response (tests/bench/response-bench.cjs)
++
+ ## [0.8.5] - 2026/11/13
+ 
+ A big one under the hood. Most of this release is based on @mirijanristic's fork (https://github.com/mirijanristic/youtube-webos): the codebase is now split into small modules with an automated test suite, both .ipk files are smaller, and a long list of bugs is fixed. Thanks!
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index ee31f09..cea9b1a 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -11,8 +11,15 @@ opening the project for the first time.
+   per folder in [codemap/](codemap/), the same data as JSON in
+   [codemap.json](codemap.json). `npm run codemap` rebuilds it; `npm test`
+   fails while it is out of date.
++- **[STATE-MACHINES.md](STATE-MACHINES.md)** names the states the code keeps
++  in plain fields (the per-video handlers, the progress bar watch, the probe
++  scheduler, the panel), what moves between them and the rules that hold.
++- **[PERFORMANCE.md](PERFORMANCE.md)** is what the hot paths cost, how to
++  measure a change before and after, and what was tried and set aside.
+ - **[DEPENDENCIES.md](DEPENDENCIES.md)** covers the npm packages, how to update
+   them safely, and the security status.
++- **[../AGENTS.md](../AGENTS.md)** is the short entry point for an AI agent
++  (or a new contributor): the commands, the rules and the traps.
+ 
+ ## Two scripts, two builds
+ 
+@@ -150,6 +157,17 @@ flowchart TD
+ The switches it reads are one snapshot (`features/adblock/flags.js`),
+ recomputed when a setting changes rather than read on every parse.
+ 
++A pass that would walk the parsed response asks the JSON text first whether
++there is anything for it to find, with one native scan (`indexOf` or a
++character class), since a walk costs about as much as the parse itself:
++
++| Pass | Asks the text for | Skips |
++| --- | --- | --- |
++| Tracking Block (`text-fixes.js`) | `"trackingParams"` | the rewrite of the text |
++| Legacy emoji fix (`emoji-wrap.js` `mayNeedEmojiWork`) | an emoji, a sentinel, or either as a `\u` escape | the emoji walk of every item |
++| DeArrow (`dearrow/index.js` `applyDeArrow`) | `"tileRenderer"` | the walk for tiles |
++| Thumbnail fallback scan (`thumbnail-quality/dispatch.js` `worthScanning`) | `i.ytimg.com`, and only when a scan is about to run | the bounded scans |
++
+ ## Pages, videos and the player
+ 
+ - **Page state** (`core/page-state.js`) watches the `<body>` classes YouTube
+@@ -220,8 +238,9 @@ re-renders.
+   only while diagnostics are on: `localStorage['ytaf-debug'] = '1'` (survives
+   restarts) or `window.__ytaf_debug__ = true` (set in the TV's web inspector).
+ - **Counters** on `window` for the web inspector: `__ytafAdblockStats`,
+-  `__ytafThumbStats`, `__ytafQualityStats`, `__ytafContinuationStats` and, on
+-  webOS 3/4 with diagnostics on, `__ytafBufferStats`.
++  `__ytafThumbStats`, `__ytafQualityStats`, `__ytafContinuationStats`,
++  `__ytafDeArrowStats` and, on webOS 3/4 with diagnostics on,
++  `__ytafBufferStats`.
+ - **perf-mon** (`npm run build:perf` / `build:perf:modern`): timings of every
+   hook and feature, in an on-screen panel (press 0 three times) and in
+   `window.__PERF` (`__PERF.help()` lists the API).
+@@ -234,6 +253,10 @@ and look for breaks of them when optimising:
+ - **Hot paths** (the parse and stringify hooks, focus listeners, the
+   SponsorBlock time listener) return early for the common case, before any
+   allocation or DOM query.
++- **Ask the text before walking the tree**: a pass over a parsed response
++  that looks for one kind of thing first checks, with a native scan of the
++  JSON text, that the response holds any (the table under "How a response
++  goes through the parse hook").
+ - **No `try` in a hot function**: webOS 3's engine (V8 3.28) does not optimise
+   a function that contains one. Put the `try` in a small helper that only the
+   rare case reaches (see `stringifyThenRestore`).
+@@ -261,7 +284,10 @@ and look for breaks of them when optimising:
+ - `npm run bundle:snapshot` before and `npm run bundle:compare` after updating
+   dependencies: it says whether the code that runs on the TV changed
+   (DEPENDENCIES.md).
+-- `npm run bench`: the hook and panel benchmarks.
++- `npm run bench`: the hook, response and panel benchmarks. To judge a
++  change, keep the bundle from before it and run
++  `node tests/bench/response-bench.cjs <bundle> legacy` on both
++  ([PERFORMANCE.md](PERFORMANCE.md)).
+ - Test builds: push to `test` with a commit title like "0.8.5 build 2" (the
+   body is the patch notes). `.github/workflows/auto-discussion.yml` runs the
+   tests, builds both .ipk files (legacy and webOS 22+) with the build number
+@@ -270,9 +296,13 @@ and look for breaks of them when optimising:
+ 
+ ### For AI agents
+ 
++- [../AGENTS.md](../AGENTS.md) first: the commands, the rules, the traps.
+ - Start from the [module table](CODEMAP.md#modules), then open the page of the
+   folder you need in [codemap/](codemap/). Each page is small enough to read
+   whole.
++- Before changing a handler's fields, a timer or an observer, read its
++  machine in [STATE-MACHINES.md](STATE-MACHINES.md): the code map says what
++  calls what, that page says which combinations of fields are legal.
+ - To find everything touching a setting, an event, a YouTube selector or a
+   hook, use the tables in CODEMAP.md, or query `docs/codemap.json`
+   (`settings`, `events`, `selectors`, `hooks`, and `calls` / `calledBy` per
+diff --git a/docs/CODEMAP.md b/docs/CODEMAP.md
+index a66f2e4..b8128b8 100644
+--- a/docs/CODEMAP.md
++++ b/docs/CODEMAP.md
+@@ -2,7 +2,7 @@
+ 
+ Generated from the source by `tools/codemap.mjs`; do not edit it by hand. After changing code, run `npm run codemap` (`npm test` fails while the map is out of date). A function's description is the comment right above it in the source: improve it there.
+ 
+-**167 modules, 1045 named functions**, 784 of them described (the perf monitor in `src/dev/` is a development tool, not in release builds, and is listed in short form). This page is the index; each folder has a page in [codemap/](codemap/) with every function of its modules. The overview (boot order, the hooks, how a response flows through the filters) is [ARCHITECTURE.md](ARCHITECTURE.md); the same data for scripts is [codemap.json](codemap.json).
++**167 modules, 1047 named functions**, 786 of them described (the perf monitor in `src/dev/` is a development tool, not in release builds, and is listed in short form). This page is the index; each folder has a page in [codemap/](codemap/) with every function of its modules. The overview (boot order, the hooks, how a response flows through the filters) is [ARCHITECTURE.md](ARCHITECTURE.md); the states the code keeps in plain fields, and the rules between them, are [STATE-MACHINES.md](STATE-MACHINES.md); the same data for scripts is [codemap.json](codemap.json).
+ 
+ How to read it:
+ 
+@@ -45,14 +45,14 @@ How to read it:
+ | [dev/perf-mon.js](codemap/dev.md#mod-perf-mon-js) | 4741 | 142 | perf-mon.js — YTAF Engine Diagnostics ===================================================================== Dev-only instrumentation for the webOS YouTube mod. |
+ | [features/adblock/constants.js](codemap/features-adblock.md#mod-constants-js) | 54 | 0 | String tables shared by the adblock modules. |
+ | [features/adblock/emoji-wrap-absent.js](codemap/features-adblock.md#mod-emoji-wrap-absent-js) | 11 | 2 | The webOS 22+ build's emoji-wrap.js (webpack.config.js): the legacy emoji fix is off on every engine that runs this build, so nothing here is reached with work to do. |
+-| [features/adblock/emoji-wrap.js](codemap/features-adblock.md#mod-emoji-wrap-js) | 250 | 10 | The legacy emoji fix's half in the response: every emoji in the parsed tree wrapped in sentinel characters, so features/emoji-font can swap it for an image on webOS 3 and 4. |
++| [features/adblock/emoji-wrap.js](codemap/features-adblock.md#mod-emoji-wrap-js) | 266 | 10 | The legacy emoji fix's half in the response: every emoji in the parsed tree wrapped in sentinel characters, so features/emoji-font can swap it for an image on webOS 3 and 4. |
+ | [features/adblock/fallback.js](codemap/features-adblock.md#mod-fallback-js) | 82 | 3 | The fallback for a response no schema path matched, and the guide filter for the small guide response: one bounded search over the body serves both. |
+ | [features/adblock/flags.js](codemap/features-adblock.md#mod-flags-js) | 97 | 2 | The filter switches as one mutable snapshot, refreshed when a setting changes rather than re-read on every JSON.parse. |
+ | [features/adblock/index.js](codemap/features-adblock.md#mod-index-js) | 7 | 0 | Ad blocking: the JSON.parse and JSON.stringify hooks (parse-hook.js, stringify-hook.ts) that userScript.js installs for the life of the page, and the telemetry blockers (tracking-block.js); all of them follow the adbl... |
+ | [features/adblock/item-filters.js](codemap/features-adblock.md#mod-item-filters-js) | 248 | 13 | Shelves and the items in them: ads, Shorts, live streams and guest prompts, removed in place; a shelf that ends up empty goes with its items. |
+ | [features/adblock/log.js](codemap/features-adblock.md#mod-log-js) | 4 | 0 | The logger of the feature's modules: their messages carry [AdBlock] (core/log.js). |
+ | [features/adblock/nav-filters.js](codemap/features-adblock.md#mod-nav-filters-js) | 66 | 4 | The left-hand guide and the tab bar: drops the Shorts and Live entries when those are hidden. |
+-| [features/adblock/parse-hook.js](codemap/features-adblock.md#mod-parse-hook-js) | 182 | 8 | The JSON.parse hook: classifies each InnerTube response and runs the filters, the thumbnail rewrite and the text fixes over it before the app sees it. |
++| [features/adblock/parse-hook.js](codemap/features-adblock.md#mod-parse-hook-js) | 184 | 8 | The JSON.parse hook: classifies each InnerTube response and runs the filters, the thumbnail rewrite and the text fixes over it before the app sees it. |
+ | [features/adblock/player-filters.js](codemap/features-adblock.md#mod-player-filters-js) | 54 | 3 | The player response: ad placements, attestation, heartbeat params, endcards. |
+ | [features/adblock/response-filters.js](codemap/features-adblock.md#mod-response-filters-js) | 194 | 12 | What gets removed from each response type, along the known schema paths; fallback.js handles the responses no path matched. |
+ | [features/adblock/search.js](codemap/features-adblock.md#mod-search-js) | 49 | 2 | The bounded tree lookups the filters use when a schema path misses. |
+@@ -70,7 +70,7 @@ How to read it:
+ | [features/dearrow/constants.js](codemap/features-dearrow.md#mod-constants-js) | 70 | 0 | DeArrow's servers, limits and timings (features/dearrow). |
+ | [features/dearrow/formatter-absent.js](codemap/features-dearrow.md#mod-formatter-absent-js) | 19 | 1 | What the legacy build (webOS 3 to 6) has in place of formatter.js (webpack.config.js): no title formatting, so the panel shows no formatting rows and titles keep the case they were written in. |
+ | [features/dearrow/formatter.js](codemap/features-dearrow.md#mod-formatter-js) | 13 | 0 | DeArrow's title formatter (src/vendor/dearrow, GPL-3.0), as the feature uses it. |
+-| [features/dearrow/index.js](codemap/features-dearrow.md#mod-index-js) | 123 | 6 | DeArrow (https://dearrow.ajay.app): crowdsourced titles and thumbnails in place of clickbait ones, on the tiles of shelves and grids. |
++| [features/dearrow/index.js](codemap/features-dearrow.md#mod-index-js) | 142 | 6 | DeArrow (https://dearrow.ajay.app): crowdsourced titles and thumbnails in place of clickbait ones, on the tiles of shelves and grids. |
+ | [features/dearrow/log.js](codemap/features-dearrow.md#mod-log-js) | 4 | 0 | The logger of the feature's modules: their messages carry [DeArrow] (core/log.js). |
+ | [features/dearrow/lookup.js](codemap/features-dearrow.md#mod-lookup-js) | 195 | 13 | Asking DeArrow about videos and deciding what their tiles show: a queue of lookups (four at a time, in screen order), the branding answer per video, then the title and the thumbnail, with each improvement handed to th... |
+ | [features/dearrow/state.js](codemap/features-dearrow.md#mod-state-js) | 29 | 2 | What DeArrow knows, shared by its modules: the videos seen, and the generation that a settings change or a wipe bumps so that work started before it does not write stale output. |
+@@ -122,11 +122,11 @@ How to read it:
+ | [features/sponsorblock/overlay.js](codemap/features-sponsorblock.md#mod-overlay-js) | 234 | 9 | The coloured segment overlay beside the progress bar: the anchor it sits by, keeping its geometry in sync, and drawing the segments. |
+ | [features/sponsorblock/popup.js](codemap/features-sponsorblock.md#mod-popup-js) | 118 | 5 | The SponsorBlock popup beside the options panel: the current video's segments, one row each with its category colour, name and time. |
+ | [features/sponsorblock/segments.js](codemap/features-sponsorblock.md#mod-segments-js) | 139 | 7 | Segment math, touching nothing but the handler's segment fields: which segments are skippable under the current settings, where the playhead is relative to them, and the end clamp. |
+-| [features/sponsorblock/skipping.js](codemap/features-sponsorblock.md#mod-skipping-js) | 316 | 19 | Playback-time behaviour: aiming at the next segment, the timeupdate listener, the per-frame loop near a segment and the skip itself, which the chain at the start (chain.js) takes too. |
++| [features/sponsorblock/skipping.js](codemap/features-sponsorblock.md#mod-skipping-js) | 338 | 20 | Playback-time behaviour: aiming at the next segment, the timeupdate listener, the per-frame loop near a segment and the skip itself, which the chain at the start (chain.js) takes too. |
+ | [features/sponsorblock/video-events.js](codemap/features-sponsorblock.md#mod-video-events-js) | 90 | 3 | The listeners a handler binds: the player state event the quality module publishes and resize, once per handler; and the &lt;video> events that reset or re-arm segment tracking, once per &lt;video> element. |
+ | [features/thumbnail-quality/cache.js](codemap/features-thumbnail-quality.md#mod-cache-js) | 100 | 8 | The persistent videoId -> verified rank cache in localStorage. |
+ | [features/thumbnail-quality/constants.js](codemap/features-thumbnail-quality.md#mod-constants-js) | 82 | 0 | Tuning constants for Max Thumbnail Quality. |
+-| [features/thumbnail-quality/dispatch.js](codemap/features-thumbnail-quality.md#mod-dispatch-js) | 362 | 14 | Where each InnerTube response type keeps its thumbnails: the known paths per type, the bounded scan for shapes no path matched, and the entry point the JSON.parse hook calls. |
++| [features/thumbnail-quality/dispatch.js](codemap/features-thumbnail-quality.md#mod-dispatch-js) | 387 | 15 | Where each InnerTube response type keeps its thumbnails: the known paths per type, the bounded scan for shapes no path matched, and the entry point the JSON.parse hook calls. |
+ | [features/thumbnail-quality/index.js](codemap/features-thumbnail-quality.md#mod-index-js) | 103 | 3 | Max Thumbnail Quality - rewrites thumbnail URLs in the parsed InnerTube response, inside the JSON.parse hook adblock already owns, so the app is only ever handed the high-quality URL and never fetches the 320x180 crop. |
+ | [features/thumbnail-quality/ladder.js](codemap/features-thumbnail-quality.md#mod-ladder-js) | 81 | 4 | The thumbnail quality ladder: the rungs YouTube serves, which of them a mode may reach for, and how a thumbnail URL is built and recognised. |
+ | [features/thumbnail-quality/log.js](codemap/features-thumbnail-quality.md#mod-log-js) | 4 | 0 | The logger of the feature's modules: their messages carry [ThumbQuality] (core/log.js). |
+@@ -136,7 +136,7 @@ How to read it:
+ | [features/thumbnail-quality/promotion.js](codemap/features-thumbnail-quality.md#mod-promotion-js) | 71 | 2 | Live promotion: patches tiles already on screen once verification found a better rung than the one they were drawn with. |
+ | [features/thumbnail-quality/rendered.js](codemap/features-thumbnail-quality.md#mod-rendered-js) | 58 | 3 | The tiles the app currently has thumbnails rendered for: a free visibility signal, since the list is virtualised and "has a rendered thumbnail" already means "on or near screen". |
+ | [features/thumbnail-quality/rewrite.js](codemap/features-thumbnail-quality.md#mod-rewrite-js) | 169 | 3 | Rewrites one thumbnail URL, and every URL in one thumbnail container, to the best rung the current mode may emit; schedules a probe when that is unproven. |
+-| [features/thumbnail-quality/state.js](codemap/features-thumbnail-quality.md#mod-state-js) | 90 | 1 | Everything the thumbnail modules share and mutate: the current mode, the verification caches and queues, timers and budgets. |
++| [features/thumbnail-quality/state.js](codemap/features-thumbnail-quality.md#mod-state-js) | 96 | 1 | Everything the thumbnail modules share and mutate: the current mode, the verification caches and queues, timers and budgets. |
+ | [features/video-quality/index.js](codemap/features-video-quality.md#mod-index-js) | 170 | 6 | Force High Resolution Video: on the watch page it attaches to the TV player, forces the highest quality (quality.js) and publishes the player's state changes for the other features (player-state.js). |
+ | [features/video-quality/kickstart-absent.js](codemap/features-video-quality.md#mod-kickstart-absent-js) | 5 | 1 | The legacy build's kickstart.js (webpack.config.js): the first-video kick is for webOS 25, which runs the webOS 22+ build. |
+ | [features/video-quality/kickstart.js](codemap/features-video-quality.md#mod-kickstart-js) | 80 | 2 | webOS 25 first-video fix: after the quality switch the player can sit in UNSTARTED, so the first playback is kicked until it reports PLAYING, and the controls bar that the kick raises is dismissed again. |
+@@ -373,6 +373,7 @@ Built-ins the app replaces or adds (polyfills), and the `window.__*` objects it
+ | `window.__ytafAdblockStats` | [features/adblock/parse-hook.js › installParseHook](codemap/features-adblock.md#fn-parse-hook-js-installparsehook) |
+ | `window.__ytafBufferStats` | [hooks/buffer-limit.js › installBufferLimit](codemap/hooks.md#fn-buffer-limit-js-installbufferlimit) |
+ | `window.__ytafContinuationStats` | [features/rows-ahead.js (at load)](codemap/features.md#mod-rows-ahead-js) |
++| `window.__ytafDeArrowStats` | [features/dearrow/index.js (at load)](codemap/features-dearrow.md#mod-index-js) |
+ | `window.__ytafQualityStats` | [features/video-quality/index.js (at load)](codemap/features-video-quality.md#mod-index-js) |
+ | `window.__ytafThumbStats` | [features/thumbnail-quality/index.js (at load)](codemap/features-thumbnail-quality.md#mod-index-js) |
+ | `window.fetch` | [dev/perf-mon.js › installNetworkProbes](codemap/dev.md#fn-perf-mon-js-installnetworkprobes), [features/block-webos-cast.ts › initBlockWebOSCast](codemap/features.md#fn-block-webos-cast-ts-initblockweboscast), [hooks/fetch.ts › FetchRegistry.constructor](codemap/hooks.md#fn-fetch-ts-fetchregistry-constructor) |
+diff --git a/docs/PERFORMANCE.md b/docs/PERFORMANCE.md
+new file mode 100644
+index 0000000..ebc02a3
+--- /dev/null
++++ b/docs/PERFORMANCE.md
+@@ -0,0 +1,160 @@
++# Performance
++
++What the hot paths cost, how to measure a change, and what has already been
++tried. Written for whoever optimises next, person or AI agent, so the same
++ground is not covered twice. The rules the code keeps for old TVs are in
++[ARCHITECTURE.md](ARCHITECTURE.md#rules-the-code-follows-for-old-tvs).
++
++## Where the time goes
++
++Nearly everything the app does per second is one of four things:
++
++| Path | How often | Where |
++| --- | --- | --- |
++| The `JSON.parse` hook | every response and every other parse YouTube makes | `features/adblock/parse-hook.js` |
++| Focus and key listeners | every remote key press | the shortcut router, the clock, the dislike panel, the thumbnail pause, DeArrow's sweep |
++| SponsorBlock's time listener | 4 Hz while a segment is ahead, per frame within 1 s of one | `features/sponsorblock/skipping.js` |
++| Observers | on DOM changes of what they watch | the progress bar (narrow, per ancestor), the legacy emoji fix (the whole body, webOS 3/4) |
++
++The parse hook is the one that scales with what YouTube sends, so it is the
++one measured below. Texts under 500 characters return through the native
++parse at once; everything else is priced against the native parse of the
++same text.
++
++### The parse hook, by setting and response
++
++`node tests/bench/response-bench.cjs <bundle> legacy`, Node 22 (V8 12), the
++legacy bundle, median of 7 runs. `overhead` is hooked minus native, in
++microseconds; `native` is what `JSON.parse` alone takes. A webOS 3 TV is, by
++a rough estimate, 20 to 50 times slower, so 500 here would be 10 to 25 ms of
++a blocked main thread there. None of these numbers was taken on a TV.
++
++| Setting | Response | native | 0.8.5 | now |
++| --- | --- | ---: | ---: | ---: |
++| defaults | browse, 240 video tiles (158 KB) | 579 | 8 | 14 |
++| defaults | comments, 300 (147 KB) | 571 | 4 | 9 |
++| legacy emoji fix (webOS 3/4 default) | browse, no emoji | 592 | 508 | 164 |
++| legacy emoji fix | browse, one emoji title | 585 | 449 | 342 |
++| legacy emoji fix | comments, no emoji | 572 | 430 | 126 |
++| DeArrow | browse, 240 video tiles | 622 | 70 | 70 |
++| DeArrow | comments | 577 | 324 | 67 |
++| DeArrow | live chat, 40 messages (10 KB) | 39 | 29 | 4 |
++| everything on | browse, 240 video tiles | 630 | 1007 | 680 |
++| everything on | comments | 578 | 1425 | 492 |
++| everything on | live chat | 37 | 44 | 20 |
++
++Rows within about 15 of each other are the same: that is the run-to-run
++noise (a longer run of the defaults row gave 8.1 before and 8.9 after).
++
++What the table says:
++
++- **The defaults cost about 2 % of a parse.** There is nothing left to win
++  there.
++- **The legacy emoji fix is the largest default cost on the slowest TVs.**
++  Before any walk it has to learn whether the text holds an emoji; that scan
++  alone was 75 % of a parse and is now about 20 % (`mayNeedEmojiWork`: a
++  class of a few ranges first, the exact class of some 150 only from where
++  the first one matched). With an emoji anywhere in the response the whole
++  tree is walked: about 180 on top, for one emoji or for 240.
++- **A walk for something that is not there is the classic waste.** DeArrow
++  walked every response for tiles, comments and live chat included; the
++  thumbnail fallback scanned every section it could not read. Both now ask
++  the text first.
++
++## Measuring a change
++
++1. Keep the bundle from before the change:
++   `npm run build && cp dist/webOSUserScripts/userScript.js /tmp/before.js`
++   (and `npm run build:modern` for the other flavour).
++2. Make the change, build again, and run the bench on both bundles, more
++   than once and alternating: one run drifts by more than most effects.
++   `node tests/bench/response-bench.cjs /tmp/before.js legacy` and the same
++   with `dist/webOSUserScripts/userScript.js`. `--json` prints rows a script
++   can compare.
++3. For a single function, load the source the way the unit tests do
++   (`tests/harness/sandbox.cjs` `loadSources`) from two checkouts and time
++   both in one process. That is how the emoji scan was compared, on seven
++   kinds of text, with the answers checked equal.
++4. To find where time goes: `npm run build:dev` (readable names), then
++   `node --cpu-prof` on a script that loops the hooked parse through
++   `tests/harness/page.cjs`. jsdom makes global lookups (`HTMLCanvasElement`,
++   `window.x`) look far more expensive than they are on a TV: do not
++   optimise those from a profile.
++5. `npm run bench` also runs `hook-bench.cjs` (every filter on, one browse
++   response, plus the stringify hook) and `panel-bench.cjs` (opening the
++   settings: elements built in the key handler).
++
++Node's V8 is not the TV's. Chromium 38 (webOS 3) is V8 3.28: no TurboFan, a
++function with a `try` in it is never optimised, and a regular expression is
++compiled differently. Prefer changes that remove work (a walk not made, a
++scan that stops early) over changes that make the same work faster on one
++engine: the first kind carries over, the second has to be measured on the
++TV.
++
++### On the TV
++
++With the web inspector attached (`npm run inspect`), the counters are on
++`window`: `__ytafAdblockStats`, `__ytafThumbStats`, `__ytafQualityStats`,
++`__ytafContinuationStats`, `__ytafDeArrowStats`, and
++`window.sponsorblock.barChecks` while a video plays. `npm run build:perf`
++adds the perf monitor (press 0 three times).
++
++To time the emoji scan on the TV itself, paste this in the console on the
++home screen and scroll a little so responses arrive; it times the scan on
++each real response text and prints the mean:
++
++```js
++(function () {
++  var parse = JSON.parse, n = 0, total = 0;
++  var first = /[\u00A9\u00AE\u200B\u200C\u203C-\u3299\uD83C-\uDBFF\uFEFF]/;
++  JSON.parse = function (text) {
++    if (typeof text === 'string' && text.length > 20000) {
++      var t = performance.now();
++      text.search(first);
++      total += performance.now() - t;
++      if (++n % 5 === 0) console.log('emoji first scan, mean ms:', (total / n).toFixed(2));
++    }
++    return parse.apply(this, arguments);
++  };
++})();
++```
++
++## Tried and set aside
++
++Each of these was measured or reasoned through and not done. Reopen one only
++with new evidence.
++
++| Idea | Why not |
++| --- | --- |
++| A lookahead in front of the exact emoji class, `(?=[^\0-\xA8])[...]`, so ASCII fails on one comparison | No faster on a two-byte text (401 against 372), and four times slower on a one-byte one |
++| A `charCodeAt` loop over the text, with the exact class tried on the non-ASCII characters only | Faster than the exact scan on two-byte text in Node (239 against 372) but 2.4 times slower on ASCII-only text, and the speed of a script loop on V8 3.28 cannot be taken from Node. The few-range class is ahead of it on every text (81) and stays a native scan |
++| Asking the text for `i.ytimg.com` before every thumbnail pass | A response whose lists the paths read needs no scan at all, so the question would cost a full `indexOf` miss for nothing. It is asked only when a fallback scan is about to run |
++| Finding DeArrow's tiles along the schema paths instead of the walk | A real video tile stops the walk (it is not descended into), so on a browse response the walk is already short: 70 on top of 620. The cost was the responses without tiles, which the text gate removes exactly; paths would add a second place to keep in step with YouTube |
++| Counting `"tileRenderer"` in the text to prove a path walk found every tile | The filters remove tiles (ads, Shorts, live) between the text and the tree, so the counts differ whenever a filter did anything |
++| One shared walk for the emoji fix, the thumbnails and DeArrow | They visit different nodes (every text field; thumbnail containers along paths; tiles only) and stop at different places. Merged, each would pay for the widest |
++| Turning the handlers' fields into explicit state objects | The readers are the hot paths, the fields are what some 3,000 test checks pin, and the bundle would grow for no behaviour gained. The states are named in [STATE-MACHINES.md](STATE-MACHINES.md) and the rules run in the tests instead |
++| Remembering which stylesheets the comments fix already scanned | Its startup scans stop once the rules are found, which is the first scan after YouTube's stylesheet loads; repeats happen only after YouTube renames the class, and stop when the stylesheet count holds still |
++| Starting the webOS 3/4 buffer trim timer only while a MediaSource exists | One timer every 5 s over an empty list: nothing a TV can notice, against a new way for the trim to be off when it is needed |
++
++## Open, in order of expected worth
++
++1. **The emoji walk itself** (webOS 3/4, default on): about a third of a
++   parse whenever a response holds one emoji, since the whole tree is then
++   walked. Skipping subtrees that never hold text (thumbnail lists, endpoint
++   commands) needs captured real responses to prove no text field is missed;
++   a tile in the generator has 17 objects, a real one several times that.
++2. **Tracking Block's rewrite** (off by default): the text is copied with
++   every `trackingParams` blanked, about a third of a parse. A copy is what
++   a text rewrite costs; the alternative, blanking after the parse, was
++   measured slower by the project before.
++3. **Playback Speed's player check** (webOS 23+, experimental): once
++   installed, a 1 s interval looks the player up for the rest of the
++   session, also after the setting is turned off, and falls back to a
++   document-wide class selector while no player is on the page. Binding on
++   the player's state events instead needs a check on Shorts, where
++   `yt-player-state-change` is not published.
++4. **A failed segment fetch is final for the video** (see Per-video instance
++   in STATE-MACHINES.md): after the fallback server and two retries, a TV
++   that was still getting its network back shows no segments until the next
++   video. A retry on the next PLAYING would be cheap; it changes when the
++   API is asked, so it wants the maintainer's call.
+diff --git a/docs/STATE-MACHINES.md b/docs/STATE-MACHINES.md
+new file mode 100644
+index 0000000..871b526
+--- /dev/null
++++ b/docs/STATE-MACHINES.md
+@@ -0,0 +1,424 @@
++# State machines
++
++The code has no state-machine library and no `state = 'X'` field for most of
++what follows: a state is a combination of plain fields (a timer id, an
++observer, a boolean) that the hot paths read directly. This page names those
++states, says which fields hold them, what moves between them and what must
++always be true, so a change can be checked against the machine instead of
++being rediscovered from the code. Kept by hand, like
++[ARCHITECTURE.md](ARCHITECTURE.md); the functions are in
++[CODEMAP.md](CODEMAP.md).
++
++- **Rules that run.** The rules of the SponsorBlock handler are code:
++  `tests/harness/invariants.cjs` checks them after every event every
++  SponsorBlock behaviour test sends, and the script fails when one breaks at
++  any step. A rule added there is enforced across some 270 test steps at once.
++- **Why the states stay plain fields.** The readers are the hot paths (the
++  time listener at 4 Hz, the frame loop, focus and key listeners), on an
++  engine (V8 3.28, webOS 3) where a property read is cheap and an extra call
++  or object is not. The fields are what the behaviour tests pin. Naming the
++  states here and checking the rules in the tests gives the safety of an
++  explicit machine without a byte or a call in the bundle.
++- **When changing one.** Find the machine below, keep its rules, and when a
++  new field can disagree with an old one, add the rule to
++  `tests/harness/invariants.cjs` (SponsorBlock) or a test of the transition.
++
++## Index
++
++| Machine | Where | Driven by |
++| --- | --- | --- |
++| [Page kind](#page-kind) | `core/page-state.js` | `<body>` class changes |
++| [Per-video instance](#per-video-instance) | `core/per-video.js` | `hashchange`, the feature's setting, unload |
++| [SponsorBlock: lifecycle](#sponsorblock-lifecycle) | `features/sponsorblock/index.js`, `api.js` | the segment fetch, destroy |
++| [SponsorBlock: the `<video>`](#sponsorblock-the-video) | `index.js`, `bar.js` | mount, replacement, PLAYING |
++| [SponsorBlock: playback](#sponsorblock-playback) | `skipping.js`, `chain.js`, `blue-key.js`, `mute.js`, `video-events.js` | `timeupdate`, frames, `seeked`, player state, settings |
++| [SponsorBlock: the progress bar](#sponsorblock-the-progress-bar) | `bar.js`, `overlay.js` | DOM mutations, frames, a bounded poll |
++| [Return YouTube Dislike](#return-youtube-dislike) | `features/return-dislike/` | focus, the description panel, the dislike fetch |
++| [Force Max Quality](#force-max-quality) | `features/video-quality/` | page changes, the player's `onStateChange` |
++| [Screensaver fix](#screensaver-fix) | `features/screensaver-fix/` | page changes, `<video>` style mutations, `pause`/`playing` |
++| [Max Thumbnail Quality](#max-thumbnail-quality) | `features/thumbnail-quality/` | parsed responses, probes, arrow keys |
++| [DeArrow](#dearrow) | `features/dearrow/` | parsed responses, branding lookups, settings |
++| [Options panel](#options-panel) | `ui/panel/` | the menu key, keys and pointer while open |
++| [Shortcuts](#shortcuts) | `ui/shortcuts/` | `keydown` |
++| [Toasts](#toasts) | `ui/toast/index.js` | `showNotification`, timers |
++| [Smaller ones](#smaller-ones) | several | see the table |
++
++## Page kind
++
++`core/page-state.js`. Four booleans (`onWatchPage`, `onShortsPage`,
++`onAccountSelectorPage`, `onSearchPage`) mirror four `<body>` classes. A
++MutationObserver on the body's `class` reads them on every change and
++dispatches `ytaf-page-update` only when one of the four changed.
++
++- The event's `detail` carries `isWatch`, `isShorts` and `isAccountSelector`;
++  a change of the search page fires the event too, without a field of its own
++  (`isSearchPage()` reads it).
++- A watch-to-watch navigation changes no class: no event. Whatever must
++  follow a new video listens to `hashchange` (per-video instances, the
++  screensaver fix) or to the player state.
++
++## Per-video instance
++
++`core/per-video.js`, used by SponsorBlock (`window.sponsorblock`) and Return
++YouTube Dislike (`window.returnYouTubeDislike`).
++
++```mermaid
++stateDiagram-v2
++  [*] --> None
++  None --> Pending: hashchange / setting / 500 ms after load
++  Live --> Pending: hashchange / setting
++  Done --> Pending: hashchange / setting
++  Pending --> Pending: another change within 10 ms (timer restarted)
++  Pending --> Live: watch page with a video id, create() gave an instance
++  Pending --> None: no video id, or create() gave null (feature off)
++  Pending --> Live: same video id and no setting change (instance kept)
++  Live --> Done: the instance destroyed itself (no segments)
++  Live --> None: beforeunload
++```
++
++| State | Fields |
++| --- | --- |
++| None | `current === null` |
++| Pending | `timer !== null`; `restartPending` remembers a setting change across restarts of the timer |
++| Live | `current` set, `!current.isDestroyed`; the getter returns it |
++| Done | `current` set, `current.isDestroyed`; the getter returns null |
++
++- **Done is kept on purpose**: the same video under a new hash does not
++  create a new instance, so "no segments for this video" is asked once.
++  It also means a fetch that failed on every retry is final for that video
++  until the hash names another one or the setting is toggled.
++- An instance must offer `init()`, `destroy()` (safe to call twice),
++  `videoID` and `isDestroyed`.
++
++## SponsorBlock: lifecycle
++
++`SponsorBlockHandler` in `features/sponsorblock/index.js`.
++
++| State | Fields | Next |
++| --- | --- | --- |
++| Created | `segments = []`, config listeners in `bag` | `init()` |
++| Fetching | `abortFetch` set while a request is in flight; between retries a timer in `bag` | segments, none, or destroy |
++| Labels only | `segments` hold full-video labels only: no `<video>`, no bar, no window listeners | destroy |
++| Active | window listeners bound, `<video>` bound or waited for, bar watched | destroy |
++| Destroyed | `isDestroyed`; every handle below is gone | (end) |
++
++- The API is asked on the primary server, then the fallback, then again after
++  2 s and 4 s (`API.retryMs`). An empty list or no list at all destroys the
++  handler; see Done above.
++- `destroy()` rules (checked): no `<video>` bound, no frame pending
++  (`rafIds` empty), no observer, no wait, no watchdog, no prompt, no mute
++  held, no overlay, no segments.
++
++## SponsorBlock: the `<video>`
++
++| State | Fields | Moves on |
++| --- | --- | --- |
++| Unbound | `video === null`, `videoBag === null`, `videoWait === null` | `bindOrWaitForVideo()` |
++| Waiting | `videoWait` set (a MutationObserver on the body, 10 s) | a `<video>` mounts; the wait runs out (then the next PLAYING looks again) |
++| Bound | `video` and `videoBag` set | the element leaves the document (noticed by a bar check: `rebindIfVideoReplaced`), destroy |
++
++Rules (checked): `video` and `videoBag` are set together; the time listener,
++the frame loop, a held mute and the metadata wait (`chainRetry`) exist only
++with a bound `<video>`; no wait runs while one is bound. `highlightPending`
++holds the highlight's auto jump until a `<video>` is bound.
++
++## SponsorBlock: playback
++
++The richest machine: where the playhead is relative to the skip list, and
++what is running because of it. `skipSegments` is rebuilt from `segments` and
++the settings (`refreshSkipSegments`); every other field refers to it.
++
++```mermaid
++stateDiagram-v2
++  [*] --> Idle
++  Idle --> Armed: a segment is ahead and the video plays
++  Armed --> Idle: pause / ENDED / nothing ahead (aimPast)
++  Armed --> Near: timeupdate within 1 s of the next segment
++  Near --> Armed: the frame loop handed over / pause / skip
++  Armed --> Skipping: inside an auto-skip segment
++  Near --> Skipping: the playhead reached the segment
++  Skipping --> Armed: seeked, or the 1.5 s watchdog
++  Armed --> Offering: inside a manual-skip segment
++  Offering --> Skipping: the blue key
++  Offering --> Armed: the playhead left the segment / its mode changed
++  Armed --> Muted: inside a mute segment
++  Muted --> Armed: the playhead left it / a skip / a rebuild
++```
++
++| State | Fields |
++| --- | --- |
++| Idle | `timeListenerActive === false`, `pollingRafId === null` |
++| Armed | `timeListenerActive`; `nextSegmentIndex`, `nextSegmentStart` aim at the segment the playhead is in or the next one |
++| Near | Armed and `pollingRafId` set: `highFreqLoop` reads `currentTime` every frame |
++| Skipping | `isSkipping` and `skipWatchdogTimer` set; `handleTimeUpdate` and the frame loop return at once |
++| Offering | `currentManualSegment` (a segment of `skipSegments`) and `activeManualNotification` (its toast) |
++| Muted | `mutedSegment` (a segment of `skipSegments`), `mutedBefore` (what to restore) |
++
++Other fields: `lastSkipTime` and `lastSkippedSegmentIndex` (the same skip
++reported twice is one skip; on webOS 3 to 6 the clamped end segment is not
++skipped again), `skippedSegmentIndices` (Skip Segments Once),
++`tempWhitelistIndex` (the segment the "previous segment" shortcut seeked back
++into: left alone until the playhead leaves it).
++
++Events, and what each does:
++
++| Event | Effect |
++| --- | --- |
++| `timeupdate` (while Armed) | `handleTimeUpdate`: leaves a prompt or mute the playhead left, starts the frame loop within 1 s of the next segment, and inside a segment skips, mutes or offers by its mode |
++| a frame (while Near) | hands over to `handleTimeUpdate` once the playhead is there; stops on pause, a skip or destroy |
++| `seeked` with `isSkipping` | the handler's own skip landed: latch and watchdog cleared, nothing else (the skip aimed past its landing point already) |
++| `seeked` without | the viewer's seek: dedupe fields reset, `resetSegmentTracking`, the start chain, and `handleTimeUpdate` when playing |
++| `playing`, player state PLAYING | `resetSegmentTracking` (both, since a player may report only one); PLAYING also re-finds the bar and runs the start chain |
++| `pause`, player state PAUSED | frame loop stopped, time listener detached |
++| player state ENDED | time listener detached; the overlay's cached hash, anchor and geometry dropped so a replay redraws |
++| `durationchange` | segments clamped to the duration; when one moved, `refreshSkipSegments` |
++| a mode setting, Allow muted segments | `refreshSkipSegments`, overlay redrawn, labels rewritten |
++
++Rules (checked after every event):
++
++- `nextSegmentIndex` is in `0..skipSegments.length`, and `nextSegmentStart`
++  is that segment's start, or `Infinity` past the last one.
++- The time listener runs only while a segment is ahead
++  (`nextSegmentStart !== Infinity`).
++- `isSkipping` implies an armed watchdog: a skip whose `seeked` never comes
++  is released after 1.5 s.
++- A prompt on screen offers a segment, and the segment offered is a
++  `manual_skip` member of the **current** `skipSegments`. `refreshSkipSegments`
++  carries the offer into the rebuilt list (`carryManualSegment`) or drops it.
++- The muted segment is a `mute` member of the current `skipSegments`.
++- `tempWhitelistIndex` is `-1` or an index into `segments`.
++
++Known edge, left as it is: a viewer's seek that starts while one of the
++handler's own skips is still seeking produces one `seeked` for both. It is
++taken for the skip's (the latch is cleared, tracking is not re-aimed), and
++the next `playing` or PLAYING re-aims. Telling the two apart by the landing
++time would need the engine's seek rounding on real TVs.
++
++## SponsorBlock: the progress bar
++
++`bar.js` finds the bar, `overlay.js` draws beside it.
++
++```mermaid
++stateDiagram-v2
++  [*] --> Finder: no ytlr-progress-bar on the page
++  [*] --> Watching: one is there
++  Finder --> Tracked: a bar check finds the bar by another selector
++  Finder --> Watching: the finder sees the bar built
++  Watching --> Tracked: acquireProgressBar finds and adopts the bar
++  Tracked --> Tracked: renderer-level match narrowed to the track
++  Tracked --> Polling: the bar left the document under a root that stayed
++  Polling --> Tracked: found again (overlay up)
++  Polling --> Watching: 40 rounds without it
++  Tracked --> Finder: the watched root left the document (a replay) and no bar is back yet
++  Tracked --> Watching: the watched root left the document and a new bar is there
++  Watching --> Finder: the watched root left the document
++```
++
++| State | Fields |
++| --- | --- |
++| Finder | `finderObserver` set (subtree observer on the app root); `domObserver`, `attrObserver`, `progressBar` all null |
++| Watching | `domObserver` and `attrObserver` set, `observedRoot` connected, `progressBar === null` |
++| Tracked | `progressBar` set; `barSelectorIndex` says which selector matched (`>= 2`: above the track, narrowed once the track exists); `anchor` caches the element the overlay sits beside |
++| Polling | `barRetry.active`: `acquireProgressBar` every 250 ms, at most 40 times |
++
++- A bar check is one frame at a time: `isProcessing` is the "a check is
++  already scheduled" bit, `barChecks` counts the requests (read it on the TV:
++  hundreds in ten seconds mean a selector matches an element YouTube changes
++  every frame).
++- Rules (checked): the finder never exists beside the bar observers or a
++  tracked bar; the two bar observers come as a pair; the poll never runs
++  beside the finder; a cached `anchor` belongs to the tracked bar; the
++  overlay has one mark (`overlayMarks`) per child.
++- Overlay: `lastOverlayHash` (duration, modes, segment count) says what is
++  drawn; `lastSyncSig` (`h` or `v`, then the box) says where. A hidden bar
++  already synced as hidden costs no layout read.
++
++## Return YouTube Dislike
++
++One `ReturnYouTubeDislike` per video (`features/return-dislike/`), alive even
++with the count off: the description panel's keyboard navigation is its too.
++
++| Sub-machine | States | Fields |
++| --- | --- | --- |
++| The count | unknown, fetching, known, retrying (3 times, 1.2 s more each), gave up | `dislikesValue` (null: unknown, never cached), `abortFetch`, `fetchAttempts`, the `retry` timer |
++| The panel | none, tracked, stale | `panelElement`, `panelBag` (its two observers), `panelPoll` (bounded: 20 rounds of 500 ms, armed by the description shortcut and by a stale panel) |
++| The factoid | absent, placeholder, number | `dislikeFactoidElement`, `dislikeValueElement`, `factoidContainer`, `cachedMode` (the panel's layout) |
++| Focus | outside, inside | `isPanelFocused`, `lastFocusedElement`, `focusedIndex`, `menuItemsCache` and `menuItemsMap` (dropped on any panel mutation that is not the instance's own) |
++| Header shift | none, shifted by n px | `shiftedList`, `shiftMemo`, `shiftStyle` |
++
++- `isProgrammaticFocus` is true only inside `moveFocus()`'s own `focus()`
++  call, so the focus listeners ignore it.
++- Named timers (`schedule(fn, ms, name)`): scheduling a name again replaces
++  the pending one; `destroy()` clears all. Names in use: `retry`, `inject`,
++  `focusSettle`, `highlightClear`.
++- `releasePanel()` is the one way out of "tracked": it clears every field
++  that points into the panel. A new field pointing into the panel is reset
++  there.
++
++## Force Max Quality
++
++`features/video-quality/`, all on the `vq` object (`state.js`).
++
++| State | Fields |
++| --- | --- |
++| Detached | `bag === null`, `navTimer === null` |
++| Attach scheduled | `navTimer` set (a tick after the watch page appears) |
++| Looking for the player | `bag` set, `poll` set: every 200 ms 50 times, then every 1 s 50 times, then it stops |
++| Attached | `bag` set, `player` set; `handleStateChange` receives the player's states |
++
++Attached, per video: `lastVideoId`, `qualitySetForVideo` (videos already
++settled), `videoBeingProcessed` (an intercept in flight: pause, force,
++resume over two frames). webOS 25 only: `kickstartInProgress`,
++`hasKickstarted` (once per session, survives a detach) and `kickstartRun`
++(bumped by every detach, so a kick loop of a previous attach stops).
++
++- `handleStateChange` publishes `yt-player-state-change` first, whatever the
++  setting: the clock, SponsorBlock and the playback speed's quality cap
++  follow the player through it. It exists only while Attached, so it is
++  silent off the watch page (the Shorts keep-alive asks the player itself).
++- `isForceEnabled()` is the one answer to "is quality forced now": the
++  setting, not an inline preview, not capped by the playback speed
++  (`core/speed-cap.js`).
++
++## Screensaver fix
++
++- **Page and `<video>`** (`index.js`): `lastPageType` (`WATCH`, `SHORTS`,
++  `OTHER`), `currentVideoElement` (observed for `style` changes),
++  `videoWait` (the wait for a `<video>` on the watch page, cancelled on a
++  page change). `rafPending` and `rafTargetVideo` coalesce a burst of style
++  mutations into one check per frame.
++- **Shorts keep-alive** (`shorts-keep-alive.js`): off, or on with a 30 s
++  interval (`shortsKeepAliveTimer`) and, for 250 ms after each press, the
++  second half of the key burst (`shortsBufferTimer`).
++- **Decoder stall** (`decoder-stall.js`): per `<video>`, `pausedAt` (a
++  WeakMap) remembers when it was paused; a `playing` more than 30 s later
++  arms one check (`pending`) 2 s ahead, which seeks in place when the clock
++  has not moved. `pause` or another `playing` cancels it; the nudge's own
++  `playing` finds no `pausedAt` and is not checked again.
++
++## Max Thumbnail Quality
++
++`features/thumbnail-quality/`, shared state in `state.js`.
++
++Per video:
++
++| State | Held in |
++| --- | --- |
++| Unknown | in none of the collections |
++| Queued | `probeQueue` and `probeAttempted` (one attempt per session; `queuedByParse` then `latestParse` say which parse queued it) |
++| Probing | counted in `state.activeProbes` (at most 3) |
++| Verified | `qualityCache` (videoId to rank; saved to localStorage, debounced) |
++| Unconfirmed | `qualityCache` and `unconfirmed`: a probe that learned nothing in Original mode; the floor for this session, not saved |
++| Awaiting correction | `pendingEntries` (the response objects written to), `provenFloor`, then `pendingPromotions` and `promotionAttempts` for tiles already on screen |
++
++The scheduler (`probes.js`):
++
++| Gate | Fields | Effect |
++| --- | --- | --- |
++| Idle | `state.lastParseAt`, `PROBE_IDLE_DELAY` (1.2 s) | probes wait until responses stop arriving (a scroll), except the two bursts below |
++| Urgent burst | `urgentLeft` (4 per parse), `latestParse` | the first videos of the latest response go at once |
++| Visible burst | `state.visibleBudget` (6), `state.visibleSample` (reused for 250 ms) | tiles on screen go at once |
++| Arrow keys | `state.lastNavAt`, `NAV_PAUSE_MS` (350 ms) | no probe and no promotion while the remote moves |
++| Background | `document.hidden` | nothing runs; pending promotions are dropped |
++
++- `state.probeTimer` (a delayed drain), `state.probePump` (an idle
++  callback), `state.promoteTimer` (a sweep) and `state.saveTimer` are each
++  "at most one pending".
++- `state.probeGeneration` is bumped when the mode's rung changes
++  (`resetVerification`): a probe that started before carries the old number
++  and its answer is dropped.
++- The stored cache is valid only for the rung and revision in
++  `ytaf-thumb-quality-cap`; anything else drops it.
++
++## DeArrow
++
++`features/dearrow/`. Off by default.
++
++Per video (`videos`, a Map of videoId to record):
++
++| State | Fields |
++| --- | --- |
++| New | record created by `patchResponseTiles`, id queued for a lookup |
++| Fetching | `fetching` (the branding request's promise, shared) |
++| Fetched | `fetched`, `raw` (the answer, or null) |
++| Resolved | `resolved`; `title`, `thumb` (null: YouTube's own), `crowdTitle`, `crowdThumb` |
++| Shown | `shownTitle`, `shownThumb` (what the sweep last wrote, so it can be put back) |
++
++- `tiles` are the response objects of the video (the last 8), written to
++  when it resolves; `originals` (a WeakMap) is what each had.
++- `generation` (`state.js`) is bumped by every settings change and wipe: an
++  answer that lands for an older generation is dropped.
++- The lookup pump: `queue`, `active` (at most 4). The sweep: `sweepTimer`
++  (at most one pending, 300 ms after a parse, a lookup or a key press).
++- A wipe (1000 videos, or the thumbnail copies' memory budget) puts every
++  original back, then forgets everything.
++- The walk of a response is skipped when its JSON text holds no
++  `"tileRenderer"` key (`window.__ytafDeArrowStats` counts both).
++
++## Options panel
++
++`ui/panel/panel.js`.
++
++| State | Fields |
++| --- | --- |
++| Not built | `panel === null` |
++| Opening block | `panelInitBlock` for 500 ms after the first build: toggles are ignored (a held menu key delivered after the build's freeze would close it again) |
++| Hidden | `panel` set, `optionsPanelVisible === false` |
++| Visible | `optionsPanelVisible`; the keyboard handler and the focus trap are attached |
++
++- Pages: only Main is built with the panel; the others are built one per
++  frame afterwards (`createDeferredBuilder`), or at once when their tab is
++  picked first. A builder never runs twice.
++- Keyboard while visible (`keyboard.js`): `pointerActive` (a Magic Remote
++  pointer is in use: Enter leaves the click to the pointer), `enterHeldSince`
++  and `dropClicksUntil` (the pointer click that follows an Enter is dropped),
++  `ownClick` (the handler's own click passes).
++- Closing with Back or Escape swallows that key until it is released
++  (`swallowUntilReleased`, 2 s at most).
++- The SponsorBlock popup (`features/sponsorblock/popup.js`): `visible` is
++  what the panel asks for, `hasSegments` what the video has; it shows only
++  with both. `rowsStale` defers building the rows until it is shown.
++
++## Shortcuts
++
++`ui/shortcuts/`.
++
++- **Router debounce** (`bindings.js` `shortcutState`): `lastKey`,
++  `lastTime`, `debounceMs` (100 ms; 650 ms for a moment after a pause, so
++  the controls dismissal is not interrupted). A repeat is swallowed, never
++  passed to YouTube. Burst actions (the seeks) are exempt.
++- **Burst seek** (`seek.js`): `seekAccumulator` (the total in the toast,
++  reset 1.2 s after the last press or when the direction flips),
++  `pendingSeekOffset` (not applied yet; applied 200 ms after the last press).
++- **Chapter skip**: `skipInFlight` (one at a time), `chaptersForcedFor` (the
++  video whose player UI was already forced open once to read the markers).
++- **Play/pause**: after a pause the controls bar is hidden for 750 ms
++  (`ui/hide-controls.js`: `saved` holds the shadows' own opacity while
++  hidden, `timer` the end of the window).
++- **OLED overlay** (`oled.js`): on while the overlay element exists;
++  `keepAliveTimer` presses UP every 30 minutes.
++
++## Toasts
++
++`ui/toast/index.js`. A toast is hidden for its first two frames, shown, then
++`fading` for 1 s, then removed. `liveToasts` (by text: a repeat extends the
++toast) and `slotToasts` (by slot: the play/pause state and the seek total
++change one toast in place) let go of a toast the moment it starts fading.
++
++## Smaller ones
++
++| Machine | Where | States and fields |
++| --- | --- | --- |
++| Settings write | `core/config.js` | clean, or dirty with `pendingWriteTimer` (200 ms debounce; flushed on `beforeunload` and `pagehide`) |
++| `<video>` cache | `core/dom.js` | `cachedVideo`, dropped when the page is neither watch nor Shorts or the element leaves the document |
++| Tracking Block | `features/adblock/tracking-block.js` | `active` follows the flag; `xhrInstalled` goes true once and stays (the wrappers are never removed, only gated) |
++| Fetch hook | `hooks/fetch.ts` | `registry` null until first use; with no listener and diagnostics off, every fetch takes the unwrapped path |
++| resolveCommand hook | `hooks/resolve-command.ts` | none, `pending` (one shared poll, 30 s), `registry`; a timed-out poll is retried by the next caller |
++| Account-selector bypass | `features/auto-login/whos-watching.js` | `bypassUntil`: open for 15 s after start or a relaunch, closed (0) by the first bypass |
++| Comments fix | `features/comments-fix.js` | startup scans every second until the rules are found (`foundRules`) or the stylesheet count held still for two scans; then up to 3 scans on panel focus (`scans`) |
++| Clock | `features/watch/index.js` | no instance, or one per mode; shown or hidden by a class; `observedPlayer` is the player whose focus attribute is watched |
++| Force Video Codec | `features/force-codec/` | `fc.mode` (`auto` when off, unknown or unsupported on this TV), `fc.installed` (hooks go in once), `fc.unsatisfiable` |
++| Playback Speed | `features/playback-speed/` | `controller` null until the setting is first on; `currentSpeed`; `pending` (a reload 800 ms after the last change, remembering the speed and position the burst started from); one audio sink at a time |
++| Buffer limit | `hooks/buffer-limit.js` | per SourceBuffer `__ytafTrimming` while a trim's `remove()` runs (an append then waits for `updateend`); `appendPatched` once |
++| Legacy emoji fix | `features/emoji-font/observer.js` | `isObserving`; `emojiState.frameId` (one frame pending for the queued text nodes) |
++| Emoji and filter flags | `features/adblock/flags.js` | one snapshot (`cfgFlags`, `cfgFlagsNoEmoji`, `filterState`) recomputed on a setting change, never per parse |
+diff --git a/docs/codemap.json b/docs/codemap.json
+index 12c8637..ba9293c 100644
+--- a/docs/codemap.json
++++ b/docs/codemap.json
+@@ -985,7 +985,7 @@
+   },
+   {
+    "path": "features/adblock/emoji-wrap.js",
+-   "lines": 250,
++   "lines": 266,
+    "header": "The legacy emoji fix's half in the response: every emoji in the parsed tree wrapped in sentinel characters, so features/emoji-font can swap it for an image on webOS 3 and 4. The webOS 22+ build carries emoji-wrap-absent.js in its place (webpack.config.js): the fix is never on there.",
+    "imports": [
+     {
+@@ -1275,7 +1275,7 @@
+   },
+   {
+    "path": "features/adblock/parse-hook.js",
+-   "lines": 182,
++   "lines": 184,
+    "header": "The JSON.parse hook: classifies each InnerTube response and runs the filters, the thumbnail rewrite and the text fixes over it before the app sees it.",
+    "imports": [
+     {
+@@ -2066,7 +2066,7 @@
+   },
+   {
+    "path": "features/dearrow/index.js",
+-   "lines": 123,
++   "lines": 142,
+    "header": "DeArrow (https://dearrow.ajay.app): crowdsourced titles and thumbnails in place of clickbait ones, on the tiles of shelves and grids. Off by default; its own page in the options panel.\n\nA branding lookup takes a request per video, which the JSON.parse hook cannot wait for, so it works in two halves: 1. applyDeArrow() runs in the parse hook (adblock/parse-hook.js) and writes what is already decided into every tile of the response, so those render right the first time; videos not seen before are queued for a lookup (lookup.js). 2. When a lookup lands, the tiles already on screen are patched (sweep.js). Tiles are rebuilt as the user moves around, so the sweep also follows every parse and key press. What is shown follows the extension: the top title or thumbnail unless it is the original or voted below zero (a locked one always wins), with the extension's own title formatter (src/vendor/dearrow).",
+    "imports": [
+     {
+@@ -2147,7 +2147,10 @@
+      "listen": [
+       "keydown"
+      ]
+-    }
++    },
++    "hooks": [
++     "window.__ytafDeArrowStats"
++    ]
+    },
+    "functions": [
+     "features/dearrow/index.js#cancelSweep",
+@@ -4681,7 +4684,7 @@
+   },
+   {
+    "path": "features/sponsorblock/skipping.js",
+-   "lines": 316,
++   "lines": 338,
+    "header": "Playback-time behaviour: aiming at the next segment, the timeupdate listener, the per-frame loop near a segment and the skip itself, which the chain at the start (chain.js) takes too. The blue key is blue-key.js.",
+    "imports": [
+     {
+@@ -4760,6 +4763,7 @@
+     "features/sponsorblock/skipping.js#aimAt",
+     "features/sponsorblock/skipping.js#aimPast",
+     "features/sponsorblock/skipping.js#resetSegmentTracking",
++    "features/sponsorblock/skipping.js#carryManualSegment",
+     "features/sponsorblock/skipping.js#refreshSkipSegments",
+     "features/sponsorblock/skipping.js#clearManualNotification",
+     "features/sponsorblock/skipping.js#armSkipWatchdog",
+@@ -4943,7 +4947,7 @@
+   },
+   {
+    "path": "features/thumbnail-quality/dispatch.js",
+-   "lines": 362,
++   "lines": 387,
+    "header": "Where each InnerTube response type keeps its thumbnails: the known paths per type, the bounded scan for shapes no path matched, and the entry point the JSON.parse hook calls.",
+    "imports": [
+     {
+@@ -4967,7 +4971,8 @@
+      "from": "features/thumbnail-quality/state.js",
+      "names": [
+       "state",
+-      "pendingPromotions"
++      "pendingPromotions",
++      "thumbStats"
+      ]
+     },
+     {
+@@ -5011,6 +5016,7 @@
+     "features/thumbnail-quality/dispatch.js#upgradeBrowseTabs",
+     "features/thumbnail-quality/dispatch.js#upgradeActions",
+     "features/thumbnail-quality/dispatch.js#upgradeContinuation",
++    "features/thumbnail-quality/dispatch.js#worthScanning",
+     "features/thumbnail-quality/dispatch.js#scanForThumbnails",
+     "features/thumbnail-quality/dispatch.js#scanRoot",
+     "features/thumbnail-quality/dispatch.js#upgradeByType",
+@@ -5521,7 +5527,7 @@
+   },
+   {
+    "path": "features/thumbnail-quality/state.js",
+-   "lines": 90,
++   "lines": 96,
+    "header": "Everything the thumbnail modules share and mutate: the current mode, the verification caches and queues, timers and budgets. Scalars live on `state` so every module reads the same value; collections are exported directly.",
+    "imports": [
+     {
+@@ -12129,10 +12135,10 @@
+    "params": "text",
+    "exported": true,
+    "lines": [
+-    58,
+-    60
++    72,
++    76
+    ],
+-   "description": "Whether the JSON text can hold anything the emoji walk would change: one native scan of the text, so the walk over every item of a response (the most expensive pass on webOS 3 and 4) is skipped for the ones without.",
++   "description": "Whether the JSON text can hold anything the emoji walk would change, so the walk over every item of a response (the most expensive pass on webOS 3 and 4) is skipped for the ones without. Native scans of the text: the few-range class first, the exact class only from where that one matched (never more characters than one exact scan read), then the escaped forms.",
+    "calledBy": [
+     "features/adblock/parse-hook.js#parseAndFilter"
+    ]
+@@ -12144,8 +12150,8 @@
+    "params": "str",
+    "exported": false,
+    "lines": [
+-    67,
+-    75
++    83,
++    91
+    ],
+    "description": "A text with each emoji wrapped in sentinels (U+200B before, U+200C after) for features/emoji-font to draw as an image on webOS 3/4. Sentinels already in the text are removed first, so it is safe to run twice; plain text comes back as it is.",
+    "calledBy": [
+@@ -12159,8 +12165,8 @@
+    "params": "text, originalRun",
+    "exported": false,
+    "lines": [
+-    78,
+-    94
++    94,
++    110
+    ],
+    "description": "Called only for text that passed NEEDS_TEXT_WORK_RE in the caller.",
+    "calledBy": [
+@@ -12174,8 +12180,8 @@
+    "params": "obj",
+    "exported": false,
+    "lines": [
+-    97,
+-    102
++    113,
++    118
+    ],
+    "description": "Whether `obj` has offset runs (commandRuns, styleRuns...) over its `content`.",
+    "calledBy": [
+@@ -12189,8 +12195,8 @@
+    "params": "obj",
+    "exported": false,
+    "lines": [
+-    111,
+-    161
++    127,
++    177
+    ],
+    "description": "An attributed string's `content` wrapped, and the offsets of its runs (UTF-16 units of `content`) moved with the characters they name: a run starting at an emoji starts at its opening sentinel, one ending with it ends after the closing one. Without this a mention, link or timestamp after an emoji pointed two characters early per emoji.",
+    "calls": [
+@@ -12207,8 +12213,8 @@
+    "params": "p",
+    "exported": false,
+    "lines": [
+-    135,
+-    147
++    151,
++    163
+    ],
+    "description": "Where offset `p` of `src` lands in `out`.",
+    "calledBy": [
+@@ -12222,8 +12228,8 @@
+    "params": "obj",
+    "exported": false,
+    "lines": [
+-    165,
+-    216
++    181,
++    232
+    ],
+    "description": "Non-recursive: the emoji/text fields of a single node, in place. walkAndProcess guarantees obj is a non-null object.",
+    "calls": [
+@@ -12243,8 +12249,8 @@
+    "params": "obj",
+    "exported": true,
+    "lines": [
+-    223,
+-    225
++    239,
++    241
+    ],
+    "description": "Wraps the emoji in the text fields of `obj` and every node below it.",
+    "calls": [
+@@ -12266,8 +12272,8 @@
+    "params": "obj, depth",
+    "exported": false,
+    "lines": [
+-    229,
+-    250
++    245,
++    266
+    ],
+    "description": "The depth is a plain argument: a default value would cost an `arguments` read per node in the legacy build.",
+    "calls": [
+@@ -12782,7 +12788,7 @@
+    "id": "features/adblock/parse-hook.js#filterSafely",
+    "name": "filterSafely",
+    "kind": "function",
+-   "params": "data, textLength, flags",
++   "params": "data, textLength, flags, text",
+    "exported": false,
+    "lines": [
+     105,
+@@ -12800,13 +12806,13 @@
+    "id": "features/adblock/parse-hook.js#filterResponse",
+    "name": "filterResponse",
+    "kind": "function",
+-   "params": "data, textLength, flags",
++   "params": "data, textLength, flags, text",
+    "exported": false,
+    "lines": [
+-    118,
+-    160
++    120,
++    162
+    ],
+-   "description": "Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade, DeArrow and the emoji wrap.",
++   "description": "Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade, DeArrow and the emoji wrap. `text` is the JSON the response was parsed from (with its trackingParams blanked when Tracking Block is on), for a pass that can tell from it that it has nothing to do; `textLength` is its length as YouTube sent it.",
+    "calls": [
+     "core/innertube.js#detectResponseType",
+     "core/log.js#isDebugEnabled",
+@@ -12832,8 +12838,8 @@
+    "params": "",
+    "exported": true,
+    "lines": [
+-    170,
+-    182
++    172,
++    184
+    ],
+    "description": "Installs the hook, once, for the life of the page.\n\nEvery switch that lives on it (ads, Shorts, guest prompts, endcards, trackingParams, the legacy emoji rewrite, the thumbnail upgrade, DeArrow) is a flag in flags.js, and filterResponse stops after the rows-ahead pass (its own switch, Load Rows Ahead) while none of them is on; force-codec's offer filter runs inside it as well.",
+    "hooks": [
+@@ -14040,13 +14046,13 @@
+    "id": "features/dearrow/index.js#applyDeArrow",
+    "name": "applyDeArrow",
+    "kind": "function",
+-   "params": "data, responseType",
++   "params": "data, responseType, text",
+    "exported": true,
+    "lines": [
+-    72,
+-    80
++    85,
++    99
+    ],
+-   "description": "The parse hook's step (adblock/parse-hook.js) for an InnerTube response: its video tiles get what is decided, new videos are queued for a lookup, and the rendered tiles are swept a moment later. Player responses carry no tiles and are skipped.",
++   "description": "The parse hook's step (adblock/parse-hook.js) for an InnerTube response: its video tiles get what is decided, new videos are queued for a lookup, and the rendered tiles are swept a moment later. Player responses carry no tiles and are skipped, and so is the walk of a response whose JSON `text` holds no tile key: comments, live chat, the guide and the settings pages are thousands of nodes with nothing in them to find, and one native scan of the text says so (a key quoted inside a string value has its quotes escaped there, so it is not taken for one).",
+    "calls": [
+     "features/dearrow/index.js#scheduleSweep",
+     "features/dearrow/index.js#wipe",
+@@ -14065,8 +14071,8 @@
+    "params": "",
+    "exported": false,
+    "lines": [
+-    89,
+-    103
++    108,
++    122
+    ],
+    "description": "A DeArrow setting changed: everything is decided again (answers already fetched are reused), newest first, since those are the videos likely on screen. Turned off, YouTube's own come back everywhere and everything DeArrow kept goes with them: up to BLOB_BUDGET of thumbnail copies would otherwise stay in memory for the rest of the session.",
+    "calls": [
+@@ -19387,6 +19393,24 @@
+     "features/sponsorblock/video-events.js#bindWindowEvents"
+    ]
+   },
++  {
++   "id": "features/sponsorblock/skipping.js#carryManualSegment",
++   "name": "carryManualSegment",
++   "kind": "function",
++   "params": "sb, originalIndex",
++   "exported": false,
++   "lines": [
++    119,
++    128
++   ],
++   "description": "After a rebuild of the skip list: the segment being offered is the one of the new list (the same API segment, with its end as clamped now), so the prompt on screen goes on offering it; or it is no longer a manual one (its mode changed, muted segments were switched) and the prompt goes with it. Without this the handler kept an object of the old list: the blue key skipped a segment the settings had just set aside, and the next timeupdate took the rebuilt segment for a new one and stacked a second prompt.",
++   "calls": [
++    "features/sponsorblock/skipping.js#clearManualNotification"
++   ],
++   "calledBy": [
++    "features/sponsorblock/skipping.js#refreshSkipSegments"
++   ]
++  },
+   {
+    "id": "features/sponsorblock/skipping.js#refreshSkipSegments",
+    "name": "refreshSkipSegments",
+@@ -19394,13 +19418,14 @@
+    "params": "sb",
+    "exported": true,
+    "lines": [
+-    111,
+-    117
++    131,
++    139
+    ],
+    "description": "Rebuilds the skip list for the current settings and re-aims.",
+    "calls": [
+     "features/sponsorblock/mute.js#leaveMutedSegment",
+     "features/sponsorblock/segments.js#rebuildSkipSegments",
++    "features/sponsorblock/skipping.js#carryManualSegment",
+     "features/sponsorblock/skipping.js#resetSegmentTracking",
+     "features/sponsorblock/skipping.js#stopHighFreqLoop"
+    ],
+@@ -19418,13 +19443,14 @@
+    "params": "sb",
+    "exported": true,
+    "lines": [
+-    122,
+-    128
++    144,
++    150
+    ],
+    "description": "Removes the manual-skip prompt and forgets the segment it offered.",
+    "calledBy": [
+     "features/sponsorblock/blue-key.js#manualSkipOrHighlight",
+     "features/sponsorblock/index.js#SponsorBlockHandler.destroy",
++    "features/sponsorblock/skipping.js#carryManualSegment",
+     "features/sponsorblock/skipping.js#handleTimeUpdate",
+     "features/sponsorblock/skipping.js#resetSegmentTracking"
+    ]
+@@ -19436,8 +19462,8 @@
+    "params": "sb",
+    "exported": true,
+    "lines": [
+-    133,
+-    143
++    155,
++    165
+    ],
+    "description": "Safety net: if the media pipeline swallows the 'seeked' event for a programmatic skip (buffer stalls / near-EOS quirks on webOS), clear the isSkipping latch so the timeupdate pipeline keeps working.",
+    "calls": [
+@@ -19458,8 +19484,8 @@
+    "params": "sb",
+    "exported": true,
+    "lines": [
+-    146,
+-    151
++    168,
++    173
+    ],
+    "description": "Stops the timer that catches a skip whose seek never completed.",
+    "calledBy": [
+@@ -19474,8 +19500,8 @@
+    "params": "sb, currentTime",
+    "exported": false,
+    "lines": [
+-    160,
+-    165
++    182,
++    187
+    ],
+    "description": "Index of the segment `currentTime` is in. The predicted one is trusted when it is a manual segment; otherwise the scan decides, since a manual segment nested in the predicted one takes precedence (see findSegmentAtTime).",
+    "calls": [
+@@ -19492,8 +19518,8 @@
+    "params": "sb, seg",
+    "exported": false,
+    "lines": [
+-    168,
+-    174
++    190,
++    196
+    ],
+    "description": "The manual-skip prompt for a segment that is not auto-skipped.",
+    "calls": [
+@@ -19511,8 +19537,8 @@
+    "params": "sb, seg, segmentIdx, currentTime",
+    "exported": false,
+    "lines": [
+-    177,
+-    196
++    199,
++    218
+    ],
+    "description": "Whether an auto-skip segment is skipped now, or left alone.",
+    "calls": [
+@@ -19534,8 +19560,8 @@
+    "params": "sb, segmentIdx, currentTime",
+    "exported": false,
+    "lines": [
+-    204,
+-    230
++    226,
++    252
+    ],
+    "description": "Where the skip lands: past this segment and the auto-skip segments that follow it closely, but never past the start of a manual one ahead of the playhead. A manual segment already behind the playhead has had its turn, and a muted segment is skipped over like any other part of the video.",
+    "calledBy": [
+@@ -19549,8 +19575,8 @@
+    "params": "sb, segmentIdx, currentTime, { jumpTarget, categories, indices }",
+    "exported": false,
+    "lines": [
+-    233,
+-    260
++    255,
++    282
+    ],
+    "description": "Performs the skip, then aims at whatever follows the landing point.",
+    "calls": [
+@@ -19571,8 +19597,8 @@
+    "params": "sb, segmentIdx, currentTime",
+    "exported": true,
+    "lines": [
+-    267,
+-    270
++    289,
++    292
+    ],
+    "description": "The auto-skip segment at `segmentIdx`, with the ones close behind it, in one jump; unless shouldSkip leaves it alone. The timeupdate path and the chain at the start (chain.js) both come here.",
+    "calls": [
+@@ -19592,8 +19618,8 @@
+    "params": "sb",
+    "exported": true,
+    "lines": [
+-    276,
+-    316
++    298,
++    338
+    ],
+    "description": "The skip decision at the playhead: leaves a muted segment, polls faster before the next segment, and inside one auto-skips, mutes, or offers the manual skip according to its category's mode.",
+    "calls": [
+@@ -20031,6 +20057,21 @@
+     "features/thumbnail-quality/dispatch.js#upgradeResponseThumbnails"
+    ]
+   },
++  {
++   "id": "features/thumbnail-quality/dispatch.js#worthScanning",
++   "name": "worthScanning",
++   "kind": "function",
++   "params": "",
++   "exported": false,
++   "lines": [
++    229,
++    235
++   ],
++   "description": "Whether a fallback scan of the current response can find anything: its JSON text names the thumbnail host. One native scan of the text, made only when a scan is about to run and once per response, in place of walks of up to SCAN_MAX_NODES nodes each (one per section the paths could not read) over a response that holds no video thumbnail: a settings page, comments under a key no path names, a shelf of channels.",
++   "calledBy": [
++    "features/thumbnail-quality/dispatch.js#scanForThumbnails"
++   ]
++  },
+   {
+    "id": "features/thumbnail-quality/dispatch.js#scanForThumbnails",
+    "name": "scanForThumbnails",
+@@ -20038,11 +20079,12 @@
+    "params": "root",
+    "exported": false,
+    "lines": [
+-    223,
+-    250
++    242,
++    269
+    ],
+    "description": "Last-resort bounded walk, used only when the schema paths produced nothing. Keeps the module working through an InnerTube reshuffle instead of silently doing nothing, without ever putting a full traversal on the hot path.",
+    "calls": [
++    "features/thumbnail-quality/dispatch.js#worthScanning",
+     "features/thumbnail-quality/rewrite.js#upgradeContainer"
+    ],
+    "calledBy": [
+@@ -20057,8 +20099,8 @@
+    "params": "data, type",
+    "exported": false,
+    "lines": [
+-    260,
+-    269
++    279,
++    288
+    ],
+    "description": "Where the thumbnail scan of a response type starts: down SCAN_FROM's path as far as it exists.",
+    "calledBy": [
+@@ -20072,8 +20114,8 @@
+    "params": "data, type, textLength",
+    "exported": false,
+    "lines": [
+-    277,
+-    327
++    296,
++    346
+    ],
+    "description": "The thumbnails at the known paths of `type`, rewritten; the count. A type whose paths reach no item list at all gets the bounded scan, an unknown type gets it when the body is large enough to be worth one, and a type with nothing to find gets neither.",
+    "calls": [
+@@ -20095,13 +20137,13 @@
+    "id": "features/thumbnail-quality/dispatch.js#upgradeResponseThumbnails",
+    "name": "upgradeResponseThumbnails",
+    "kind": "function",
+-   "params": "data, responseType, textLength",
++   "params": "data, responseType, textLength, text",
+    "exported": true,
+    "lines": [
+-    335,
+-    362
++    355,
++    387
+    ],
+-   "description": "Entry point called from the JSON.parse hook in adblock/parse-hook.js. `responseType` is the type adblock already detected, so this costs no extra detection pass; `textLength` is the length of the JSON text, which the hook already has.",
++   "description": "Entry point called from the JSON.parse hook in adblock/parse-hook.js. `responseType` is the type adblock already detected, so this costs no extra detection pass; `textLength` is the length of the JSON text, which the hook already has, and `text` the text itself, which a fallback scan asks whether it is worth running (worthScanning).",
+    "calls": [
+     "features/thumbnail-quality/dispatch.js#upgradeByType",
+     "features/thumbnail-quality/dispatch.js#upgradeContinuation",
+@@ -20800,8 +20842,8 @@
+    "params": "name",
+    "exported": true,
+    "lines": [
+-    56,
+-    61
++    62,
++    67
+    ],
+    "description": "Clears the timer in `state[name]`, if one is set.",
+    "calledBy": [
+@@ -28801,6 +28843,9 @@
+   "window.__ytafContinuationStats": [
+    "features/rows-ahead.js#(top level)"
+   ],
++  "window.__ytafDeArrowStats": [
++   "features/dearrow/index.js#(top level)"
++  ],
+   "window.__ytafQualityStats": [
+    "features/video-quality/index.js#(top level)"
+   ],
+diff --git a/docs/codemap/features-adblock.md b/docs/codemap/features-adblock.md
+index e8be218..e400f90 100644
+--- a/docs/codemap/features-adblock.md
++++ b/docs/codemap/features-adblock.md
+@@ -40,7 +40,7 @@ No emoji work on this build.
+ 
+ > The legacy emoji fix's half in the response: every emoji in the parsed tree wrapped in sentinel characters, so features/emoji-font can swap it for an image on webOS 3 and 4. The webOS 22+ build carries emoji-wrap-absent.js in its place (webpack.config.js): the fix is never on there.
+ 
+-250 lines · imports [features/adblock/log.js](#mod-log-js) · imported by [features/adblock/item-filters.js](#mod-item-filters-js), [features/adblock/parse-hook.js](#mod-parse-hook-js), [features/adblock/response-filters.js](#mod-response-filters-js)
++266 lines · imports [features/adblock/log.js](#mod-log-js) · imported by [features/adblock/item-filters.js](#mod-item-filters-js), [features/adblock/parse-hook.js](#mod-parse-hook-js), [features/adblock/response-filters.js](#mod-response-filters-js)
+ 
+ **At load:**
+ 
+@@ -54,35 +54,35 @@ The body of the first character class in `re`: what is between its [ and ].
+ - **Called by:** [at load](#mod-emoji-wrap-js)
+ 
+ <a id="fn-emoji-wrap-js-mayneedemojiwork"></a>
+-**`mayNeedEmojiWork(text)`** · function, exported · L58–60
++**`mayNeedEmojiWork(text)`** · function, exported · L72–76
+ 
+-Whether the JSON text can hold anything the emoji walk would change: one native scan of the text, so the walk over every item of a response (the most expensive pass on webOS 3 and 4) is skipped for the ones without.
++Whether the JSON text can hold anything the emoji walk would change, so the walk over every item of a response (the most expensive pass on webOS 3 and 4) is skipped for the ones without. Native scans of the text: the few-range class first, the exact class only from where that one matched (never more characters than one exact scan read), then the escaped forms.
+ 
+ - **Called by:** [features/adblock/parse-hook.js › parseAndFilter](#fn-parse-hook-js-parseandfilter)
+ 
+ <a id="fn-emoji-wrap-js-processemojistring"></a>
+-**`processEmojiString(str)`** · function · L67–75
++**`processEmojiString(str)`** · function · L83–91
+ 
+ A text with each emoji wrapped in sentinels (U+200B before, U+200C after) for features/emoji-font to draw as an image on webOS 3/4. Sentinels already in the text are removed first, so it is safe to run twice; plain text comes back as it is.
+ 
+ - **Called by:** [processTextFieldsInPlace](#fn-emoji-wrap-js-processtextfieldsinplace)
+ 
+ <a id="fn-emoji-wrap-js-splitintoruns"></a>
+-**`splitIntoRuns(text, originalRun)`** · function · L78–94
++**`splitIntoRuns(text, originalRun)`** · function · L94–110
+ 
+ Called only for text that passed NEEDS_TEXT_WORK_RE in the caller.
+ 
+ - **Called by:** [processTextFieldsInPlace](#fn-emoji-wrap-js-processtextfieldsinplace)
+ 
+ <a id="fn-emoji-wrap-js-hasoffsetruns"></a>
+-**`hasOffsetRuns(obj)`** · function · L97–102
++**`hasOffsetRuns(obj)`** · function · L113–118
+ 
+ Whether `obj` has offset runs (commandRuns, styleRuns...) over its `content`.
+ 
+ - **Called by:** [processTextFieldsInPlace](#fn-emoji-wrap-js-processtextfieldsinplace)
+ 
+ <a id="fn-emoji-wrap-js-wrapattributedcontent"></a>
+-**`wrapAttributedContent(obj)`** · function · L111–161
++**`wrapAttributedContent(obj)`** · function · L127–177
+ 
+ An attributed string's `content` wrapped, and the offsets of its runs (UTF-16 units of `content`) moved with the characters they name: a run starting at an emoji starts at its opening sentinel, one ending with it ends after the closing one. Without this a mention, link or timestamp after an emoji pointed two characters early per emoji.
+ 
+@@ -90,14 +90,14 @@ An attributed string's `content` wrapped, and the offsets of its runs (UTF-16 un
+ - **Called by:** [processTextFieldsInPlace](#fn-emoji-wrap-js-processtextfieldsinplace)
+ 
+ <a id="fn-emoji-wrap-js-wrapattributedcontent-moved"></a>
+-**`wrapAttributedContent.moved(p)`** · arrow · L135–147
++**`wrapAttributedContent.moved(p)`** · arrow · L151–163
+ 
+ Where offset `p` of `src` lands in `out`.
+ 
+ - **Called by:** [wrapAttributedContent](#fn-emoji-wrap-js-wrapattributedcontent)
+ 
+ <a id="fn-emoji-wrap-js-processtextfieldsinplace"></a>
+-**`processTextFieldsInPlace(obj)`** · function · L165–216
++**`processTextFieldsInPlace(obj)`** · function · L181–232
+ 
+ Non-recursive: the emoji/text fields of a single node, in place. walkAndProcess guarantees obj is a non-null object.
+ 
+@@ -105,7 +105,7 @@ Non-recursive: the emoji/text fields of a single node, in place. walkAndProcess
+ - **Called by:** [walkEmoji](#fn-emoji-wrap-js-walkemoji)
+ 
+ <a id="fn-emoji-wrap-js-wrapemojiintree"></a>
+-**`wrapEmojiInTree(obj)`** · function, exported · L223–225
++**`wrapEmojiInTree(obj)`** · function, exported · L239–241
+ 
+ Wraps the emoji in the text fields of `obj` and every node below it.
+ 
+@@ -113,7 +113,7 @@ Wraps the emoji in the text fields of `obj` and every node below it.
+ - **Called by:** [features/adblock/item-filters.js › filterItems](#fn-item-filters-js-filteritems), [features/adblock/item-filters.js › filterSectionList](#fn-item-filters-js-filtersectionlist), [features/adblock/parse-hook.js › wrapEmojiInFrameworkUpdates](#fn-parse-hook-js-wrapemojiinframeworkupdates), [features/adblock/response-filters.js › filterActions](#fn-response-filters-js-filteractions), [features/adblock/response-filters.js › filterContinuation](#fn-response-filters-js-filtercontinuation), [features/adblock/response-filters.js › filterWatchResponse](#fn-response-filters-js-filterwatchresponse)
+ 
+ <a id="fn-emoji-wrap-js-walkemoji"></a>
+-**`walkEmoji(obj, depth)`** · function · L229–250
++**`walkEmoji(obj, depth)`** · function · L245–266
+ 
+ The depth is a plain argument: a default value would cost an `arguments` read per node in the legacy build.
+ 
+@@ -357,7 +357,7 @@ Drops blocked entries from each list, and from each section's own tabs or items.
+ 
+ > The JSON.parse hook: classifies each InnerTube response and runs the filters, the thumbnail rewrite and the text fixes over it before the app sees it.
+ 
+-182 lines · imports [core/page-state.js](core.md#mod-page-state-js), [core/log.js](core.md#mod-log-js), [features/thumbnail-quality/index.js](features-thumbnail-quality.md#mod-index-js), [features/dearrow/index.js](features-dearrow.md#mod-index-js), [features/rows-ahead.js](features.md#mod-rows-ahead-js), [features/adblock/constants.js](#mod-constants-js), [core/innertube.js](core.md#mod-innertube-js), [features/adblock/search.js](#mod-search-js), [features/adblock/text-fixes.js](#mod-text-fixes-js), [features/adblock/emoji-wrap.js](#mod-emoji-wrap-js), [features/adblock/response-filters.js](#mod-response-filters-js), [features/adblock/fallback.js](#mod-fallback-js), [features/adblock/flags.js](#mod-flags-js), [features/force-codec/hooks.js](features-force-codec.md#mod-hooks-js), [features/force-codec/state.js](features-force-codec.md#mod-state-js), [features/adblock/log.js](#mod-log-js) · imported by [features/playback-speed/index.js](features-playback-speed.md#mod-index-js)
++184 lines · imports [core/page-state.js](core.md#mod-page-state-js), [core/log.js](core.md#mod-log-js), [features/thumbnail-quality/index.js](features-thumbnail-quality.md#mod-index-js), [features/dearrow/index.js](features-dearrow.md#mod-index-js), [features/rows-ahead.js](features.md#mod-rows-ahead-js), [features/adblock/constants.js](#mod-constants-js), [core/innertube.js](core.md#mod-innertube-js), [features/adblock/search.js](#mod-search-js), [features/adblock/text-fixes.js](#mod-text-fixes-js), [features/adblock/emoji-wrap.js](#mod-emoji-wrap-js), [features/adblock/response-filters.js](#mod-response-filters-js), [features/adblock/fallback.js](#mod-fallback-js), [features/adblock/flags.js](#mod-flags-js), [features/force-codec/hooks.js](features-force-codec.md#mod-hooks-js), [features/force-codec/state.js](features-force-codec.md#mod-state-js), [features/adblock/log.js](#mod-log-js) · imported by [features/playback-speed/index.js](features-playback-speed.md#mod-index-js)
+ 
+ <a id="fn-parse-hook-js-setparsedobjectstep"></a>
+ **`setParsedObjectStep(fn)`** · function, exported · L27–29
+@@ -397,7 +397,7 @@ Parses a large text (with tracking parameters blanked first when Tracking Block
+ - **Called by:** [hookedParse](#fn-parse-hook-js-hookedparse)
+ 
+ <a id="fn-parse-hook-js-filtersafely"></a>
+-**`filterSafely(data, textLength, flags)`** · function · L105–111
++**`filterSafely(data, textLength, flags, text)`** · function · L105–111
+ 
+ filterResponse, with an error logged instead of thrown: a filter bug must never break YouTube's parse.
+ 
+@@ -405,15 +405,15 @@ filterResponse, with an error logged instead of thrown: a filter bug must never
+ - **Called by:** [parseAndFilter](#fn-parse-hook-js-parseandfilter)
+ 
+ <a id="fn-parse-hook-js-filterresponse"></a>
+-**`filterResponse(data, textLength, flags)`** · function · L118–160
++**`filterResponse(data, textLength, flags, text)`** · function · L120–162
+ 
+-Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade, DeArrow and the emoji wrap.
++Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade, DeArrow and the emoji wrap. `text` is the JSON the response was parsed from (with its trackingParams blanked when Tracking Block is on), for a pass that can tell from it that it has nothing to do; `textLength` is its length as YouTube sent it.
+ 
+ - **Calls:** [core/innertube.js › detectResponseType](core.md#fn-innertube-js-detectresponsetype), [core/log.js › isDebugEnabled](core.md#fn-log-js-isdebugenabled), [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [features/adblock/fallback.js › applyFallbackFilters](#fn-fallback-js-applyfallbackfilters), [features/adblock/fallback.js › removeBlockedNavEntries](#fn-fallback-js-removeblockednaventries), [logSchemaMiss](#fn-parse-hook-js-logschemamiss), [wrapEmojiInFrameworkUpdates](#fn-parse-hook-js-wrapemojiinframeworkupdates), [features/adblock/response-filters.js › applySchemaFilters](#fn-response-filters-js-applyschemafilters), [features/dearrow/index.js › applyDeArrow](features-dearrow.md#fn-index-js-applydearrow), [features/force-codec/hooks.js › filterParsedResponse](features-force-codec.md#fn-hooks-js-filterparsedresponse), [features/rows-ahead.js › raiseRowsAhead](features.md#fn-rows-ahead-js-raiserowsahead), [features/thumbnail-quality/dispatch.js › upgradeResponseThumbnails](features-thumbnail-quality.md#fn-dispatch-js-upgraderesponsethumbnails)
+ - **Called by:** [filterSafely](#fn-parse-hook-js-filtersafely)
+ 
+ <a id="fn-parse-hook-js-installparsehook"></a>
+-**`installParseHook()`** · function, exported · L170–182
++**`installParseHook()`** · function, exported · L172–184
+ 
+ Installs the hook, once, for the life of the page.
+ 
+diff --git a/docs/codemap/features-dearrow.md b/docs/codemap/features-dearrow.md
+index b045e31..9d7ae84 100644
+--- a/docs/codemap/features-dearrow.md
++++ b/docs/codemap/features-dearrow.md
+@@ -45,12 +45,13 @@ The title with the ">" markers taken out and the ends trimmed, as the formatter'
+ >
+ > A branding lookup takes a request per video, which the JSON.parse hook cannot wait for, so it works in two halves: 1. applyDeArrow() runs in the parse hook (adblock/parse-hook.js) and writes what is already decided into every tile of the response, so those render right the first time; videos not seen before are queued for a lookup (lookup.js). 2. When a lookup lands, the tiles already on screen are patched (sweep.js). Tiles are rebuilt as the user moves around, so the sweep also follows every parse and key press. What is shown follows the extension: the top title or thumbnail unless it is the original or voted below zero (a locked one always wins), with the extension's own title formatter (src/vendor/dearrow).
+ 
+-123 lines · imports [core/config.js](core.md#mod-config-js), [features/dearrow/constants.js](#mod-constants-js), [features/dearrow/state.js](#mod-state-js), [features/dearrow/thumbs.js](#mod-thumbs-js), [features/dearrow/tiles.js](#mod-tiles-js), [features/dearrow/sweep.js](#mod-sweep-js), [features/dearrow/lookup.js](#mod-lookup-js), [features/dearrow/log.js](#mod-log-js) · imported by [features/adblock/parse-hook.js](features-adblock.md#mod-parse-hook-js), [ui/panel/pages.js](ui-panel.md#mod-pages-js)
++142 lines · imports [core/config.js](core.md#mod-config-js), [features/dearrow/constants.js](#mod-constants-js), [features/dearrow/state.js](#mod-state-js), [features/dearrow/thumbs.js](#mod-thumbs-js), [features/dearrow/tiles.js](#mod-tiles-js), [features/dearrow/sweep.js](#mod-sweep-js), [features/dearrow/lookup.js](#mod-lookup-js), [features/dearrow/log.js](#mod-log-js) · imported by [features/adblock/parse-hook.js](features-adblock.md#mod-parse-hook-js), [ui/panel/pages.js](ui-panel.md#mod-pages-js)
+ 
+ **At load:**
+ 
+ - **Calls:** [features/dearrow/lookup.js › setChangeHandler](#fn-lookup-js-setchangehandler), [features/dearrow/tiles.js › applyToVideo](#fn-tiles-js-applytovideo), [scheduleSweep](#fn-index-js-schedulesweep), [core/config.js › configAddChangeListener](core.md#fn-config-js-configaddchangelistener), [onSettingsChange](#fn-index-js-onsettingschange)
+ - **Events:** listens to `keydown`
++- **Hooks:** `window.__ytafDeArrowStats`
+ 
+ <a id="fn-index-js-cancelsweep"></a>
+ **`cancelSweep()`** · function · L31–34
+@@ -86,15 +87,15 @@ Forgets everything (too many videos remembered, or DeArrow switched off): origin
+ - **Called by:** [applyDeArrow](#fn-index-js-applydearrow), [onSettingsChange](#fn-index-js-onsettingschange)
+ 
+ <a id="fn-index-js-applydearrow"></a>
+-**`applyDeArrow(data, responseType)`** · function, exported · L72–80
++**`applyDeArrow(data, responseType, text)`** · function, exported · L85–99
+ 
+-The parse hook's step (adblock/parse-hook.js) for an InnerTube response: its video tiles get what is decided, new videos are queued for a lookup, and the rendered tiles are swept a moment later. Player responses carry no tiles and are skipped.
++The parse hook's step (adblock/parse-hook.js) for an InnerTube response: its video tiles get what is decided, new videos are queued for a lookup, and the rendered tiles are swept a moment later. Player responses carry no tiles and are skipped, and so is the walk of a response whose JSON `text` holds no tile key: comments, live chat, the guide and the settings pages are thousands of nodes with nothing in them to find, and one native scan of the text says so (a key quoted inside a string value has its quotes escaped there, so it is not taken for one).
+ 
+ - **Calls:** [scheduleSweep](#fn-index-js-schedulesweep), [wipe](#fn-index-js-wipe), [features/dearrow/lookup.js › queueLookups](#fn-lookup-js-queuelookups), [features/dearrow/thumbs.js › thumbsFull](#fn-thumbs-js-thumbsfull), [features/dearrow/tiles.js › patchResponseTiles](#fn-tiles-js-patchresponsetiles)
+ - **Called by:** [features/adblock/parse-hook.js › filterResponse](features-adblock.md#fn-parse-hook-js-filterresponse)
+ 
+ <a id="fn-index-js-onsettingschange"></a>
+-**`onSettingsChange()`** · function · L89–103
++**`onSettingsChange()`** · function · L108–122
+ 
+ A DeArrow setting changed: everything is decided again (answers already fetched are reused), newest first, since those are the videos likely on screen. Turned off, YouTube's own come back everywhere and everything DeArrow kept goes with them: up to BLOB_BUDGET of thumbnail copies would otherwise stay in memory for the rest of the session.
+ 
+diff --git a/docs/codemap/features-sponsorblock.md b/docs/codemap/features-sponsorblock.md
+index 7f2cf7c..53f39ed 100644
+--- a/docs/codemap/features-sponsorblock.md
++++ b/docs/codemap/features-sponsorblock.md
+@@ -834,7 +834,7 @@ Clamps the segments to the video's duration, and short of it on the legacy engin
+ 
+ > Playback-time behaviour: aiming at the next segment, the timeupdate listener, the per-frame loop near a segment and the skip itself, which the chain at the start (chain.js) takes too. The blue key is blue-key.js.
+ 
+-316 lines · imports [core/config.js](core.md#mod-config-js), [ui/toast/index.js](ui-toast.md#mod-index-js), [core/text.js](core.md#mod-text-js), [features/sponsorblock/constants.js](#mod-constants-js), [features/sponsorblock/segments.js](#mod-segments-js), [features/sponsorblock/overlay.js](#mod-overlay-js), [features/sponsorblock/mute.js](#mod-mute-js) · imported by [features/sponsorblock/blue-key.js](#mod-blue-key-js), [features/sponsorblock/chain.js](#mod-chain-js), [features/sponsorblock/index.js](#mod-index-js), [features/sponsorblock/video-events.js](#mod-video-events-js)
++338 lines · imports [core/config.js](core.md#mod-config-js), [ui/toast/index.js](ui-toast.md#mod-index-js), [core/text.js](core.md#mod-text-js), [features/sponsorblock/constants.js](#mod-constants-js), [features/sponsorblock/segments.js](#mod-segments-js), [features/sponsorblock/overlay.js](#mod-overlay-js), [features/sponsorblock/mute.js](#mod-mute-js) · imported by [features/sponsorblock/blue-key.js](#mod-blue-key-js), [features/sponsorblock/chain.js](#mod-chain-js), [features/sponsorblock/index.js](#mod-index-js), [features/sponsorblock/video-events.js](#mod-video-events-js)
+ 
+ <a id="fn-skipping-js-attachtimelistener"></a>
+ **`attachTimeListener(sb)`** · function · L20–24
+@@ -899,23 +899,31 @@ Re-aims from the playhead and re-arms the listener: after a seek, when playback
+ - **Calls:** [features/sponsorblock/mute.js › leaveMutedSegment](#fn-mute-js-leavemutedsegment), [aimAt](#fn-skipping-js-aimat), [attachTimeListener](#fn-skipping-js-attachtimelistener), [clearManualNotification](#fn-skipping-js-clearmanualnotification), [detachTimeListener](#fn-skipping-js-detachtimelistener)
+ - **Called by:** [armSkipWatchdog](#fn-skipping-js-armskipwatchdog), [refreshSkipSegments](#fn-skipping-js-refreshskipsegments), [features/sponsorblock/video-events.js › bindVideoEvents](#fn-video-events-js-bindvideoevents), [features/sponsorblock/video-events.js › bindWindowEvents](#fn-video-events-js-bindwindowevents)
+ 
++<a id="fn-skipping-js-carrymanualsegment"></a>
++**`carryManualSegment(sb, originalIndex)`** · function · L119–128
++
++After a rebuild of the skip list: the segment being offered is the one of the new list (the same API segment, with its end as clamped now), so the prompt on screen goes on offering it; or it is no longer a manual one (its mode changed, muted segments were switched) and the prompt goes with it. Without this the handler kept an object of the old list: the blue key skipped a segment the settings had just set aside, and the next timeupdate took the rebuilt segment for a new one and stacked a second prompt.
++
++- **Calls:** [clearManualNotification](#fn-skipping-js-clearmanualnotification)
++- **Called by:** [refreshSkipSegments](#fn-skipping-js-refreshskipsegments)
++
+ <a id="fn-skipping-js-refreshskipsegments"></a>
+-**`refreshSkipSegments(sb)`** · function, exported · L111–117
++**`refreshSkipSegments(sb)`** · function, exported · L131–139
+ 
+ Rebuilds the skip list for the current settings and re-aims.
+ 
+-- **Calls:** [features/sponsorblock/mute.js › leaveMutedSegment](#fn-mute-js-leavemutedsegment), [features/sponsorblock/segments.js › rebuildSkipSegments](#fn-segments-js-rebuildskipsegments), [resetSegmentTracking](#fn-skipping-js-resetsegmenttracking), [stopHighFreqLoop](#fn-skipping-js-stophighfreqloop)
++- **Calls:** [features/sponsorblock/mute.js › leaveMutedSegment](#fn-mute-js-leavemutedsegment), [features/sponsorblock/segments.js › rebuildSkipSegments](#fn-segments-js-rebuildskipsegments), [carryManualSegment](#fn-skipping-js-carrymanualsegment), [resetSegmentTracking](#fn-skipping-js-resetsegmenttracking), [stopHighFreqLoop](#fn-skipping-js-stophighfreqloop)
+ - **Called by:** [features/sponsorblock/index.js › SponsorBlockHandler.applySegments](#fn-index-js-sponsorblockhandler-applysegments), [features/sponsorblock/index.js › SponsorBlockHandler.bindVideo](#fn-index-js-sponsorblockhandler-bindvideo), [features/sponsorblock/index.js › SponsorBlockHandler.setupConfigListeners.rebuild](#fn-index-js-sponsorblockhandler-setupconfiglisteners-rebuild), [features/sponsorblock/video-events.js › bindVideoEvents](#fn-video-events-js-bindvideoevents)
+ 
+ <a id="fn-skipping-js-clearmanualnotification"></a>
+-**`clearManualNotification(sb)`** · function, exported · L122–128
++**`clearManualNotification(sb)`** · function, exported · L144–150
+ 
+ Removes the manual-skip prompt and forgets the segment it offered.
+ 
+-- **Called by:** [features/sponsorblock/blue-key.js › manualSkipOrHighlight](#fn-blue-key-js-manualskiporhighlight), [features/sponsorblock/index.js › SponsorBlockHandler.destroy](#fn-index-js-sponsorblockhandler-destroy), [handleTimeUpdate](#fn-skipping-js-handletimeupdate), [resetSegmentTracking](#fn-skipping-js-resetsegmenttracking)
++- **Called by:** [features/sponsorblock/blue-key.js › manualSkipOrHighlight](#fn-blue-key-js-manualskiporhighlight), [features/sponsorblock/index.js › SponsorBlockHandler.destroy](#fn-index-js-sponsorblockhandler-destroy), [carryManualSegment](#fn-skipping-js-carrymanualsegment), [handleTimeUpdate](#fn-skipping-js-handletimeupdate), [resetSegmentTracking](#fn-skipping-js-resetsegmenttracking)
+ 
+ <a id="fn-skipping-js-armskipwatchdog"></a>
+-**`armSkipWatchdog(sb)`** · function, exported · L133–143
++**`armSkipWatchdog(sb)`** · function, exported · L155–165
+ 
+ Safety net: if the media pipeline swallows the 'seeked' event for a programmatic skip (buffer stalls / near-EOS quirks on webOS), clear the isSkipping latch so the timeupdate pipeline keeps working.
+ 
+@@ -924,14 +932,14 @@ Safety net: if the media pipeline swallows the 'seeked' event for a programmatic
+ - **Browser:** `setTimeout`
+ 
+ <a id="fn-skipping-js-clearskipwatchdog"></a>
+-**`clearSkipWatchdog(sb)`** · function, exported · L146–151
++**`clearSkipWatchdog(sb)`** · function, exported · L168–173
+ 
+ Stops the timer that catches a skip whose seek never completed.
+ 
+ - **Called by:** [features/sponsorblock/index.js › SponsorBlockHandler.destroy](#fn-index-js-sponsorblockhandler-destroy), [features/sponsorblock/video-events.js › bindVideoEvents](#fn-video-events-js-bindvideoevents)
+ 
+ <a id="fn-skipping-js-findcurrentsegment"></a>
+-**`findCurrentSegment(sb, currentTime)`** · function · L160–165
++**`findCurrentSegment(sb, currentTime)`** · function · L182–187
+ 
+ Index of the segment `currentTime` is in. The predicted one is trusted when it is a manual segment; otherwise the scan decides, since a manual segment nested in the predicted one takes precedence (see findSegmentAtTime).
+ 
+@@ -939,7 +947,7 @@ Index of the segment `currentTime` is in. The predicted one is trusted when it i
+ - **Called by:** [handleTimeUpdate](#fn-skipping-js-handletimeupdate)
+ 
+ <a id="fn-skipping-js-announcesegment"></a>
+-**`announceSegment(sb, seg)`** · function · L168–174
++**`announceSegment(sb, seg)`** · function · L190–196
+ 
+ The manual-skip prompt for a segment that is not auto-skipped.
+ 
+@@ -947,7 +955,7 @@ The manual-skip prompt for a segment that is not auto-skipped.
+ - **Called by:** [handleTimeUpdate](#fn-skipping-js-handletimeupdate)
+ 
+ <a id="fn-skipping-js-shouldskip"></a>
+-**`shouldSkip(sb, seg, segmentIdx, currentTime)`** · function · L177–196
++**`shouldSkip(sb, seg, segmentIdx, currentTime)`** · function · L199–218
+ 
+ Whether an auto-skip segment is skipped now, or left alone.
+ 
+@@ -956,14 +964,14 @@ Whether an auto-skip segment is skipped now, or left alone.
+ - **Settings:** uses `(all)`
+ 
+ <a id="fn-skipping-js-findjumptarget"></a>
+-**`findJumpTarget(sb, segmentIdx, currentTime)`** · function · L204–230
++**`findJumpTarget(sb, segmentIdx, currentTime)`** · function · L226–252
+ 
+ Where the skip lands: past this segment and the auto-skip segments that follow it closely, but never past the start of a manual one ahead of the playhead. A manual segment already behind the playhead has had its turn, and a muted segment is skipped over like any other part of the video.
+ 
+ - **Called by:** [skipAutoSegment](#fn-skipping-js-skipautosegment)
+ 
+ <a id="fn-skipping-js-skipto"></a>
+-**`skipTo(sb, segmentIdx, currentTime, { jumpTarget, categories, indices })`** · function · L233–260
++**`skipTo(sb, segmentIdx, currentTime, { jumpTarget, categories, indices })`** · function · L255–282
+ 
+ Performs the skip, then aims at whatever follows the landing point.
+ 
+@@ -971,7 +979,7 @@ Performs the skip, then aims at whatever follows the landing point.
+ - **Called by:** [skipAutoSegment](#fn-skipping-js-skipautosegment)
+ 
+ <a id="fn-skipping-js-skipautosegment"></a>
+-**`skipAutoSegment(sb, segmentIdx, currentTime)`** · function, exported · L267–270
++**`skipAutoSegment(sb, segmentIdx, currentTime)`** · function, exported · L289–292
+ 
+ The auto-skip segment at `segmentIdx`, with the ones close behind it, in one jump; unless shouldSkip leaves it alone. The timeupdate path and the chain at the start (chain.js) both come here.
+ 
+@@ -979,7 +987,7 @@ The auto-skip segment at `segmentIdx`, with the ones close behind it, in one jum
+ - **Called by:** [features/sponsorblock/chain.js › executeChainSkip](#fn-chain-js-executechainskip), [handleTimeUpdate](#fn-skipping-js-handletimeupdate)
+ 
+ <a id="fn-skipping-js-handletimeupdate"></a>
+-**`handleTimeUpdate(sb)`** · function, exported · L276–316
++**`handleTimeUpdate(sb)`** · function, exported · L298–338
+ 
+ The skip decision at the playhead: leaves a muted segment, polls faster before the next segment, and inside one auto-skips, mutes, or offers the manual skip according to its category's mode.
+ 
+diff --git a/docs/codemap/features-thumbnail-quality.md b/docs/codemap/features-thumbnail-quality.md
+index 16b0e26..656dc07 100644
+--- a/docs/codemap/features-thumbnail-quality.md
++++ b/docs/codemap/features-thumbnail-quality.md
+@@ -92,7 +92,7 @@ Saves a pending change now (the app is going to the background).
+ 
+ > Where each InnerTube response type keeps its thumbnails: the known paths per type, the bounded scan for shapes no path matched, and the entry point the JSON.parse hook calls.
+ 
+-362 lines · imports [features/thumbnail-quality/constants.js](#mod-constants-js), [core/innertube.js](core.md#mod-innertube-js), [features/thumbnail-quality/state.js](#mod-state-js), [features/thumbnail-quality/probes.js](#mod-probes-js), [features/thumbnail-quality/promotion.js](#mod-promotion-js), [features/thumbnail-quality/rewrite.js](#mod-rewrite-js), [features/thumbnail-quality/log.js](#mod-log-js)
++387 lines · imports [features/thumbnail-quality/constants.js](#mod-constants-js), [core/innertube.js](core.md#mod-innertube-js), [features/thumbnail-quality/state.js](#mod-state-js), [features/thumbnail-quality/probes.js](#mod-probes-js), [features/thumbnail-quality/promotion.js](#mod-promotion-js), [features/thumbnail-quality/rewrite.js](#mod-rewrite-js), [features/thumbnail-quality/log.js](#mod-log-js)
+ 
+ <a id="fn-dispatch-js-upgradeitem"></a>
+ **`upgradeItem(item)`** · function · L26–53
+@@ -175,23 +175,30 @@ Called for every response rather than only for responseType 'CONTINUATION', beca
+ - **Calls:** [core/innertube.js › getByPath](core.md#fn-innertube-js-getbypath), [upgradeItems](#fn-dispatch-js-upgradeitems), [upgradeSectionList](#fn-dispatch-js-upgradesectionlist)
+ - **Called by:** [upgradeResponseThumbnails](#fn-dispatch-js-upgraderesponsethumbnails)
+ 
++<a id="fn-dispatch-js-worthscanning"></a>
++**`worthScanning()`** · function · L229–235
++
++Whether a fallback scan of the current response can find anything: its JSON text names the thumbnail host. One native scan of the text, made only when a scan is about to run and once per response, in place of walks of up to SCAN_MAX_NODES nodes each (one per section the paths could not read) over a response that holds no video thumbnail: a settings page, comments under a key no path names, a shelf of channels.
++
++- **Called by:** [scanForThumbnails](#fn-dispatch-js-scanforthumbnails)
++
+ <a id="fn-dispatch-js-scanforthumbnails"></a>
+-**`scanForThumbnails(root)`** · function · L223–250
++**`scanForThumbnails(root)`** · function · L242–269
+ 
+ Last-resort bounded walk, used only when the schema paths produced nothing. Keeps the module working through an InnerTube reshuffle instead of silently doing nothing, without ever putting a full traversal on the hot path.
+ 
+-- **Calls:** [features/thumbnail-quality/rewrite.js › upgradeContainer](#fn-rewrite-js-upgradecontainer)
++- **Calls:** [worthScanning](#fn-dispatch-js-worthscanning), [features/thumbnail-quality/rewrite.js › upgradeContainer](#fn-rewrite-js-upgradecontainer)
+ - **Called by:** [upgradeByType](#fn-dispatch-js-upgradebytype), [upgradeSectionList](#fn-dispatch-js-upgradesectionlist)
+ 
+ <a id="fn-dispatch-js-scanroot"></a>
+-**`scanRoot(data, type)`** · function · L260–269
++**`scanRoot(data, type)`** · function · L279–288
+ 
+ Where the thumbnail scan of a response type starts: down SCAN_FROM's path as far as it exists.
+ 
+ - **Called by:** [upgradeByType](#fn-dispatch-js-upgradebytype)
+ 
+ <a id="fn-dispatch-js-upgradebytype"></a>
+-**`upgradeByType(data, type, textLength)`** · function · L277–327
++**`upgradeByType(data, type, textLength)`** · function · L296–346
+ 
+ The thumbnails at the known paths of `type`, rewritten; the count. A type whose paths reach no item list at all gets the bounded scan, an unknown type gets it when the body is large enough to be worth one, and a type with nothing to find gets neither.
+ 
+@@ -199,9 +206,9 @@ The thumbnails at the known paths of `type`, rewritten; the count. A type whose
+ - **Called by:** [upgradeResponseThumbnails](#fn-dispatch-js-upgraderesponsethumbnails)
+ 
+ <a id="fn-dispatch-js-upgraderesponsethumbnails"></a>
+-**`upgradeResponseThumbnails(data, responseType, textLength)`** · function, exported · L335–362
++**`upgradeResponseThumbnails(data, responseType, textLength, text)`** · function, exported · L355–387
+ 
+-Entry point called from the JSON.parse hook in adblock/parse-hook.js. `responseType` is the type adblock already detected, so this costs no extra detection pass; `textLength` is the length of the JSON text, which the hook already has.
++Entry point called from the JSON.parse hook in adblock/parse-hook.js. `responseType` is the type adblock already detected, so this costs no extra detection pass; `textLength` is the length of the JSON text, which the hook already has, and `text` the text itself, which a fallback scan asks whether it is worth running (worthScanning).
+ 
+ - **Calls:** [upgradeByType](#fn-dispatch-js-upgradebytype), [upgradeContinuation](#fn-dispatch-js-upgradecontinuation), [features/thumbnail-quality/probes.js › deferProbes](#fn-probes-js-deferprobes), [features/thumbnail-quality/promotion.js › schedulePromotionSweep](#fn-promotion-js-schedulepromotionsweep)
+ - **Called by:** [features/adblock/parse-hook.js › filterResponse](features-adblock.md#fn-parse-hook-js-filterresponse)
+@@ -589,7 +596,7 @@ Rewrite every URL in a thumbnail container in place. Handles both `{ thumbnails:
+ 
+ > Everything the thumbnail modules share and mutate: the current mode, the verification caches and queues, timers and budgets. Scalars live on `state` so every module reads the same value; collections are exported directly.
+ 
+-90 lines · imports [core/config.js](core.md#mod-config-js), [features/thumbnail-quality/ladder.js](#mod-ladder-js) · imported by [features/thumbnail-quality/cache.js](#mod-cache-js), [features/thumbnail-quality/dispatch.js](#mod-dispatch-js), [features/thumbnail-quality/index.js](#mod-index-js), [features/thumbnail-quality/navigation-pause.js](#mod-navigation-pause-js), [features/thumbnail-quality/probe-transport.js](#mod-probe-transport-js), [features/thumbnail-quality/probes.js](#mod-probes-js), [features/thumbnail-quality/promotion.js](#mod-promotion-js), [features/thumbnail-quality/rendered.js](#mod-rendered-js), [features/thumbnail-quality/rewrite.js](#mod-rewrite-js)
++96 lines · imports [core/config.js](core.md#mod-config-js), [features/thumbnail-quality/ladder.js](#mod-ladder-js) · imported by [features/thumbnail-quality/cache.js](#mod-cache-js), [features/thumbnail-quality/dispatch.js](#mod-dispatch-js), [features/thumbnail-quality/index.js](#mod-index-js), [features/thumbnail-quality/navigation-pause.js](#mod-navigation-pause-js), [features/thumbnail-quality/probe-transport.js](#mod-probe-transport-js), [features/thumbnail-quality/probes.js](#mod-probes-js), [features/thumbnail-quality/promotion.js](#mod-promotion-js), [features/thumbnail-quality/rendered.js](#mod-rendered-js), [features/thumbnail-quality/rewrite.js](#mod-rewrite-js)
+ 
+ **At load:**
+ 
+@@ -597,7 +604,7 @@ Rewrite every URL in a thumbnail container in place. Handles both `{ thumbnails:
+ - **Settings:** reads `thumbnailQualityMode`, `upgradeThumbnails`
+ 
+ <a id="fn-state-js-clearstatetimer"></a>
+-**`clearStateTimer(name)`** · function, exported · L56–61
++**`clearStateTimer(name)`** · function, exported · L62–67
+ 
+ Clears the timer in `state[name]`, if one is set.
+ 
+diff --git a/package.json b/package.json
+index bd23e1c..6bcdd9f 100644
+--- a/package.json
++++ b/package.json
+@@ -25,7 +25,7 @@
+     "prettier-check": "npm run format:check",
+     "test": "node tests/run-all.mjs",
+     "test:quick": "node tests/run-all.mjs --quick",
+-    "bench": "npm run build && node tests/bench/hook-bench.cjs && node tests/bench/panel-bench.cjs",
++    "bench": "npm run build && node tests/bench/hook-bench.cjs && node tests/bench/response-bench.cjs && node tests/bench/panel-bench.cjs",
+     "bundle:snapshot": "node tools/bundle-snapshot.mjs snapshot",
+     "bundle:compare": "node tools/bundle-snapshot.mjs compare",
+     "codemap": "node tools/codemap.mjs",
+diff --git a/src/features/adblock/emoji-wrap.js b/src/features/adblock/emoji-wrap.js
+index 4c3b190..de68f2a 100644
+--- a/src/features/adblock/emoji-wrap.js
++++ b/src/features/adblock/emoji-wrap.js
+@@ -50,13 +50,29 @@ const ATTRIBUTED_WORK_RE = new RegExp(`${CLEAN_TEXT_RE.source}|(${EMOJI_RE.sourc
+ const ESCAPED_EMOJI_RE =
+   /\\u(?:00[aA][9eE]|2[0-9a-fA-F]{3}|3[0-2][0-9a-fA-F]{2}|[dD][89abAB][0-9a-fA-F]{2}|[fF][eE][fF][fF])/;
+ 
++// The first scan of mayNeedEmojiWork: a handful of ranges that hold every
++// character NEEDS_TEXT_WORK_RE matches (tests/unit/adblock-text-fixes-test.cjs
++// checks all 65536 units). The exact class is some 150 ranges, and a
++// response's text is two-byte as soon as it holds one bullet, where the engine
++// decides among all of them for every character: 2.4 ns a character against
++// 0.5 ns for this class on a text where neither matches (V8 12, Node 22; not
++// measured on the TV's V8 3.28). Most text ends here: ASCII,
++// bullets, dashes, curly quotes, Latin, Cyrillic, Greek, Arabic, Hangul and
++// the CJK ideographs are all outside it. Kana and CJK punctuation are inside,
++// so Japanese and Chinese text goes on to the exact class.
++const EMOJI_PREFILTER_RE = /[\u00A9\u00AE\u200B\u200C\u203C-\u3299\uD83C-\uDBFF\uFEFF]/;
++
+ /**
+- * Whether the JSON text can hold anything the emoji walk would change: one
+- * native scan of the text, so the walk over every item of a response (the
+- * most expensive pass on webOS 3 and 4) is skipped for the ones without.
++ * Whether the JSON text can hold anything the emoji walk would change, so the
++ * walk over every item of a response (the most expensive pass on webOS 3 and
++ * 4) is skipped for the ones without. Native scans of the text: the few-range
++ * class first, the exact class only from where that one matched (never more
++ * characters than one exact scan read), then the escaped forms.
+  */
+ export function mayNeedEmojiWork(text) {
+-  return NEEDS_TEXT_WORK_RE.test(text) || ESCAPED_EMOJI_RE.test(text);
++  const from = text.search(EMOJI_PREFILTER_RE);
++  if (from !== -1 && NEEDS_TEXT_WORK_RE.test(from === 0 ? text : text.slice(from))) return true;
++  return ESCAPED_EMOJI_RE.test(text);
+ }
+ 
+ /**
+diff --git a/src/features/adblock/parse-hook.js b/src/features/adblock/parse-hook.js
+index 1522215..0d768b3 100644
+--- a/src/features/adblock/parse-hook.js
++++ b/src/features/adblock/parse-hook.js
+@@ -94,7 +94,7 @@ function parseAndFilter(text, reviver) {
+   // in it is filtered with the fix left out (one scan of the text instead).
+   const flags =
+     cfgFlags.enableLegacyEmojiFix && !mayNeedEmojiWork(text) ? cfgFlagsNoEmoji : cfgFlags;
+-  filterSafely(data, textLength, flags);
++  filterSafely(data, textLength, flags, text);
+   return data;
+ }
+ 
+@@ -102,9 +102,9 @@ function parseAndFilter(text, reviver) {
+  * filterResponse, with an error logged instead of thrown: a filter bug must never break YouTube's
+  * parse.
+  */
+-function filterSafely(data, textLength, flags) {
++function filterSafely(data, textLength, flags, text) {
+   try {
+-    filterResponse(data, textLength, flags);
++    filterResponse(data, textLength, flags, text);
+   } catch (e) {
+     log.warn('Error during filtering:', e);
+   }
+@@ -113,9 +113,11 @@ function filterSafely(data, textLength, flags) {
+ /**
+  * Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content
+  * filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade,
+- * DeArrow and the emoji wrap.
++ * DeArrow and the emoji wrap. `text` is the JSON the response was parsed from (with its
++ * trackingParams blanked when Tracking Block is on), for a pass that can tell from it that it has
++ * nothing to do; `textLength` is its length as YouTube sent it.
+  */
+-function filterResponse(data, textLength, flags) {
++function filterResponse(data, textLength, flags, text) {
+   // The codec filter first: a player response is also one the Shorts guard
+   // below leaves alone.
+   if (fc.mode !== 'auto') filterParsedResponse(data);
+@@ -153,9 +155,9 @@ function filterResponse(data, textLength, flags) {
+   // were just removed are never rewritten, and it reuses the responseType
+   // already resolved above instead of detecting the shape a second time.
+   // The thumbnail module keeps its own switch and returns at once when off.
+-  upgradeResponseThumbnails(data, responseType, textLength);
++  upgradeResponseThumbnails(data, responseType, textLength, text);
+   // After the thumbnail upgrade, so a DeArrow thumbnail is the one that sticks.
+-  if (flags.enableDeArrow) applyDeArrow(data, responseType);
++  if (flags.enableDeArrow) applyDeArrow(data, responseType, text);
+   wrapEmojiInFrameworkUpdates(data, flags);
+ }
+ 
+diff --git a/src/features/dearrow/index.js b/src/features/dearrow/index.js
+index 7beefdf..b3185f0 100644
+--- a/src/features/dearrow/index.js
++++ b/src/features/dearrow/index.js
+@@ -63,19 +63,38 @@ function wipe() {
+   forgetThumbs();
+ }
+ 
++// The key every tile sits under, as it stands in a response's JSON text.
++const TILE_KEY = '"tileRenderer"';
++
++// How many responses were walked for tiles, and how many were not because
++// their text names none. Read on the TV from the web inspector as
++// window.__ytafDeArrowStats; the DeArrow test reads it too.
++const dearrowStats = { walks: 0, skipped: 0 };
++window.__ytafDeArrowStats = dearrowStats;
++
+ /**
+  * The parse hook's step (adblock/parse-hook.js) for an InnerTube response:
+  * its video tiles get what is decided, new videos are queued for a lookup,
+  * and the rendered tiles are swept a moment later. Player responses carry no
+- * tiles and are skipped.
++ * tiles and are skipped, and so is the walk of a response whose JSON `text`
++ * holds no tile key: comments, live chat, the guide and the settings pages
++ * are thousands of nodes with nothing in them to find, and one native scan
++ * of the text says so (a key quoted inside a string value has its quotes
++ * escaped there, so it is not taken for one).
+  */
+-export function applyDeArrow(data, responseType) {
++export function applyDeArrow(data, responseType, text) {
+   if (!data || typeof data !== 'object' || responseType === 'PLAYER') return;
+   // Before any patching: a wipe in the middle of a response would free blobs
+   // this same response was just given.
+   if (videos.size >= CACHE_LIMIT || thumbsFull()) wipe();
+-  const found = patchResponseTiles(data);
+-  if (found.length) queueLookups(found);
++  if (text.indexOf(TILE_KEY) === -1) {
++    dearrowStats.skipped++;
++  } else {
++    dearrowStats.walks++;
++    const found = patchResponseTiles(data);
++    if (found.length) queueLookups(found);
++  }
++  // Tiles are rebuilt as the user moves around: the sweep follows every parse.
+   scheduleSweep();
+ }
+ 
+diff --git a/src/features/sponsorblock/skipping.js b/src/features/sponsorblock/skipping.js
+index 5814c69..9b03672 100644
+--- a/src/features/sponsorblock/skipping.js
++++ b/src/features/sponsorblock/skipping.js
+@@ -107,12 +107,34 @@ export function resetSegmentTracking(sb) {
+   else detachTimeListener(sb);
+ }
+ 
++/**
++ * After a rebuild of the skip list: the segment being offered is the one of
++ * the new list (the same API segment, with its end as clamped now), so the
++ * prompt on screen goes on offering it; or it is no longer a manual one (its
++ * mode changed, muted segments were switched) and the prompt goes with it.
++ * Without this the handler kept an object of the old list: the blue key
++ * skipped a segment the settings had just set aside, and the next timeupdate
++ * took the rebuilt segment for a new one and stacked a second prompt.
++ */
++function carryManualSegment(sb, originalIndex) {
++  for (let i = 0; i < sb.skipSegments.length; i++) {
++    const seg = sb.skipSegments[i];
++    if (seg.originalIndex === originalIndex && seg.mode === 'manual_skip') {
++      sb.currentManualSegment = seg;
++      return;
++    }
++  }
++  clearManualNotification(sb);
++}
++
+ /** Rebuilds the skip list for the current settings and re-aims. */
+ export function refreshSkipSegments(sb) {
+   stopHighFreqLoop(sb);
+   // A muted segment is re-entered from the new list on the next timeupdate.
+   leaveMutedSegment(sb);
++  const offered = sb.currentManualSegment;
+   rebuildSkipSegments(sb);
++  if (offered) carryManualSegment(sb, offered.originalIndex);
+   resetSegmentTracking(sb);
+ }
+ 
+diff --git a/src/features/thumbnail-quality/dispatch.js b/src/features/thumbnail-quality/dispatch.js
+index c622956..44979aa 100644
+--- a/src/features/thumbnail-quality/dispatch.js
++++ b/src/features/thumbnail-quality/dispatch.js
+@@ -8,7 +8,7 @@ import {
+   PROMOTION_DEBOUNCE
+ } from './constants.js';
+ import { SCHEMA_REGISTRY, getByPath, forEachItemList } from '../../core/innertube.js';
+-import { state, pendingPromotions } from './state.js';
++import { state, pendingPromotions, thumbStats } from './state.js';
+ import { deferProbes } from './probes.js';
+ import { schedulePromotionSweep } from './promotion.js';
+ import { upgradeContainer } from './rewrite.js';
+@@ -215,13 +215,32 @@ function upgradeContinuation(data) {
+   return changed;
+ }
+ 
++// Every URL the ladder can rewrite is on this host (ladder.js THUMB_URL_RE).
++const THUMBNAIL_HOST = 'i.ytimg.com';
++
++/**
++ * Whether a fallback scan of the current response can find anything: its JSON
++ * text names the thumbnail host. One native scan of the text, made only when
++ * a scan is about to run and once per response, in place of walks of up to
++ * SCAN_MAX_NODES nodes each (one per section the paths could not read) over
++ * a response that holds no video thumbnail: a settings page, comments under a
++ * key no path names, a shelf of channels.
++ */
++function worthScanning() {
++  if (state.textNamesThumbnails === null) {
++    state.textNamesThumbnails = state.responseText.indexOf(THUMBNAIL_HOST) !== -1;
++    if (!state.textNamesThumbnails) thumbStats.scansSkipped++;
++  }
++  return state.textNamesThumbnails;
++}
++
+ /**
+  * Last-resort bounded walk, used only when the schema paths produced nothing.
+  * Keeps the module working through an InnerTube reshuffle instead of silently
+  * doing nothing, without ever putting a full traversal on the hot path.
+  */
+ function scanForThumbnails(root) {
+-  if (!root || typeof root !== 'object') return 0;
++  if (!root || typeof root !== 'object' || !worthScanning()) return 0;
+   const queue = [root, 0];
+   let index = 0;
+   let visited = 0;
+@@ -330,10 +349,13 @@ function upgradeByType(data, type, textLength) {
+  * Entry point called from the JSON.parse hook in adblock/parse-hook.js.
+  * `responseType` is the type adblock already detected, so this costs no extra
+  * detection pass; `textLength` is the length of the JSON text, which the hook
+- * already has.
++ * already has, and `text` the text itself, which a fallback scan asks whether
++ * it is worth running (worthScanning).
+  */
+-export function upgradeResponseThumbnails(data, responseType, textLength) {
++export function upgradeResponseThumbnails(data, responseType, textLength, text) {
+   if (!state.enabled || !data || typeof data !== 'object' || Array.isArray(data)) return 0;
++  state.responseText = text;
++  state.textNamesThumbnails = null;
+ 
+   // Stamped on every parse, including ones that rewrite nothing: an empty
+   // continuation is still evidence the surface is moving. admitToTier() reads
+@@ -348,6 +370,9 @@ export function upgradeResponseThumbnails(data, responseType, textLength) {
+   // signature detectResponseType() happens to test first.
+   let changed = data.continuationContents ? upgradeContinuation(data) : 0;
+   changed += upgradeByType(data, responseType, textLength);
++  // The text is the response's, not the module's to keep. (A pass that threw
++  // holds it until the next response replaces it.)
++  state.responseText = '';
+ 
+   if (changed) log.debug(`${responseType || 'unknown'}: rewrote ${changed} thumbnail URLs`);
+   // Not gated on `changed`: a response that rewrote nothing can still have
+diff --git a/src/features/thumbnail-quality/state.js b/src/features/thumbnail-quality/state.js
+index 38c77fb..5592acc 100644
+--- a/src/features/thumbnail-quality/state.js
++++ b/src/features/thumbnail-quality/state.js
+@@ -41,7 +41,12 @@ export const state = {
+   listsSeen: 0,
+   // Thumbnail lists alone (upgradeContainer), so a section of a shape the
+   // walk does not know can be told from one it read (dispatch.js).
+-  containersSeen: 0
++  containersSeen: 0,
++  // The JSON text of the response being upgraded, held for the length of the
++  // pass, and whether it names the thumbnail host: null until a fallback scan
++  // asks (dispatch.js worthScanning).
++  responseText: '',
++  textNamesThumbnails: null
+ };
+ 
+ // Read on the TV from the web inspector as window.__ytafThumbStats (index.js):
+@@ -49,8 +54,9 @@ export const state = {
+ // the modes that draw unproven rungs showed grey until the correction), and
+ // the ones that learned nothing (a timeout or a network error). The share of
+ // misses among the answers is the price of drawing sddefault unproven, about
+-// 1 % expected.
+-export const thumbStats = { answered: 0, missed: 0, unknown: 0 };
++// 1 % expected. `scansSkipped` counts the responses whose fallback scan was
++// not run because their text names no thumbnail (dispatch.js).
++export const thumbStats = { answered: 0, missed: 0, unknown: 0, scansSkipped: 0 };
+ 
+ /** Clears the timer in `state[name]`, if one is set. */
+ export function clearStateTimer(name) {
+diff --git a/tests/behaviour/dearrow-test.cjs b/tests/behaviour/dearrow-test.cjs
+index 28fa488..f527e5a 100644
+--- a/tests/behaviour/dearrow-test.cjs
++++ b/tests/behaviour/dearrow-test.cjs
+@@ -755,5 +755,78 @@ function shown(win, id) {
+     );
+   }
+ 
++  // ---- a response without a tile is not walked (window.__ytafDeArrowStats) ----------------
++  {
++    const p = boot({});
++    await wait(50);
++    const stats = () => Object.assign({}, p.win.__ytafDeArrowStats);
++    t('__ytafDeArrowStats is there to read on the TV', !!p.win.__ytafDeArrowStats);
++    // A comments continuation: thousands of nodes, none of them a tile.
++    const comments = JSON.stringify({
++      responseContext: {},
++      continuationContents: {
++        itemSectionContinuation: {
++          contents: Array.from({ length: 300 }, (_, i) => ({
++            commentRenderer: {
++              authorText: { simpleText: 'Author ' + i },
++              contentText: { runs: [{ text: 'A comment about tiles, number ' + i }] },
++              authorThumbnail: { thumbnails: [{ url: 'https://yt3.ggpht.com/a' + i }] }
++            }
++          }))
++        }
++      }
++    });
++    const before = stats();
++    p.win.JSON.parse(comments);
++    const afterComments = stats();
++    t(
++      'a response whose text names no tileRenderer is skipped, not walked',
++      afterComments.walks === before.walks && afterComments.skipped === before.skipped + 1,
++      JSON.stringify([before, afterComments])
++    );
++    const data = p.win.JSON.parse(response([tile('custom00001', 'SHOCKING iPhone review!!!')]));
++    const afterTiles = stats();
++    t(
++      'a response with a tile is walked',
++      afterTiles.walks === afterComments.walks + 1 && afterTiles.skipped === afterComments.skipped,
++      JSON.stringify([afterComments, afterTiles])
++    );
++    render(p.win, data);
++    await waitFor(() => shown(p.win, 'custom00001').title === 'the iPhone review');
++    t(
++      'and its tile still gets the crowdsourced title',
++      shown(p.win, 'custom00001').title === 'the iPhone review',
++      JSON.stringify(shown(p.win, 'custom00001'))
++    );
++    // The key as a word inside a string is not a key: the quote before it is escaped.
++    const mention = JSON.stringify({
++      responseContext: {},
++      note: 'the "tileRenderer" key, quoted in a text',
++      padding: 'x'.repeat(600)
++    });
++    const beforeMention = stats();
++    p.win.JSON.parse(mention);
++    t(
++      'the key quoted inside a string value does not count as one',
++      stats().walks === beforeMention.walks,
++      JSON.stringify([beforeMention, stats()])
++    );
++    // With Tracking Block on the text is rewritten before the parse: the gate reads that text.
++    const q = boot({ enableTrackingBlock: true });
++    await wait(50);
++    const tracked = JSON.stringify({
++      responseContext: {},
++      trackingParams: 'CAAQ',
++      contents: [tile('custom00001', 'SHOCKING iPhone review!!!')],
++      padding: 'x'.repeat(600)
++    });
++    const w0 = q.win.__ytafDeArrowStats.walks;
++    const trackedData = q.win.JSON.parse(tracked);
++    t(
++      'with Tracking Block on, a response with a tile is still walked',
++      q.win.__ytafDeArrowStats.walks === w0 + 1 && trackedData.trackingParams === ''
++    );
++  }
++
+   report.finish();
+ })();
+diff --git a/tests/behaviour/sponsorblock-ui-test.cjs b/tests/behaviour/sponsorblock-ui-test.cjs
+index 9902f9e..994f0d9 100644
+--- a/tests/behaviour/sponsorblock-ui-test.cjs
++++ b/tests/behaviour/sponsorblock-ui-test.cjs
+@@ -179,6 +179,80 @@ function boot(segments, cfg, currentTime, options) {
+     );
+   }
+ 
++  // ---- the manual-skip prompt follows a mode changed while it is up ----
++  {
++    const prompt = 'Sponsored: Press Blue to skip';
++    const p = boot([seg('sponsor', 20, 30)], { sbMode_sponsor: 'manual_skip' }, 10);
++    await p.ready();
++    p.seekTo(21);
++    await wait(40);
++    t(
++      'setup: inside a manual segment, the prompt is up',
++      p.toasts().some((m) => m === prompt) && !!p.sb().currentManualSegment,
++      p.toasts().join(' | ')
++    );
++    await showPanel(p.win);
++    p.tab(1);
++    const row = cycleRow(p.win, 'Sponsor', '#ytaf-page-sponsor');
++    row.focus();
++    // Manual Skip, then Show in Seek Bar: the segment is no longer one to act on.
++    press(p.win, KEYS.RIGHT, row);
++    t(
++      'setup: Sponsor set to Show in Seek Bar on the panel',
++      row.querySelector('.ytaf-value').textContent === 'Show in Seek Bar',
++      row.querySelector('.ytaf-value').textContent
++    );
++    p.win.ytaf_showOptionsPanel(false);
++    t(
++      'the segment being offered is forgotten with its mode',
++      p.sb().currentManualSegment === null && p.sb().activeManualNotification === null
++    );
++    const handled = p.sb().manualSkipOrHighlight();
++    t(
++      'and the blue key no longer skips a segment the settings now leave alone',
++      handled === false && p.model.currentTime === 21,
++      handled + ' / ' + p.model.currentTime
++    );
++    await waitFor(() => !p.toasts().some((m) => m === prompt), 2000);
++    t(
++      'the prompt leaves the screen',
++      !p.toasts().some((m) => m === prompt),
++      p.toasts().join(' | ')
++    );
++  }
++
++  // ---- the prompt stays one toast when the skip list is rebuilt under it ----
++  {
++    const prompt = 'Sponsored: Press Blue to skip';
++    const p = boot([seg('sponsor', 20, 30)], { sbMode_sponsor: 'manual_skip' }, 10);
++    await p.ready();
++    p.seekTo(21);
++    await wait(40);
++    const shownBefore = p.sb().activeManualNotification;
++    // A shorter duration clamps the segment, which rebuilds the skip list.
++    p.durationchange(28);
++    p.timeupdate(21.5);
++    await wait(40);
++    t(
++      'the same toast keeps offering the segment (no second one beside it fading out)',
++      p.toasts().filter((m) => m === prompt).length === 1 &&
++        p.sb().activeManualNotification === shownBefore,
++      p.toasts().join(' | ')
++    );
++    t(
++      'and it offers the segment of the rebuilt list, with its clamped end',
++      p.sb().skipSegments.indexOf(p.sb().currentManualSegment) !== -1 &&
++        p.sb().currentManualSegment.end < 30,
++      JSON.stringify(p.sb().currentManualSegment)
++    );
++    const handled = p.sb().manualSkipOrHighlight();
++    t(
++      'the blue key skips to the clamped end',
++      handled === true && p.model.currentTime === p.sb().skipSegments[0].end,
++      handled + ' / ' + p.model.currentTime
++    );
++  }
++
+   // ---- the labels through the handler ----------------------------------------------------------
+   {
+     const p = boot(
+diff --git a/tests/behaviour/thumbnail-dispatch-test.cjs b/tests/behaviour/thumbnail-dispatch-test.cjs
+index a82e024..7084a12 100644
+--- a/tests/behaviour/thumbnail-dispatch-test.cjs
++++ b/tests/behaviour/thumbnail-dispatch-test.cjs
+@@ -464,5 +464,61 @@ const boot = (cfg, more) =>
+     t('and is probed for a better one', probedB(), requests.map((r) => r.url).join(' | '));
+   }
+ 
++  // ---- a response whose text names no thumbnail is never scanned (__ytafThumbStats) ----
++  {
++    const { win, requests } = boot({ upgradeThumbnails: true }, { xhr: 'sddefault' });
++    await wait(20);
++    const skipped = () => win.__ytafThumbStats.scansSkipped;
++    // An unknown shape over the size threshold: the bounded scan is all that
++    // could find a thumbnail in it, and its text says there is none to find.
++    const rows = Array.from({ length: 200 }, (_, i) => ({
++      novelRow: {
++        label: { simpleText: 'Setting ' + i },
++        icon: { url: 'https://yt3.ggpht.com/i' + i }
++      }
++    }));
++    const settings = { responseContext: { _pad: 'z'.repeat(600) }, novelSurface: { rows } };
++    const before = skipped();
++    win.JSON.parse(win.JSON.stringify(settings));
++    t(
++      'an unknown shape without a video thumbnail in its text: the scan is skipped',
++      skipped() === before + 1,
++      before + ' -> ' + skipped()
++    );
++    // A home response of sections the paths cannot read, none with a thumbnail:
++    // each section would get its own scan; the text is asked once.
++    const novelHome = browseResponse(
++      Array.from({ length: 5 }, (_, i) => ({ novelShelfRenderer: { title: 'Shelf ' + i } }))
++    );
++    const beforeHome = skipped();
++    win.JSON.parse(win.JSON.stringify(novelHome));
++    t(
++      'sections no path can read, in a text without thumbnails: skipped, counted once',
++      skipped() === beforeHome + 1,
++      beforeHome + ' -> ' + skipped()
++    );
++    // The same unknown shape with one video thumbnail in it is scanned as before.
++    rows.push({ novelTile: { thumbnail: thumbs('scangate001') } });
++    const beforeFound = skipped();
++    const out = win.JSON.parse(win.JSON.stringify(settings));
++    const url = out.novelSurface.rows[rows.length - 1].novelTile.thumbnail.thumbnails[0].url;
++    await waitFor(() => requests.some((r) => r.url.indexOf('scangate001') !== -1));
++    t(
++      'with a video thumbnail in the text the scan runs: found, rewritten and probed',
++      skipped() === beforeFound &&
++        isSd(url) &&
++        requests.some((r) => r.url.indexOf('scangate001') !== -1),
++      url
++    );
++    // A response the paths read costs no look at the text at all.
++    const beforeKnown = skipped();
++    win.JSON.parse(win.JSON.stringify(browseResponse([shelfOf([tile('gateknown01')])])));
++    t(
++      'a response whose thumbnails the paths reached asks nothing of the text',
++      skipped() === beforeKnown,
++      beforeKnown + ' -> ' + skipped()
++    );
++  }
++
+   report.finish();
+ })();
+diff --git a/tests/bench/response-bench.cjs b/tests/bench/response-bench.cjs
+new file mode 100644
+index 0000000..657fa09
+--- /dev/null
++++ b/tests/bench/response-bench.cjs
+@@ -0,0 +1,196 @@
++/**
++ * Times the JSON.parse hook against the native parse on the kinds of response
++ * the TV app makes, under the settings that put work on the hook: the
++ * defaults, the legacy emoji fix (on by default on webOS 3 and 4), DeArrow,
++ * and everything at once. hook-bench.cjs times one browse response with every
++ * filter on; this one says what each setting costs on each kind of response,
++ * the ones without a tile in them included (comments, live chat), which is
++ * where a pass that has nothing to find must cost nothing.
++ *
++ * A measurement, not a check: run it before and after a change and compare.
++ * Node's V8 is not the TV's: the ratios carry over better than the times.
++ *
++ * Run after a build: node tests/bench/response-bench.cjs [bundle] [legacy|modern]
++ * `--json` prints the rows as JSON, for a script that compares two runs.
++ */
++const { createPage, flavour } = require('../harness/page.cjs');
++const { makeBrowse } = require('../harness/gen-payload.cjs');
++
++const legacy = flavour === 'legacy';
++const asJson = process.argv.includes('--json');
++
++// The settings compared. The legacy emoji fix only exists in the legacy build.
++const CONFIGS = {
++  defaults: {},
++  'emoji fix (webOS 3/4 default)': { enableLegacyEmojiFix: true },
++  DeArrow: { enableDeArrow: true },
++  everything: {
++    enableTrackingBlock: true,
++    removeGlobalShorts: true,
++    removeLiveVideos: true,
++    hideGuestSignInPrompts: true,
++    hideEndcards: true,
++    enableLegacyEmojiFix: legacy,
++    upgradeThumbnails: true,
++    enableDeArrow: true
++  }
++};
++if (!legacy) delete CONFIGS['emoji fix (webOS 3/4 default)'];
++
++/**
++ * A browse response as the TV gets it: the generator's, with the bullets every
++ * metadata line carries (they make the text two-byte, as a real one is) and a
++ * contentId on each tile (what makes it a video tile for DeArrow).
++ */
++function browseText(options) {
++  return JSON.stringify(makeBrowse(options))
++    .replace(/Channel (\d+)/g, 'Channel $1 \u2022 1.2M views \u2022 3 days ago')
++    .replace(
++      /"contentType":"TILE_CONTENT_TYPE_VIDEO"/g,
++      (match, at) => match + ',"contentId":"v' + String(at).padStart(10, '0').slice(-10) + '"'
++    );
++}
++
++/** A comments continuation: thousands of nodes, no tile, no video thumbnail. */
++function commentsText(count) {
++  return JSON.stringify({
++    responseContext: { visitorData: 'x' },
++    continuationContents: {
++      itemSectionContinuation: {
++        contents: Array.from({ length: count }, (_, i) => ({
++          commentThreadRenderer: {
++            comment: {
++              commentRenderer: {
++                authorText: { simpleText: 'Author ' + i },
++                contentText: {
++                  runs: [{ text: 'A comment \u2022 number ' + i + ', a few words long' }]
++                },
++                authorThumbnail: {
++                  thumbnails: [{ url: 'https://yt3.ggpht.com/a' + i, width: 48 }]
++                },
++                publishedTimeText: { simpleText: '3 days ago' },
++                voteCount: { simpleText: String(i) },
++                actionButtons: {
++                  commentActionButtonsRenderer: {
++                    likeButton: {
++                      toggleButtonRenderer: { isToggled: false, trackingParams: 'x' + i }
++                    }
++                  }
++                }
++              }
++            }
++          }
++        }))
++      }
++    }
++  });
++}
++
++/** A live chat continuation, as one arrives every few seconds with the chat open. */
++function liveChatText(count) {
++  return JSON.stringify({
++    responseContext: {},
++    continuationContents: {
++      liveChatContinuation: {
++        actions: Array.from({ length: count }, (_, i) => ({
++          addChatItemAction: {
++            item: {
++              liveChatTextMessageRenderer: {
++                message: { runs: [{ text: 'chat message ' + i }] },
++                authorName: { simpleText: 'user' + i },
++                authorPhoto: { thumbnails: [{ url: 'https://yt3.ggpht.com/c' + i }] },
++                id: 'id' + i
++              }
++            }
++          }
++        }))
++      }
++    }
++  });
++}
++
++const PAYLOADS = [
++  ['browse, 240 video tiles', browseText({}), 60],
++  ['browse, one emoji title', browseText({}).replace('title number 5019', '\uD83D\uDE00 5019'), 60],
++  ['comments, 300', commentsText(300), 80],
++  ['live chat, 40 messages', liveChatText(40), 400]
++];
++
++const median = (values) => values.slice().sort((x, y) => x - y)[values.length >> 1];
++/** The mean time of one call of `fn`, in microseconds, over `iterations` calls. */
++function timeOf(fn, iterations) {
++  const start = process.hrtime.bigint();
++  for (let i = 0; i < iterations; i++) fn();
++  return Number(process.hrtime.bigint() - start) / 1e3 / iterations;
++}
++
++const names = Object.keys(CONFIGS);
++const rows = [];
++
++/** Boots a page under one config, times every payload on it, then goes on to the next config. */
++function run(index) {
++  if (index >= names.length) {
++    report();
++    return;
++  }
++  const page = createPage({
++    ua: legacy ? 'webos3' : 'webos23',
++    raf: 'timeout',
++    config: CONFIGS[names[index]]
++  });
++  setTimeout(() => {
++    const hooked = page.win.JSON.parse;
++    const native = page.NP;
++    for (const [payload, text, iterations] of PAYLOADS) {
++      for (let warm = 0; warm < 60; warm++) {
++        hooked(text);
++        native(text);
++      }
++      // Interleaved, and the median of several: one pass drifts more than the effect measured.
++      const hookedTimes = [];
++      const nativeTimes = [];
++      for (let rep = 0; rep < 11; rep++) {
++        hookedTimes.push(timeOf(() => hooked(text), iterations));
++        nativeTimes.push(timeOf(() => native(text), iterations));
++      }
++      rows.push({
++        config: names[index],
++        payload,
++        kb: Math.round(text.length / 1024),
++        native: median(nativeTimes),
++        hooked: median(hookedTimes)
++      });
++    }
++    run(index + 1);
++  }, 300);
++}
++
++/** Prints the rows as a table, or as JSON with `--json`, and ends the process. */
++function report() {
++  if (asJson) {
++    console.log(JSON.stringify(rows));
++    process.exit(0);
++  }
++  console.log(`\n=== the parse hook by response and setting, ${flavour} bundle ===`);
++  console.log(
++    'setting'.padEnd(31),
++    'response'.padEnd(26),
++    'KB'.padStart(4),
++    'native us'.padStart(10),
++    'hooked us'.padStart(10),
++    'overhead'.padStart(9)
++  );
++  for (const row of rows) {
++    console.log(
++      row.config.padEnd(31),
++      row.payload.padEnd(26),
++      String(row.kb).padStart(4),
++      row.native.toFixed(0).padStart(10),
++      row.hooked.toFixed(0).padStart(10),
++      ('+' + (100 * (row.hooked / row.native - 1)).toFixed(0) + '%').padStart(9)
++    );
++  }
++  process.exit(0);
++}
++
++run(0);
+diff --git a/tests/harness/invariants.cjs b/tests/harness/invariants.cjs
+new file mode 100644
+index 0000000..31a6697
+--- /dev/null
++++ b/tests/harness/invariants.cjs
+@@ -0,0 +1,151 @@
++/**
++ * The state machines of the per-video handlers as checks: what must hold
++ * between their fields whenever the page is at rest (after an event has been
++ * handled, never in the middle of one). docs/STATE-MACHINES.md describes the
++ * machines; this file is the part of that description a test can run.
++ *
++ *   sponsorBlockViolations(sb) -> string[]
++ *     the rules a SponsorBlockHandler breaks right now (empty: none). `sb` may
++ *     be a handler that was destroyed: the rules for one are checked then.
++ *   watchSponsorBlock(win) -> { check(after), violations }
++ *     keeps hold of every handler the page creates (window.sponsorblock only
++ *     hands out the live one) and collects what any of them breaks, each
++ *     once, with the event `after` which it was seen. harness/sponsorblock.cjs
++ *     calls check() after every event a test sends, so every SponsorBlock
++ *     behaviour test checks the rules at every step.
++ *
++ * A rule goes here when it is true by design and cheap to read: a field that
++ * can only be set together with another, a handle that must be gone once its
++ * owner is. A rule about timing or about what the viewer sees is a test's.
++ */
++'use strict';
++
++/** Whether the frame loop, the time listener or the bar poll of `sb` is running. */
++const running = (sb) => ({
++  frameLoop: sb.pollingRafId !== null && sb.pollingRafId !== undefined,
++  timeListener: sb.timeListenerActive === true,
++  barPoll: !!(sb.barRetry && sb.barRetry.active)
++});
++
++function sponsorBlockViolations(sb) {
++  const broken = [];
++  /** Records `name` unless `ok`. */
++  const rule = (name, ok) => {
++    if (!ok) broken.push(name);
++  };
++  const run = running(sb);
++  const skip = sb.skipSegments;
++
++  if (sb.isDestroyed) {
++    // destroy() leaves nothing behind that could call back or hold the page.
++    rule('destroyed: no <video> bound', sb.video === null && sb.videoBag === null);
++    rule('destroyed: no time listener, frame loop or bar poll', !run.frameLoop && !run.barPoll);
++    rule('destroyed: no frame of its own pending', sb.rafIds.size === 0);
++    rule(
++      'destroyed: no observer left',
++      sb.domObserver === null && sb.attrObserver === null && sb.finderObserver === null
++    );
++    rule('destroyed: no wait for a <video> or its metadata', !sb.videoWait && !sb.chainRetry);
++    rule('destroyed: no skip watchdog', sb.skipWatchdogTimer === null);
++    rule('destroyed: no prompt, no mute held', !sb.activeManualNotification && !sb.mutedSegment);
++    rule('destroyed: no overlay', sb.overlay === null);
++    rule('destroyed: no segments kept', sb.segments.length === 0 && skip.length === 0);
++    return broken;
++  }
++
++  // --- The <video> binding ---
++  rule('a <video> is bound together with its listeners', (sb.video === null) === !sb.videoBag);
++  rule(
++    'the time listener, the frame loop, a mute and the metadata wait need a bound <video>',
++    sb.video !== null || (!run.timeListener && !run.frameLoop && !sb.mutedSegment && !sb.chainRetry)
++  );
++  rule('one wait for a <video> at most, and none while one is bound', !(sb.video && sb.videoWait));
++
++  // --- Aiming: where the playhead is relative to the skip list ---
++  rule(
++    'nextSegmentIndex points into the skip list or just past it',
++    sb.nextSegmentIndex >= 0 && sb.nextSegmentIndex <= skip.length
++  );
++  rule(
++    'nextSegmentStart is the start of the segment aimed at, or Infinity past the last',
++    sb.nextSegmentStart ===
++      (sb.nextSegmentIndex < skip.length ? skip[sb.nextSegmentIndex].start : Infinity)
++  );
++  rule(
++    'the time listener runs only while a segment is ahead',
++    !run.timeListener || sb.nextSegmentStart !== Infinity
++  );
++  rule(
++    'the frame loop runs only while a segment is ahead',
++    !run.frameLoop || sb.nextSegmentStart !== Infinity
++  );
++
++  // --- A skip in flight ---
++  rule('a skip in flight has its watchdog armed', !sb.isSkipping || sb.skipWatchdogTimer !== null);
++
++  // --- The manual-skip prompt ---
++  rule(
++    'a prompt on screen offers a segment',
++    !sb.activeManualNotification || !!sb.currentManualSegment
++  );
++  rule(
++    'the segment offered is a manual one of the current skip list',
++    !sb.currentManualSegment ||
++      (skip.indexOf(sb.currentManualSegment) !== -1 &&
++        sb.currentManualSegment.mode === 'manual_skip')
++  );
++
++  // --- The muted segment ---
++  rule(
++    'the muted segment is a mute one of the current skip list',
++    !sb.mutedSegment || (skip.indexOf(sb.mutedSegment) !== -1 && sb.mutedSegment.mode === 'mute')
++  );
++
++  // --- The blue key's whitelist ---
++  rule(
++    'tempWhitelistIndex names a segment or nothing',
++    sb.tempWhitelistIndex >= -1 && sb.tempWhitelistIndex < sb.segments.length
++  );
++
++  // --- The progress bar ---
++  rule(
++    'the finder waits only while no bar is tracked or watched',
++    !sb.finderObserver || (sb.domObserver === null && sb.attrObserver === null && !sb.progressBar)
++  );
++  rule(
++    'the bar observers come as a pair',
++    (sb.domObserver === null) === (sb.attrObserver === null)
++  );
++  rule('the bar poll never runs beside the finder', !(run.barPoll && sb.finderObserver));
++  rule(
++    'an anchor is cached for the tracked bar only',
++    !sb.anchor || sb.anchor.bar === sb.progressBar
++  );
++  rule(
++    'the overlay has one mark for each one drawn',
++    !sb.overlay || sb.overlay.children.length === sb.overlayMarks.length
++  );
++  return broken;
++}
++
++function watchSponsorBlock(win) {
++  const seen = [];
++  const violations = [];
++  const reported = new Set();
++  /** Checks every handler seen so far; `after` names the event just handled. */
++  const check = (after) => {
++    const live = win.sponsorblock;
++    if (live && seen.indexOf(live) === -1) seen.push(live);
++    for (let i = 0; i < seen.length; i++) {
++      const broken = sponsorBlockViolations(seen[i]);
++      for (let j = 0; j < broken.length; j++) {
++        if (reported.has(broken[j])) continue;
++        reported.add(broken[j]);
++        violations.push(broken[j] + ' (after ' + after + ')');
++      }
++    }
++  };
++  return { check, violations };
++}
++
++module.exports = { sponsorBlockViolations, watchSponsorBlock };
+diff --git a/tests/harness/sponsorblock.cjs b/tests/harness/sponsorblock.cjs
+index 44e3e9a..acb373e 100644
+--- a/tests/harness/sponsorblock.cjs
++++ b/tests/harness/sponsorblock.cjs
+@@ -21,6 +21,27 @@
+ const { createPage } = require('./page.cjs');
+ const { waitFor, press, toasts, videoModel } = require('./fixtures.cjs');
+ const { VIDEO, PREFIX, seg } = require('./sponsorblock-data.cjs');
++const { watchSponsorBlock } = require('./invariants.cjs');
++const { addFinishCheck } = require('./report.cjs');
++
++// Every page's watcher of the state-machine rules: a script fails at finish()
++// when a handler of any of its pages broke one, at any step.
++const watchers = [];
++addFinishCheck((check) => {
++  if (watchers.length === 0) return;
++  const broken = [];
++  watchers.forEach((watch, index) => {
++    watch.check('the end of the script');
++    watch.violations.forEach((v) => {
++      broken.push(`page ${index + 1}: ${v}`);
++    });
++  });
++  check(
++    'the SponsorBlock state-machine rules held after every event (harness/invariants.cjs)',
++    broken.length === 0,
++    broken.join('\n     ')
++  );
++});
+ 
+ function sponsorBlockFetch(videoID, segments, options) {
+   const o = options || {};
+@@ -217,25 +238,44 @@ function sponsorBlockPage(segments, cfg, currentTime, options) {
+     });
+     return !!asked;
+   };
++  // The handler's state-machine rules, checked after every event a test sends
++  // (and once more when the script finishes): harness/invariants.cjs.
++  const watch = watchSponsorBlock(win);
++  watchers.push(watch);
++  /** `fn` with the rules checked once it has run (and settled, for one that waits). */
++  const checked = (name, fn) =>
++    function () {
++      const result = fn.apply(null, arguments);
++      if (result && typeof result.then === 'function') {
++        return result.then((value) => {
++          watch.check(name);
++          return value;
++        });
++      }
++      watch.check(name);
++      return result;
++    };
+   return {
+     win,
+     get model() {
+       return model;
+     },
+-    ready,
++    ready: checked('ready', ready),
+     requests: api.requests,
+     pending: api.pending,
+     seeks,
+-    timeupdate,
+-    seeked,
+-    playing,
+-    seekTo,
+-    durationchange,
+-    loadedmetadata,
+-    state,
+-    rebuildBar,
+-    addVideo,
+-    press: (code) => press(win, code, win.document.body),
++    timeupdate: checked('timeupdate', timeupdate),
++    seeked: checked('seeked', seeked),
++    playing: checked('playing', playing),
++    seekTo: checked('seekTo', seekTo),
++    durationchange: checked('durationchange', durationchange),
++    loadedmetadata: checked('loadedmetadata', loadedmetadata),
++    state: checked('state', state),
++    rebuildBar: checked('rebuildBar', rebuildBar),
++    addVideo: checked('addVideo', addVideo),
++    press: checked('press', (code) => press(win, code, win.document.body)),
++    /** The state-machine rules broken so far on this page (harness/invariants.cjs). */
++    violations: watch.violations,
+     toasts: () => toasts(win),
+     overlay: () => win.document.getElementById('previewbar'),
+     overlays: () => win.document.querySelectorAll('#previewbar').length,
+diff --git a/tests/unit/adblock-text-fixes-test.cjs b/tests/unit/adblock-text-fixes-test.cjs
+index 7e18d4c..f960826 100644
+--- a/tests/unit/adblock-text-fixes-test.cjs
++++ b/tests/unit/adblock-text-fixes-test.cjs
+@@ -364,4 +364,61 @@ function leftover(obj) {
+   );
+ }
+ 
++// ---- the gate's first scan: a few ranges that hold every character the exact class does ----
++{
++  const exact = get('NEEDS_TEXT_WORK_RE');
++  const first = get('EMOJI_PREFILTER_RE');
++  // A character class matches one UTF-16 unit, so agreeing on every unit is
++  // agreeing on every text.
++  let missed = 0;
++  let exactCount = 0;
++  for (let unit = 0; unit <= 0xffff; unit++) {
++    const ch = String.fromCharCode(unit);
++    if (!exact.test(ch)) continue;
++    exactCount++;
++    if (!first.test(ch)) missed++;
++  }
++  t('the exact class matches some units at all (the check below is not vacuous)', exactCount > 100);
++  eq('every unit the exact class matches passes the first scan', missed, 0);
++  t(
++    'what most text is made of stops at the first scan: ASCII, bullets, dashes, quotes, Cyrillic, Hangul',
++    !first.test(
++      'Plain text \u2022 1.2M views \u2013 \u201Cquoted\u201D \u2026 \u041F\u0440\u0438\u0432\u0435\u0442 \uD55C\uAD6D\uC5B4'
++    )
++  );
++  // Text the first scan lets through without an emoji in it (kana) is decided
++  // by the exact class from there, and an emoji after it is still found.
++  const kana = '{"t":"' + 'x'.repeat(40) + ' \u3053\u3093\u306B\u3061\u306F"}';
++  t('kana passes the first scan', first.test(kana));
++  t('and needs no walk', mayNeedEmojiWork(kana) === false);
++  t(
++    'an emoji after kana is found',
++    mayNeedEmojiWork(kana.replace('"}', ' ' + String.fromCodePoint(0x1f600) + '"}')) === true
++  );
++  t(
++    'an emoji as the very first character is found',
++    mayNeedEmojiWork(String.fromCharCode(0x2764) + 'x'.repeat(20)) === true
++  );
++  // The whole function against the two exact scans it stands for, on texts of every kind.
++  const escaped = get('ESCAPED_EMOJI_RE');
++  const samples = [
++    '',
++    'plain',
++    kana,
++    'a\u2022b',
++    'x\u00A9',
++    '\u200B',
++    'tail ' + String.fromCodePoint(0x1f1e9, 0x1f1ea),
++    '1\uFE0F\u20E3',
++    'esc \\ud83d\\ude00',
++    'esc \\u0026 only',
++    '\uD83D alone'
++  ];
++  let disagreements = 0;
++  for (const sample of samples) {
++    if (mayNeedEmojiWork(sample) !== (exact.test(sample) || escaped.test(sample))) disagreements++;
++  }
++  eq('mayNeedEmojiWork answers as the two exact scans do, on every sample', disagreements, 0);
++}
++
+ report.finish();
+diff --git a/tools/codemap.mjs b/tools/codemap.mjs
+index ff267cd..d000fcf 100644
+--- a/tools/codemap.mjs
++++ b/tools/codemap.mjs
+@@ -1089,7 +1089,7 @@ const out = new Map(); // file path relative to docs/ -> text
+   );
+   md.push('');
+   md.push(
+-    `**${modules.size} modules, ${fnCount} named functions**, ${describedCount} of them described (the perf monitor in \`src/dev/\` is a development tool, not in release builds, and is listed in short form). This page is the index; each folder has a page in [codemap/](codemap/) with every function of its modules. The overview (boot order, the hooks, how a response flows through the filters) is [ARCHITECTURE.md](ARCHITECTURE.md); the same data for scripts is [codemap.json](codemap.json).`
++    `**${modules.size} modules, ${fnCount} named functions**, ${describedCount} of them described (the perf monitor in \`src/dev/\` is a development tool, not in release builds, and is listed in short form). This page is the index; each folder has a page in [codemap/](codemap/) with every function of its modules. The overview (boot order, the hooks, how a response flows through the filters) is [ARCHITECTURE.md](ARCHITECTURE.md); the states the code keeps in plain fields, and the rules between them, are [STATE-MACHINES.md](STATE-MACHINES.md); the same data for scripts is [codemap.json](codemap.json).`
+   );
+   md.push('');
+   md.push('How to read it:');

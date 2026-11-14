@@ -21,6 +21,27 @@
 const { createPage } = require('./page.cjs');
 const { waitFor, press, toasts, videoModel } = require('./fixtures.cjs');
 const { VIDEO, PREFIX, seg } = require('./sponsorblock-data.cjs');
+const { watchSponsorBlock } = require('./invariants.cjs');
+const { addFinishCheck } = require('./report.cjs');
+
+// Every page's watcher of the state-machine rules: a script fails at finish()
+// when a handler of any of its pages broke one, at any step.
+const watchers = [];
+addFinishCheck((check) => {
+  if (watchers.length === 0) return;
+  const broken = [];
+  watchers.forEach((watch, index) => {
+    watch.check('the end of the script');
+    watch.violations.forEach((v) => {
+      broken.push(`page ${index + 1}: ${v}`);
+    });
+  });
+  check(
+    'the SponsorBlock state-machine rules held after every event (harness/invariants.cjs)',
+    broken.length === 0,
+    broken.join('\n     ')
+  );
+});
 
 function sponsorBlockFetch(videoID, segments, options) {
   const o = options || {};
@@ -217,25 +238,44 @@ function sponsorBlockPage(segments, cfg, currentTime, options) {
     });
     return !!asked;
   };
+  // The handler's state-machine rules, checked after every event a test sends
+  // (and once more when the script finishes): harness/invariants.cjs.
+  const watch = watchSponsorBlock(win);
+  watchers.push(watch);
+  /** `fn` with the rules checked once it has run (and settled, for one that waits). */
+  const checked = (name, fn) =>
+    function () {
+      const result = fn.apply(null, arguments);
+      if (result && typeof result.then === 'function') {
+        return result.then((value) => {
+          watch.check(name);
+          return value;
+        });
+      }
+      watch.check(name);
+      return result;
+    };
   return {
     win,
     get model() {
       return model;
     },
-    ready,
+    ready: checked('ready', ready),
     requests: api.requests,
     pending: api.pending,
     seeks,
-    timeupdate,
-    seeked,
-    playing,
-    seekTo,
-    durationchange,
-    loadedmetadata,
-    state,
-    rebuildBar,
-    addVideo,
-    press: (code) => press(win, code, win.document.body),
+    timeupdate: checked('timeupdate', timeupdate),
+    seeked: checked('seeked', seeked),
+    playing: checked('playing', playing),
+    seekTo: checked('seekTo', seekTo),
+    durationchange: checked('durationchange', durationchange),
+    loadedmetadata: checked('loadedmetadata', loadedmetadata),
+    state: checked('state', state),
+    rebuildBar: checked('rebuildBar', rebuildBar),
+    addVideo: checked('addVideo', addVideo),
+    press: checked('press', (code) => press(win, code, win.document.body)),
+    /** The state-machine rules broken so far on this page (harness/invariants.cjs). */
+    violations: watch.violations,
     toasts: () => toasts(win),
     overlay: () => win.document.getElementById('previewbar'),
     overlays: () => win.document.querySelectorAll('#previewbar').length,

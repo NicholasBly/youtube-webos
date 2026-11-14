@@ -179,6 +179,80 @@ function boot(segments, cfg, currentTime, options) {
     );
   }
 
+  // ---- the manual-skip prompt follows a mode changed while it is up ----
+  {
+    const prompt = 'Sponsored: Press Blue to skip';
+    const p = boot([seg('sponsor', 20, 30)], { sbMode_sponsor: 'manual_skip' }, 10);
+    await p.ready();
+    p.seekTo(21);
+    await wait(40);
+    t(
+      'setup: inside a manual segment, the prompt is up',
+      p.toasts().some((m) => m === prompt) && !!p.sb().currentManualSegment,
+      p.toasts().join(' | ')
+    );
+    await showPanel(p.win);
+    p.tab(1);
+    const row = cycleRow(p.win, 'Sponsor', '#ytaf-page-sponsor');
+    row.focus();
+    // Manual Skip, then Show in Seek Bar: the segment is no longer one to act on.
+    press(p.win, KEYS.RIGHT, row);
+    t(
+      'setup: Sponsor set to Show in Seek Bar on the panel',
+      row.querySelector('.ytaf-value').textContent === 'Show in Seek Bar',
+      row.querySelector('.ytaf-value').textContent
+    );
+    p.win.ytaf_showOptionsPanel(false);
+    t(
+      'the segment being offered is forgotten with its mode',
+      p.sb().currentManualSegment === null && p.sb().activeManualNotification === null
+    );
+    const handled = p.sb().manualSkipOrHighlight();
+    t(
+      'and the blue key no longer skips a segment the settings now leave alone',
+      handled === false && p.model.currentTime === 21,
+      handled + ' / ' + p.model.currentTime
+    );
+    await waitFor(() => !p.toasts().some((m) => m === prompt), 2000);
+    t(
+      'the prompt leaves the screen',
+      !p.toasts().some((m) => m === prompt),
+      p.toasts().join(' | ')
+    );
+  }
+
+  // ---- the prompt stays one toast when the skip list is rebuilt under it ----
+  {
+    const prompt = 'Sponsored: Press Blue to skip';
+    const p = boot([seg('sponsor', 20, 30)], { sbMode_sponsor: 'manual_skip' }, 10);
+    await p.ready();
+    p.seekTo(21);
+    await wait(40);
+    const shownBefore = p.sb().activeManualNotification;
+    // A shorter duration clamps the segment, which rebuilds the skip list.
+    p.durationchange(28);
+    p.timeupdate(21.5);
+    await wait(40);
+    t(
+      'the same toast keeps offering the segment (no second one beside it fading out)',
+      p.toasts().filter((m) => m === prompt).length === 1 &&
+        p.sb().activeManualNotification === shownBefore,
+      p.toasts().join(' | ')
+    );
+    t(
+      'and it offers the segment of the rebuilt list, with its clamped end',
+      p.sb().skipSegments.indexOf(p.sb().currentManualSegment) !== -1 &&
+        p.sb().currentManualSegment.end < 30,
+      JSON.stringify(p.sb().currentManualSegment)
+    );
+    const handled = p.sb().manualSkipOrHighlight();
+    t(
+      'the blue key skips to the clamped end',
+      handled === true && p.model.currentTime === p.sb().skipSegments[0].end,
+      handled + ' / ' + p.model.currentTime
+    );
+  }
+
   // ---- the labels through the handler ----------------------------------------------------------
   {
     const p = boot(

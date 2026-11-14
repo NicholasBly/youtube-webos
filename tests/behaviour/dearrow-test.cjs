@@ -755,5 +755,78 @@ function shown(win, id) {
     );
   }
 
+  // ---- a response without a tile is not walked (window.__ytafDeArrowStats) ----------------
+  {
+    const p = boot({});
+    await wait(50);
+    const stats = () => Object.assign({}, p.win.__ytafDeArrowStats);
+    t('__ytafDeArrowStats is there to read on the TV', !!p.win.__ytafDeArrowStats);
+    // A comments continuation: thousands of nodes, none of them a tile.
+    const comments = JSON.stringify({
+      responseContext: {},
+      continuationContents: {
+        itemSectionContinuation: {
+          contents: Array.from({ length: 300 }, (_, i) => ({
+            commentRenderer: {
+              authorText: { simpleText: 'Author ' + i },
+              contentText: { runs: [{ text: 'A comment about tiles, number ' + i }] },
+              authorThumbnail: { thumbnails: [{ url: 'https://yt3.ggpht.com/a' + i }] }
+            }
+          }))
+        }
+      }
+    });
+    const before = stats();
+    p.win.JSON.parse(comments);
+    const afterComments = stats();
+    t(
+      'a response whose text names no tileRenderer is skipped, not walked',
+      afterComments.walks === before.walks && afterComments.skipped === before.skipped + 1,
+      JSON.stringify([before, afterComments])
+    );
+    const data = p.win.JSON.parse(response([tile('custom00001', 'SHOCKING iPhone review!!!')]));
+    const afterTiles = stats();
+    t(
+      'a response with a tile is walked',
+      afterTiles.walks === afterComments.walks + 1 && afterTiles.skipped === afterComments.skipped,
+      JSON.stringify([afterComments, afterTiles])
+    );
+    render(p.win, data);
+    await waitFor(() => shown(p.win, 'custom00001').title === 'the iPhone review');
+    t(
+      'and its tile still gets the crowdsourced title',
+      shown(p.win, 'custom00001').title === 'the iPhone review',
+      JSON.stringify(shown(p.win, 'custom00001'))
+    );
+    // The key as a word inside a string is not a key: the quote before it is escaped.
+    const mention = JSON.stringify({
+      responseContext: {},
+      note: 'the "tileRenderer" key, quoted in a text',
+      padding: 'x'.repeat(600)
+    });
+    const beforeMention = stats();
+    p.win.JSON.parse(mention);
+    t(
+      'the key quoted inside a string value does not count as one',
+      stats().walks === beforeMention.walks,
+      JSON.stringify([beforeMention, stats()])
+    );
+    // With Tracking Block on the text is rewritten before the parse: the gate reads that text.
+    const q = boot({ enableTrackingBlock: true });
+    await wait(50);
+    const tracked = JSON.stringify({
+      responseContext: {},
+      trackingParams: 'CAAQ',
+      contents: [tile('custom00001', 'SHOCKING iPhone review!!!')],
+      padding: 'x'.repeat(600)
+    });
+    const w0 = q.win.__ytafDeArrowStats.walks;
+    const trackedData = q.win.JSON.parse(tracked);
+    t(
+      'with Tracking Block on, a response with a tile is still walked',
+      q.win.__ytafDeArrowStats.walks === w0 + 1 && trackedData.trackingParams === ''
+    );
+  }
+
   report.finish();
 })();

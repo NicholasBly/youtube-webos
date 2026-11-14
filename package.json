@@ -1,6 +1,6 @@
 {
   "name": "youtube-webos",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "description": "Ad-free YouTube app for webOS",
   "private": true,
   "type": "module",
@@ -25,7 +25,7 @@
     "prettier-check": "npm run format:check",
     "test": "node tests/run-all.mjs",
     "test:quick": "node tests/run-all.mjs --quick",
-    "bench": "npm run build && node tests/bench/hook-bench.cjs && node tests/bench/panel-bench.cjs",
+    "bench": "npm run build && node tests/bench/hook-bench.cjs && node tests/bench/response-bench.cjs && node tests/bench/panel-bench.cjs",
     "bundle:snapshot": "node tools/bundle-snapshot.mjs snapshot",
     "bundle:compare": "node tools/bundle-snapshot.mjs compare",
     "codemap": "node tools/codemap.mjs",

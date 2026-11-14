@@ -50,13 +50,29 @@ const ATTRIBUTED_WORK_RE = new RegExp(`${CLEAN_TEXT_RE.source}|(${EMOJI_RE.sourc
 const ESCAPED_EMOJI_RE =
   /\\u(?:00[aA][9eE]|2[0-9a-fA-F]{3}|3[0-2][0-9a-fA-F]{2}|[dD][89abAB][0-9a-fA-F]{2}|[fF][eE][fF][fF])/;
 
+// The first scan of mayNeedEmojiWork: a handful of ranges that hold every
+// character NEEDS_TEXT_WORK_RE matches (tests/unit/adblock-text-fixes-test.cjs
+// checks all 65536 units). The exact class is some 150 ranges, and a
+// response's text is two-byte as soon as it holds one bullet, where the engine
+// decides among all of them for every character: 2.4 ns a character against
+// 0.5 ns for this class on a text where neither matches (V8 12, Node 22; not
+// measured on the TV's V8 3.28). Most text ends here: ASCII,
+// bullets, dashes, curly quotes, Latin, Cyrillic, Greek, Arabic, Hangul and
+// the CJK ideographs are all outside it. Kana and CJK punctuation are inside,
+// so Japanese and Chinese text goes on to the exact class.
+const EMOJI_PREFILTER_RE = /[\u00A9\u00AE\u200B\u200C\u203C-\u3299\uD83C-\uDBFF\uFEFF]/;
+
 /**
- * Whether the JSON text can hold anything the emoji walk would change: one
- * native scan of the text, so the walk over every item of a response (the
- * most expensive pass on webOS 3 and 4) is skipped for the ones without.
+ * Whether the JSON text can hold anything the emoji walk would change, so the
+ * walk over every item of a response (the most expensive pass on webOS 3 and
+ * 4) is skipped for the ones without. Native scans of the text: the few-range
+ * class first, the exact class only from where that one matched (never more
+ * characters than one exact scan read), then the escaped forms.
  */
 export function mayNeedEmojiWork(text) {
-  return NEEDS_TEXT_WORK_RE.test(text) || ESCAPED_EMOJI_RE.test(text);
+  const from = text.search(EMOJI_PREFILTER_RE);
+  if (from !== -1 && NEEDS_TEXT_WORK_RE.test(from === 0 ? text : text.slice(from))) return true;
+  return ESCAPED_EMOJI_RE.test(text);
 }
 
 /**

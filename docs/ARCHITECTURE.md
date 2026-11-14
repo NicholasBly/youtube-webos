@@ -11,8 +11,15 @@ opening the project for the first time.
   per folder in [codemap/](codemap/), the same data as JSON in
   [codemap.json](codemap.json). `npm run codemap` rebuilds it; `npm test`
   fails while it is out of date.
+- **[STATE-MACHINES.md](STATE-MACHINES.md)** names the states the code keeps
+  in plain fields (the per-video handlers, the progress bar watch, the probe
+  scheduler, the panel), what moves between them and the rules that hold.
+- **[PERFORMANCE.md](PERFORMANCE.md)** is what the hot paths cost, how to
+  measure a change before and after, and what was tried and set aside.
 - **[DEPENDENCIES.md](DEPENDENCIES.md)** covers the npm packages, how to update
   them safely, and the security status.
+- **[../AGENTS.md](../AGENTS.md)** is the short entry point for an AI agent
+  (or a new contributor): the commands, the rules and the traps.
 
 ## Two scripts, two builds
 
@@ -150,6 +157,17 @@ flowchart TD
 The switches it reads are one snapshot (`features/adblock/flags.js`),
 recomputed when a setting changes rather than read on every parse.
 
+A pass that would walk the parsed response asks the JSON text first whether
+there is anything for it to find, with one native scan (`indexOf` or a
+character class), since a walk costs about as much as the parse itself:
+
+| Pass | Asks the text for | Skips |
+| --- | --- | --- |
+| Tracking Block (`text-fixes.js`) | `"trackingParams"` | the rewrite of the text |
+| Legacy emoji fix (`emoji-wrap.js` `mayNeedEmojiWork`) | an emoji, a sentinel, or either as a `\u` escape | the emoji walk of every item |
+| DeArrow (`dearrow/index.js` `applyDeArrow`) | `"tileRenderer"` | the walk for tiles |
+| Thumbnail fallback scan (`thumbnail-quality/dispatch.js` `worthScanning`) | `i.ytimg.com`, and only when a scan is about to run | the bounded scans |
+
 ## Pages, videos and the player
 
 - **Page state** (`core/page-state.js`) watches the `<body>` classes YouTube
@@ -220,8 +238,9 @@ re-renders.
   only while diagnostics are on: `localStorage['ytaf-debug'] = '1'` (survives
   restarts) or `window.__ytaf_debug__ = true` (set in the TV's web inspector).
 - **Counters** on `window` for the web inspector: `__ytafAdblockStats`,
-  `__ytafThumbStats`, `__ytafQualityStats`, `__ytafContinuationStats` and, on
-  webOS 3/4 with diagnostics on, `__ytafBufferStats`.
+  `__ytafThumbStats`, `__ytafQualityStats`, `__ytafContinuationStats`,
+  `__ytafDeArrowStats` and, on webOS 3/4 with diagnostics on,
+  `__ytafBufferStats`.
 - **perf-mon** (`npm run build:perf` / `build:perf:modern`): timings of every
   hook and feature, in an on-screen panel (press 0 three times) and in
   `window.__PERF` (`__PERF.help()` lists the API).
@@ -234,6 +253,10 @@ and look for breaks of them when optimising:
 - **Hot paths** (the parse and stringify hooks, focus listeners, the
   SponsorBlock time listener) return early for the common case, before any
   allocation or DOM query.
+- **Ask the text before walking the tree**: a pass over a parsed response
+  that looks for one kind of thing first checks, with a native scan of the
+  JSON text, that the response holds any (the table under "How a response
+  goes through the parse hook").
 - **No `try` in a hot function**: webOS 3's engine (V8 3.28) does not optimise
   a function that contains one. Put the `try` in a small helper that only the
   rare case reaches (see `stringifyThenRestore`).
@@ -261,7 +284,10 @@ and look for breaks of them when optimising:
 - `npm run bundle:snapshot` before and `npm run bundle:compare` after updating
   dependencies: it says whether the code that runs on the TV changed
   (DEPENDENCIES.md).
-- `npm run bench`: the hook and panel benchmarks.
+- `npm run bench`: the hook, response and panel benchmarks. To judge a
+  change, keep the bundle from before it and run
+  `node tests/bench/response-bench.cjs <bundle> legacy` on both
+  ([PERFORMANCE.md](PERFORMANCE.md)).
 - Test builds: push to `test` with a commit title like "0.8.5 build 2" (the
   body is the patch notes). `.github/workflows/auto-discussion.yml` runs the
   tests, builds both .ipk files (legacy and webOS 22+) with the build number
@@ -270,9 +296,13 @@ and look for breaks of them when optimising:
 
 ### For AI agents
 
+- [../AGENTS.md](../AGENTS.md) first: the commands, the rules, the traps.
 - Start from the [module table](CODEMAP.md#modules), then open the page of the
   folder you need in [codemap/](codemap/). Each page is small enough to read
   whole.
+- Before changing a handler's fields, a timer or an observer, read its
+  machine in [STATE-MACHINES.md](STATE-MACHINES.md): the code map says what
+  calls what, that page says which combinations of fields are legal.
 - To find everything touching a setting, an event, a YouTube selector or a
   hook, use the tables in CODEMAP.md, or query `docs/codemap.json`
   (`settings`, `events`, `selectors`, `hooks`, and `calls` / `calledBy` per

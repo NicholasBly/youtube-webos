@@ -40,7 +40,7 @@ No emoji work on this build.
 
 > The legacy emoji fix's half in the response: every emoji in the parsed tree wrapped in sentinel characters, so features/emoji-font can swap it for an image on webOS 3 and 4. The webOS 22+ build carries emoji-wrap-absent.js in its place (webpack.config.js): the fix is never on there.
 
-250 lines · imports [features/adblock/log.js](#mod-log-js) · imported by [features/adblock/item-filters.js](#mod-item-filters-js), [features/adblock/parse-hook.js](#mod-parse-hook-js), [features/adblock/response-filters.js](#mod-response-filters-js)
+266 lines · imports [features/adblock/log.js](#mod-log-js) · imported by [features/adblock/item-filters.js](#mod-item-filters-js), [features/adblock/parse-hook.js](#mod-parse-hook-js), [features/adblock/response-filters.js](#mod-response-filters-js)
 
 **At load:**
 
@@ -54,35 +54,35 @@ The body of the first character class in `re`: what is between its [ and ].
 - **Called by:** [at load](#mod-emoji-wrap-js)
 
 <a id="fn-emoji-wrap-js-mayneedemojiwork"></a>
-**`mayNeedEmojiWork(text)`** · function, exported · L58–60
+**`mayNeedEmojiWork(text)`** · function, exported · L72–76
 
-Whether the JSON text can hold anything the emoji walk would change: one native scan of the text, so the walk over every item of a response (the most expensive pass on webOS 3 and 4) is skipped for the ones without.
+Whether the JSON text can hold anything the emoji walk would change, so the walk over every item of a response (the most expensive pass on webOS 3 and 4) is skipped for the ones without. Native scans of the text: the few-range class first, the exact class only from where that one matched (never more characters than one exact scan read), then the escaped forms.
 
 - **Called by:** [features/adblock/parse-hook.js › parseAndFilter](#fn-parse-hook-js-parseandfilter)
 
 <a id="fn-emoji-wrap-js-processemojistring"></a>
-**`processEmojiString(str)`** · function · L67–75
+**`processEmojiString(str)`** · function · L83–91
 
 A text with each emoji wrapped in sentinels (U+200B before, U+200C after) for features/emoji-font to draw as an image on webOS 3/4. Sentinels already in the text are removed first, so it is safe to run twice; plain text comes back as it is.
 
 - **Called by:** [processTextFieldsInPlace](#fn-emoji-wrap-js-processtextfieldsinplace)
 
 <a id="fn-emoji-wrap-js-splitintoruns"></a>
-**`splitIntoRuns(text, originalRun)`** · function · L78–94
+**`splitIntoRuns(text, originalRun)`** · function · L94–110
 
 Called only for text that passed NEEDS_TEXT_WORK_RE in the caller.
 
 - **Called by:** [processTextFieldsInPlace](#fn-emoji-wrap-js-processtextfieldsinplace)
 
 <a id="fn-emoji-wrap-js-hasoffsetruns"></a>
-**`hasOffsetRuns(obj)`** · function · L97–102
+**`hasOffsetRuns(obj)`** · function · L113–118
 
 Whether `obj` has offset runs (commandRuns, styleRuns...) over its `content`.
 
 - **Called by:** [processTextFieldsInPlace](#fn-emoji-wrap-js-processtextfieldsinplace)
 
 <a id="fn-emoji-wrap-js-wrapattributedcontent"></a>
-**`wrapAttributedContent(obj)`** · function · L111–161
+**`wrapAttributedContent(obj)`** · function · L127–177
 
 An attributed string's `content` wrapped, and the offsets of its runs (UTF-16 units of `content`) moved with the characters they name: a run starting at an emoji starts at its opening sentinel, one ending with it ends after the closing one. Without this a mention, link or timestamp after an emoji pointed two characters early per emoji.
 
@@ -90,14 +90,14 @@ An attributed string's `content` wrapped, and the offsets of its runs (UTF-16 un
 - **Called by:** [processTextFieldsInPlace](#fn-emoji-wrap-js-processtextfieldsinplace)
 
 <a id="fn-emoji-wrap-js-wrapattributedcontent-moved"></a>
-**`wrapAttributedContent.moved(p)`** · arrow · L135–147
+**`wrapAttributedContent.moved(p)`** · arrow · L151–163
 
 Where offset `p` of `src` lands in `out`.
 
 - **Called by:** [wrapAttributedContent](#fn-emoji-wrap-js-wrapattributedcontent)
 
 <a id="fn-emoji-wrap-js-processtextfieldsinplace"></a>
-**`processTextFieldsInPlace(obj)`** · function · L165–216
+**`processTextFieldsInPlace(obj)`** · function · L181–232
 
 Non-recursive: the emoji/text fields of a single node, in place. walkAndProcess guarantees obj is a non-null object.
 
@@ -105,7 +105,7 @@ Non-recursive: the emoji/text fields of a single node, in place. walkAndProcess 
 - **Called by:** [walkEmoji](#fn-emoji-wrap-js-walkemoji)
 
 <a id="fn-emoji-wrap-js-wrapemojiintree"></a>
-**`wrapEmojiInTree(obj)`** · function, exported · L223–225
+**`wrapEmojiInTree(obj)`** · function, exported · L239–241
 
 Wraps the emoji in the text fields of `obj` and every node below it.
 
@@ -113,7 +113,7 @@ Wraps the emoji in the text fields of `obj` and every node below it.
 - **Called by:** [features/adblock/item-filters.js › filterItems](#fn-item-filters-js-filteritems), [features/adblock/item-filters.js › filterSectionList](#fn-item-filters-js-filtersectionlist), [features/adblock/parse-hook.js › wrapEmojiInFrameworkUpdates](#fn-parse-hook-js-wrapemojiinframeworkupdates), [features/adblock/response-filters.js › filterActions](#fn-response-filters-js-filteractions), [features/adblock/response-filters.js › filterContinuation](#fn-response-filters-js-filtercontinuation), [features/adblock/response-filters.js › filterWatchResponse](#fn-response-filters-js-filterwatchresponse)
 
 <a id="fn-emoji-wrap-js-walkemoji"></a>
-**`walkEmoji(obj, depth)`** · function · L229–250
+**`walkEmoji(obj, depth)`** · function · L245–266
 
 The depth is a plain argument: a default value would cost an `arguments` read per node in the legacy build.
 
@@ -357,7 +357,7 @@ Drops blocked entries from each list, and from each section's own tabs or items.
 
 > The JSON.parse hook: classifies each InnerTube response and runs the filters, the thumbnail rewrite and the text fixes over it before the app sees it.
 
-182 lines · imports [core/page-state.js](core.md#mod-page-state-js), [core/log.js](core.md#mod-log-js), [features/thumbnail-quality/index.js](features-thumbnail-quality.md#mod-index-js), [features/dearrow/index.js](features-dearrow.md#mod-index-js), [features/rows-ahead.js](features.md#mod-rows-ahead-js), [features/adblock/constants.js](#mod-constants-js), [core/innertube.js](core.md#mod-innertube-js), [features/adblock/search.js](#mod-search-js), [features/adblock/text-fixes.js](#mod-text-fixes-js), [features/adblock/emoji-wrap.js](#mod-emoji-wrap-js), [features/adblock/response-filters.js](#mod-response-filters-js), [features/adblock/fallback.js](#mod-fallback-js), [features/adblock/flags.js](#mod-flags-js), [features/force-codec/hooks.js](features-force-codec.md#mod-hooks-js), [features/force-codec/state.js](features-force-codec.md#mod-state-js), [features/adblock/log.js](#mod-log-js) · imported by [features/playback-speed/index.js](features-playback-speed.md#mod-index-js)
+184 lines · imports [core/page-state.js](core.md#mod-page-state-js), [core/log.js](core.md#mod-log-js), [features/thumbnail-quality/index.js](features-thumbnail-quality.md#mod-index-js), [features/dearrow/index.js](features-dearrow.md#mod-index-js), [features/rows-ahead.js](features.md#mod-rows-ahead-js), [features/adblock/constants.js](#mod-constants-js), [core/innertube.js](core.md#mod-innertube-js), [features/adblock/search.js](#mod-search-js), [features/adblock/text-fixes.js](#mod-text-fixes-js), [features/adblock/emoji-wrap.js](#mod-emoji-wrap-js), [features/adblock/response-filters.js](#mod-response-filters-js), [features/adblock/fallback.js](#mod-fallback-js), [features/adblock/flags.js](#mod-flags-js), [features/force-codec/hooks.js](features-force-codec.md#mod-hooks-js), [features/force-codec/state.js](features-force-codec.md#mod-state-js), [features/adblock/log.js](#mod-log-js) · imported by [features/playback-speed/index.js](features-playback-speed.md#mod-index-js)
 
 <a id="fn-parse-hook-js-setparsedobjectstep"></a>
 **`setParsedObjectStep(fn)`** · function, exported · L27–29
@@ -397,7 +397,7 @@ Parses a large text (with tracking parameters blanked first when Tracking Block 
 - **Called by:** [hookedParse](#fn-parse-hook-js-hookedparse)
 
 <a id="fn-parse-hook-js-filtersafely"></a>
-**`filterSafely(data, textLength, flags)`** · function · L105–111
+**`filterSafely(data, textLength, flags, text)`** · function · L105–111
 
 filterResponse, with an error logged instead of thrown: a filter bug must never break YouTube's parse.
 
@@ -405,15 +405,15 @@ filterResponse, with an error logged instead of thrown: a filter bug must never 
 - **Called by:** [parseAndFilter](#fn-parse-hook-js-parseandfilter)
 
 <a id="fn-parse-hook-js-filterresponse"></a>
-**`filterResponse(data, textLength, flags)`** · function · L118–160
+**`filterResponse(data, textLength, flags, text)`** · function · L120–162
 
-Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade, DeArrow and the emoji wrap.
+Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade, DeArrow and the emoji wrap. `text` is the JSON the response was parsed from (with its trackingParams blanked when Tracking Block is on), for a pass that can tell from it that it has nothing to do; `textLength` is its length as YouTube sent it.
 
 - **Calls:** [core/innertube.js › detectResponseType](core.md#fn-innertube-js-detectresponsetype), [core/log.js › isDebugEnabled](core.md#fn-log-js-isdebugenabled), [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [features/adblock/fallback.js › applyFallbackFilters](#fn-fallback-js-applyfallbackfilters), [features/adblock/fallback.js › removeBlockedNavEntries](#fn-fallback-js-removeblockednaventries), [logSchemaMiss](#fn-parse-hook-js-logschemamiss), [wrapEmojiInFrameworkUpdates](#fn-parse-hook-js-wrapemojiinframeworkupdates), [features/adblock/response-filters.js › applySchemaFilters](#fn-response-filters-js-applyschemafilters), [features/dearrow/index.js › applyDeArrow](features-dearrow.md#fn-index-js-applydearrow), [features/force-codec/hooks.js › filterParsedResponse](features-force-codec.md#fn-hooks-js-filterparsedresponse), [features/rows-ahead.js › raiseRowsAhead](features.md#fn-rows-ahead-js-raiserowsahead), [features/thumbnail-quality/dispatch.js › upgradeResponseThumbnails](features-thumbnail-quality.md#fn-dispatch-js-upgraderesponsethumbnails)
 - **Called by:** [filterSafely](#fn-parse-hook-js-filtersafely)
 
 <a id="fn-parse-hook-js-installparsehook"></a>
-**`installParseHook()`** · function, exported · L170–182
+**`installParseHook()`** · function, exported · L172–184
 
 Installs the hook, once, for the life of the page.
 

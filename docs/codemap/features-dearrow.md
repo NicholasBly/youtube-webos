@@ -45,12 +45,13 @@ The title with the ">" markers taken out and the ends trimmed, as the formatter'
 >
 > A branding lookup takes a request per video, which the JSON.parse hook cannot wait for, so it works in two halves: 1. applyDeArrow() runs in the parse hook (adblock/parse-hook.js) and writes what is already decided into every tile of the response, so those render right the first time; videos not seen before are queued for a lookup (lookup.js). 2. When a lookup lands, the tiles already on screen are patched (sweep.js). Tiles are rebuilt as the user moves around, so the sweep also follows every parse and key press. What is shown follows the extension: the top title or thumbnail unless it is the original or voted below zero (a locked one always wins), with the extension's own title formatter (src/vendor/dearrow).
 
-123 lines · imports [core/config.js](core.md#mod-config-js), [features/dearrow/constants.js](#mod-constants-js), [features/dearrow/state.js](#mod-state-js), [features/dearrow/thumbs.js](#mod-thumbs-js), [features/dearrow/tiles.js](#mod-tiles-js), [features/dearrow/sweep.js](#mod-sweep-js), [features/dearrow/lookup.js](#mod-lookup-js), [features/dearrow/log.js](#mod-log-js) · imported by [features/adblock/parse-hook.js](features-adblock.md#mod-parse-hook-js), [ui/panel/pages.js](ui-panel.md#mod-pages-js)
+142 lines · imports [core/config.js](core.md#mod-config-js), [features/dearrow/constants.js](#mod-constants-js), [features/dearrow/state.js](#mod-state-js), [features/dearrow/thumbs.js](#mod-thumbs-js), [features/dearrow/tiles.js](#mod-tiles-js), [features/dearrow/sweep.js](#mod-sweep-js), [features/dearrow/lookup.js](#mod-lookup-js), [features/dearrow/log.js](#mod-log-js) · imported by [features/adblock/parse-hook.js](features-adblock.md#mod-parse-hook-js), [ui/panel/pages.js](ui-panel.md#mod-pages-js)
 
 **At load:**
 
 - **Calls:** [features/dearrow/lookup.js › setChangeHandler](#fn-lookup-js-setchangehandler), [features/dearrow/tiles.js › applyToVideo](#fn-tiles-js-applytovideo), [scheduleSweep](#fn-index-js-schedulesweep), [core/config.js › configAddChangeListener](core.md#fn-config-js-configaddchangelistener), [onSettingsChange](#fn-index-js-onsettingschange)
 - **Events:** listens to `keydown`
+- **Hooks:** `window.__ytafDeArrowStats`
 
 <a id="fn-index-js-cancelsweep"></a>
 **`cancelSweep()`** · function · L31–34
@@ -86,15 +87,15 @@ Forgets everything (too many videos remembered, or DeArrow switched off): origin
 - **Called by:** [applyDeArrow](#fn-index-js-applydearrow), [onSettingsChange](#fn-index-js-onsettingschange)
 
 <a id="fn-index-js-applydearrow"></a>
-**`applyDeArrow(data, responseType)`** · function, exported · L72–80
+**`applyDeArrow(data, responseType, text)`** · function, exported · L85–99
 
-The parse hook's step (adblock/parse-hook.js) for an InnerTube response: its video tiles get what is decided, new videos are queued for a lookup, and the rendered tiles are swept a moment later. Player responses carry no tiles and are skipped.
+The parse hook's step (adblock/parse-hook.js) for an InnerTube response: its video tiles get what is decided, new videos are queued for a lookup, and the rendered tiles are swept a moment later. Player responses carry no tiles and are skipped, and so is the walk of a response whose JSON `text` holds no tile key: comments, live chat, the guide and the settings pages are thousands of nodes with nothing in them to find, and one native scan of the text says so (a key quoted inside a string value has its quotes escaped there, so it is not taken for one).
 
 - **Calls:** [scheduleSweep](#fn-index-js-schedulesweep), [wipe](#fn-index-js-wipe), [features/dearrow/lookup.js › queueLookups](#fn-lookup-js-queuelookups), [features/dearrow/thumbs.js › thumbsFull](#fn-thumbs-js-thumbsfull), [features/dearrow/tiles.js › patchResponseTiles](#fn-tiles-js-patchresponsetiles)
 - **Called by:** [features/adblock/parse-hook.js › filterResponse](features-adblock.md#fn-parse-hook-js-filterresponse)
 
 <a id="fn-index-js-onsettingschange"></a>
-**`onSettingsChange()`** · function · L89–103
+**`onSettingsChange()`** · function · L108–122
 
 A DeArrow setting changed: everything is decided again (answers already fetched are reused), newest first, since those are the videos likely on screen. Turned off, YouTube's own come back everywhere and everything DeArrow kept goes with them: up to BLOB_BUDGET of thumbnail copies would otherwise stay in memory for the rest of the session.
 

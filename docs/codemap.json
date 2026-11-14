@@ -985,7 +985,7 @@
   },
   {
    "path": "features/adblock/emoji-wrap.js",
-   "lines": 250,
+   "lines": 266,
    "header": "The legacy emoji fix's half in the response: every emoji in the parsed tree wrapped in sentinel characters, so features/emoji-font can swap it for an image on webOS 3 and 4. The webOS 22+ build carries emoji-wrap-absent.js in its place (webpack.config.js): the fix is never on there.",
    "imports": [
     {
@@ -1275,7 +1275,7 @@
   },
   {
    "path": "features/adblock/parse-hook.js",
-   "lines": 182,
+   "lines": 184,
    "header": "The JSON.parse hook: classifies each InnerTube response and runs the filters, the thumbnail rewrite and the text fixes over it before the app sees it.",
    "imports": [
     {
@@ -2066,7 +2066,7 @@
   },
   {
    "path": "features/dearrow/index.js",
-   "lines": 123,
+   "lines": 142,
    "header": "DeArrow (https://dearrow.ajay.app): crowdsourced titles and thumbnails in place of clickbait ones, on the tiles of shelves and grids. Off by default; its own page in the options panel.\n\nA branding lookup takes a request per video, which the JSON.parse hook cannot wait for, so it works in two halves: 1. applyDeArrow() runs in the parse hook (adblock/parse-hook.js) and writes what is already decided into every tile of the response, so those render right the first time; videos not seen before are queued for a lookup (lookup.js). 2. When a lookup lands, the tiles already on screen are patched (sweep.js). Tiles are rebuilt as the user moves around, so the sweep also follows every parse and key press. What is shown follows the extension: the top title or thumbnail unless it is the original or voted below zero (a locked one always wins), with the extension's own title formatter (src/vendor/dearrow).",
    "imports": [
     {
@@ -2147,7 +2147,10 @@
      "listen": [
       "keydown"
      ]
-    }
+    },
+    "hooks": [
+     "window.__ytafDeArrowStats"
+    ]
    },
    "functions": [
     "features/dearrow/index.js#cancelSweep",
@@ -4681,7 +4684,7 @@
   },
   {
    "path": "features/sponsorblock/skipping.js",
-   "lines": 316,
+   "lines": 338,
    "header": "Playback-time behaviour: aiming at the next segment, the timeupdate listener, the per-frame loop near a segment and the skip itself, which the chain at the start (chain.js) takes too. The blue key is blue-key.js.",
    "imports": [
     {
@@ -4760,6 +4763,7 @@
     "features/sponsorblock/skipping.js#aimAt",
     "features/sponsorblock/skipping.js#aimPast",
     "features/sponsorblock/skipping.js#resetSegmentTracking",
+    "features/sponsorblock/skipping.js#carryManualSegment",
     "features/sponsorblock/skipping.js#refreshSkipSegments",
     "features/sponsorblock/skipping.js#clearManualNotification",
     "features/sponsorblock/skipping.js#armSkipWatchdog",
@@ -4943,7 +4947,7 @@
   },
   {
    "path": "features/thumbnail-quality/dispatch.js",
-   "lines": 362,
+   "lines": 387,
    "header": "Where each InnerTube response type keeps its thumbnails: the known paths per type, the bounded scan for shapes no path matched, and the entry point the JSON.parse hook calls.",
    "imports": [
     {
@@ -4967,7 +4971,8 @@
      "from": "features/thumbnail-quality/state.js",
      "names": [
       "state",
-      "pendingPromotions"
+      "pendingPromotions",
+      "thumbStats"
      ]
     },
     {
@@ -5011,6 +5016,7 @@
     "features/thumbnail-quality/dispatch.js#upgradeBrowseTabs",
     "features/thumbnail-quality/dispatch.js#upgradeActions",
     "features/thumbnail-quality/dispatch.js#upgradeContinuation",
+    "features/thumbnail-quality/dispatch.js#worthScanning",
     "features/thumbnail-quality/dispatch.js#scanForThumbnails",
     "features/thumbnail-quality/dispatch.js#scanRoot",
     "features/thumbnail-quality/dispatch.js#upgradeByType",
@@ -5521,7 +5527,7 @@
   },
   {
    "path": "features/thumbnail-quality/state.js",
-   "lines": 90,
+   "lines": 96,
    "header": "Everything the thumbnail modules share and mutate: the current mode, the verification caches and queues, timers and budgets. Scalars live on `state` so every module reads the same value; collections are exported directly.",
    "imports": [
     {
@@ -12129,10 +12135,10 @@
    "params": "text",
    "exported": true,
    "lines": [
-    58,
-    60
+    72,
+    76
    ],
-   "description": "Whether the JSON text can hold anything the emoji walk would change: one native scan of the text, so the walk over every item of a response (the most expensive pass on webOS 3 and 4) is skipped for the ones without.",
+   "description": "Whether the JSON text can hold anything the emoji walk would change, so the walk over every item of a response (the most expensive pass on webOS 3 and 4) is skipped for the ones without. Native scans of the text: the few-range class first, the exact class only from where that one matched (never more characters than one exact scan read), then the escaped forms.",
    "calledBy": [
     "features/adblock/parse-hook.js#parseAndFilter"
    ]
@@ -12144,8 +12150,8 @@
    "params": "str",
    "exported": false,
    "lines": [
-    67,
-    75
+    83,
+    91
    ],
    "description": "A text with each emoji wrapped in sentinels (U+200B before, U+200C after) for features/emoji-font to draw as an image on webOS 3/4. Sentinels already in the text are removed first, so it is safe to run twice; plain text comes back as it is.",
    "calledBy": [
@@ -12159,8 +12165,8 @@
    "params": "text, originalRun",
    "exported": false,
    "lines": [
-    78,
-    94
+    94,
+    110
    ],
    "description": "Called only for text that passed NEEDS_TEXT_WORK_RE in the caller.",
    "calledBy": [
@@ -12174,8 +12180,8 @@
    "params": "obj",
    "exported": false,
    "lines": [
-    97,
-    102
+    113,
+    118
    ],
    "description": "Whether `obj` has offset runs (commandRuns, styleRuns...) over its `content`.",
    "calledBy": [
@@ -12189,8 +12195,8 @@
    "params": "obj",
    "exported": false,
    "lines": [
-    111,
-    161
+    127,
+    177
    ],
    "description": "An attributed string's `content` wrapped, and the offsets of its runs (UTF-16 units of `content`) moved with the characters they name: a run starting at an emoji starts at its opening sentinel, one ending with it ends after the closing one. Without this a mention, link or timestamp after an emoji pointed two characters early per emoji.",
    "calls": [
@@ -12207,8 +12213,8 @@
    "params": "p",
    "exported": false,
    "lines": [
-    135,
-    147
+    151,
+    163
    ],
    "description": "Where offset `p` of `src` lands in `out`.",
    "calledBy": [
@@ -12222,8 +12228,8 @@
    "params": "obj",
    "exported": false,
    "lines": [
-    165,
-    216
+    181,
+    232
    ],
    "description": "Non-recursive: the emoji/text fields of a single node, in place. walkAndProcess guarantees obj is a non-null object.",
    "calls": [
@@ -12243,8 +12249,8 @@
    "params": "obj",
    "exported": true,
    "lines": [
-    223,
-    225
+    239,
+    241
    ],
    "description": "Wraps the emoji in the text fields of `obj` and every node below it.",
    "calls": [
@@ -12266,8 +12272,8 @@
    "params": "obj, depth",
    "exported": false,
    "lines": [
-    229,
-    250
+    245,
+    266
    ],
    "description": "The depth is a plain argument: a default value would cost an `arguments` read per node in the legacy build.",
    "calls": [
@@ -12782,7 +12788,7 @@
    "id": "features/adblock/parse-hook.js#filterSafely",
    "name": "filterSafely",
    "kind": "function",
-   "params": "data, textLength, flags",
+   "params": "data, textLength, flags, text",
    "exported": false,
    "lines": [
     105,
@@ -12800,13 +12806,13 @@
    "id": "features/adblock/parse-hook.js#filterResponse",
    "name": "filterResponse",
    "kind": "function",
-   "params": "data, textLength, flags",
+   "params": "data, textLength, flags, text",
    "exported": false,
    "lines": [
-    118,
-    160
+    120,
+    162
    ],
-   "description": "Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade, DeArrow and the emoji wrap.",
+   "description": "Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade, DeArrow and the emoji wrap. `text` is the JSON the response was parsed from (with its trackingParams blanked when Tracking Block is on), for a pass that can tell from it that it has nothing to do; `textLength` is its length as YouTube sent it.",
    "calls": [
     "core/innertube.js#detectResponseType",
     "core/log.js#isDebugEnabled",
@@ -12832,8 +12838,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    170,
-    182
+    172,
+    184
    ],
    "description": "Installs the hook, once, for the life of the page.\n\nEvery switch that lives on it (ads, Shorts, guest prompts, endcards, trackingParams, the legacy emoji rewrite, the thumbnail upgrade, DeArrow) is a flag in flags.js, and filterResponse stops after the rows-ahead pass (its own switch, Load Rows Ahead) while none of them is on; force-codec's offer filter runs inside it as well.",
    "hooks": [
@@ -14040,13 +14046,13 @@
    "id": "features/dearrow/index.js#applyDeArrow",
    "name": "applyDeArrow",
    "kind": "function",
-   "params": "data, responseType",
+   "params": "data, responseType, text",
    "exported": true,
    "lines": [
-    72,
-    80
+    85,
+    99
    ],
-   "description": "The parse hook's step (adblock/parse-hook.js) for an InnerTube response: its video tiles get what is decided, new videos are queued for a lookup, and the rendered tiles are swept a moment later. Player responses carry no tiles and are skipped.",
+   "description": "The parse hook's step (adblock/parse-hook.js) for an InnerTube response: its video tiles get what is decided, new videos are queued for a lookup, and the rendered tiles are swept a moment later. Player responses carry no tiles and are skipped, and so is the walk of a response whose JSON `text` holds no tile key: comments, live chat, the guide and the settings pages are thousands of nodes with nothing in them to find, and one native scan of the text says so (a key quoted inside a string value has its quotes escaped there, so it is not taken for one).",
    "calls": [
     "features/dearrow/index.js#scheduleSweep",
     "features/dearrow/index.js#wipe",
@@ -14065,8 +14071,8 @@
    "params": "",
    "exported": false,
    "lines": [
-    89,
-    103
+    108,
+    122
    ],
    "description": "A DeArrow setting changed: everything is decided again (answers already fetched are reused), newest first, since those are the videos likely on screen. Turned off, YouTube's own come back everywhere and everything DeArrow kept goes with them: up to BLOB_BUDGET of thumbnail copies would otherwise stay in memory for the rest of the session.",
    "calls": [
@@ -19388,19 +19394,38 @@
    ]
   },
   {
+   "id": "features/sponsorblock/skipping.js#carryManualSegment",
+   "name": "carryManualSegment",
+   "kind": "function",
+   "params": "sb, originalIndex",
+   "exported": false,
+   "lines": [
+    119,
+    128
+   ],
+   "description": "After a rebuild of the skip list: the segment being offered is the one of the new list (the same API segment, with its end as clamped now), so the prompt on screen goes on offering it; or it is no longer a manual one (its mode changed, muted segments were switched) and the prompt goes with it. Without this the handler kept an object of the old list: the blue key skipped a segment the settings had just set aside, and the next timeupdate took the rebuilt segment for a new one and stacked a second prompt.",
+   "calls": [
+    "features/sponsorblock/skipping.js#clearManualNotification"
+   ],
+   "calledBy": [
+    "features/sponsorblock/skipping.js#refreshSkipSegments"
+   ]
+  },
+  {
    "id": "features/sponsorblock/skipping.js#refreshSkipSegments",
    "name": "refreshSkipSegments",
    "kind": "function",
    "params": "sb",
    "exported": true,
    "lines": [
-    111,
-    117
+    131,
+    139
    ],
    "description": "Rebuilds the skip list for the current settings and re-aims.",
    "calls": [
     "features/sponsorblock/mute.js#leaveMutedSegment",
     "features/sponsorblock/segments.js#rebuildSkipSegments",
+    "features/sponsorblock/skipping.js#carryManualSegment",
     "features/sponsorblock/skipping.js#resetSegmentTracking",
     "features/sponsorblock/skipping.js#stopHighFreqLoop"
    ],
@@ -19418,13 +19443,14 @@
    "params": "sb",
    "exported": true,
    "lines": [
-    122,
-    128
+    144,
+    150
    ],
    "description": "Removes the manual-skip prompt and forgets the segment it offered.",
    "calledBy": [
     "features/sponsorblock/blue-key.js#manualSkipOrHighlight",
     "features/sponsorblock/index.js#SponsorBlockHandler.destroy",
+    "features/sponsorblock/skipping.js#carryManualSegment",
     "features/sponsorblock/skipping.js#handleTimeUpdate",
     "features/sponsorblock/skipping.js#resetSegmentTracking"
    ]
@@ -19436,8 +19462,8 @@
    "params": "sb",
    "exported": true,
    "lines": [
-    133,
-    143
+    155,
+    165
    ],
    "description": "Safety net: if the media pipeline swallows the 'seeked' event for a programmatic skip (buffer stalls / near-EOS quirks on webOS), clear the isSkipping latch so the timeupdate pipeline keeps working.",
    "calls": [
@@ -19458,8 +19484,8 @@
    "params": "sb",
    "exported": true,
    "lines": [
-    146,
-    151
+    168,
+    173
    ],
    "description": "Stops the timer that catches a skip whose seek never completed.",
    "calledBy": [
@@ -19474,8 +19500,8 @@
    "params": "sb, currentTime",
    "exported": false,
    "lines": [
-    160,
-    165
+    182,
+    187
    ],
    "description": "Index of the segment `currentTime` is in. The predicted one is trusted when it is a manual segment; otherwise the scan decides, since a manual segment nested in the predicted one takes precedence (see findSegmentAtTime).",
    "calls": [
@@ -19492,8 +19518,8 @@
    "params": "sb, seg",
    "exported": false,
    "lines": [
-    168,
-    174
+    190,
+    196
    ],
    "description": "The manual-skip prompt for a segment that is not auto-skipped.",
    "calls": [
@@ -19511,8 +19537,8 @@
    "params": "sb, seg, segmentIdx, currentTime",
    "exported": false,
    "lines": [
-    177,
-    196
+    199,
+    218
    ],
    "description": "Whether an auto-skip segment is skipped now, or left alone.",
    "calls": [
@@ -19534,8 +19560,8 @@
    "params": "sb, segmentIdx, currentTime",
    "exported": false,
    "lines": [
-    204,
-    230
+    226,
+    252
    ],
    "description": "Where the skip lands: past this segment and the auto-skip segments that follow it closely, but never past the start of a manual one ahead of the playhead. A manual segment already behind the playhead has had its turn, and a muted segment is skipped over like any other part of the video.",
    "calledBy": [
@@ -19549,8 +19575,8 @@
    "params": "sb, segmentIdx, currentTime, { jumpTarget, categories, indices }",
    "exported": false,
    "lines": [
-    233,
-    260
+    255,
+    282
    ],
    "description": "Performs the skip, then aims at whatever follows the landing point.",
    "calls": [
@@ -19571,8 +19597,8 @@
    "params": "sb, segmentIdx, currentTime",
    "exported": true,
    "lines": [
-    267,
-    270
+    289,
+    292
    ],
    "description": "The auto-skip segment at `segmentIdx`, with the ones close behind it, in one jump; unless shouldSkip leaves it alone. The timeupdate path and the chain at the start (chain.js) both come here.",
    "calls": [
@@ -19592,8 +19618,8 @@
    "params": "sb",
    "exported": true,
    "lines": [
-    276,
-    316
+    298,
+    338
    ],
    "description": "The skip decision at the playhead: leaves a muted segment, polls faster before the next segment, and inside one auto-skips, mutes, or offers the manual skip according to its category's mode.",
    "calls": [
@@ -20032,17 +20058,33 @@
    ]
   },
   {
+   "id": "features/thumbnail-quality/dispatch.js#worthScanning",
+   "name": "worthScanning",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    229,
+    235
+   ],
+   "description": "Whether a fallback scan of the current response can find anything: its JSON text names the thumbnail host. One native scan of the text, made only when a scan is about to run and once per response, in place of walks of up to SCAN_MAX_NODES nodes each (one per section the paths could not read) over a response that holds no video thumbnail: a settings page, comments under a key no path names, a shelf of channels.",
+   "calledBy": [
+    "features/thumbnail-quality/dispatch.js#scanForThumbnails"
+   ]
+  },
+  {
    "id": "features/thumbnail-quality/dispatch.js#scanForThumbnails",
    "name": "scanForThumbnails",
    "kind": "function",
    "params": "root",
    "exported": false,
    "lines": [
-    223,
-    250
+    242,
+    269
    ],
    "description": "Last-resort bounded walk, used only when the schema paths produced nothing. Keeps the module working through an InnerTube reshuffle instead of silently doing nothing, without ever putting a full traversal on the hot path.",
    "calls": [
+    "features/thumbnail-quality/dispatch.js#worthScanning",
     "features/thumbnail-quality/rewrite.js#upgradeContainer"
    ],
    "calledBy": [
@@ -20057,8 +20099,8 @@
    "params": "data, type",
    "exported": false,
    "lines": [
-    260,
-    269
+    279,
+    288
    ],
    "description": "Where the thumbnail scan of a response type starts: down SCAN_FROM's path as far as it exists.",
    "calledBy": [
@@ -20072,8 +20114,8 @@
    "params": "data, type, textLength",
    "exported": false,
    "lines": [
-    277,
-    327
+    296,
+    346
    ],
    "description": "The thumbnails at the known paths of `type`, rewritten; the count. A type whose paths reach no item list at all gets the bounded scan, an unknown type gets it when the body is large enough to be worth one, and a type with nothing to find gets neither.",
    "calls": [
@@ -20095,13 +20137,13 @@
    "id": "features/thumbnail-quality/dispatch.js#upgradeResponseThumbnails",
    "name": "upgradeResponseThumbnails",
    "kind": "function",
-   "params": "data, responseType, textLength",
+   "params": "data, responseType, textLength, text",
    "exported": true,
    "lines": [
-    335,
-    362
+    355,
+    387
    ],
-   "description": "Entry point called from the JSON.parse hook in adblock/parse-hook.js. `responseType` is the type adblock already detected, so this costs no extra detection pass; `textLength` is the length of the JSON text, which the hook already has.",
+   "description": "Entry point called from the JSON.parse hook in adblock/parse-hook.js. `responseType` is the type adblock already detected, so this costs no extra detection pass; `textLength` is the length of the JSON text, which the hook already has, and `text` the text itself, which a fallback scan asks whether it is worth running (worthScanning).",
    "calls": [
     "features/thumbnail-quality/dispatch.js#upgradeByType",
     "features/thumbnail-quality/dispatch.js#upgradeContinuation",
@@ -20800,8 +20842,8 @@
    "params": "name",
    "exported": true,
    "lines": [
-    56,
-    61
+    62,
+    67
    ],
    "description": "Clears the timer in `state[name]`, if one is set.",
    "calledBy": [
@@ -28800,6 +28842,9 @@
   ],
   "window.__ytafContinuationStats": [
    "features/rows-ahead.js#(top level)"
+  ],
+  "window.__ytafDeArrowStats": [
+   "features/dearrow/index.js#(top level)"
   ],
   "window.__ytafQualityStats": [
    "features/video-quality/index.js#(top level)"

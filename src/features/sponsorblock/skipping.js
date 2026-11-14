@@ -107,12 +107,34 @@ export function resetSegmentTracking(sb) {
   else detachTimeListener(sb);
 }
 
+/**
+ * After a rebuild of the skip list: the segment being offered is the one of
+ * the new list (the same API segment, with its end as clamped now), so the
+ * prompt on screen goes on offering it; or it is no longer a manual one (its
+ * mode changed, muted segments were switched) and the prompt goes with it.
+ * Without this the handler kept an object of the old list: the blue key
+ * skipped a segment the settings had just set aside, and the next timeupdate
+ * took the rebuilt segment for a new one and stacked a second prompt.
+ */
+function carryManualSegment(sb, originalIndex) {
+  for (let i = 0; i < sb.skipSegments.length; i++) {
+    const seg = sb.skipSegments[i];
+    if (seg.originalIndex === originalIndex && seg.mode === 'manual_skip') {
+      sb.currentManualSegment = seg;
+      return;
+    }
+  }
+  clearManualNotification(sb);
+}
+
 /** Rebuilds the skip list for the current settings and re-aims. */
 export function refreshSkipSegments(sb) {
   stopHighFreqLoop(sb);
   // A muted segment is re-entered from the new list on the next timeupdate.
   leaveMutedSegment(sb);
+  const offered = sb.currentManualSegment;
   rebuildSkipSegments(sb);
+  if (offered) carryManualSegment(sb, offered.originalIndex);
   resetSegmentTracking(sb);
 }
 

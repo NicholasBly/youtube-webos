@@ -834,7 +834,7 @@ Clamps the segments to the video's duration, and short of it on the legacy engin
 
 > Playback-time behaviour: aiming at the next segment, the timeupdate listener, the per-frame loop near a segment and the skip itself, which the chain at the start (chain.js) takes too. The blue key is blue-key.js.
 
-316 lines · imports [core/config.js](core.md#mod-config-js), [ui/toast/index.js](ui-toast.md#mod-index-js), [core/text.js](core.md#mod-text-js), [features/sponsorblock/constants.js](#mod-constants-js), [features/sponsorblock/segments.js](#mod-segments-js), [features/sponsorblock/overlay.js](#mod-overlay-js), [features/sponsorblock/mute.js](#mod-mute-js) · imported by [features/sponsorblock/blue-key.js](#mod-blue-key-js), [features/sponsorblock/chain.js](#mod-chain-js), [features/sponsorblock/index.js](#mod-index-js), [features/sponsorblock/video-events.js](#mod-video-events-js)
+338 lines · imports [core/config.js](core.md#mod-config-js), [ui/toast/index.js](ui-toast.md#mod-index-js), [core/text.js](core.md#mod-text-js), [features/sponsorblock/constants.js](#mod-constants-js), [features/sponsorblock/segments.js](#mod-segments-js), [features/sponsorblock/overlay.js](#mod-overlay-js), [features/sponsorblock/mute.js](#mod-mute-js) · imported by [features/sponsorblock/blue-key.js](#mod-blue-key-js), [features/sponsorblock/chain.js](#mod-chain-js), [features/sponsorblock/index.js](#mod-index-js), [features/sponsorblock/video-events.js](#mod-video-events-js)
 
 <a id="fn-skipping-js-attachtimelistener"></a>
 **`attachTimeListener(sb)`** · function · L20–24
@@ -899,23 +899,31 @@ Re-aims from the playhead and re-arms the listener: after a seek, when playback 
 - **Calls:** [features/sponsorblock/mute.js › leaveMutedSegment](#fn-mute-js-leavemutedsegment), [aimAt](#fn-skipping-js-aimat), [attachTimeListener](#fn-skipping-js-attachtimelistener), [clearManualNotification](#fn-skipping-js-clearmanualnotification), [detachTimeListener](#fn-skipping-js-detachtimelistener)
 - **Called by:** [armSkipWatchdog](#fn-skipping-js-armskipwatchdog), [refreshSkipSegments](#fn-skipping-js-refreshskipsegments), [features/sponsorblock/video-events.js › bindVideoEvents](#fn-video-events-js-bindvideoevents), [features/sponsorblock/video-events.js › bindWindowEvents](#fn-video-events-js-bindwindowevents)
 
+<a id="fn-skipping-js-carrymanualsegment"></a>
+**`carryManualSegment(sb, originalIndex)`** · function · L119–128
+
+After a rebuild of the skip list: the segment being offered is the one of the new list (the same API segment, with its end as clamped now), so the prompt on screen goes on offering it; or it is no longer a manual one (its mode changed, muted segments were switched) and the prompt goes with it. Without this the handler kept an object of the old list: the blue key skipped a segment the settings had just set aside, and the next timeupdate took the rebuilt segment for a new one and stacked a second prompt.
+
+- **Calls:** [clearManualNotification](#fn-skipping-js-clearmanualnotification)
+- **Called by:** [refreshSkipSegments](#fn-skipping-js-refreshskipsegments)
+
 <a id="fn-skipping-js-refreshskipsegments"></a>
-**`refreshSkipSegments(sb)`** · function, exported · L111–117
+**`refreshSkipSegments(sb)`** · function, exported · L131–139
 
 Rebuilds the skip list for the current settings and re-aims.
 
-- **Calls:** [features/sponsorblock/mute.js › leaveMutedSegment](#fn-mute-js-leavemutedsegment), [features/sponsorblock/segments.js › rebuildSkipSegments](#fn-segments-js-rebuildskipsegments), [resetSegmentTracking](#fn-skipping-js-resetsegmenttracking), [stopHighFreqLoop](#fn-skipping-js-stophighfreqloop)
+- **Calls:** [features/sponsorblock/mute.js › leaveMutedSegment](#fn-mute-js-leavemutedsegment), [features/sponsorblock/segments.js › rebuildSkipSegments](#fn-segments-js-rebuildskipsegments), [carryManualSegment](#fn-skipping-js-carrymanualsegment), [resetSegmentTracking](#fn-skipping-js-resetsegmenttracking), [stopHighFreqLoop](#fn-skipping-js-stophighfreqloop)
 - **Called by:** [features/sponsorblock/index.js › SponsorBlockHandler.applySegments](#fn-index-js-sponsorblockhandler-applysegments), [features/sponsorblock/index.js › SponsorBlockHandler.bindVideo](#fn-index-js-sponsorblockhandler-bindvideo), [features/sponsorblock/index.js › SponsorBlockHandler.setupConfigListeners.rebuild](#fn-index-js-sponsorblockhandler-setupconfiglisteners-rebuild), [features/sponsorblock/video-events.js › bindVideoEvents](#fn-video-events-js-bindvideoevents)
 
 <a id="fn-skipping-js-clearmanualnotification"></a>
-**`clearManualNotification(sb)`** · function, exported · L122–128
+**`clearManualNotification(sb)`** · function, exported · L144–150
 
 Removes the manual-skip prompt and forgets the segment it offered.
 
-- **Called by:** [features/sponsorblock/blue-key.js › manualSkipOrHighlight](#fn-blue-key-js-manualskiporhighlight), [features/sponsorblock/index.js › SponsorBlockHandler.destroy](#fn-index-js-sponsorblockhandler-destroy), [handleTimeUpdate](#fn-skipping-js-handletimeupdate), [resetSegmentTracking](#fn-skipping-js-resetsegmenttracking)
+- **Called by:** [features/sponsorblock/blue-key.js › manualSkipOrHighlight](#fn-blue-key-js-manualskiporhighlight), [features/sponsorblock/index.js › SponsorBlockHandler.destroy](#fn-index-js-sponsorblockhandler-destroy), [carryManualSegment](#fn-skipping-js-carrymanualsegment), [handleTimeUpdate](#fn-skipping-js-handletimeupdate), [resetSegmentTracking](#fn-skipping-js-resetsegmenttracking)
 
 <a id="fn-skipping-js-armskipwatchdog"></a>
-**`armSkipWatchdog(sb)`** · function, exported · L133–143
+**`armSkipWatchdog(sb)`** · function, exported · L155–165
 
 Safety net: if the media pipeline swallows the 'seeked' event for a programmatic skip (buffer stalls / near-EOS quirks on webOS), clear the isSkipping latch so the timeupdate pipeline keeps working.
 
@@ -924,14 +932,14 @@ Safety net: if the media pipeline swallows the 'seeked' event for a programmatic
 - **Browser:** `setTimeout`
 
 <a id="fn-skipping-js-clearskipwatchdog"></a>
-**`clearSkipWatchdog(sb)`** · function, exported · L146–151
+**`clearSkipWatchdog(sb)`** · function, exported · L168–173
 
 Stops the timer that catches a skip whose seek never completed.
 
 - **Called by:** [features/sponsorblock/index.js › SponsorBlockHandler.destroy](#fn-index-js-sponsorblockhandler-destroy), [features/sponsorblock/video-events.js › bindVideoEvents](#fn-video-events-js-bindvideoevents)
 
 <a id="fn-skipping-js-findcurrentsegment"></a>
-**`findCurrentSegment(sb, currentTime)`** · function · L160–165
+**`findCurrentSegment(sb, currentTime)`** · function · L182–187
 
 Index of the segment `currentTime` is in. The predicted one is trusted when it is a manual segment; otherwise the scan decides, since a manual segment nested in the predicted one takes precedence (see findSegmentAtTime).
 
@@ -939,7 +947,7 @@ Index of the segment `currentTime` is in. The predicted one is trusted when it i
 - **Called by:** [handleTimeUpdate](#fn-skipping-js-handletimeupdate)
 
 <a id="fn-skipping-js-announcesegment"></a>
-**`announceSegment(sb, seg)`** · function · L168–174
+**`announceSegment(sb, seg)`** · function · L190–196
 
 The manual-skip prompt for a segment that is not auto-skipped.
 
@@ -947,7 +955,7 @@ The manual-skip prompt for a segment that is not auto-skipped.
 - **Called by:** [handleTimeUpdate](#fn-skipping-js-handletimeupdate)
 
 <a id="fn-skipping-js-shouldskip"></a>
-**`shouldSkip(sb, seg, segmentIdx, currentTime)`** · function · L177–196
+**`shouldSkip(sb, seg, segmentIdx, currentTime)`** · function · L199–218
 
 Whether an auto-skip segment is skipped now, or left alone.
 
@@ -956,14 +964,14 @@ Whether an auto-skip segment is skipped now, or left alone.
 - **Settings:** uses `(all)`
 
 <a id="fn-skipping-js-findjumptarget"></a>
-**`findJumpTarget(sb, segmentIdx, currentTime)`** · function · L204–230
+**`findJumpTarget(sb, segmentIdx, currentTime)`** · function · L226–252
 
 Where the skip lands: past this segment and the auto-skip segments that follow it closely, but never past the start of a manual one ahead of the playhead. A manual segment already behind the playhead has had its turn, and a muted segment is skipped over like any other part of the video.
 
 - **Called by:** [skipAutoSegment](#fn-skipping-js-skipautosegment)
 
 <a id="fn-skipping-js-skipto"></a>
-**`skipTo(sb, segmentIdx, currentTime, { jumpTarget, categories, indices })`** · function · L233–260
+**`skipTo(sb, segmentIdx, currentTime, { jumpTarget, categories, indices })`** · function · L255–282
 
 Performs the skip, then aims at whatever follows the landing point.
 
@@ -971,7 +979,7 @@ Performs the skip, then aims at whatever follows the landing point.
 - **Called by:** [skipAutoSegment](#fn-skipping-js-skipautosegment)
 
 <a id="fn-skipping-js-skipautosegment"></a>
-**`skipAutoSegment(sb, segmentIdx, currentTime)`** · function, exported · L267–270
+**`skipAutoSegment(sb, segmentIdx, currentTime)`** · function, exported · L289–292
 
 The auto-skip segment at `segmentIdx`, with the ones close behind it, in one jump; unless shouldSkip leaves it alone. The timeupdate path and the chain at the start (chain.js) both come here.
 
@@ -979,7 +987,7 @@ The auto-skip segment at `segmentIdx`, with the ones close behind it, in one jum
 - **Called by:** [features/sponsorblock/chain.js › executeChainSkip](#fn-chain-js-executechainskip), [handleTimeUpdate](#fn-skipping-js-handletimeupdate)
 
 <a id="fn-skipping-js-handletimeupdate"></a>
-**`handleTimeUpdate(sb)`** · function, exported · L276–316
+**`handleTimeUpdate(sb)`** · function, exported · L298–338
 
 The skip decision at the playhead: leaves a muted segment, polls faster before the next segment, and inside one auto-skips, mutes, or offers the manual skip according to its category's mode.
 

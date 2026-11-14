@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.6 build 1]
+
+## Fixed
+
++ SponsorBlock: changing a category's mode in the settings while its "Press Blue to skip" prompt was up left the prompt on screen, and the blue button still skipped the segment even when the category had just been set to "Show in Seek Bar" or "Disable". The prompt now follows the setting
+
++ SponsorBlock: the "Press Blue to skip" prompt no longer shows twice for a moment when the video's duration is reported again while you are inside the segment
+
+## Performance
+
++ "Emoji + Characters Fix" (webOS 3 and 4, on by default): the check that decides whether a page of results contains any emoji at all is about 3x faster on pages without one, which is most of them. That check runs on every response YouTube sends, so home, search and scrolling cost less on the oldest TVs
+
++ DeArrow no longer walks through responses that contain no video tiles (comments, live chat, settings pages): on those it now does about 80% less work
+
++ "Max Thumbnail Quality" no longer scans a response for thumbnails when the response contains none
+
+## Under the hood
+
++ New docs for contributors and AI agents: AGENTS.md (commands, rules, traps), docs/STATE-MACHINES.md (the states each feature keeps and the rules between them) and docs/PERFORMANCE.md (what the hot paths cost, how to measure, what was already tried)
+
++ SponsorBlock's state rules are now checked after every step of every SponsorBlock test (tests/harness/invariants.cjs), which is how the two prompt bugs above were pinned down
+
++ `npm run bench` also times the JSON.parse hook per setting and per kind of response (tests/bench/response-bench.cjs)
+
 ## [0.8.5] - 2026/11/13
 
 A big one under the hood. Most of this release is based on @mirijanristic's fork (https://github.com/mirijanristic/youtube-webos): the codebase is now split into small modules with an automated test suite, both .ipk files are smaller, and a long list of bugs is fixed. Thanks!
