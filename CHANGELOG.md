@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.8.5] - 2026/10/17
+## [0.8.5] - 2026/11/13
 
 A big one under the hood. Most of this release is based on @mirijanristic's fork (https://github.com/mirijanristic/youtube-webos): the codebase is now split into small modules with an automated test suite, both .ipk files are smaller, and a long list of bugs is fixed. Thanks!
 
@@ -141,6 +141,8 @@ A big one under the hood. Most of this release is based on @mirijanristic's fork
 + Fixed Bypass Nag Screens pressing Enter on the account selector at launch even with the setting turned off
 
 + Fixed turning off "Display Time in UI" within its first minute leaving a timer running in the background
+
++ Fixed thumbnail video preview inline playback (hover over video tiles) - https://github.com/NicholasBly/youtube-webos/issues/125
 
 + Fixed Display Time in UI showing no clock at all when the system language tag has a format the TV's Intl can't read (it falls back to the default format now)
 
