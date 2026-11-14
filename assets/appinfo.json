@@ -17,7 +17,7 @@
   },
   "volumeRatioOnTTS": 50,
   "vendorExtension": {
-    "userAgent": "$browserName$/$browserVersion$ ($platformName$-$platformVersion$), _TV_$chipSetName$/$firmwareVersion$ (LG, $modelName$, $networkMode$)",
+    "userAgent": "$browserName$/$browserVersion$ ($platformName$-$platformVersion$), _TV_O18/$firmwareVersion$ (LG, $modelName$, $networkMode$)",
     "allowCrossDomain": true,
     "reloadAtLanguageChanged": true,
     "backgroundColor": "0xFF212121",
