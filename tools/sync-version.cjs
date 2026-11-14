@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
 const fs = require('fs');
+const path = require('path');
 
 const packageInfo = require('../package.json');
 const appinfo = require('../assets/appinfo.json');
 
 fs.writeFileSync(
-  'assets/appinfo.json',
+  path.join(__dirname, '..', 'assets', 'appinfo.json'),
   `${JSON.stringify(
     {
       ...appinfo,

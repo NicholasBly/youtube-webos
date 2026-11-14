@@ -1,0 +1,10 @@
+/* The DeArrow badge (features/dearrow/sweep.js): YouTube draws it as one of
+   its own metadata badges, the pill "4K" sits in, around a fisheye mark; the
+   mark is hidden and the logo (an inline background image) drawn in its place,
+   one text height tall. */
+.ytaf-dearrow-badge {
+  color: transparent !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 1em 1em !important;
+}

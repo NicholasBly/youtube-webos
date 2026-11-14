@@ -1,0 +1,22 @@
+/* The YouTube Logo setting, as a class on <html> set by logo-style.js. Rules
+   rather than styles on the element, so a header YouTube draws again (after
+   the profile picker, back from the background) takes them too; !important
+   outranks the inline styles YouTube draws the logo with. */
+
+/* Hidden. */
+html.ytaf-hide-logo ytlr-redux-connect-ytlr-logo-entity,
+html.ytaf-hide-logo ytlr-logo-entity {
+  visibility: hidden !important;
+}
+
+/* Premium: its wordmark is 0.625rem wider than the default one, and the header
+   places the logo by its left edge, so it starts 0.625rem further left (the
+   right edge stays at 76.5rem). */
+html.ytaf-premium-logo ytlr-logo-entity {
+  left: 65.75rem !important;
+  width: 10.75rem !important;
+}
+
+html.ytaf-premium-logo ytlr-logo-entity ytlr-thumbnail-details {
+  background-image: url('https://www.gstatic.com/youtube/img/branding/livingroom/premium/wordmark_truncated/fullcolor_white_57_2x_v2.png') !important;
+}

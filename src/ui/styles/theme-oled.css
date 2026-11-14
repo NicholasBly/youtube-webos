@@ -1,0 +1,43 @@
+/* OLED-care mode, under html.ytaf-oled (styles/html-classes.js): black
+   backgrounds for the options panel and the toasts. YouTube's own surfaces are
+   in global.css, the clock in features/watch/watch.css, the black overlay of
+   the oled_toggle shortcut in shortcuts/oled.css. */
+
+.ytaf-oled .ytaf-ui-container {
+  background: #000000;
+}
+
+.ytaf-oled.ytaf-theme-red .ytaf-ui-container {
+  border-color: rgba(255, 0, 0, 0.4);
+}
+
+.ytaf-oled .ytaf-ui-container input[type='checkbox'] {
+  background: #000;
+  border-color: #555;
+}
+
+.ytaf-oled .ytaf-ui-container input[type='checkbox']:checked {
+  background: #555;
+}
+
+.ytaf-oled .ytaf-toast {
+  background: #000000;
+  border: 0.09vh solid #00d4ff;
+  border-left: 0.37vh solid #00d4ff;
+  box-shadow: none;
+  color: #cccccc;
+}
+
+.ytaf-oled.ytaf-theme-red .ytaf-toast {
+  border-color: #ff4444;
+}
+
+/* The panel logo: the dark one, whatever the theme. */
+.ytaf-oled .ytaf-ui-container .ytaf-logo-blue,
+.ytaf-oled .ytaf-ui-container .ytaf-logo-red {
+  display: none;
+}
+
+.ytaf-oled .ytaf-ui-container .ytaf-logo-dark {
+  display: inline;
+}

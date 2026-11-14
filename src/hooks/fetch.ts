@@ -1,168 +1,134 @@
-import { CustomEventTarget, TypedCustomEvent } from '../custom-event-target';
+// The fetch hook: wraps window.fetch once and lets listeners see, and cancel,
+// requests. Consumers get the one instance through getInstance().
+import { createLogger, isDebugEnabled } from '../core/log.js';
 
-export interface StringConvertible {
+const log = createLogger('Fetch');
+
+interface StringConvertible {
   toString(): string;
 }
 
-export type FetchTarget = Request | StringConvertible;
+type FetchTarget = Request | StringConvertible;
 
-let registry: FetchRegistry | null = null;
-
-type HookedType = 'request' | 'response';
-
-const isHookedType = (t: unknown): t is HookedType =>
-  t === 'request' || t === 'response';
-
-export interface RequestInfo {
+/** The detail of a 'request' event: the URL parsed once, and fetch()'s own arguments. */
+interface FetchRequestDetail {
   url: URL;
   resource: FetchTarget;
   init?: RequestInit | undefined;
 }
 
-interface EventMap {
-  request: CustomEvent<RequestInfo>;
-  response: CustomEvent<Response>;
+interface FetchEventMap {
+  request: CustomEvent<FetchRequestDetail>;
 }
 
-export class FetchRegistry extends CustomEventTarget<EventMap> {
+type FetchEventType = keyof FetchEventMap;
+
+type FetchListener<K extends FetchEventType> = (evt: FetchEventMap[K]) => void;
+
+let registry: FetchRegistry | null = null;
+
+/** Runs one listener; one that throws is logged and the rest still run, as on an event target. */
+function callListener<E>(listener: (evt: E) => void, evt: E): void {
+  try {
+    listener(evt);
+  } catch (error) {
+    log.error('A fetch listener threw:', error);
+  }
+}
+
+export class FetchRegistry {
   #originalFetch: typeof fetch;
   #fetchCount = 0;
-  #listeners: Record<HookedType, Set<unknown>> = {
-    request: new Set(),
-    response: new Set()
+  // The listeners per event, called in the order added, each once (a Set,
+  // as an event target keeps them). The fetch fast path reads their sizes.
+  #listeners: Record<FetchEventType, Set<unknown>> = {
+    request: new Set()
   };
 
-  override addEventListener(type: any, callback: any, options?: any): void {
-    super.addEventListener(type, callback, options);
-    if (callback && isHookedType(type)) this.#listeners[type].add(callback);
-  }
-
-  override removeEventListener(
-    type: any,
-    callback: any,
-    options?: any
-  ): void {
-    super.removeEventListener(type, callback, options);
-    if (callback && isHookedType(type)) this.#listeners[type].delete(callback);
-  }
-
+  /** Wraps window.fetch; private, as there is one registry (getInstance()). */
   private constructor() {
-    super();
-
     this.#originalFetch = window.fetch.bind(window);
     window.fetch = this.#customFetch;
   }
 
-  static async #dumpBody(resource: Request | Response) {
-    if (
-      !resource?.constructor?.name ||
-      !['Request', 'Response'].includes(resource.constructor.name)
-    )
-      return null;
-
-    const blob = await resource.clone().blob();
-    if (!blob.size) return null;
-
-    const fr = new FileReader();
-
-    const res = new Promise<string | ArrayBuffer | null>((resolve) => {
-      fr.addEventListener('load', () => {
-        resolve(fr.result);
-      });
-    });
-
-    fr.readAsDataURL(blob);
-
-    return res;
+  /** The one registry, created (and fetch wrapped) on first use. */
+  static getInstance() {
+    if (!registry) registry = new FetchRegistry();
+    return registry;
   }
 
-  #customFetch = async (
-    resource: FetchTarget,
-    init?: RequestInit
-  ): Promise<Response> => {
-    // Fast path: no listeners and not debugging — pass straight through with
-    // zero allocations (no URL object, no CustomEvent dispatch). Tracking
-    // block off is the common case for most sessions.
-    if (
-      !window.__ytaf_debug__ &&
-      this.#listeners.request.size === 0 &&
-      this.#listeners.response.size === 0
-    ) {
+  /** Adds a listener for `type` ('request'); it can cancel a request with preventDefault(). */
+  addEventListener<K extends FetchEventType>(type: K, callback: FetchListener<K>): void {
+    this.#listeners[type].add(callback);
+  }
+
+  /** Removes a listener added with addEventListener. */
+  removeEventListener<K extends FetchEventType>(type: K, callback: FetchListener<K>): void {
+    this.#listeners[type].delete(callback);
+  }
+
+  /** Calls the listeners with a cancelable event; false when one prevented it. */
+  #dispatch<K extends FetchEventType>(type: K, detail: FetchEventMap[K]['detail']): boolean {
+    const evt = new CustomEvent(type, { detail, cancelable: true }) as FetchEventMap[K];
+    const registered = this.#listeners[type];
+    // Those registered when the event starts, as an event target calls them:
+    // one added meanwhile waits for the next event, one removed meanwhile is
+    // skipped.
+    const listeners: unknown[] = [];
+    registered.forEach((listener) => {
+      listeners.push(listener);
+    });
+    for (let i = 0; i < listeners.length; i++) {
+      if (registered.has(listeners[i])) callListener(listeners[i] as FetchListener<K>, evt);
+    }
+    return !evt.defaultPrevented;
+  }
+
+  // Not async: on the fast path the original promise is returned as is, with
+  // no wrapper promise, no URL object and no event. The registry exists once
+  // Tracking Block was first turned on (features/adblock/tracking-block.js);
+  // turned off again it has no listener, and every request takes this path.
+  // The cast block (features/block-webos-cast) does its own check without it.
+  #customFetch = (resource: FetchTarget, init?: RequestInit): Promise<Response> => {
+    if (!isDebugEnabled() && this.#listeners.request.size === 0) {
       return this.#originalFetch(resource as Parameters<typeof fetch>[0], init);
     }
+    return this.#hookedFetch(resource, init);
+  };
 
-    if (window.__ytaf_debug__) {
-      console.debug(`Request ${this.#fetchCount}:`, resource);
-      init && console.debug(`Options  ${this.#fetchCount}:`, init);
-
-      if (resource instanceof Request) {
-        const reqBody = await FetchRegistry.#dumpBody(resource);
-        reqBody && console.debug(`Request Body ${this.#fetchCount}:`, reqBody);
-      }
+  /**
+   * The slow path: numbers and logs the request when diagnostics are on, lets the 'request'
+   * listeners see and cancel it (a cancelled one fails like a network error), then fetches.
+   */
+  async #hookedFetch(resource: FetchTarget, init?: RequestInit): Promise<Response> {
+    // Numbered at the start: requests in parallel each keep their own number.
+    const n = this.#fetchCount++;
+    // Diagnostics log what a request is and how it was answered, never a
+    // body: reading one would delay the answer and hold a copy of it, and the
+    // TV checks run with diagnostics on.
+    if (isDebugEnabled()) {
+      log.debug(`Request ${n}:`, resource instanceof Request ? resource.url : String(resource));
+      if (init) log.debug(`Options  ${n}:`, init);
     }
 
-    let reqAllowed = true;
     if (this.#listeners.request.size > 0) {
       const url =
         resource instanceof Request
           ? new URL(resource.url)
           : new URL(resource.toString(), document.location.href);
-
-      reqAllowed = this.dispatchEvent(
-        new TypedCustomEvent('request', {
-          detail: { url, resource, init },
-          cancelable: true
-        })
-      );
+      if (!this.#dispatch('request', { url, resource, init })) {
+        log.info(`Fetch request ${n} was cancelled by listener.`, resource, init);
+        throw new TypeError('Failed to fetch');
+      }
     }
 
-    if (!reqAllowed) {
-      console.info(
-        `Fetch request ${this.#fetchCount} was cancelled by listener.`,
-        resource,
-        init
-      );
-      throw new TypeError('Failed to fetch');
+    const res = await this.#originalFetch(resource as Parameters<typeof fetch>[0], init);
+
+    if (isDebugEnabled()) {
+      const size = res.headers ? res.headers.get('content-length') : null;
+      log.debug(`Response ${n}:`, res.status, size === null ? '' : size + ' bytes');
     }
-
-    const res = await this.#originalFetch(resource, init);
-
-    if (window.__ytaf_debug__) {
-      console.debug(`Response ${this.#fetchCount}:`, res);
-
-      const resBody = await FetchRegistry.#dumpBody(res);
-      resBody && console.debug(`Response Body ${this.#fetchCount}:`, resBody);
-    }
-
-    let resAllowed = true;
-    if (this.#listeners.response.size > 0) {
-      resAllowed = this.dispatchEvent(
-        new TypedCustomEvent('response', { detail: res, cancelable: true })
-      );
-    }
-
-    if (!resAllowed) {
-      console.info(
-        `Fetch response ${this.#fetchCount} was cancelled by listener.`,
-        res
-      );
-      throw new TypeError('Failed to fetch');
-    }
-
-    this.#fetchCount++;
 
     return res;
-  };
-
-  static getInstance() {
-    if (!registry) {
-      registry = new FetchRegistry();
-    }
-    return registry;
-  }
-
-  [Symbol.dispose]() {
-    window.fetch = this.#originalFetch;
-    registry = null;
   }
 }
