@@ -321,6 +321,38 @@ function commentsFixPage() {
     );
   }
 
+  // The native player is beneath the browse page; only the painting element
+  // in front of the playing video should lose its background.
+  if (flavour === 'modern') {
+    const { win } = createPage({
+      html: '<body class="WEB_PAGE_TYPE_BROWSE"><video></video><ytlr-thumbnail-details style="background: black"></ytlr-thumbnail-details><img></body>',
+      setup(w) {
+        const d = w.document;
+        d.elementsFromPoint = () => [
+          d.querySelector('ytlr-thumbnail-details'),
+          d.querySelector('video'),
+          d.querySelector('img')
+        ];
+      }
+    });
+    const d = win.document;
+    const video = d.querySelector('video');
+    const tile = d.querySelector('ytlr-thumbnail-details');
+    video.getBoundingClientRect = () => ({ left: 10, top: 40, width: 720, height: 405 });
+    Object.defineProperty(video, 'paused', { value: false });
+    video.dispatchEvent(new win.Event('playing'));
+    t(
+      'a playing preview clears the thumbnail above the video',
+      tile.classList.contains('ytaf-preview-cover')
+    );
+    t(
+      'a layer behind the video is untouched',
+      !d.querySelector('img').classList.contains('ytaf-preview-cover')
+    );
+    video.dispatchEvent(new win.Event('pause'));
+    t('the thumbnail is restored on pause', !tile.classList.contains('ytaf-preview-cover'));
+  }
+
   // ---- comments-panel fix: the override follows YouTube's stylesheet ----------------
   {
     const { win } = createPage({

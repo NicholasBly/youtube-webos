@@ -81,6 +81,7 @@ const makeConfig = (env) => {
                 )
               }
             : {
+                [path.resolve(__dirname, 'src/features/preview-cover.js')]: false,
                 [path.resolve(__dirname, 'src/features/block-webos-cast.ts')]: path.resolve(
                   __dirname,
                   'src/features/block-webos-cast-absent.js'

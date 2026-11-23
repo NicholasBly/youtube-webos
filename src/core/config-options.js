@@ -239,6 +239,7 @@ export const configOptions = new Map([
   ['fixSearchFont', { default: true, desc: 'Fix Search Results Font' }],
   ['removeBlackBorders', { default: false, desc: 'New Liquid Glass UI' }],
   ['forcePreviews', { default: 'disabled', desc: 'Force Previews' }],
+  ['clearPreviewCover', { default: true, desc: 'Fix Black Tile Previews' }],
   ['enableLegacyEmojiFix', { default: true, desc: 'Emoji + Characters Fix' }],
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],

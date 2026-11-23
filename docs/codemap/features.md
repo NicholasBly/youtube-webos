@@ -2,7 +2,7 @@
 
 Part of the [code map](../CODEMAP.md), generated from the source by `tools/codemap.mjs`: do not edit it by hand.
 
-Modules: [features/block-webos-cast-absent.js](#mod-block-webos-cast-absent-js), [features/block-webos-cast.ts](#mod-block-webos-cast-ts), [features/comments-fix.js](#mod-comments-fix-js), [features/lang-settings-fix.ts](#mod-lang-settings-fix-ts), [features/logo-style.js](#mod-logo-style-js), [features/playback-speed-absent.js](#mod-playback-speed-absent-js), [features/rows-ahead.js](#mod-rows-ahead-js)
+Modules: [features/block-webos-cast-absent.js](#mod-block-webos-cast-absent-js), [features/block-webos-cast.ts](#mod-block-webos-cast-ts), [features/comments-fix.js](#mod-comments-fix-js), [features/lang-settings-fix.ts](#mod-lang-settings-fix-ts), [features/logo-style.js](#mod-logo-style-js), [features/playback-speed-absent.js](#mod-playback-speed-absent-js), [features/preview-cover.js](#mod-preview-cover-js), [features/rows-ahead.js](#mod-rows-ahead-js)
 
 <a id="mod-block-webos-cast-absent-js"></a>
 
@@ -206,6 +206,79 @@ The Playback Speed + and - shortcuts: says the TV cannot.
 **`resetSpeed()`** · function, exported · L15–15
 
 The Playback Speed 1x shortcut: nothing to reset.
+
+<a id="mod-preview-cover-js"></a>
+
+## features/preview-cover.js
+
+> Adapted from foxi69/youtube-webos#156 (GPL-3.0). Leanback scales the shared video player \*behind\* the grid. webOS can put decoded video on a separate hardware plane, so clear the paint above it rather than copying the pixels.
+
+117 lines · imports [core/config.js](core.md#mod-config-js), [core/page-state.js](core.md#mod-page-state-js), [core/webos.js](core.md#mod-webos-js) · imported by [ui/panel/pages.js](ui-panel.md#mod-pages-js)
+
+**At load:**
+
+- **Calls:** [core/webos.js › getWebOSVersion](core.md#fn-webos-js-getwebosversion), [follow](#fn-preview-cover-js-follow), [stop](#fn-preview-cover-js-stop), [sync](#fn-preview-cover-js-sync), [core/config.js › configAddChangeListener](core.md#fn-config-js-configaddchangelistener)
+- **Settings:** listens to `clearPreviewCover`
+- **Events:** listens to `playing`, `ytaf-page-update`
+
+<a id="fn-preview-cover-js-updatecover"></a>
+**`updateCover(next)`** · function · L15–19
+
+Restore the elements that are no longer above the current preview.
+
+- **Called by:** [refresh](#fn-preview-cover-js-refresh), [stop](#fn-preview-cover-js-stop)
+
+<a id="fn-preview-cover-js-stop"></a>
+**`stop()`** · function · L22–27
+
+Stop sampling when playback stops, the element is removed, or the page changes.
+
+- **Calls:** [updateCover](#fn-preview-cover-js-updatecover)
+- **Called by:** [at load](#mod-preview-cover-js), [refresh](#fn-preview-cover-js-refresh), [sync](#fn-preview-cover-js-sync)
+
+<a id="fn-preview-cover-js-paints"></a>
+**`paints(el)`** · function · L30–39
+
+Can this element's own paint cover a hardware video plane?
+
+- **Called by:** [refresh](#fn-preview-cover-js-refresh)
+- **Browser:** `getComputedStyle`
+
+<a id="fn-preview-cover-js-previewstack"></a>
+**`previewStack(x, y)`** · function · L42–51
+
+Hit-test decoration too, without changing the pointer target of any user event.
+
+- **Called by:** [refresh](#fn-preview-cover-js-refresh)
+
+<a id="fn-preview-cover-js-refresh"></a>
+**`refresh()`** · function · L54–71
+
+Follow tile recycling, clearing only layers in front of the playing video.
+
+- **Calls:** [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [core/page-state.js › isWatchPage](core.md#fn-page-state-js-iswatchpage), [paints](#fn-preview-cover-js-paints), [previewStack](#fn-preview-cover-js-previewstack), [stop](#fn-preview-cover-js-stop), [updateCover](#fn-preview-cover-js-updatecover)
+- **Called by:** [follow](#fn-preview-cover-js-follow)
+- **Browser:** `getBoundingClientRect`
+
+<a id="fn-preview-cover-js-follow"></a>
+**`follow(video)`** · function · L74–79
+
+Start following an already-playing inline video or the one that just started.
+
+- **Calls:** [core/config.js › configRead](core.md#fn-config-js-configread), [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [core/page-state.js › isWatchPage](core.md#fn-page-state-js-iswatchpage), [refresh](#fn-preview-cover-js-refresh)
+- **Called by:** [at load](#mod-preview-cover-js), [sync](#fn-preview-cover-js-sync)
+- **Settings:** reads `clearPreviewCover`
+- **Browser:** `setInterval`
+
+<a id="fn-preview-cover-js-sync"></a>
+**`sync()`** · function · L82–91
+
+Handle changes of page or setting without requiring a new playing event.
+
+- **Calls:** [core/config.js › configRead](core.md#fn-config-js-configread), [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [core/page-state.js › isWatchPage](core.md#fn-page-state-js-iswatchpage), [follow](#fn-preview-cover-js-follow), [stop](#fn-preview-cover-js-stop)
+- **Called by:** [at load](#mod-preview-cover-js)
+- **Settings:** reads `clearPreviewCover`
+- **Browser:** `querySelectorAll`
 
 <a id="mod-rows-ahead-js"></a>
 

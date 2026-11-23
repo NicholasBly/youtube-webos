@@ -1,0 +1,11 @@
+/* Remove paint, not layout: the focused tile must still receive the remote. */
+html body .ytaf-preview-cover.ytaf-preview-cover {
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+html body img.ytaf-preview-cover,
+html body canvas.ytaf-preview-cover,
+html body svg.ytaf-preview-cover {
+  opacity: 0 !important;
+}
