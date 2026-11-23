@@ -21,7 +21,7 @@
   },
   {
    "path": "core/config-options.js",
-   "lines": 283,
+   "lines": 284,
    "header": "Every setting the app knows about, with its default and the label the options panel shows, plus the value tables the cycle controls choose from. An option's `upgrade(stored)` turns a value an older build stored into this build's (core/config.js applies it when the settings load).",
    "imports": [
     {
@@ -95,6 +95,7 @@
     "features/logo-style.js",
     "features/playback-speed/controller.js",
     "features/playback-speed/index.js",
+    "features/preview-cover.js",
     "features/return-dislike/bootstrap.js",
     "features/sponsorblock/blue-key.js",
     "features/sponsorblock/bootstrap.js",
@@ -412,6 +413,7 @@
    ],
    "importedBy": [
     "features/adblock/parse-hook.js",
+    "features/preview-cover.js",
     "features/screensaver-fix/index.js",
     "features/video-quality/index.js",
     "features/watch/index.js",
@@ -670,6 +672,7 @@
     "core/fetch-timeout.js",
     "features/adblock/flags.js",
     "features/emoji-font/index.js",
+    "features/preview-cover.js",
     "features/return-dislike/constants.js",
     "features/return-dislike/navigation.js",
     "features/sponsorblock/index.js",
@@ -3251,6 +3254,77 @@
    "functions": [
     "features/playback-speed-absent.js#stepSpeed",
     "features/playback-speed-absent.js#resetSpeed"
+   ]
+  },
+  {
+   "path": "features/preview-cover.js",
+   "lines": 135,
+   "header": "Adapted from foxi69/youtube-webos#156 (GPL-3.0). Leanback scales the shared video player *behind* the grid. webOS can put decoded video on a separate hardware plane, so clear the paint above it rather than copying the pixels.",
+   "imports": [
+    {
+     "from": "core/config.js",
+     "names": [
+      "configAddChangeListener",
+      "configRead"
+     ]
+    },
+    {
+     "from": "core/page-state.js",
+     "names": [
+      "isWatchPage",
+      "isShortsPage"
+     ]
+    },
+    {
+     "from": "core/webos.js",
+     "names": [
+      "getWebOSVersion"
+     ]
+    },
+    {
+     "from": "features/preview-cover.css",
+     "names": []
+    }
+   ],
+   "importedBy": [
+    "ui/panel/pages.js"
+   ],
+   "exports": [
+    "previewCoverAvailable"
+   ],
+   "atLoad": {
+    "calls": [
+     "core/webos.js#getWebOSVersion",
+     "features/preview-cover.js#queueRefresh",
+     "features/preview-cover.js#follow",
+     "features/preview-cover.js#stop",
+     "features/preview-cover.js#sync",
+     "core/config.js#configAddChangeListener"
+    ],
+    "settings": {
+     "listen": [
+      "clearPreviewCover"
+     ]
+    },
+    "events": {
+     "listen": [
+      "focusin",
+      "resize",
+      "transitionend",
+      "playing",
+      "ytaf-page-update"
+     ]
+    }
+   },
+   "functions": [
+    "features/preview-cover.js#updateCover",
+    "features/preview-cover.js#stop",
+    "features/preview-cover.js#paints",
+    "features/preview-cover.js#previewStack",
+    "features/preview-cover.js#refresh",
+    "features/preview-cover.js#queueRefresh",
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#sync"
    ]
   },
   {
@@ -6703,9 +6777,15 @@
   },
   {
    "path": "ui/panel/pages.js",
-   "lines": 249,
+   "lines": 252,
    "header": "The five pages of the options panel. Each builder returns its page element; the panel appends it and decides when it is built (Main up front, the rest one per frame once the panel is on screen).",
    "imports": [
+    {
+     "from": "features/preview-cover.js",
+     "names": [
+      "previewCoverAvailable"
+     ]
+    },
     {
      "from": "core/config.js",
      "names": [
@@ -8321,6 +8401,8 @@
     "features/logo-style.js#applyLogoStyle",
     "features/playback-speed/controller.js#createSpeedController.applyReload",
     "features/playback-speed/index.js#isOn",
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#sync",
     "features/return-dislike/bootstrap.js#bootstrapReturnDislike",
     "features/sponsorblock/bootstrap.js#bootstrapSponsorBlock",
     "features/sponsorblock/labels.js#buildCss",
@@ -8394,6 +8476,7 @@
     "features/force-codec/index.js#installCodecHooks",
     "features/logo-style.js#initLogoStyle",
     "features/playback-speed/index.js#(top level)",
+    "features/preview-cover.js#(top level)",
     "features/sponsorblock/index.js#SponsorBlockHandler.setupConfigListeners.listen",
     "features/thumbnail-quality/index.js#(top level)",
     "features/video-quality/index.js#(top level)",
@@ -9111,6 +9194,9 @@
    ],
    "description": "Whether the watch (video player) page is showing.",
    "calledBy": [
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#refresh",
+    "features/preview-cover.js#sync",
     "features/screensaver-fix/index.js#classifyPage",
     "features/video-quality/index.js#handleNavigation",
     "features/watch/index.js#Watch.updateVisibility",
@@ -9132,6 +9218,9 @@
    "description": "Whether the Shorts player is showing.",
    "calledBy": [
     "features/adblock/parse-hook.js#filterResponse",
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#refresh",
+    "features/preview-cover.js#sync",
     "features/screensaver-fix/index.js#classifyPage",
     "ui/shortcuts/actions.js#ACTIONS.refresh_page.run",
     "ui/shortcuts/playback.js#hideControlsAfterPause",
@@ -9473,6 +9562,7 @@
     "core/webos.js#isWebOS25",
     "features/adblock/flags.js#recomputeFilterFlags",
     "features/emoji-font/index.js#(top level)",
+    "features/preview-cover.js#(top level)",
     "features/return-dislike/navigation.js#(top level)",
     "ui/panel/pages.js#buildUITweaksPage",
     "userScript.js#(top level)"
@@ -16181,6 +16271,185 @@
     15
    ],
    "description": "The Playback Speed 1x shortcut: nothing to reset."
+  },
+  {
+   "id": "features/preview-cover.js#updateCover",
+   "name": "updateCover",
+   "kind": "function",
+   "params": "next",
+   "exported": false,
+   "lines": [
+    17,
+    21
+   ],
+   "description": "Restore the elements that are no longer above the current preview.",
+   "calledBy": [
+    "features/preview-cover.js#refresh",
+    "features/preview-cover.js#stop"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#stop",
+   "name": "stop",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    24,
+    31
+   ],
+   "description": "Stop sampling when playback stops, the element is removed, or the page changes.",
+   "calls": [
+    "features/preview-cover.js#updateCover"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#(top level)",
+    "features/preview-cover.js#refresh",
+    "features/preview-cover.js#sync"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#paints",
+   "name": "paints",
+   "kind": "function",
+   "params": "el",
+   "exported": false,
+   "lines": [
+    34,
+    42
+   ],
+   "description": "Can this element's own paint cover a hardware video plane?",
+   "browser": [
+    "getComputedStyle"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#refresh"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#previewStack",
+   "name": "previewStack",
+   "kind": "function",
+   "params": "x, y",
+   "exported": false,
+   "lines": [
+    45,
+    54
+   ],
+   "description": "Hit-test decoration too, without changing the pointer target of any user event.",
+   "calledBy": [
+    "features/preview-cover.js#refresh"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#refresh",
+   "name": "refresh",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    57,
+    74
+   ],
+   "description": "Follow tile recycling, clearing only layers in front of the playing video.",
+   "calls": [
+    "core/page-state.js#isShortsPage",
+    "core/page-state.js#isWatchPage",
+    "features/preview-cover.js#paints",
+    "features/preview-cover.js#previewStack",
+    "features/preview-cover.js#stop",
+    "features/preview-cover.js#updateCover"
+   ],
+   "browser": [
+    "getBoundingClientRect"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#queueRefresh"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#queueRefresh",
+   "name": "queueRefresh",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    77,
+    83
+   ],
+   "description": "Coalesce navigation events into one hit-test after the layout settles.",
+   "calls": [
+    "features/preview-cover.js#refresh"
+   ],
+   "browser": [
+    "requestAnimationFrame"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#(top level)",
+    "features/preview-cover.js#follow"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#follow",
+   "name": "follow",
+   "kind": "function",
+   "params": "video",
+   "exported": false,
+   "lines": [
+    86,
+    92
+   ],
+   "description": "Start following an already-playing inline video or the one that just started.",
+   "calls": [
+    "core/config.js#configRead",
+    "core/page-state.js#isShortsPage",
+    "core/page-state.js#isWatchPage",
+    "features/preview-cover.js#queueRefresh",
+    "features/preview-cover.js#refresh"
+   ],
+   "settings": {
+    "read": [
+     "clearPreviewCover"
+    ]
+   },
+   "browser": [
+    "setInterval"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#(top level)",
+    "features/preview-cover.js#sync"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#sync",
+   "name": "sync",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    95,
+    104
+   ],
+   "description": "Handle changes of page or setting without requiring a new playing event.",
+   "calls": [
+    "core/config.js#configRead",
+    "core/page-state.js#isShortsPage",
+    "core/page-state.js#isWatchPage",
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#stop"
+   ],
+   "settings": {
+    "read": [
+     "clearPreviewCover"
+    ]
+   },
+   "browser": [
+    "querySelectorAll"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#(top level)"
+   ]
   },
   {
    "id": "features/return-dislike/api.js#getCachedDislikes",
@@ -23416,8 +23685,8 @@
    "params": "text",
    "exported": false,
    "lines": [
-    34,
-    34
+    35,
+    35
    ],
    "description": "A line of small help text under a row.",
    "calls": [
@@ -23435,8 +23704,8 @@
    "params": "text",
    "exported": false,
    "lines": [
-    37,
-    37
+    38,
+    38
    ],
    "description": "The centred small print at the foot of a page: what the feature is and where it comes from.",
    "calls": [
@@ -23454,8 +23723,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    44,
-    100
+    45,
+    101
    ],
    "description": "The Main page: Cosmetic Filtering (Ad Blocking and the filters that depend on it, greyed out while it is off), then the other features.",
    "calls": [
@@ -23499,8 +23768,8 @@
    "params": "",
    "exported": false,
    "lines": [
-    70,
-    75
+    71,
+    76
    ],
    "description": "Greys out the rows that depend on Ad Blocking while it is off.",
    "calls": [
@@ -23523,8 +23792,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    104,
-    135
+    105,
+    136
    ],
    "description": "The SponsorBlock page: the switch, one row per category, and the SponsorBlock options.",
    "calls": [
@@ -23560,8 +23829,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    143,
-    186
+    144,
+    187
    ],
    "description": "The DeArrow page: the switch and the logo, then the title and thumbnail options, greyed out while it is off (and the thumbnail fallback while crowdsourced thumbnails are). Title formatting is in the webOS 22+ build only (features/dearrow/titles.js): the legacy one gets no formatting rows.",
    "calls": [
@@ -23595,8 +23864,8 @@
    "params": "",
    "exported": false,
    "lines": [
-    174,
-    181
+    175,
+    182
    ],
    "description": "Greys out the rows while DeArrow is off, and the fallback while crowdsourced thumbnails are.",
    "calls": [
@@ -23620,8 +23889,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    190,
-    200
+    191,
+    201
    ],
    "description": "The Shortcuts page: one row per configurable key.",
    "calls": [
@@ -23636,8 +23905,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    207,
-    249
+    208,
+    252
    ],
    "description": "The UI Tweaks page: shelf opacity, previews, titles, rows ahead, Liquid Glass, the theme, the emoji fix on webOS 3/4, and playback speed where the TV can (webOS 23 and newer).",
    "calls": [
@@ -23658,6 +23927,7 @@
      "fixSearchFont",
      "enableRowsAhead",
      "removeBlackBorders",
+     "clearPreviewCover",
      "enableLegacyEmojiFix",
      "enablePlaybackSpeed"
     ]
@@ -28060,6 +28330,20 @@
     "features/auto-login/previews.js#initPreviews"
    ]
   },
+  "clearPreviewCover": {
+   "label": "Fix Black Tile Previews",
+   "default": true,
+   "listen": [
+    "features/preview-cover.js#(top level)"
+   ],
+   "read": [
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#sync"
+   ],
+   "other": [
+    "ui/panel/pages.js#buildUITweaksPage"
+   ]
+  },
   "enableLegacyEmojiFix": {
    "label": "Emoji + Characters Fix",
    "default": true,
@@ -28235,6 +28519,7 @@
   "focusin": {
    "listen": [
     "features/comments-fix.js#(top level)",
+    "features/preview-cover.js#(top level)",
     "features/return-dislike/focus-tracking.js#attachListeners",
     "features/watch/index.js#Watch.setupGlobalListeners",
     "ui/panel/keyboard.js#createPanelKeyboard"
@@ -28312,6 +28597,7 @@
   },
   "playing": {
    "listen": [
+    "features/preview-cover.js#(top level)",
     "features/screensaver-fix/decoder-stall.js#(top level)",
     "vendor/playback-speed/audio-engine.js#AudioEngine.attachVideo"
    ]
@@ -28323,6 +28609,7 @@
   },
   "resize": {
    "listen": [
+    "features/preview-cover.js#(top level)",
     "features/screensaver-fix/index.js#(top level)",
     "features/sponsorblock/video-events.js#bindWindowEvents"
    ]
@@ -28336,6 +28623,11 @@
    "listen": [
     "dev/perf-mon.js#ensureVideoTickProbe",
     "features/sponsorblock/skipping.js#attachTimeListener"
+   ]
+  },
+  "transitionend": {
+   "listen": [
+    "features/preview-cover.js#(top level)"
    ]
   },
   "update": {
@@ -28394,6 +28686,7 @@
     "core/dom.js#(top level)",
     "features/auto-login/whos-watching.js#setupActiveBypassListener",
     "features/emoji-font/index.js#(top level)",
+    "features/preview-cover.js#(top level)",
     "features/screensaver-fix/index.js#(top level)",
     "features/video-quality/index.js#setupListeners",
     "features/watch/index.js#Watch.setupGlobalListeners"

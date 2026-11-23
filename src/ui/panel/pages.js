@@ -1,6 +1,7 @@
 // The five pages of the options panel. Each builder returns its page element;
 // the panel appends it and decides when it is built (Main up front, the rest
 // one per frame once the panel is on screen).
+import { previewCoverAvailable } from '../../features/preview-cover.js';
 import {
   configRead,
   configAddChangeListener,
@@ -226,6 +227,8 @@ export function buildUITweaksPage() {
     createConfigCheckbox('removeBlackBorders'),
     createThemeControl()
   ];
+
+  if (previewCoverAvailable) playerUITweaks.push(createConfigCheckbox('clearPreviewCover'));
 
   if (getWebOSVersion() <= 4) {
     playerUITweaks.push(createConfigCheckbox('enableLegacyEmojiFix'));
