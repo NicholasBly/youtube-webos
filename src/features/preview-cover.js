@@ -7,14 +7,16 @@ import { getWebOSVersion } from '../core/webos.js';
 import './preview-cover.css';
 
 const CLEAR = 'ytaf-preview-cover';
+const RESCAN_MS = 5000;
 let active = null;
 let timer = null;
+let frame = null;
 let cleared = [];
 
 /** Restore the elements that are no longer above the current preview. */
 function updateCover(next) {
   for (const el of cleared) if (!next.includes(el)) el.classList.remove(CLEAR);
-  for (const el of next) el.classList.add(CLEAR);
+  for (const el of next) if (!el.classList.contains(CLEAR)) el.classList.add(CLEAR);
   cleared = next;
 }
 
@@ -22,6 +24,8 @@ function updateCover(next) {
 function stop() {
   clearInterval(timer);
   timer = null;
+  if (frame !== null) cancelAnimationFrame(frame);
+  frame = null;
   active = null;
   updateCover([]);
 }
@@ -33,8 +37,7 @@ function paints(el) {
   const bg = style.backgroundColor;
   return (
     (bg && bg !== 'transparent' && !/^rgba\(.*,\s*0\)$/.test(bg)) ||
-    (style.backgroundImage && style.backgroundImage !== 'none') ||
-    (style.boxShadow && style.boxShadow !== 'none')
+    (style.backgroundImage && style.backgroundImage !== 'none')
   );
 }
 
@@ -70,12 +73,22 @@ function refresh() {
   updateCover(next);
 }
 
+/** Coalesce navigation events into one hit-test after the layout settles. */
+function queueRefresh() {
+  if (!active || frame !== null) return;
+  frame = requestAnimationFrame(() => {
+    frame = null;
+    refresh();
+  });
+}
+
 /** Start following an already-playing inline video or the one that just started. */
 function follow(video) {
   if (isWatchPage() || isShortsPage() || !configRead('clearPreviewCover')) return;
   active = video;
   refresh();
-  if (active && timer === null) timer = setInterval(refresh, 1000);
+  // Catch recycled layers even if YouTube did not move focus or restart playback.
+  if (active && timer === null) timer = setInterval(queueRefresh, RESCAN_MS);
 }
 
 /** Handle changes of page or setting without requiring a new playing event. */
@@ -95,6 +108,11 @@ export const previewCoverAvailable =
   getWebOSVersion() >= 22 && typeof document.elementsFromPoint === 'function';
 
 if (previewCoverAvailable) {
+  document.addEventListener('focusin', queueRefresh, true);
+  window.addEventListener('resize', queueRefresh);
+  document.addEventListener('transitionend', ({ target }) => {
+    if (active && target.contains(active)) queueRefresh();
+  });
   document.addEventListener(
     'playing',
     ({ target }) => {

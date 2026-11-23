@@ -1,8 +1,7 @@
-/* Remove paint, not layout: the focused tile must still receive the remote. */
+/* Clear the background without changing layout or the tile's focus shadow. */
 html body .ytaf-preview-cover.ytaf-preview-cover {
   background-color: transparent !important;
   background-image: none !important;
-  box-shadow: none !important;
 }
 html body img.ytaf-preview-cover,
 html body canvas.ytaf-preview-cover,

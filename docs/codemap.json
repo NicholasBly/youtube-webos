@@ -3258,7 +3258,7 @@
   },
   {
    "path": "features/preview-cover.js",
-   "lines": 117,
+   "lines": 135,
    "header": "Adapted from foxi69/youtube-webos#156 (GPL-3.0). Leanback scales the shared video player *behind* the grid. webOS can put decoded video on a separate hardware plane, so clear the paint above it rather than copying the pixels.",
    "imports": [
     {
@@ -3295,6 +3295,7 @@
    "atLoad": {
     "calls": [
      "core/webos.js#getWebOSVersion",
+     "features/preview-cover.js#queueRefresh",
      "features/preview-cover.js#follow",
      "features/preview-cover.js#stop",
      "features/preview-cover.js#sync",
@@ -3307,6 +3308,9 @@
     },
     "events": {
      "listen": [
+      "focusin",
+      "resize",
+      "transitionend",
       "playing",
       "ytaf-page-update"
      ]
@@ -3318,6 +3322,7 @@
     "features/preview-cover.js#paints",
     "features/preview-cover.js#previewStack",
     "features/preview-cover.js#refresh",
+    "features/preview-cover.js#queueRefresh",
     "features/preview-cover.js#follow",
     "features/preview-cover.js#sync"
    ]
@@ -16274,8 +16279,8 @@
    "params": "next",
    "exported": false,
    "lines": [
-    15,
-    19
+    17,
+    21
    ],
    "description": "Restore the elements that are no longer above the current preview.",
    "calledBy": [
@@ -16290,8 +16295,8 @@
    "params": "",
    "exported": false,
    "lines": [
-    22,
-    27
+    24,
+    31
    ],
    "description": "Stop sampling when playback stops, the element is removed, or the page changes.",
    "calls": [
@@ -16310,8 +16315,8 @@
    "params": "el",
    "exported": false,
    "lines": [
-    30,
-    39
+    34,
+    42
    ],
    "description": "Can this element's own paint cover a hardware video plane?",
    "browser": [
@@ -16328,8 +16333,8 @@
    "params": "x, y",
    "exported": false,
    "lines": [
-    42,
-    51
+    45,
+    54
    ],
    "description": "Hit-test decoration too, without changing the pointer target of any user event.",
    "calledBy": [
@@ -16343,8 +16348,8 @@
    "params": "",
    "exported": false,
    "lines": [
-    54,
-    71
+    57,
+    74
    ],
    "description": "Follow tile recycling, clearing only layers in front of the playing video.",
    "calls": [
@@ -16359,6 +16364,29 @@
     "getBoundingClientRect"
    ],
    "calledBy": [
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#queueRefresh"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#queueRefresh",
+   "name": "queueRefresh",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    77,
+    83
+   ],
+   "description": "Coalesce navigation events into one hit-test after the layout settles.",
+   "calls": [
+    "features/preview-cover.js#refresh"
+   ],
+   "browser": [
+    "requestAnimationFrame"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#(top level)",
     "features/preview-cover.js#follow"
    ]
   },
@@ -16369,14 +16397,15 @@
    "params": "video",
    "exported": false,
    "lines": [
-    74,
-    79
+    86,
+    92
    ],
    "description": "Start following an already-playing inline video or the one that just started.",
    "calls": [
     "core/config.js#configRead",
     "core/page-state.js#isShortsPage",
     "core/page-state.js#isWatchPage",
+    "features/preview-cover.js#queueRefresh",
     "features/preview-cover.js#refresh"
    ],
    "settings": {
@@ -16399,8 +16428,8 @@
    "params": "",
    "exported": false,
    "lines": [
-    82,
-    91
+    95,
+    104
    ],
    "description": "Handle changes of page or setting without requiring a new playing event.",
    "calls": [
@@ -28490,6 +28519,7 @@
   "focusin": {
    "listen": [
     "features/comments-fix.js#(top level)",
+    "features/preview-cover.js#(top level)",
     "features/return-dislike/focus-tracking.js#attachListeners",
     "features/watch/index.js#Watch.setupGlobalListeners",
     "ui/panel/keyboard.js#createPanelKeyboard"
@@ -28579,6 +28609,7 @@
   },
   "resize": {
    "listen": [
+    "features/preview-cover.js#(top level)",
     "features/screensaver-fix/index.js#(top level)",
     "features/sponsorblock/video-events.js#bindWindowEvents"
    ]
@@ -28592,6 +28623,11 @@
    "listen": [
     "dev/perf-mon.js#ensureVideoTickProbe",
     "features/sponsorblock/skipping.js#attachTimeListener"
+   ]
+  },
+  "transitionend": {
+   "listen": [
+    "features/preview-cover.js#(top level)"
    ]
   },
   "update": {
