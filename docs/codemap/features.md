@@ -2,7 +2,7 @@
 
 Part of the [code map](../CODEMAP.md), generated from the source by `tools/codemap.mjs`: do not edit it by hand.
 
-Modules: [features/block-webos-cast-absent.js](#mod-block-webos-cast-absent-js), [features/block-webos-cast.ts](#mod-block-webos-cast-ts), [features/comments-fix.js](#mod-comments-fix-js), [features/lang-settings-fix.ts](#mod-lang-settings-fix-ts), [features/logo-style.js](#mod-logo-style-js), [features/playback-speed-absent.js](#mod-playback-speed-absent-js), [features/rows-ahead.js](#mod-rows-ahead-js)
+Modules: [features/block-webos-cast-absent.js](#mod-block-webos-cast-absent-js), [features/block-webos-cast.ts](#mod-block-webos-cast-ts), [features/comments-fix.js](#mod-comments-fix-js), [features/lang-settings-fix.ts](#mod-lang-settings-fix-ts), [features/logo-style.js](#mod-logo-style-js), [features/playback-speed-absent.js](#mod-playback-speed-absent-js), [features/playlist-previews.js](#mod-playlist-previews-js), [features/preview-cover-absent.js](#mod-preview-cover-absent-js), [features/preview-cover.js](#mod-preview-cover-js), [features/rows-ahead.js](#mod-rows-ahead-js)
 
 <a id="mod-block-webos-cast-absent-js"></a>
 
@@ -206,6 +206,118 @@ The Playback Speed + and - shortcuts: says the TV cannot.
 **`resetSpeed()`** · function, exported · L15–15
 
 The Playback Speed 1x shortcut: nothing to reset.
+
+<a id="mod-playlist-previews-js"></a>
+
+## features/playlist-previews.js
+
+> Playlist pages play no tile preview. YouTube sends a preview command (startInlinePlaybackCommand) for each row of a playlist page too, Watch Later and every other VL... list, but the TV app does not put the player on the row there: the preview played full screen behind the page, heard and not seen while the row's time counted down, and opened the video by itself after 39 s (NicholasBly/youtube-webos#227, and #221's playlist report). Home, search and Subscriptions keep their previews. Seen and fixed on a webOS 25 TV by foxi69 (foxi69/youtube-webos 94efeb3), whose response shapes the tests use.
+>
+> Called by the JSON.parse hook on every response, whatever the settings: a few property reads, and a walk of the rows only on a playlist page. Should YouTube move the list, the previews come back and nothing else changes.
+
+38 lines · imports [core/innertube.js](core.md#mod-innertube-js) · imported by [features/adblock/parse-hook.js](features-adblock.md#mod-parse-hook-js)
+
+<a id="fn-playlist-previews-js-dropplaylistrowpreviews"></a>
+**`dropPlaylistRowPreviews(data)`** · function, exported · L23–38
+
+Takes the preview command off every row of the playlist in `data`, and the row's focus command with it when that was all it held. Returns how many rows lost one.
+
+- **Calls:** [core/innertube.js › getByPath](core.md#fn-innertube-js-getbypath)
+- **Called by:** [features/adblock/parse-hook.js › filterResponse](features-adblock.md#fn-parse-hook-js-filterresponse)
+
+<a id="mod-preview-cover-absent-js"></a>
+
+## features/preview-cover-absent.js
+
+> The legacy build's preview-cover.js (webpack.config.js): the fix is for webOS 22 and newer, where the black tile previews were reported, so webOS 3 to 6 have neither the listeners nor the switch.
+
+6 lines
+
+<a id="mod-preview-cover-js"></a>
+
+## features/preview-cover.js
+
+> Fix Black Tile Previews (webOS 22 and newer; the legacy build has preview-cover-absent.js). A tile preview does not play inside the tile: YouTube's one shared player is scaled down onto it, \*behind\* the browse page. webOS puts decoded video on a hardware plane under the page, so anything the page paints over that spot covers the picture while the sound plays: on some TVs (an LG C2, C4 and CS among them) a preview was sound over a black tile (NicholasBly/youtube-webos#221).
+>
+> While a preview plays, the elements stacked over the middle of its video that paint a background or are an image lose that paint (a class, see preview-cover.css), and get it back when it stops, the page changes or the setting goes off. Layout and the focus ring's shadow are untouched. The stack is looked up when the preview starts, when the focus moves, a transition around the video ends or the window resizes (once per frame however many events), and every RESCAN_MS while it plays, for layers YouTube recycles. A TV whose previews already show finds nothing to clear.
+>
+> From foxi69/youtube-webos#156 (diagnosed on a TV in foxi69/youtube-webos#67), ported in NicholasBly/youtube-webos#229 by valentinBoch, who confirmed the picture on an affected TV. GPL-3.0, as this project.
+
+153 lines · imports [core/config.js](core.md#mod-config-js), [core/page-state.js](core.md#mod-page-state-js), [core/webos.js](core.md#mod-webos-js) · imported by [ui/panel/pages.js](ui-panel.md#mod-pages-js), [userScript.js](app.md#mod-userscript-js)
+
+**At load:**
+
+- **Calls:** [core/webos.js › getWebOSVersion](core.md#fn-webos-js-getwebosversion), [queueRefresh](#fn-preview-cover-js-queuerefresh), [follow](#fn-preview-cover-js-follow), [stop](#fn-preview-cover-js-stop), [sync](#fn-preview-cover-js-sync), [core/config.js › configAddChangeListener](core.md#fn-config-js-configaddchangelistener)
+- **Settings:** listens to `clearPreviewCover`
+- **Events:** listens to `focusin`, `resize`, `transitionend`, `playing`, `ytaf-page-update`
+
+<a id="fn-preview-cover-js-updatecover"></a>
+**`updateCover(next)`** · function · L34–38
+
+Restore the elements that are no longer above the current preview.
+
+- **Called by:** [refresh](#fn-preview-cover-js-refresh), [stop](#fn-preview-cover-js-stop)
+
+<a id="fn-preview-cover-js-stop"></a>
+**`stop()`** · function · L41–48
+
+Stop sampling when playback stops, the element is removed, or the page changes.
+
+- **Calls:** [updateCover](#fn-preview-cover-js-updatecover)
+- **Called by:** [at load](#mod-preview-cover-js), [refresh](#fn-preview-cover-js-refresh), [sync](#fn-preview-cover-js-sync)
+
+<a id="fn-preview-cover-js-paints"></a>
+**`paints(el)`** · function · L51–59
+
+Can this element's own paint cover a hardware video plane?
+
+- **Called by:** [refresh](#fn-preview-cover-js-refresh)
+- **Browser:** `getComputedStyle`
+
+<a id="fn-preview-cover-js-previewstack"></a>
+**`previewStack(x, y)`** · function · L62–71
+
+Hit-test decoration too, without changing the pointer target of any user event.
+
+- **Called by:** [refresh](#fn-preview-cover-js-refresh)
+
+<a id="fn-preview-cover-js-refresh"></a>
+**`refresh()`** · function · L74–91
+
+Follow tile recycling, clearing only layers in front of the playing video.
+
+- **Calls:** [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [core/page-state.js › isWatchPage](core.md#fn-page-state-js-iswatchpage), [paints](#fn-preview-cover-js-paints), [previewStack](#fn-preview-cover-js-previewstack), [stop](#fn-preview-cover-js-stop), [updateCover](#fn-preview-cover-js-updatecover)
+- **Called by:** [follow](#fn-preview-cover-js-follow), [queueRefresh](#fn-preview-cover-js-queuerefresh)
+- **Browser:** `getBoundingClientRect`
+
+<a id="fn-preview-cover-js-queuerefresh"></a>
+**`queueRefresh()`** · function · L94–100
+
+Coalesce navigation events into one hit-test after the layout settles.
+
+- **Calls:** [refresh](#fn-preview-cover-js-refresh)
+- **Called by:** [at load](#mod-preview-cover-js), [follow](#fn-preview-cover-js-follow)
+- **Browser:** `requestAnimationFrame`
+
+<a id="fn-preview-cover-js-follow"></a>
+**`follow(video)`** · function · L103–109
+
+Start following an already-playing inline video or the one that just started.
+
+- **Calls:** [core/config.js › configRead](core.md#fn-config-js-configread), [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [core/page-state.js › isWatchPage](core.md#fn-page-state-js-iswatchpage), [queueRefresh](#fn-preview-cover-js-queuerefresh), [refresh](#fn-preview-cover-js-refresh)
+- **Called by:** [at load](#mod-preview-cover-js), [sync](#fn-preview-cover-js-sync)
+- **Settings:** reads `clearPreviewCover`
+- **Browser:** `setInterval`
+
+<a id="fn-preview-cover-js-sync"></a>
+**`sync()`** · function · L112–121
+
+Handle changes of page or setting without requiring a new playing event.
+
+- **Calls:** [core/config.js › configRead](core.md#fn-config-js-configread), [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [core/page-state.js › isWatchPage](core.md#fn-page-state-js-iswatchpage), [follow](#fn-preview-cover-js-follow), [stop](#fn-preview-cover-js-stop)
+- **Called by:** [at load](#mod-preview-cover-js)
+- **Settings:** reads `clearPreviewCover`
+- **Browser:** `querySelectorAll`
 
 <a id="mod-rows-ahead-js"></a>
 

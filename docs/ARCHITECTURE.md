@@ -56,6 +56,7 @@ A module imported by name gets a stand-in with the same exports
 | `features/video-quality/kickstart.js` | `kickstart-absent.js` | in (webOS 25) |
 | `features/playback-speed/` (and `vendor/playback-speed/`) | `playback-speed-absent.js` | in (needs WebCodecs: webOS 23 and newer) |
 | `features/dearrow/formatter.js` (and `vendor/dearrow/`) | `formatter-absent.js` (48 KiB there, and only webOS 5/6 could use it) | in |
+| `features/preview-cover.js` (Fix Black Tile Previews) | `preview-cover-absent.js` (reported on webOS 22 and newer only) | in |
 | `dev/perf-mon.js` | out unless `--env perf` | out unless `--env perf` |
 
 `babel.config.js` has one branch per build (`envName` legacy or modern). There
@@ -116,7 +117,7 @@ and the browser:
 
 | Hook | Installed by | Used for |
 | --- | --- | --- |
-| `JSON.parse` | `features/adblock/parse-hook.js` | Every InnerTube response YouTube parses: ad removal, the Shorts/Live/shelf filters, endcards, Load Rows Ahead, the codec filter, thumbnail upgrades, DeArrow, the emoji wrap; and, with Playback Speed on, YouTube's Speed button. |
+| `JSON.parse` | `features/adblock/parse-hook.js` | Every InnerTube response YouTube parses: ad removal, the Shorts/Live/shelf filters, endcards, Load Rows Ahead, the codec filter, the playlist rows' previews, thumbnail upgrades, DeArrow, the emoji wrap; and, with Playback Speed on, YouTube's Speed button. |
 | `JSON.stringify` | `features/adblock/stringify-hook.ts` | Outgoing player requests: marks them `isInlinePlaybackNoAd` while Ad Blocking is on. |
 | `window.fetch` | `hooks/fetch.ts` (`FetchRegistry`) | Listeners can see and cancel requests: Tracking Block cancels telemetry. Without listeners the original fetch is called directly. |
 | `window.fetch` (second wrapper) | `features/block-webos-cast.ts` | webOS 25: fails the request that wakes the cast receiver. A plain string check, not a registry listener, so other requests stay on the fast path. |
@@ -146,7 +147,7 @@ flowchart TD
   R -- yes --> F[filterResponse]
   F --> F1[codec filter, if Force Video Codec is set]
   F1 --> F2[detect the response type<br/>core/innertube.js SCHEMA_REGISTRY]
-  F2 --> F3[Load Rows Ahead, if on]
+  F2 --> F3[Load Rows Ahead, if on;<br/>playlist rows lose their preview, always]
   F3 --> F4{any filter on?}
   F4 -- no --> X
   F4 -- yes --> F5[content filters: by schema, else the fallback search,<br/>else the guide's nav entries]

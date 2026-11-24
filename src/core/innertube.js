@@ -31,6 +31,22 @@ export const SCHEMA_REGISTRY = {
   ],
   paths: {
     PLAYER: { overlayPath: ['playerOverlays', 'playerOverlayRenderer'] },
+    // A playlist page (Watch Later, any VL... list) is a HOME_BROWSE response
+    // with its rows here, and its next rows come as a continuation under
+    // `continuationKey` (features/playlist-previews.js).
+    PLAYLIST: {
+      rowsPath: [
+        'contents',
+        'tvBrowseRenderer',
+        'content',
+        'tvSurfaceContentRenderer',
+        'content',
+        'twoColumnRenderer',
+        'rightColumn',
+        'playlistVideoListRenderer'
+      ],
+      continuationKey: 'playlistVideoListContinuation'
+    },
     NEXT: {
       overlayPath: ['playerOverlays', 'playerOverlayRenderer'],
       pivotPath: [

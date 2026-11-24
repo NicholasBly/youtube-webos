@@ -40,6 +40,7 @@ being rediscovered from the code. Kept by hand, like
 | [DeArrow](#dearrow) | `features/dearrow/` | parsed responses, branding lookups, settings |
 | [Options panel](#options-panel) | `ui/panel/` | the menu key, keys and pointer while open |
 | [Shortcuts](#shortcuts) | `ui/shortcuts/` | `keydown` |
+| [Fix Black Tile Previews](#fix-black-tile-previews) | `features/preview-cover.js` (webOS 22+) | `playing`/`pause`/`ended`/`emptied`/`error`, focus, transitions, resize, page changes, the setting |
 | [Toasts](#toasts) | `ui/toast/index.js` | `showNotification`, timers |
 | [Smaller ones](#smaller-ones) | several | see the table |
 
@@ -398,6 +399,32 @@ Per video (`videos`, a Map of videoId to record):
 - **OLED overlay** (`oled.js`): on while the overlay element exists;
   `keepAliveTimer` presses UP every 30 minutes.
 
+## Fix Black Tile Previews
+
+`features/preview-cover.js`, webOS 22 and newer (the legacy build has
+`preview-cover-absent.js`).
+
+| State | Fields |
+| --- | --- |
+| Idle | `active === null`, `timer === null`, `frame === null`, `cleared` empty |
+| Following | `active` is the playing preview's `<video>`, `timer` the 5 s rescan; `cleared` the elements over it that lost their paint |
+| Lookup queued | Following and `frame` set: one lookup in the next frame, however many focus, transition and resize events came |
+
+- `playing` on a browse page with the setting on: Following, with a lookup at
+  once. `pause`, `ended`, `emptied` or `error` of the followed video, a page
+  change to the watch page or Shorts, the setting going off, or a lookup that
+  finds the video paused, ended or gone: Idle, and every element in `cleared`
+  gets its paint back.
+- A lookup restyles the page twice (a stylesheet that gives every element
+  `pointer-events: auto` goes in and out around `elementsFromPoint`), so it is
+  never run per event: per frame at most, and only while Following.
+- Rules: `cleared` is empty whenever `active` is null; an element carries the
+  `ytaf-preview-cover` class only while it is in `cleared`; nothing inside
+  the options panel (`.ytaf-ui-container`) is ever in it; a video as big as
+  the screen clears nothing.
+- The setting turned on while a preview plays, or a page change back to a
+  page with previews: `sync()` finds the playing video and follows it at once.
+
 ## Toasts
 
 `ui/toast/index.js`. A toast is hidden for its first two frames, shown, then
@@ -421,4 +448,5 @@ change one toast in place) let go of a toast the moment it starts fading.
 | Playback Speed | `features/playback-speed/` | `controller` null until the setting is first on; `currentSpeed`; `pending` (a reload 800 ms after the last change, remembering the speed and position the burst started from); one audio sink at a time |
 | Buffer limit | `hooks/buffer-limit.js` | per SourceBuffer `__ytafTrimming` while a trim's `remove()` runs (an append then waits for `updateend`); `appendPatched` once |
 | Legacy emoji fix | `features/emoji-font/observer.js` | `isObserving`; `emojiState.frameId` (one frame pending for the queued text nodes) |
+| Playlist row previews | `features/playlist-previews.js` | no state: every HOME_BROWSE and CONTINUATION response has its playlist rows' preview commands taken off, by path (`SCHEMA_REGISTRY.paths.PLAYLIST`); a moved path leaves the previews in |
 | Emoji and filter flags | `features/adblock/flags.js` | one snapshot (`cfgFlags`, `cfgFlagsNoEmoji`, `filterState`) recomputed on a setting change, never per parse |

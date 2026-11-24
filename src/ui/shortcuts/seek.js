@@ -55,8 +55,29 @@ export async function skipChapter(direction = 'next') {
   }
 }
 
-/** The chapter widths off the bar's markers, and their sum (0 when none has a width). */
-function readChapters(chapterEls) {
+/**
+ * The chapters' starts in seconds, as the bar renderer's own data has them
+ * (`chapters[].start`), or an empty list when it has none. The widths of the
+ * markers are whole pixels (seconds off on a short video), and on a long video
+ * the bar draws only some chapters: 50 of 71 on a 4.7-hour one, read on a TV,
+ * which put a skip minutes off (NicholasBly/youtube-webos#225, point 3; fixed
+ * so in foxi69/youtube-webos 675ffad, four skips in a row exact on the TV).
+ */
+function readDataStarts() {
+  const renderer = document.querySelector(SELECTORS.PROGRESS_BAR_RENDERER);
+  const props = renderer && renderer.__instance && renderer.__instance.props;
+  const chapters = props && props.data && props.data.chapters;
+  const starts = [];
+  if (!Array.isArray(chapters)) return starts;
+  for (let i = 0; i < chapters.length; i++) {
+    const start = chapters[i] ? Number(chapters[i].start) : NaN;
+    if (isFinite(start) && start >= 0) starts.push(start);
+  }
+  return starts;
+}
+
+/** The chapters' starts in seconds worked out from the markers' widths; empty when none has a width. */
+function readWidthStarts(chapterEls, duration) {
   const widths = [];
   let total = 0;
   for (let i = 0; i < chapterEls.length; i++) {
@@ -64,7 +85,15 @@ function readChapters(chapterEls) {
     total += width;
     widths.push(width);
   }
-  return { widths, total };
+  const starts = [];
+  // Markers without a width say nothing about where a chapter starts.
+  if (total === 0) return starts;
+  let at = 0;
+  for (let i = 0; i < widths.length; i++) {
+    starts.push((at / total) * duration);
+    at += widths[i];
+  }
+  return starts;
 }
 
 /**
@@ -72,14 +101,12 @@ function readChapters(chapterEls) {
  * a second past the playhead; back, the start of the current chapter, or of
  * the one before it within the first three seconds of the current one.
  */
-function pickChapterTarget(chapters, duration, currentTime, direction) {
+function pickChapterTarget(starts, currentTime, direction) {
   let currentChapterStart = 0;
   let prevChapterStart = 0;
-  let accumulatedWidth = 0;
 
-  for (let i = 0; i < chapters.widths.length; i++) {
-    const startTimestamp = (accumulatedWidth / chapters.total) * duration;
-    accumulatedWidth += chapters.widths[i];
+  for (let i = 0; i < starts.length; i++) {
+    const startTimestamp = starts[i];
 
     if (direction === 'next') {
       if (startTimestamp > currentTime + 1) return startTimestamp;
@@ -122,15 +149,15 @@ async function doSkipChapter(direction) {
     return;
   }
 
-  const chapters = readChapters(chapterEls);
-  if (chapters.total === 0) {
-    // Markers without a width say nothing about where a chapter starts.
+  let starts = readDataStarts();
+  if (starts.length === 0) starts = readWidthStarts(chapterEls, video.duration);
+  if (starts.length === 0) {
     showNotification('No chapters found');
     if (wasForcedNow) dismissForcedUI();
     return;
   }
 
-  const targetTime = pickChapterTarget(chapters, video.duration, video.currentTime, direction);
+  const targetTime = pickChapterTarget(starts, video.currentTime, direction);
 
   // Back always has a chapter start to go to, at worst the video's own.
   if (targetTime !== -1 && targetTime < video.duration) {

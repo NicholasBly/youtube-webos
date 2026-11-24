@@ -5,6 +5,7 @@ import { isDebugEnabled } from '../../core/log.js';
 import { upgradeResponseThumbnails } from '../thumbnail-quality/index.js';
 import { applyDeArrow } from '../dearrow/index.js';
 import { raiseRowsAhead } from '../rows-ahead.js';
+import { dropPlaylistRowPreviews } from '../playlist-previews.js';
 import { IGNORE_ON_SHORTS } from './constants.js';
 import { detectResponseType } from '../../core/innertube.js';
 import { searchStats } from './search.js';
@@ -111,7 +112,8 @@ function filterSafely(data, textLength, flags, text) {
 }
 
 /**
- * Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content
+ * Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the playlist
+ * rows' previews (features/playlist-previews.js), the content
  * filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade,
  * DeArrow and the emoji wrap. `text` is the JSON the response was parsed from (with its
  * trackingParams blanked when Tracking Block is on), for a pass that can tell from it that it has
@@ -125,6 +127,10 @@ function filterResponse(data, textLength, flags, text) {
   const responseType = detectResponseType(data);
   // Load Rows Ahead: YouTube's own threshold stays when the setting is off.
   if (cfgFlags.enableRowsAhead) raiseRowsAhead(data, responseType);
+  // No setting: a playlist row's preview plays unseen behind the page.
+  if (responseType === 'HOME_BROWSE' || responseType === 'CONTINUATION') {
+    dropPlaylistRowPreviews(data);
+  }
 
   // The rest follows the switches in flags.js: nothing to do while all of
   // them are off. (The codec filter above has its own: fc.mode is the one

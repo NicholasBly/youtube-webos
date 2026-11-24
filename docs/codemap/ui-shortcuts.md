@@ -371,7 +371,7 @@ The shortcut router (capture phase, before YouTube): runs the action bound to th
 
 > Seeking: chapter skips read off the progress bar, and burst seeking that batches rapid presses into one jump.
 
-178 lines · imports [ui/toast/index.js](ui-toast.md#mod-index-js), [core/remote.js](core.md#mod-remote-js), [core/page-state.js](core.md#mod-page-state-js), [core/dom.js](core.md#mod-dom-js), [ui/shortcuts/helpers.js](#mod-helpers-js), [core/selectors.js](core.md#mod-selectors-js), [ui/shortcuts/log.js](#mod-log-js) · imported by [ui/shortcuts/actions.js](#mod-actions-js)
+205 lines · imports [ui/toast/index.js](ui-toast.md#mod-index-js), [core/remote.js](core.md#mod-remote-js), [core/page-state.js](core.md#mod-page-state-js), [core/dom.js](core.md#mod-dom-js), [ui/shortcuts/helpers.js](#mod-helpers-js), [core/selectors.js](core.md#mod-selectors-js), [ui/shortcuts/log.js](#mod-log-js) · imported by [ui/shortcuts/actions.js](#mod-actions-js)
 
 <a id="fn-seek-js-getchapterels"></a>
 **`getChapterEls()`** · function · L27–37
@@ -399,31 +399,40 @@ Skips to the next or previous chapter; one skip at a time, never on Shorts.
 - **Calls:** [core/page-state.js › isShortsPage](core.md#fn-page-state-js-isshortspage), [doSkipChapter](#fn-seek-js-doskipchapter)
 - **Called by:** [ui/shortcuts/actions.js (at load)](#mod-actions-js)
 
-<a id="fn-seek-js-readchapters"></a>
-**`readChapters(chapterEls)`** · function · L59–68
+<a id="fn-seek-js-readdatastarts"></a>
+**`readDataStarts()`** · function · L66–77
 
-The chapter widths off the bar's markers, and their sum (0 when none has a width).
+The chapters' starts in seconds, as the bar renderer's own data has them (`chapters[].start`), or an empty list when it has none. The widths of the markers are whole pixels (seconds off on a short video), and on a long video the bar draws only some chapters: 50 of 71 on a 4.7-hour one, read on a TV, which put a skip minutes off (NicholasBly/youtube-webos#225, point 3; fixed so in foxi69/youtube-webos 675ffad, four skips in a row exact on the TV).
+
+- **Called by:** [doSkipChapter](#fn-seek-js-doskipchapter)
+- **Selectors:** `PROGRESS_BAR_RENDERER`
+- **Browser:** `querySelector`
+
+<a id="fn-seek-js-readwidthstarts"></a>
+**`readWidthStarts(chapterEls, duration)`** · function · L80–97
+
+The chapters' starts in seconds worked out from the markers' widths; empty when none has a width.
 
 - **Called by:** [doSkipChapter](#fn-seek-js-doskipchapter)
 
 <a id="fn-seek-js-pickchaptertarget"></a>
-**`pickChapterTarget(chapters, duration, currentTime, direction)`** · function · L75–95
+**`pickChapterTarget(starts, currentTime, direction)`** · function · L104–122
 
 Where the skip lands, or -1: forward, the first chapter starting more than a second past the playhead; back, the start of the current chapter, or of the one before it within the first three seconds of the current one.
 
 - **Called by:** [doSkipChapter](#fn-seek-js-doskipchapter)
 
 <a id="fn-seek-js-doskipchapter"></a>
-**`doSkipChapter(direction)`** · function, async · L101–143
+**`doSkipChapter(direction)`** · function, async · L128–170
 
 Reads the chapters from the progress bar (showing the player UI first when they are not rendered), then seeks to the next or previous one.
 
-- **Calls:** [core/dom.js › getVideo](core.md#fn-dom-js-getvideo), [core/remote.js › sendKey](core.md#fn-remote-js-sendkey), [dismissForcedUI](#fn-seek-js-dismissforcedui), [getChapterEls](#fn-seek-js-getchapterels), [pickChapterTarget](#fn-seek-js-pickchaptertarget), [readChapters](#fn-seek-js-readchapters), [ui/toast/index.js › showNotification](ui-toast.md#fn-index-js-shownotification)
+- **Calls:** [core/dom.js › getVideo](core.md#fn-dom-js-getvideo), [core/remote.js › sendKey](core.md#fn-remote-js-sendkey), [dismissForcedUI](#fn-seek-js-dismissforcedui), [getChapterEls](#fn-seek-js-getchapterels), [pickChapterTarget](#fn-seek-js-pickchaptertarget), [readDataStarts](#fn-seek-js-readdatastarts), [readWidthStarts](#fn-seek-js-readwidthstarts), [ui/toast/index.js › showNotification](ui-toast.md#fn-index-js-shownotification)
 - **Called by:** [skipChapter](#fn-seek-js-skipchapter)
 - **Browser:** `setTimeout`
 
 <a id="fn-seek-js-performburstseek"></a>
-**`performBurstSeek(seconds, video)`** · function, exported · L153–178
+**`performBurstSeek(seconds, video)`** · function, exported · L180–205
 
 One press of a burst: the toast shows the running total at once, the video is moved by the pending part once the presses pause for 200 ms (a seek per press froze the UI), and a change of direction starts the toast's total over; the part not applied yet still counts. The reset 1.2 s later ends only the toast's total: the part not applied yet is the seek timer's, and a stalled event loop may run the two in either order.
 

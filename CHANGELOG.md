@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.6 build 2]
+
+## Fixed
+
++ Tile previews that play sound over a black tile on webOS 22 and newer (an LG C2, C4 and CS among the reports): "Fix Black Tile Previews" (UI Tweaks, on by default, webOS 22 and newer only) clears whatever the page draws over the playing preview, so the picture shows through, and puts it back when the preview stops. Nothing changes on TVs whose previews already show. Turn it off if a preview looks wrong - and please report it either way - https://github.com/NicholasBly/youtube-webos/issues/221. From @foxi69's fix (foxi69/youtube-webos#156), ported by @valentinBoch in https://github.com/NicholasBly/youtube-webos/pull/229
+
++ Watch Later and the other playlist pages no longer play a preview you can't see. YouTube sent a preview for each row there, which played full screen behind the page (sound only) and opened the video by itself after about 40 seconds. Focusing a row now plays nothing; OK opens the video as before, and Home, search and Subscriptions keep their previews - https://github.com/NicholasBly/youtube-webos/issues/227. From @foxi69's fork
+
++ "Force Video Codec": with a codec pinned (AV1, VP9, AVC or HEVC), videos could be held at 480p30, because YouTube's player also asks the TV whether it handles a frame rate or a size and those questions were answered "no". They get the TV's real answer now, and only the plain codec questions are narrowed. Reported in https://github.com/NicholasBly/youtube-webos/pull/212 by @wakamex; this is @foxi69's narrower fix of the same bug
+
++ Skip to Next/Previous Chapter lands on the chapter's real start. It worked the start out from the widths on the progress bar, which are a few seconds off, and on a long video the bar draws only some of the chapters, which put skips minutes off. The chapters' own start times are used now, with the old way as the fallback - https://github.com/NicholasBly/youtube-webos/issues/225 (point 3). From @foxi69's fork
+
 ## [0.8.6 build 1]
 
 ## Fixed

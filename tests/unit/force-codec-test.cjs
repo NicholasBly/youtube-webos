@@ -130,6 +130,55 @@ const itags = (list) => list.map((f) => f.itag).join(',');
   eq('canPlayType allows audio', m.canPlayType('audio/mp4; codecs="mp4a.40.2"'), 'probably');
 }
 
+// ---- the player's parameter probes get the TV's own answer ----
+// At startup YouTube's player asks with an AVC codec and one parameter at a
+// time (framerate=, width=, eotf=...) which parameters the platform reads.
+// Declined under a pinned codec, it drops every 60 fps format: a 1440p60 video
+// played in 480p30 (PR #212, and foxi69/youtube-webos 0.8.8). Only the plain
+// codec questions are narrowed.
+{
+  const m = load('av1', supportsEverything);
+  eq(
+    'pinned av1: a framerate probe with avc is answered',
+    m.isTypeSupported('video/mp4; codecs="avc1.4d401e"; framerate=30'),
+    true
+  );
+  eq(
+    'pinned av1: a width probe with avc is answered',
+    m.isTypeSupported('video/mp4; codecs="avc1.4d401e"; width=640'),
+    true
+  );
+  eq(
+    'pinned av1: a 4K vp9 probe is answered',
+    m.isTypeSupported('video/webm; codecs="vp9"; width=3840; height=2160'),
+    true
+  );
+  eq(
+    'pinned av1: canPlayType answers a parameter probe too',
+    m.canPlayType('video/mp4; codecs="avc1.4d401e"; eotf=bt709'),
+    'probably'
+  );
+  eq(
+    'pinned av1: vp9 with codecs= only is still declined',
+    m.isTypeSupported('video/webm;codecs=vp9'),
+    false
+  );
+  eq(
+    'pinned av1: avc with codecs= only is still declined',
+    m.isTypeSupported('video/mp4; codecs="avc1.640028"'),
+    false
+  );
+}
+{
+  // The answer is the platform's: a parameter it cannot do stays a no.
+  const m = load('av1', (type) => type.indexOf('width=3840') === -1);
+  eq(
+    'a parameter probe the platform refuses is still refused',
+    m.isTypeSupported('video/webm; codecs="vp9"; width=3840; height=2160'),
+    false
+  );
+}
+
 // ---- forcing av1 filters the offer ----
 {
   const m = load('av1', supportsEverything);
