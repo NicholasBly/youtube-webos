@@ -5,6 +5,7 @@ import { isDebugEnabled } from '../../core/log.js';
 import { upgradeResponseThumbnails } from '../thumbnail-quality/index.js';
 import { applyDeArrow } from '../dearrow/index.js';
 import { raiseRowsAhead } from '../rows-ahead.js';
+import { dropPlaylistRowPreviews } from '../playlist-previews.js';
 import { IGNORE_ON_SHORTS } from './constants.js';
 import { detectResponseType } from '../../core/innertube.js';
 import { searchStats } from './search.js';
@@ -94,7 +95,7 @@ function parseAndFilter(text, reviver) {
   // in it is filtered with the fix left out (one scan of the text instead).
   const flags =
     cfgFlags.enableLegacyEmojiFix && !mayNeedEmojiWork(text) ? cfgFlagsNoEmoji : cfgFlags;
-  filterSafely(data, textLength, flags);
+  filterSafely(data, textLength, flags, text);
   return data;
 }
 
@@ -102,20 +103,23 @@ function parseAndFilter(text, reviver) {
  * filterResponse, with an error logged instead of thrown: a filter bug must never break YouTube's
  * parse.
  */
-function filterSafely(data, textLength, flags) {
+function filterSafely(data, textLength, flags, text) {
   try {
-    filterResponse(data, textLength, flags);
+    filterResponse(data, textLength, flags, text);
   } catch (e) {
     log.warn('Error during filtering:', e);
   }
 }
 
 /**
- * Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content
+ * Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the playlist
+ * rows' previews (features/playlist-previews.js), the content
  * filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade,
- * DeArrow and the emoji wrap.
+ * DeArrow and the emoji wrap. `text` is the JSON the response was parsed from (with its
+ * trackingParams blanked when Tracking Block is on), for a pass that can tell from it that it has
+ * nothing to do; `textLength` is its length as YouTube sent it.
  */
-function filterResponse(data, textLength, flags) {
+function filterResponse(data, textLength, flags, text) {
   // The codec filter first: a player response is also one the Shorts guard
   // below leaves alone.
   if (fc.mode !== 'auto') filterParsedResponse(data);
@@ -123,6 +127,10 @@ function filterResponse(data, textLength, flags) {
   const responseType = detectResponseType(data);
   // Load Rows Ahead: YouTube's own threshold stays when the setting is off.
   if (cfgFlags.enableRowsAhead) raiseRowsAhead(data, responseType);
+  // No setting: a playlist row's preview plays unseen behind the page.
+  if (responseType === 'HOME_BROWSE' || responseType === 'CONTINUATION') {
+    dropPlaylistRowPreviews(data);
+  }
 
   // The rest follows the switches in flags.js: nothing to do while all of
   // them are off. (The codec filter above has its own: fc.mode is the one
@@ -153,9 +161,9 @@ function filterResponse(data, textLength, flags) {
   // were just removed are never rewritten, and it reuses the responseType
   // already resolved above instead of detecting the shape a second time.
   // The thumbnail module keeps its own switch and returns at once when off.
-  upgradeResponseThumbnails(data, responseType, textLength);
+  upgradeResponseThumbnails(data, responseType, textLength, text);
   // After the thumbnail upgrade, so a DeArrow thumbnail is the one that sticks.
-  if (flags.enableDeArrow) applyDeArrow(data, responseType);
+  if (flags.enableDeArrow) applyDeArrow(data, responseType, text);
   wrapEmojiInFrameworkUpdates(data, flags);
 }
 

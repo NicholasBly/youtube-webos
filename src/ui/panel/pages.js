@@ -1,6 +1,7 @@
 // The five pages of the options panel. Each builder returns its page element;
 // the panel appends it and decides when it is built (Main up front, the rest
 // one per frame once the panel is on screen).
+import { previewCoverAvailable } from '../../features/preview-cover.js';
 import {
   configRead,
   configAddChangeListener,
@@ -201,8 +202,9 @@ export function buildShortcutsPage() {
 
 // --- Page 5: UI Tweaks ---
 /**
- * The UI Tweaks page: shelf opacity, previews, titles, rows ahead, Liquid Glass, the theme, the
- * emoji fix on webOS 3/4, and playback speed where the TV can (webOS 23 and newer).
+ * The UI Tweaks page: shelf opacity, previews (and Fix Black Tile Previews on webOS 22 and newer),
+ * titles, rows ahead, Liquid Glass, the theme, the emoji fix on webOS 3/4, and playback speed where
+ * the TV can (webOS 23 and newer).
  */
 export function buildUITweaksPage() {
   const pageUITweaks = createElement('div', {
@@ -215,7 +217,16 @@ export function buildUITweaksPage() {
     createOpacityControl('videoShelfOpacity'),
     helpLine('Adjusts opacity of black background underneath videos (Requires OLED-care mode)'),
     createPreviewControl('forcePreviews'),
-    helpLine('Forces the video thumbnail preview on/off on app load'),
+    helpLine('Forces the video thumbnail preview on/off on app load')
+  ];
+  // webOS 22 and newer: the switch for previews that play sound over a black tile.
+  if (previewCoverAvailable) {
+    playerUITweaks.push(
+      createConfigCheckbox('clearPreviewCover'),
+      helpLine('For previews that play sound over a black tile (webOS 22 and newer)')
+    );
+  }
+  playerUITweaks.push(
     createConfigCheckbox('fixMultilineTitles'),
     createConfigCheckbox('fixSearchFont'),
     createConfigCheckbox('removeLowMemoryStyle'),
@@ -229,7 +240,7 @@ export function buildUITweaksPage() {
     ),
     createConfigCheckbox('removeBlackBorders'),
     createThemeControl()
-  ];
+  );
 
   if (getWebOSVersion() <= 4) {
     playerUITweaks.push(createConfigCheckbox('enableLegacyEmojiFix'));

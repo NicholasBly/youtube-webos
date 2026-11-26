@@ -1089,7 +1089,7 @@ const out = new Map(); // file path relative to docs/ -> text
   );
   md.push('');
   md.push(
-    `**${modules.size} modules, ${fnCount} named functions**, ${describedCount} of them described (the perf monitor in \`src/dev/\` is a development tool, not in release builds, and is listed in short form). This page is the index; each folder has a page in [codemap/](codemap/) with every function of its modules. The overview (boot order, the hooks, how a response flows through the filters) is [ARCHITECTURE.md](ARCHITECTURE.md); the same data for scripts is [codemap.json](codemap.json).`
+    `**${modules.size} modules, ${fnCount} named functions**, ${describedCount} of them described (the perf monitor in \`src/dev/\` is a development tool, not in release builds, and is listed in short form). This page is the index; each folder has a page in [codemap/](codemap/) with every function of its modules. The overview (boot order, the hooks, how a response flows through the filters) is [ARCHITECTURE.md](ARCHITECTURE.md); the states the code keeps in plain fields, and the rules between them, are [STATE-MACHINES.md](STATE-MACHINES.md); the same data for scripts is [codemap.json](codemap.json).`
   );
   md.push('');
   md.push('How to read it:');

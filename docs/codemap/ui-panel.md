@@ -473,10 +473,10 @@ Stops handling keys (the panel closed).
 
 > The five pages of the options panel. Each builder returns its page element; the panel appends it and decides when it is built (Main up front, the rest one per frame once the panel is on screen).
 
-253 lines · imports [core/config.js](core.md#mod-config-js), [features/dearrow/index.js](features-dearrow.md#mod-index-js), [features/playback-speed/index.js](features-playback-speed.md#mod-index-js), [core/guest-mode.js](core.md#mod-guest-mode-js), [core/webos.js](core.md#mod-webos-js), [ui/dom.js](ui.md#mod-dom-js), [core/config-options.js](core.md#mod-config-options-js), [ui/panel/controls/index.js](#mod-controls-index-js) · imported by [ui/panel/panel.js](#mod-panel-js)
+264 lines · imports [features/preview-cover.js](features.md#mod-preview-cover-js), [core/config.js](core.md#mod-config-js), [features/dearrow/index.js](features-dearrow.md#mod-index-js), [features/playback-speed/index.js](features-playback-speed.md#mod-index-js), [core/guest-mode.js](core.md#mod-guest-mode-js), [core/webos.js](core.md#mod-webos-js), [ui/dom.js](ui.md#mod-dom-js), [core/config-options.js](core.md#mod-config-options-js), [ui/panel/controls/index.js](#mod-controls-index-js) · imported by [ui/panel/panel.js](#mod-panel-js)
 
 <a id="fn-pages-js-helpline"></a>
-**`helpLine(text)`** · arrow · L34–34
+**`helpLine(text)`** · arrow · L35–35
 
 A line of small help text under a row.
 
@@ -484,7 +484,7 @@ A line of small help text under a row.
 - **Called by:** [buildDeArrowPage](#fn-pages-js-builddearrowpage), [buildUITweaksPage](#fn-pages-js-builduitweakspage)
 
 <a id="fn-pages-js-footnote"></a>
-**`footNote(text)`** · arrow · L37–37
+**`footNote(text)`** · arrow · L38–38
 
 The centred small print at the foot of a page: what the feature is and where it comes from.
 
@@ -492,7 +492,7 @@ The centred small print at the foot of a page: what the feature is and where it 
 - **Called by:** [buildDeArrowPage](#fn-pages-js-builddearrowpage), [buildSponsorPage](#fn-pages-js-buildsponsorpage)
 
 <a id="fn-pages-js-buildmainpage"></a>
-**`buildMainPage()`** · function, exported · L44–100
+**`buildMainPage()`** · function, exported · L45–101
 
 The Main page: Cosmetic Filtering (Ad Blocking and the filters that depend on it, greyed out while it is off), then the other features.
 
@@ -500,7 +500,7 @@ The Main page: Cosmetic Filtering (Ad Blocking and the filters that depend on it
 - **Settings:** listens to `enableAdBlock`; uses `enableTrackingBlock`, `removeGlobalShorts`, `removeLiveVideos`, `removeTopLiveGames`, `removeMostRelevant`, `hideGuestSignInPrompts`, `forceHighResVideo`, `hideEndcards`, `enableReturnYouTubeDislike`, `enableAutoLogin`, `upgradeThumbnails`, `showWatch`, `enableOledCareMode`, `disableNotifications`
 
 <a id="fn-pages-js-buildmainpage-updatedependencystate"></a>
-**`buildMainPage.updateDependencyState()`** · arrow · L70–75
+**`buildMainPage.updateDependencyState()`** · arrow · L71–76
 
 Greys out the rows that depend on Ad Blocking while it is off.
 
@@ -509,7 +509,7 @@ Greys out the rows that depend on Ad Blocking while it is off.
 - **Settings:** reads `enableAdBlock`
 
 <a id="fn-pages-js-buildsponsorpage"></a>
-**`buildSponsorPage()`** · function, exported · L104–135
+**`buildSponsorPage()`** · function, exported · L105–136
 
 The SponsorBlock page: the switch, one row per category, and the SponsorBlock options.
 
@@ -517,7 +517,7 @@ The SponsorBlock page: the switch, one row per category, and the SponsorBlock op
 - **Settings:** uses `enableSponsorBlock`, `sbMode_sponsor`, `sbMode_intro`, `sbMode_outro`, `sbMode_interaction`, `sbMode_selfpromo`, `sbMode_musicofftopic`, `sbMode_filler`, `sbMode_hook`, `sbMode_preview`, `sbMode_highlight`, `enableMutedSegments`, `skipSegmentsOnce`, `sbFullVideoLabel`, `sbShowTimeWithSkips`
 
 <a id="fn-pages-js-builddearrowpage"></a>
-**`buildDeArrowPage()`** · function, exported · L143–186
+**`buildDeArrowPage()`** · function, exported · L144–187
 
 The DeArrow page: the switch and the logo, then the title and thumbnail options, greyed out while it is off (and the thumbnail fallback while crowdsourced thumbnails are). Title formatting is in the webOS 22+ build only (features/dearrow/titles.js): the legacy one gets no formatting rows.
 
@@ -525,7 +525,7 @@ The DeArrow page: the switch and the logo, then the title and thumbnail options,
 - **Settings:** listens to `enableDeArrow`, `dearrowCrowdThumbnails`; uses `dearrowShowBadge`, `dearrowCrowdTitles`, `dearrowTitleFormatting`, `dearrowCleanEmojis`, `dearrowThumbnailFallback`
 
 <a id="fn-pages-js-builddearrowpage-sync"></a>
-**`buildDeArrowPage.sync()`** · arrow · L174–181
+**`buildDeArrowPage.sync()`** · arrow · L175–182
 
 Greys out the rows while DeArrow is off, and the fallback while crowdsourced thumbnails are.
 
@@ -534,19 +534,19 @@ Greys out the rows while DeArrow is off, and the fallback while crowdsourced thu
 - **Settings:** reads `enableDeArrow`, `dearrowCrowdThumbnails`
 
 <a id="fn-pages-js-buildshortcutspage"></a>
-**`buildShortcutsPage()`** · function, exported · L190–200
+**`buildShortcutsPage()`** · function, exported · L191–201
 
 The Shortcuts page: one row per configurable key.
 
 - **Calls:** [ui/dom.js › createElement](ui.md#fn-dom-js-createelement), [ui/panel/controls/cycle-row.js › createShortcutControl](#fn-controls-cycle-row-js-createshortcutcontrol)
 
 <a id="fn-pages-js-builduitweakspage"></a>
-**`buildUITweaksPage()`** · function, exported · L207–253
+**`buildUITweaksPage()`** · function, exported · L209–264
 
-The UI Tweaks page: shelf opacity, previews, titles, rows ahead, Liquid Glass, the theme, the emoji fix on webOS 3/4, and playback speed where the TV can (webOS 23 and newer).
+The UI Tweaks page: shelf opacity, previews (and Fix Black Tile Previews on webOS 22 and newer), titles, rows ahead, Liquid Glass, the theme, the emoji fix on webOS 3/4, and playback speed where the TV can (webOS 23 and newer).
 
 - **Calls:** [core/webos.js › getWebOSVersion](core.md#fn-webos-js-getwebosversion), [ui/dom.js › createElement](ui.md#fn-dom-js-createelement), [ui/panel/controls/checkbox.js › createConfigCheckbox](#fn-controls-checkbox-js-createconfigcheckbox), [ui/panel/controls/cycle-row.js › createOpacityControl](#fn-controls-cycle-row-js-createopacitycontrol), [ui/panel/controls/cycle-row.js › createPreviewControl](#fn-controls-cycle-row-js-createpreviewcontrol), [ui/panel/controls/cycle-row.js › createThemeControl](#fn-controls-cycle-row-js-createthemecontrol), [ui/panel/controls/section.js › createSection](#fn-controls-section-js-createsection), [helpLine](#fn-pages-js-helpline)
-- **Settings:** uses `videoShelfOpacity`, `forcePreviews`, `fixMultilineTitles`, `fixSearchFont`, `removeLowMemoryStyle`, `enableRowsAhead`, `removeBlackBorders`, `enableLegacyEmojiFix`, `enablePlaybackSpeed`
+- **Settings:** uses `videoShelfOpacity`, `forcePreviews`, `clearPreviewCover`, `fixMultilineTitles`, `fixSearchFont`, `removeLowMemoryStyle`, `enableRowsAhead`, `removeBlackBorders`, `enableLegacyEmojiFix`, `enablePlaybackSpeed`
 
 <a id="mod-panel-js"></a>
 

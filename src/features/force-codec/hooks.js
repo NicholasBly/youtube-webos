@@ -6,9 +6,20 @@ import { detectCodec, isVideoMime, allowsCodec, narrowing } from './codecs.js';
 import { filterStreamingData } from './format-filter.js';
 import { log } from './log.js';
 
-/** Whether a capability question about `type` is answered no by the mode. */
+// A parameter in a probe other than codecs= (framerate=30, width=640, eotf=bt709).
+const FEATURE_PARAM_RE = /;\s*(?!codecs\s*=)[a-z-]+\s*=/i;
+
+/**
+ * Whether a capability question about `type` is answered no by the mode. Only the
+ * plain codec questions are: at startup the player asks with an AVC codec and one
+ * parameter at a time which parameters the platform reads, and declining those
+ * under a pinned codec made it drop every 60 fps format, so a 1440p60 video
+ * played in 480p30 (PR #212; foxi69/youtube-webos 0.8.8). They get the
+ * platform's own answer; the offer filter still keeps only the pinned codec.
+ */
 function declines(type) {
   if (!narrowing() || typeof type !== 'string' || !isVideoMime(type)) return false;
+  if (FEATURE_PARAM_RE.test(type)) return false;
   const codec = detectCodec(type);
   return codec !== null && !allowsCodec(codec);
 }

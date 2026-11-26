@@ -4,7 +4,43 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.8.5] - 2026/10/17
+## [0.8.6 build 2]
+
+## Fixed
+
++ Tile previews that play sound over a black tile on webOS 22 and newer (an LG C2, C4 and CS among the reports): "Fix Black Tile Previews" (UI Tweaks, on by default, webOS 22 and newer only) clears whatever the page draws over the playing preview, so the picture shows through, and puts it back when the preview stops. Nothing changes on TVs whose previews already show. Turn it off if a preview looks wrong - and please report it either way - https://github.com/NicholasBly/youtube-webos/issues/221. From @foxi69's fix (foxi69/youtube-webos#156), ported by @valentinBoch in https://github.com/NicholasBly/youtube-webos/pull/229
+
++ Watch Later and the other playlist pages no longer play a preview you can't see. YouTube sent a preview for each row there, which played full screen behind the page (sound only) and opened the video by itself after about 40 seconds. Focusing a row now plays nothing; OK opens the video as before, and Home, search and Subscriptions keep their previews - https://github.com/NicholasBly/youtube-webos/issues/227. From @foxi69's fork
+
++ "Force Video Codec": with a codec pinned (AV1, VP9, AVC or HEVC), videos could be held at 480p30, because YouTube's player also asks the TV whether it handles a frame rate or a size and those questions were answered "no". They get the TV's real answer now, and only the plain codec questions are narrowed. Reported in https://github.com/NicholasBly/youtube-webos/pull/212 by @wakamex; this is @foxi69's narrower fix of the same bug
+
++ Skip to Next/Previous Chapter lands on the chapter's real start. It worked the start out from the widths on the progress bar, which are a few seconds off, and on a long video the bar draws only some of the chapters, which put skips minutes off. The chapters' own start times are used now, with the old way as the fallback - https://github.com/NicholasBly/youtube-webos/issues/225 (point 3). From @foxi69's fork
+
+## [0.8.6 build 1]
+
+## Fixed
+
++ SponsorBlock: changing a category's mode in the settings while its "Press Blue to skip" prompt was up left the prompt on screen, and the blue button still skipped the segment even when the category had just been set to "Show in Seek Bar" or "Disable". The prompt now follows the setting
+
++ SponsorBlock: the "Press Blue to skip" prompt no longer shows twice for a moment when the video's duration is reported again while you are inside the segment
+
+## Performance
+
++ "Emoji + Characters Fix" (webOS 3 and 4, on by default): the check that decides whether a page of results contains any emoji at all is about 3x faster on pages without one, which is most of them. That check runs on every response YouTube sends, so home, search and scrolling cost less on the oldest TVs
+
++ DeArrow no longer walks through responses that contain no video tiles (comments, live chat, settings pages): on those it now does about 80% less work
+
++ "Max Thumbnail Quality" no longer scans a response for thumbnails when the response contains none
+
+## Under the hood
+
++ New docs for contributors and AI agents: AGENTS.md (commands, rules, traps), docs/STATE-MACHINES.md (the states each feature keeps and the rules between them) and docs/PERFORMANCE.md (what the hot paths cost, how to measure, what was already tried)
+
++ SponsorBlock's state rules are now checked after every step of every SponsorBlock test (tests/harness/invariants.cjs), which is how the two prompt bugs above were pinned down
+
++ `npm run bench` also times the JSON.parse hook per setting and per kind of response (tests/bench/response-bench.cjs)
+
+## [0.8.5] - 2026/11/13
 
 A big one under the hood. Most of this release is based on @mirijanristic's fork (https://github.com/mirijanristic/youtube-webos): the codebase is now split into small modules with an automated test suite, both .ipk files are smaller, and a long list of bugs is fixed. Thanks!
 
@@ -130,6 +166,8 @@ A big one under the hood. Most of this release is based on @mirijanristic's fork
 
 ### General
 
++ YouTube Logo: fixed the Premium logo turning back into the standard YouTube logo after the "Who's watching" screen or coming back to the app. "Default" now leaves the logo exactly as YouTube draws it - https://github.com/NicholasBly/youtube-webos/issues/214
+
 + Fixed the picture staying frozen for about 20 seconds when you press play after a video screensaver (Aerial, the gallery) ran: the video now restarts in place within a few seconds. Thanks @magicsk (#198)
 
 + Reduce Telemetry & Tracking: fixed Subscriptions channel tabs (and channel page tabs) showing another channel's videos. The tabs keep the one tracking value YouTube matches their content with. Thanks @anilkusaksiz (#196)
@@ -139,6 +177,8 @@ A big one under the hood. Most of this release is based on @mirijanristic's fork
 + Fixed Bypass Nag Screens pressing Enter on the account selector at launch even with the setting turned off
 
 + Fixed turning off "Display Time in UI" within its first minute leaving a timer running in the background
+
++ Fixed thumbnail video preview inline playback (hover over video tiles) - https://github.com/NicholasBly/youtube-webos/issues/125
 
 + Fixed Display Time in UI showing no clock at all when the system language tag has a format the TV's Intl can't read (it falls back to the default format now)
 

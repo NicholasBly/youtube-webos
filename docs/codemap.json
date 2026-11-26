@@ -21,7 +21,7 @@
   },
   {
    "path": "core/config-options.js",
-   "lines": 284,
+   "lines": 285,
    "header": "Every setting the app knows about, with its default and the label the options panel shows, plus the value tables the cycle controls choose from. An option's `upgrade(stored)` turns a value an older build stored into this build's (core/config.js applies it when the settings load).",
    "imports": [
     {
@@ -96,6 +96,7 @@
     "features/logo-style.js",
     "features/playback-speed/controller.js",
     "features/playback-speed/index.js",
+    "features/preview-cover.js",
     "features/return-dislike/bootstrap.js",
     "features/sponsorblock/blue-key.js",
     "features/sponsorblock/bootstrap.js",
@@ -202,7 +203,6 @@
    "imports": [],
    "importedBy": [
     "features/app-quality-fix.js",
-    "features/logo-style.js",
     "features/return-dislike/panel-observer.js",
     "features/screensaver-fix/index.js",
     "features/sponsorblock/bar.js",
@@ -286,7 +286,7 @@
   },
   {
    "path": "core/innertube.js",
-   "lines": 145,
+   "lines": 161,
    "header": "The InnerTube response shapes the TV app uses: how to tell the kinds of response apart, where each keeps its content, and the item lists a section can hold. Shared by the adblock filters and the thumbnail rewrite, which must agree on where a response keeps its content.",
    "imports": [],
    "importedBy": [
@@ -294,6 +294,7 @@
     "features/adblock/parse-hook.js",
     "features/adblock/response-filters.js",
     "features/adblock/search.js",
+    "features/playlist-previews.js",
     "features/rows-ahead.js",
     "features/thumbnail-quality/dispatch.js"
    ],
@@ -416,6 +417,7 @@
    ],
    "importedBy": [
     "features/adblock/parse-hook.js",
+    "features/preview-cover.js",
     "features/screensaver-fix/index.js",
     "features/video-quality/index.js",
     "features/watch/index.js",
@@ -551,7 +553,7 @@
   },
   {
    "path": "core/selectors.js",
-   "lines": 99,
+   "lines": 98,
    "header": "Class names, ids and tag names YouTube's leanback app puts on the page. Everything that has to recognise a page, the player or a control goes through this one table, so a YouTube markup change is fixed here and nowhere else. Six-letter tokens are YouTube's obfuscated class names and change the most; the comment says what each was observed to be. The app's own ids and classes (ytaf-*, ryd-*) stay with the feature that creates them, and Return YouTube Dislike keeps its panel-internal selectors in its own table.\n\nRead an entry as SELECTORS.NAME, pass it on, iterate it or put it in a template string, but do not call a method on it directly (SELECTORS.NAME.map(...), SELECTORS.NAME.toUpperCase()): the minifier then keeps the whole table in the bundle instead of inlining the entries used.",
    "imports": [],
    "importedBy": [
@@ -560,7 +562,6 @@
     "features/comments-fix.js",
     "features/dearrow/sweep.js",
     "features/emoji-font/text-nodes.js",
-    "features/logo-style.js",
     "features/playback-speed/index.js",
     "features/return-dislike/constants.js",
     "features/return-dislike/injection.js",
@@ -675,6 +676,7 @@
     "core/fetch-timeout.js",
     "features/adblock/flags.js",
     "features/emoji-font/index.js",
+    "features/preview-cover.js",
     "features/return-dislike/constants.js",
     "features/return-dislike/navigation.js",
     "features/sponsorblock/index.js",
@@ -990,7 +992,7 @@
   },
   {
    "path": "features/adblock/emoji-wrap.js",
-   "lines": 250,
+   "lines": 266,
    "header": "The legacy emoji fix's half in the response: every emoji in the parsed tree wrapped in sentinel characters, so features/emoji-font can swap it for an image on webOS 3 and 4. The webOS 22+ build carries emoji-wrap-absent.js in its place (webpack.config.js): the fix is never on there.",
    "imports": [
     {
@@ -1280,7 +1282,7 @@
   },
   {
    "path": "features/adblock/parse-hook.js",
-   "lines": 182,
+   "lines": 190,
    "header": "The JSON.parse hook: classifies each InnerTube response and runs the filters, the thumbnail rewrite and the text fixes over it before the app sees it.",
    "imports": [
     {
@@ -1311,6 +1313,12 @@
      "from": "features/rows-ahead.js",
      "names": [
       "raiseRowsAhead"
+     ]
+    },
+    {
+     "from": "features/playlist-previews.js",
+     "names": [
+      "dropPlaylistRowPreviews"
      ]
     },
     {
@@ -2119,7 +2127,7 @@
   },
   {
    "path": "features/dearrow/index.js",
-   "lines": 121,
+   "lines": 142,
    "header": "DeArrow (https://dearrow.ajay.app): crowdsourced titles and thumbnails in place of clickbait ones, on the tiles of shelves and grids. Off by default; its own page in the options panel.\n\nA branding lookup takes a request per video, which the JSON.parse hook cannot wait for, so it works in two halves: 1. applyDeArrow() runs in the parse hook (adblock/parse-hook.js) and writes what is already decided into every tile of the response, so those render right the first time; videos not seen before are queued for a lookup (lookup.js). 2. When a lookup lands, the tiles already on screen are patched (sweep.js). Tiles are rebuilt as the user moves around, so the sweep also follows every parse and key press. What is shown follows the extension: the top title or thumbnail unless it is the original or voted below zero (a locked one always wins), with the extension's own title formatter (src/vendor/dearrow).",
    "imports": [
     {
@@ -2200,7 +2208,10 @@
      "listen": [
       "keydown"
      ]
-    }
+    },
+    "hooks": [
+     "window.__ytafDeArrowStats"
+    ]
    },
    "functions": [
     "features/dearrow/index.js#cancelSweep",
@@ -2841,7 +2852,7 @@
   },
   {
    "path": "features/force-codec/hooks.js",
-   "lines": 69,
+   "lines": 80,
    "header": "The capability hooks, installed once and gated on the mode: MediaSource .isTypeSupported and HTMLMediaElement#canPlayType; and the offer filter the shared JSON.parse hook (features/adblock/parse-hook.js) calls.",
    "imports": [
     {
@@ -2891,7 +2902,7 @@
   },
   {
    "path": "features/force-codec/index.js",
-   "lines": 122,
+   "lines": 125,
    "header": "Force Video Codec: the setting's switch, the codec hooks and the filter of the formats a player response offers. The comment below the imports explains the feature.",
    "imports": [
     {
@@ -3031,26 +3042,14 @@
   },
   {
    "path": "features/logo-style.js",
-   "lines": 99,
-   "header": "YouTube wordmark selection.\n\nYouTube ships two wordmarks and picks between them by account status:\n\npremium  .../livingroom/premium/wordmark_truncated/fullcolor_white_57_2x_v2.png default  .../livingroom/youtube/wordmark/fullcolor_white_57_2x_v2.png\n\nThey are different widths, and the header positions the element with an absolute `left` that is calculated from that width, so swapping the image alone leaves it misaligned. Both values are set together.\n\nApplied once: the element is rendered by the app shell rather than per page, so navigating or watching a video does not revert it. A short bounded wait, then the page changes, cover a shell that has not painted yet; nothing is left listening once it is applied.",
+   "lines": 39,
+   "header": "YouTube wordmark selection (Interface -> YouTube Logo).\n\nYouTube ships two wordmarks and picks between them by account status:\n\npremium  .../livingroom/premium/wordmark_truncated/fullcolor_white_57_2x_v2.png default  .../livingroom/youtube/wordmark/fullcolor_white_57_2x_v2.png\n\nDefault leaves the header as YouTube draws it. Premium and Hidden are a class on <html> that logo-style.css keys its rules on, never writes to the element: YouTube builds the header again after the profile picker and when the app comes back from the background, and a new header takes the rules as it is drawn, where styles written on the old element were lost with it (issue #214). The rules are !important, which outranks the inline left, width and background-image YouTube draws the logo with.",
    "imports": [
     {
      "from": "core/config.js",
      "names": [
       "configRead",
       "configAddChangeListener"
-     ]
-    },
-    {
-     "from": "core/dom.js",
-     "names": [
-      "pollUntil"
-     ]
-    },
-    {
-     "from": "core/selectors.js",
-     "names": [
-      "SELECTORS"
      ]
     },
     {
@@ -3064,17 +3063,10 @@
    "exports": [
     "initLogoStyle"
    ],
-   "atLoad": {
-    "selectors": [
-     "LOGO",
-     "THUMBNAIL_TILE"
-    ]
-   },
+   "atLoad": {},
    "functions": [
-    "features/logo-style.js#applyToElement",
     "features/logo-style.js#applyLogoStyle",
-    "features/logo-style.js#initLogoStyle",
-    "features/logo-style.js#initLogoStyle.onPageUpdate"
+    "features/logo-style.js#initLogoStyle"
    ]
   },
   {
@@ -3323,6 +3315,114 @@
    "functions": [
     "features/playback-speed-absent.js#stepSpeed",
     "features/playback-speed-absent.js#resetSpeed"
+   ]
+  },
+  {
+   "path": "features/playlist-previews.js",
+   "lines": 38,
+   "header": "Playlist pages play no tile preview. YouTube sends a preview command (startInlinePlaybackCommand) for each row of a playlist page too, Watch Later and every other VL... list, but the TV app does not put the player on the row there: the preview played full screen behind the page, heard and not seen while the row's time counted down, and opened the video by itself after 39 s (NicholasBly/youtube-webos#227, and #221's playlist report). Home, search and Subscriptions keep their previews. Seen and fixed on a webOS 25 TV by foxi69 (foxi69/youtube-webos 94efeb3), whose response shapes the tests use.\n\nCalled by the JSON.parse hook on every response, whatever the settings: a few property reads, and a walk of the rows only on a playlist page. Should YouTube move the list, the previews come back and nothing else changes.",
+   "imports": [
+    {
+     "from": "core/innertube.js",
+     "names": [
+      "SCHEMA_REGISTRY",
+      "getByPath"
+     ]
+    }
+   ],
+   "importedBy": [
+    "features/adblock/parse-hook.js"
+   ],
+   "exports": [
+    "dropPlaylistRowPreviews"
+   ],
+   "atLoad": {},
+   "functions": [
+    "features/playlist-previews.js#dropPlaylistRowPreviews"
+   ]
+  },
+  {
+   "path": "features/preview-cover-absent.js",
+   "lines": 6,
+   "header": "The legacy build's preview-cover.js (webpack.config.js): the fix is for webOS 22 and newer, where the black tile previews were reported, so webOS 3 to 6 have neither the listeners nor the switch.",
+   "imports": [],
+   "importedBy": [],
+   "exports": [
+    "previewCoverAvailable"
+   ],
+   "atLoad": {},
+   "functions": []
+  },
+  {
+   "path": "features/preview-cover.js",
+   "lines": 153,
+   "header": "Fix Black Tile Previews (webOS 22 and newer; the legacy build has preview-cover-absent.js). A tile preview does not play inside the tile: YouTube's one shared player is scaled down onto it, *behind* the browse page. webOS puts decoded video on a hardware plane under the page, so anything the page paints over that spot covers the picture while the sound plays: on some TVs (an LG C2, C4 and CS among them) a preview was sound over a black tile (NicholasBly/youtube-webos#221).\n\nWhile a preview plays, the elements stacked over the middle of its video that paint a background or are an image lose that paint (a class, see preview-cover.css), and get it back when it stops, the page changes or the setting goes off. Layout and the focus ring's shadow are untouched. The stack is looked up when the preview starts, when the focus moves, a transition around the video ends or the window resizes (once per frame however many events), and every RESCAN_MS while it plays, for layers YouTube recycles. A TV whose previews already show finds nothing to clear.\n\nFrom foxi69/youtube-webos#156 (diagnosed on a TV in foxi69/youtube-webos#67), ported in NicholasBly/youtube-webos#229 by valentinBoch, who confirmed the picture on an affected TV. GPL-3.0, as this project.",
+   "imports": [
+    {
+     "from": "core/config.js",
+     "names": [
+      "configAddChangeListener",
+      "configRead"
+     ]
+    },
+    {
+     "from": "core/page-state.js",
+     "names": [
+      "isWatchPage",
+      "isShortsPage"
+     ]
+    },
+    {
+     "from": "core/webos.js",
+     "names": [
+      "getWebOSVersion"
+     ]
+    },
+    {
+     "from": "features/preview-cover.css",
+     "names": []
+    }
+   ],
+   "importedBy": [
+    "ui/panel/pages.js",
+    "userScript.js"
+   ],
+   "exports": [
+    "previewCoverAvailable"
+   ],
+   "atLoad": {
+    "calls": [
+     "core/webos.js#getWebOSVersion",
+     "features/preview-cover.js#queueRefresh",
+     "features/preview-cover.js#follow",
+     "features/preview-cover.js#stop",
+     "features/preview-cover.js#sync",
+     "core/config.js#configAddChangeListener"
+    ],
+    "settings": {
+     "listen": [
+      "clearPreviewCover"
+     ]
+    },
+    "events": {
+     "listen": [
+      "focusin",
+      "resize",
+      "transitionend",
+      "playing",
+      "ytaf-page-update"
+     ]
+    }
+   },
+   "functions": [
+    "features/preview-cover.js#updateCover",
+    "features/preview-cover.js#stop",
+    "features/preview-cover.js#paints",
+    "features/preview-cover.js#previewStack",
+    "features/preview-cover.js#refresh",
+    "features/preview-cover.js#queueRefresh",
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#sync"
    ]
   },
   {
@@ -4753,7 +4853,7 @@
   },
   {
    "path": "features/sponsorblock/skipping.js",
-   "lines": 316,
+   "lines": 338,
    "header": "Playback-time behaviour: aiming at the next segment, the timeupdate listener, the per-frame loop near a segment and the skip itself, which the chain at the start (chain.js) takes too. The blue key is blue-key.js.",
    "imports": [
     {
@@ -4832,6 +4932,7 @@
     "features/sponsorblock/skipping.js#aimAt",
     "features/sponsorblock/skipping.js#aimPast",
     "features/sponsorblock/skipping.js#resetSegmentTracking",
+    "features/sponsorblock/skipping.js#carryManualSegment",
     "features/sponsorblock/skipping.js#refreshSkipSegments",
     "features/sponsorblock/skipping.js#clearManualNotification",
     "features/sponsorblock/skipping.js#armSkipWatchdog",
@@ -5015,7 +5116,7 @@
   },
   {
    "path": "features/thumbnail-quality/dispatch.js",
-   "lines": 362,
+   "lines": 387,
    "header": "Where each InnerTube response type keeps its thumbnails: the known paths per type, the bounded scan for shapes no path matched, and the entry point the JSON.parse hook calls.",
    "imports": [
     {
@@ -5039,7 +5140,8 @@
      "from": "features/thumbnail-quality/state.js",
      "names": [
       "state",
-      "pendingPromotions"
+      "pendingPromotions",
+      "thumbStats"
      ]
     },
     {
@@ -5083,6 +5185,7 @@
     "features/thumbnail-quality/dispatch.js#upgradeBrowseTabs",
     "features/thumbnail-quality/dispatch.js#upgradeActions",
     "features/thumbnail-quality/dispatch.js#upgradeContinuation",
+    "features/thumbnail-quality/dispatch.js#worthScanning",
     "features/thumbnail-quality/dispatch.js#scanForThumbnails",
     "features/thumbnail-quality/dispatch.js#scanRoot",
     "features/thumbnail-quality/dispatch.js#upgradeByType",
@@ -5593,7 +5696,7 @@
   },
   {
    "path": "features/thumbnail-quality/state.js",
-   "lines": 90,
+   "lines": 96,
    "header": "Everything the thumbnail modules share and mutate: the current mode, the verification caches and queues, timers and budgets. Scalars live on `state` so every module reads the same value; collections are exported directly.",
    "imports": [
     {
@@ -6775,9 +6878,15 @@
   },
   {
    "path": "ui/panel/pages.js",
-   "lines": 253,
+   "lines": 264,
    "header": "The five pages of the options panel. Each builder returns its page element; the panel appends it and decides when it is built (Main up front, the rest one per frame once the panel is on screen).",
    "imports": [
+    {
+     "from": "features/preview-cover.js",
+     "names": [
+      "previewCoverAvailable"
+     ]
+    },
     {
      "from": "core/config.js",
      "names": [
@@ -7518,7 +7627,7 @@
   },
   {
    "path": "ui/shortcuts/seek.js",
-   "lines": 178,
+   "lines": 205,
    "header": "Seeking: chapter skips read off the progress bar, and burst seeking that batches rapid presses into one jump.",
    "imports": [
     {
@@ -7577,7 +7686,8 @@
     "ui/shortcuts/seek.js#getChapterEls",
     "ui/shortcuts/seek.js#dismissForcedUI",
     "ui/shortcuts/seek.js#skipChapter",
-    "ui/shortcuts/seek.js#readChapters",
+    "ui/shortcuts/seek.js#readDataStarts",
+    "ui/shortcuts/seek.js#readWidthStarts",
     "ui/shortcuts/seek.js#pickChapterTarget",
     "ui/shortcuts/seek.js#doSkipChapter",
     "ui/shortcuts/seek.js#performBurstSeek"
@@ -7695,7 +7805,7 @@
   },
   {
    "path": "userScript.js",
-   "lines": 93,
+   "lines": 95,
    "header": "The script webOS runs inside YouTube's TV site (built as webOSUserScripts/userScript.js). It loads every feature, installs the global hooks and handles launches and relaunches; the order of the imports below is the order things start in (docs/ARCHITECTURE.md).",
    "imports": [
     {
@@ -7797,6 +7907,10 @@
     },
     {
      "from": "features/app-quality-fix.js",
+     "names": []
+    },
+    {
+     "from": "features/preview-cover.js",
      "names": []
     },
     {
@@ -8398,6 +8512,8 @@
     "features/logo-style.js#applyLogoStyle",
     "features/playback-speed/controller.js#createSpeedController.applyReload",
     "features/playback-speed/index.js#isOn",
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#sync",
     "features/return-dislike/bootstrap.js#bootstrapReturnDislike",
     "features/sponsorblock/bootstrap.js#bootstrapSponsorBlock",
     "features/sponsorblock/labels.js#buildCss",
@@ -8472,6 +8588,7 @@
     "features/force-codec/index.js#installCodecHooks",
     "features/logo-style.js#initLogoStyle",
     "features/playback-speed/index.js#(top level)",
+    "features/preview-cover.js#(top level)",
     "features/sponsorblock/index.js#SponsorBlockHandler.setupConfigListeners.listen",
     "features/thumbnail-quality/index.js#(top level)",
     "features/video-quality/index.js#(top level)",
@@ -8666,7 +8783,6 @@
    ],
    "calledBy": [
     "features/app-quality-fix.js#sync",
-    "features/logo-style.js#initLogoStyle",
     "features/return-dislike/panel-observer.js#pollForPanel",
     "features/sponsorblock/bar.js#scheduleBarRetry",
     "features/video-quality/index.js#pollForPlayer"
@@ -8869,8 +8985,8 @@
    "params": "obj, parts",
    "exported": true,
    "lines": [
-    87,
-    94
+    103,
+    110
    ],
    "description": "The value at `parts` under `obj`, or undefined when any step is missing.",
    "calledBy": [
@@ -8881,6 +8997,7 @@
     "features/adblock/response-filters.js#filterWatchResponse",
     "features/adblock/response-filters.js#removeTimelyActions",
     "features/adblock/search.js#atPathOrSearch",
+    "features/playlist-previews.js#dropPlaylistRowPreviews",
     "features/rows-ahead.js#raiseRowsAhead",
     "features/thumbnail-quality/dispatch.js#upgradeByType",
     "features/thumbnail-quality/dispatch.js#upgradeContinuation"
@@ -8893,8 +9010,8 @@
    "params": "data",
    "exported": true,
    "lines": [
-    97,
-    108
+    113,
+    124
    ],
    "description": "The kind of response, by the first signature it matches; null for none.",
    "calls": [
@@ -8911,8 +9028,8 @@
    "params": "section, fn, arg",
    "exported": true,
    "lines": [
-    118,
-    145
+    134,
+    161
    ],
    "description": "The item lists a section can hold, in the shapes the TV app uses: a shelf (a horizontal list, a grid or expanded contents), or a bare grid or horizontal list. Calls `fn(items, arg)` for each list found and returns how many there were; zero for a section that is itself an item (search interleaves tiles among the shelves) or a shelf with no content. `arg` lets a caller on a hot path pass its state to a function declared once.",
    "calledBy": [
@@ -9192,6 +9309,9 @@
    ],
    "description": "Whether the watch (video player) page is showing.",
    "calledBy": [
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#refresh",
+    "features/preview-cover.js#sync",
     "features/screensaver-fix/index.js#classifyPage",
     "features/video-quality/index.js#handleNavigation",
     "features/watch/index.js#Watch.updateVisibility",
@@ -9213,6 +9333,9 @@
    "description": "Whether the Shorts player is showing.",
    "calledBy": [
     "features/adblock/parse-hook.js#filterResponse",
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#refresh",
+    "features/preview-cover.js#sync",
     "features/screensaver-fix/index.js#classifyPage",
     "ui/shortcuts/actions.js#ACTIONS.refresh_page.run",
     "ui/shortcuts/playback.js#hideControlsAfterPause",
@@ -9554,6 +9677,7 @@
     "core/webos.js#isWebOS25",
     "features/adblock/flags.js#recomputeFilterFlags",
     "features/emoji-font/index.js#(top level)",
+    "features/preview-cover.js#(top level)",
     "features/return-dislike/navigation.js#(top level)",
     "ui/panel/pages.js#buildUITweaksPage",
     "userScript.js#(top level)"
@@ -12210,10 +12334,10 @@
    "params": "text",
    "exported": true,
    "lines": [
-    58,
-    60
+    72,
+    76
    ],
-   "description": "Whether the JSON text can hold anything the emoji walk would change: one native scan of the text, so the walk over every item of a response (the most expensive pass on webOS 3 and 4) is skipped for the ones without.",
+   "description": "Whether the JSON text can hold anything the emoji walk would change, so the walk over every item of a response (the most expensive pass on webOS 3 and 4) is skipped for the ones without. Native scans of the text: the few-range class first, the exact class only from where that one matched (never more characters than one exact scan read), then the escaped forms.",
    "calledBy": [
     "features/adblock/parse-hook.js#parseAndFilter"
    ]
@@ -12225,8 +12349,8 @@
    "params": "str",
    "exported": false,
    "lines": [
-    67,
-    75
+    83,
+    91
    ],
    "description": "A text with each emoji wrapped in sentinels (U+200B before, U+200C after) for features/emoji-font to draw as an image on webOS 3/4. Sentinels already in the text are removed first, so it is safe to run twice; plain text comes back as it is.",
    "calledBy": [
@@ -12240,8 +12364,8 @@
    "params": "text, originalRun",
    "exported": false,
    "lines": [
-    78,
-    94
+    94,
+    110
    ],
    "description": "Called only for text that passed NEEDS_TEXT_WORK_RE in the caller.",
    "calledBy": [
@@ -12255,8 +12379,8 @@
    "params": "obj",
    "exported": false,
    "lines": [
-    97,
-    102
+    113,
+    118
    ],
    "description": "Whether `obj` has offset runs (commandRuns, styleRuns...) over its `content`.",
    "calledBy": [
@@ -12270,8 +12394,8 @@
    "params": "obj",
    "exported": false,
    "lines": [
-    111,
-    161
+    127,
+    177
    ],
    "description": "An attributed string's `content` wrapped, and the offsets of its runs (UTF-16 units of `content`) moved with the characters they name: a run starting at an emoji starts at its opening sentinel, one ending with it ends after the closing one. Without this a mention, link or timestamp after an emoji pointed two characters early per emoji.",
    "calls": [
@@ -12288,8 +12412,8 @@
    "params": "p",
    "exported": false,
    "lines": [
-    135,
-    147
+    151,
+    163
    ],
    "description": "Where offset `p` of `src` lands in `out`.",
    "calledBy": [
@@ -12303,8 +12427,8 @@
    "params": "obj",
    "exported": false,
    "lines": [
-    165,
-    216
+    181,
+    232
    ],
    "description": "Non-recursive: the emoji/text fields of a single node, in place. walkAndProcess guarantees obj is a non-null object.",
    "calls": [
@@ -12324,8 +12448,8 @@
    "params": "obj",
    "exported": true,
    "lines": [
-    223,
-    225
+    239,
+    241
    ],
    "description": "Wraps the emoji in the text fields of `obj` and every node below it.",
    "calls": [
@@ -12347,8 +12471,8 @@
    "params": "obj, depth",
    "exported": false,
    "lines": [
-    229,
-    250
+    245,
+    266
    ],
    "description": "The depth is a plain argument: a default value would cost an `arguments` read per node in the legacy build.",
    "calls": [
@@ -12783,8 +12907,8 @@
    "params": "fn",
    "exported": true,
    "lines": [
-    27,
-    29
+    28,
+    30
    ],
    "description": "Sets the step run on every object parsed past the size gate (null: none).",
    "calledBy": [
@@ -12798,8 +12922,8 @@
    "params": "data, textLength",
    "exported": false,
    "lines": [
-    32,
-    36
+    33,
+    37
    ],
    "description": "Debug log for a large response no schema recognised (the fallback filters ran instead).",
    "calledBy": [
@@ -12813,8 +12937,8 @@
    "params": "data, flags",
    "exported": false,
    "lines": [
-    42,
-    46
+    43,
+    47
    ],
    "description": "The legacy emoji rewrite over frameworkUpdates, the one part of a response the content filters never reach.",
    "calls": [
@@ -12831,8 +12955,8 @@
    "params": "text, reviver",
    "exported": false,
    "lines": [
-    58,
-    67
+    59,
+    68
    ],
    "description": "The JSON.parse replacement. Texts under 500 characters (YouTube's many small blobs) go straight to the native parse; the rest through parseAndFilter.",
    "calls": [
@@ -12846,8 +12970,8 @@
    "params": "text, reviver",
    "exported": false,
    "lines": [
-    73,
-    99
+    74,
+    100
    ],
    "description": "Parses a large text (with tracking parameters blanked first when Tracking Block is on) and, when it is an InnerTube response, runs the filters on it in place.",
    "calls": [
@@ -12863,11 +12987,11 @@
    "id": "features/adblock/parse-hook.js#filterSafely",
    "name": "filterSafely",
    "kind": "function",
-   "params": "data, textLength, flags",
+   "params": "data, textLength, flags, text",
    "exported": false,
    "lines": [
-    105,
-    111
+    106,
+    112
    ],
    "description": "filterResponse, with an error logged instead of thrown: a filter bug must never break YouTube's parse.",
    "calls": [
@@ -12881,13 +13005,13 @@
    "id": "features/adblock/parse-hook.js#filterResponse",
    "name": "filterResponse",
    "kind": "function",
-   "params": "data, textLength, flags",
+   "params": "data, textLength, flags, text",
    "exported": false,
    "lines": [
-    118,
-    160
+    122,
+    168
    ],
-   "description": "Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade, DeArrow and the emoji wrap.",
+   "description": "Everything done to a parsed response, in order: the codec filter, Load Rows Ahead, the playlist rows' previews (features/playlist-previews.js), the content filters (by schema, the fallback search, or the guide's nav entries), then the thumbnail upgrade, DeArrow and the emoji wrap. `text` is the JSON the response was parsed from (with its trackingParams blanked when Tracking Block is on), for a pass that can tell from it that it has nothing to do; `textLength` is its length as YouTube sent it.",
    "calls": [
     "core/innertube.js#detectResponseType",
     "core/log.js#isDebugEnabled",
@@ -12899,6 +13023,7 @@
     "features/adblock/response-filters.js#applySchemaFilters",
     "features/dearrow/index.js#applyDeArrow",
     "features/force-codec/hooks.js#filterParsedResponse",
+    "features/playlist-previews.js#dropPlaylistRowPreviews",
     "features/rows-ahead.js#raiseRowsAhead",
     "features/thumbnail-quality/dispatch.js#upgradeResponseThumbnails"
    ],
@@ -12913,8 +13038,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    170,
-    182
+    178,
+    190
    ],
    "description": "Installs the hook, once, for the life of the page.\n\nEvery switch that lives on it (ads, Shorts, guest prompts, endcards, trackingParams, the legacy emoji rewrite, the thumbnail upgrade, DeArrow) is a flag in flags.js, and filterResponse stops after the rows-ahead pass (its own switch, Load Rows Ahead) while none of them is on; force-codec's offer filter runs inside it as well.",
    "hooks": [
@@ -14168,7 +14293,6 @@
     "features/dearrow/sweep.js#sweepTiles"
    ],
    "calledBy": [
-    "features/dearrow/index.js#onSettingsChange",
     "features/dearrow/index.js#wipe"
    ]
   },
@@ -14182,7 +14306,7 @@
     56,
     64
    ],
-   "description": "Forgets everything (too many videos remembered): originals back on screen and in the stored responses while they are still known, then the videos, the queue and the thumbnails.",
+   "description": "Forgets everything (too many videos remembered, or DeArrow switched off): originals back on screen and in the stored responses while they are still known, then the videos, the queue and the thumbnails, whose blobs are freed.",
    "calls": [
     "features/dearrow/index.js#restoreTiles",
     "features/dearrow/lookup.js#clearQueue",
@@ -14191,20 +14315,21 @@
     "features/dearrow/tiles.js#unpatchResponses"
    ],
    "calledBy": [
-    "features/dearrow/index.js#applyDeArrow"
+    "features/dearrow/index.js#applyDeArrow",
+    "features/dearrow/index.js#onSettingsChange"
    ]
   },
   {
    "id": "features/dearrow/index.js#applyDeArrow",
    "name": "applyDeArrow",
    "kind": "function",
-   "params": "data, responseType",
+   "params": "data, responseType, text",
    "exported": true,
    "lines": [
-    72,
-    80
+    85,
+    99
    ],
-   "description": "The parse hook's step (adblock/parse-hook.js) for an InnerTube response: its video tiles get what is decided, new videos are queued for a lookup, and the rendered tiles are swept a moment later. Player responses carry no tiles and are skipped.",
+   "description": "The parse hook's step (adblock/parse-hook.js) for an InnerTube response: its video tiles get what is decided, new videos are queued for a lookup, and the rendered tiles are swept a moment later. Player responses carry no tiles and are skipped, and so is the walk of a response whose JSON `text` holds no tile key: comments, live chat, the guide and the settings pages are thousands of nodes with nothing in them to find, and one native scan of the text says so (a key quoted inside a string value has its quotes escaped there, so it is not taken for one).",
    "calls": [
     "features/dearrow/index.js#scheduleSweep",
     "features/dearrow/index.js#wipe",
@@ -14223,13 +14348,13 @@
    "params": "",
    "exported": false,
    "lines": [
-    87,
-    101
+    108,
+    122
    ],
-   "description": "A DeArrow setting changed: everything is decided again (answers already fetched are reused), newest first, since those are the videos likely on screen; turned off, YouTube's own come back everywhere.",
+   "description": "A DeArrow setting changed: everything is decided again (answers already fetched are reused), newest first, since those are the videos likely on screen. Turned off, YouTube's own come back everywhere and everything DeArrow kept goes with them: up to BLOB_BUDGET of thumbnail copies would otherwise stay in memory for the rest of the session.",
    "calls": [
     "core/config.js#configRead",
-    "features/dearrow/index.js#restoreTiles",
+    "features/dearrow/index.js#wipe",
     "features/dearrow/lookup.js#clearQueue",
     "features/dearrow/lookup.js#queueLookups",
     "features/dearrow/state.js#nextGeneration",
@@ -15563,10 +15688,10 @@
    "params": "type",
    "exported": false,
    "lines": [
-    10,
-    14
+    20,
+    25
    ],
-   "description": "Whether a capability question about `type` is answered no by the mode.",
+   "description": "Whether a capability question about `type` is answered no by the mode. Only the plain codec questions are: at startup the player asks with an AVC codec and one parameter at a time which parameters the platform reads, and declining those under a pinned codec made it drop every 60 fps format, so a 1440p60 video played in 480p30 (PR #212; foxi69/youtube-webos 0.8.8). They get the platform's own answer; the offer filter still keeps only the pinned codec.",
    "calls": [
     "features/force-codec/codecs.js#allowsCodec",
     "features/force-codec/codecs.js#detectCodec",
@@ -15585,8 +15710,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    20,
-    52
+    31,
+    63
    ],
    "description": "Installs the codec hooks once: MediaSource.isTypeSupported and canPlayType answer no for a codec the Force Video Codec setting declines.",
    "hooks": [
@@ -15604,8 +15729,8 @@
    "params": "type",
    "exported": false,
    "lines": [
-    33,
-    39
+    44,
+    50
    ],
    "description": "isTypeSupported that declines the codecs the setting rules out and asks the platform about the rest.",
    "calls": [
@@ -15619,8 +15744,8 @@
    "params": "type",
    "exported": false,
    "lines": [
-    47,
-    50
+    58,
+    61
    ],
    "description": "canPlayType that answers '' for the declined codecs and asks the platform about the rest.",
    "calls": [
@@ -15634,8 +15759,8 @@
    "params": "out",
    "exported": true,
    "lines": [
-    58,
-    69
+    69,
+    80
    ],
    "description": "The server's offer, in a parsed response: strips the renditions the mode refuses. Called from the shared JSON.parse hook while a codec is forced.",
    "calls": [
@@ -15652,8 +15777,8 @@
    "params": "interactive",
    "exported": false,
    "lines": [
-    68,
-    107
+    71,
+    110
    ],
    "description": "Apply the stored setting.\n\n@param {boolean} interactive true when the user just changed it, which is the only time there is a DOM to put a notification in and the only time a \"reload to apply\" message is worth showing.",
    "calls": [
@@ -15678,8 +15803,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    112,
-    117
+    115,
+    120
    ],
    "description": "Installs the capability hooks for the stored setting and follows its changes; idempotent.",
    "calls": [
@@ -15702,8 +15827,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    120,
-    122
+    123,
+    125
    ],
    "description": "The live mode, or null when nothing is narrowed: for tests/unit/force-codec-test.cjs.",
    "calls": [
@@ -15744,55 +15869,26 @@
    ]
   },
   {
-   "id": "features/logo-style.js#applyToElement",
-   "name": "applyToElement",
-   "kind": "function",
-   "params": "logo, style",
-   "exported": false,
-   "lines": [
-    49,
-    61
-   ],
-   "description": "Applies a logo style to one header logo (image, position, width), writing only what differs; false when the logo has no image yet.",
-   "selectors": [
-    "THUMBNAIL_TILE"
-   ],
-   "browser": [
-    "querySelector"
-   ],
-   "calledBy": [
-    "features/logo-style.js#applyLogoStyle"
-   ]
-  },
-  {
    "id": "features/logo-style.js#applyLogoStyle",
    "name": "applyLogoStyle",
    "kind": "function",
    "params": "",
    "exported": false,
    "lines": [
-    64,
-    72
+    27,
+    33
    ],
-   "description": "Apply the configured style now, if the header exists yet.",
+   "description": "Sets the class of the configured style on <html>, and takes the others off.",
    "calls": [
-    "core/config.js#configRead",
-    "features/logo-style.js#applyToElement"
+    "core/config.js#configRead"
    ],
    "settings": {
     "read": [
      "logoStyle"
     ]
    },
-   "selectors": [
-    "LOGO"
-   ],
-   "browser": [
-    "querySelector"
-   ],
    "calledBy": [
-    "features/logo-style.js#initLogoStyle",
-    "features/logo-style.js#initLogoStyle.onPageUpdate"
+    "features/logo-style.js#initLogoStyle"
    ]
   },
   {
@@ -15802,46 +15898,21 @@
    "params": "",
    "exported": true,
    "lines": [
-    78,
-    99
+    36,
+    39
    ],
-   "description": "Applies the YouTube Logo setting now or, while the header is not painted yet, by a short poll and then on every page change until it takes; follows the setting.",
+   "description": "Applies the YouTube Logo setting, and follows it.",
    "calls": [
     "core/config.js#configAddChangeListener",
-    "core/dom.js#pollUntil",
-    "features/logo-style.js#applyLogoStyle",
-    "features/logo-style.js#initLogoStyle.onPageUpdate"
+    "features/logo-style.js#applyLogoStyle"
    ],
    "settings": {
     "listen": [
      "logoStyle"
     ]
    },
-   "events": {
-    "listen": [
-     "ytaf-page-update"
-    ]
-   },
    "calledBy": [
     "userScript.js#(top level)"
-   ]
-  },
-  {
-   "id": "features/logo-style.js#initLogoStyle.onPageUpdate",
-   "name": "initLogoStyle.onPageUpdate",
-   "kind": "arrow",
-   "params": "",
-   "exported": false,
-   "lines": [
-    86,
-    88
-   ],
-   "description": "The app shell may not have painted yet: a short poll, and past it every page change tries again (an account picked late, a slow cold start) until one applies, rather than a MutationObserver on the document for the life of the session.",
-   "calls": [
-    "features/logo-style.js#applyLogoStyle"
-   ],
-   "calledBy": [
-    "features/logo-style.js#initLogoStyle"
    ]
   },
   {
@@ -16393,6 +16464,203 @@
     15
    ],
    "description": "The Playback Speed 1x shortcut: nothing to reset."
+  },
+  {
+   "id": "features/playlist-previews.js#dropPlaylistRowPreviews",
+   "name": "dropPlaylistRowPreviews",
+   "kind": "function",
+   "params": "data",
+   "exported": true,
+   "lines": [
+    23,
+    38
+   ],
+   "description": "Takes the preview command off every row of the playlist in `data`, and the row's focus command with it when that was all it held. Returns how many rows lost one.",
+   "calls": [
+    "core/innertube.js#getByPath"
+   ],
+   "calledBy": [
+    "features/adblock/parse-hook.js#filterResponse"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#updateCover",
+   "name": "updateCover",
+   "kind": "function",
+   "params": "next",
+   "exported": false,
+   "lines": [
+    34,
+    38
+   ],
+   "description": "Restore the elements that are no longer above the current preview.",
+   "calledBy": [
+    "features/preview-cover.js#refresh",
+    "features/preview-cover.js#stop"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#stop",
+   "name": "stop",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    41,
+    48
+   ],
+   "description": "Stop sampling when playback stops, the element is removed, or the page changes.",
+   "calls": [
+    "features/preview-cover.js#updateCover"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#(top level)",
+    "features/preview-cover.js#refresh",
+    "features/preview-cover.js#sync"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#paints",
+   "name": "paints",
+   "kind": "function",
+   "params": "el",
+   "exported": false,
+   "lines": [
+    51,
+    59
+   ],
+   "description": "Can this element's own paint cover a hardware video plane?",
+   "browser": [
+    "getComputedStyle"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#refresh"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#previewStack",
+   "name": "previewStack",
+   "kind": "function",
+   "params": "x, y",
+   "exported": false,
+   "lines": [
+    62,
+    71
+   ],
+   "description": "Hit-test decoration too, without changing the pointer target of any user event.",
+   "calledBy": [
+    "features/preview-cover.js#refresh"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#refresh",
+   "name": "refresh",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    74,
+    91
+   ],
+   "description": "Follow tile recycling, clearing only layers in front of the playing video.",
+   "calls": [
+    "core/page-state.js#isShortsPage",
+    "core/page-state.js#isWatchPage",
+    "features/preview-cover.js#paints",
+    "features/preview-cover.js#previewStack",
+    "features/preview-cover.js#stop",
+    "features/preview-cover.js#updateCover"
+   ],
+   "browser": [
+    "getBoundingClientRect"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#queueRefresh"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#queueRefresh",
+   "name": "queueRefresh",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    94,
+    100
+   ],
+   "description": "Coalesce navigation events into one hit-test after the layout settles.",
+   "calls": [
+    "features/preview-cover.js#refresh"
+   ],
+   "browser": [
+    "requestAnimationFrame"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#(top level)",
+    "features/preview-cover.js#follow"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#follow",
+   "name": "follow",
+   "kind": "function",
+   "params": "video",
+   "exported": false,
+   "lines": [
+    103,
+    109
+   ],
+   "description": "Start following an already-playing inline video or the one that just started.",
+   "calls": [
+    "core/config.js#configRead",
+    "core/page-state.js#isShortsPage",
+    "core/page-state.js#isWatchPage",
+    "features/preview-cover.js#queueRefresh",
+    "features/preview-cover.js#refresh"
+   ],
+   "settings": {
+    "read": [
+     "clearPreviewCover"
+    ]
+   },
+   "browser": [
+    "setInterval"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#(top level)",
+    "features/preview-cover.js#sync"
+   ]
+  },
+  {
+   "id": "features/preview-cover.js#sync",
+   "name": "sync",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    112,
+    121
+   ],
+   "description": "Handle changes of page or setting without requiring a new playing event.",
+   "calls": [
+    "core/config.js#configRead",
+    "core/page-state.js#isShortsPage",
+    "core/page-state.js#isWatchPage",
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#stop"
+   ],
+   "settings": {
+    "read": [
+     "clearPreviewCover"
+    ]
+   },
+   "browser": [
+    "querySelectorAll"
+   ],
+   "calledBy": [
+    "features/preview-cover.js#(top level)"
+   ]
   },
   {
    "id": "features/return-dislike/api.js#getCachedDislikes",
@@ -19600,19 +19868,38 @@
    ]
   },
   {
+   "id": "features/sponsorblock/skipping.js#carryManualSegment",
+   "name": "carryManualSegment",
+   "kind": "function",
+   "params": "sb, originalIndex",
+   "exported": false,
+   "lines": [
+    119,
+    128
+   ],
+   "description": "After a rebuild of the skip list: the segment being offered is the one of the new list (the same API segment, with its end as clamped now), so the prompt on screen goes on offering it; or it is no longer a manual one (its mode changed, muted segments were switched) and the prompt goes with it. Without this the handler kept an object of the old list: the blue key skipped a segment the settings had just set aside, and the next timeupdate took the rebuilt segment for a new one and stacked a second prompt.",
+   "calls": [
+    "features/sponsorblock/skipping.js#clearManualNotification"
+   ],
+   "calledBy": [
+    "features/sponsorblock/skipping.js#refreshSkipSegments"
+   ]
+  },
+  {
    "id": "features/sponsorblock/skipping.js#refreshSkipSegments",
    "name": "refreshSkipSegments",
    "kind": "function",
    "params": "sb",
    "exported": true,
    "lines": [
-    111,
-    117
+    131,
+    139
    ],
    "description": "Rebuilds the skip list for the current settings and re-aims.",
    "calls": [
     "features/sponsorblock/mute.js#leaveMutedSegment",
     "features/sponsorblock/segments.js#rebuildSkipSegments",
+    "features/sponsorblock/skipping.js#carryManualSegment",
     "features/sponsorblock/skipping.js#resetSegmentTracking",
     "features/sponsorblock/skipping.js#stopHighFreqLoop"
    ],
@@ -19630,13 +19917,14 @@
    "params": "sb",
    "exported": true,
    "lines": [
-    122,
-    128
+    144,
+    150
    ],
    "description": "Removes the manual-skip prompt and forgets the segment it offered.",
    "calledBy": [
     "features/sponsorblock/blue-key.js#manualSkipOrHighlight",
     "features/sponsorblock/index.js#SponsorBlockHandler.destroy",
+    "features/sponsorblock/skipping.js#carryManualSegment",
     "features/sponsorblock/skipping.js#handleTimeUpdate",
     "features/sponsorblock/skipping.js#resetSegmentTracking"
    ]
@@ -19648,8 +19936,8 @@
    "params": "sb",
    "exported": true,
    "lines": [
-    133,
-    143
+    155,
+    165
    ],
    "description": "Safety net: if the media pipeline swallows the 'seeked' event for a programmatic skip (buffer stalls / near-EOS quirks on webOS), clear the isSkipping latch so the timeupdate pipeline keeps working.",
    "calls": [
@@ -19670,8 +19958,8 @@
    "params": "sb",
    "exported": true,
    "lines": [
-    146,
-    151
+    168,
+    173
    ],
    "description": "Stops the timer that catches a skip whose seek never completed.",
    "calledBy": [
@@ -19686,8 +19974,8 @@
    "params": "sb, currentTime",
    "exported": false,
    "lines": [
-    160,
-    165
+    182,
+    187
    ],
    "description": "Index of the segment `currentTime` is in. The predicted one is trusted when it is a manual segment; otherwise the scan decides, since a manual segment nested in the predicted one takes precedence (see findSegmentAtTime).",
    "calls": [
@@ -19704,8 +19992,8 @@
    "params": "sb, seg",
    "exported": false,
    "lines": [
-    168,
-    174
+    190,
+    196
    ],
    "description": "The manual-skip prompt for a segment that is not auto-skipped.",
    "calls": [
@@ -19723,8 +20011,8 @@
    "params": "sb, seg, segmentIdx, currentTime",
    "exported": false,
    "lines": [
-    177,
-    196
+    199,
+    218
    ],
    "description": "Whether an auto-skip segment is skipped now, or left alone.",
    "calls": [
@@ -19746,8 +20034,8 @@
    "params": "sb, segmentIdx, currentTime",
    "exported": false,
    "lines": [
-    204,
-    230
+    226,
+    252
    ],
    "description": "Where the skip lands: past this segment and the auto-skip segments that follow it closely, but never past the start of a manual one ahead of the playhead. A manual segment already behind the playhead has had its turn, and a muted segment is skipped over like any other part of the video.",
    "calledBy": [
@@ -19761,8 +20049,8 @@
    "params": "sb, segmentIdx, currentTime, { jumpTarget, categories, indices }",
    "exported": false,
    "lines": [
-    233,
-    260
+    255,
+    282
    ],
    "description": "Performs the skip, then aims at whatever follows the landing point.",
    "calls": [
@@ -19783,8 +20071,8 @@
    "params": "sb, segmentIdx, currentTime",
    "exported": true,
    "lines": [
-    267,
-    270
+    289,
+    292
    ],
    "description": "The auto-skip segment at `segmentIdx`, with the ones close behind it, in one jump; unless shouldSkip leaves it alone. The timeupdate path and the chain at the start (chain.js) both come here.",
    "calls": [
@@ -19804,8 +20092,8 @@
    "params": "sb",
    "exported": true,
    "lines": [
-    276,
-    316
+    298,
+    338
    ],
    "description": "The skip decision at the playhead: leaves a muted segment, polls faster before the next segment, and inside one auto-skips, mutes, or offers the manual skip according to its category's mode.",
    "calls": [
@@ -20244,17 +20532,33 @@
    ]
   },
   {
+   "id": "features/thumbnail-quality/dispatch.js#worthScanning",
+   "name": "worthScanning",
+   "kind": "function",
+   "params": "",
+   "exported": false,
+   "lines": [
+    229,
+    235
+   ],
+   "description": "Whether a fallback scan of the current response can find anything: its JSON text names the thumbnail host. One native scan of the text, made only when a scan is about to run and once per response, in place of walks of up to SCAN_MAX_NODES nodes each (one per section the paths could not read) over a response that holds no video thumbnail: a settings page, comments under a key no path names, a shelf of channels.",
+   "calledBy": [
+    "features/thumbnail-quality/dispatch.js#scanForThumbnails"
+   ]
+  },
+  {
    "id": "features/thumbnail-quality/dispatch.js#scanForThumbnails",
    "name": "scanForThumbnails",
    "kind": "function",
    "params": "root",
    "exported": false,
    "lines": [
-    223,
-    250
+    242,
+    269
    ],
    "description": "Last-resort bounded walk, used only when the schema paths produced nothing. Keeps the module working through an InnerTube reshuffle instead of silently doing nothing, without ever putting a full traversal on the hot path.",
    "calls": [
+    "features/thumbnail-quality/dispatch.js#worthScanning",
     "features/thumbnail-quality/rewrite.js#upgradeContainer"
    ],
    "calledBy": [
@@ -20269,8 +20573,8 @@
    "params": "data, type",
    "exported": false,
    "lines": [
-    260,
-    269
+    279,
+    288
    ],
    "description": "Where the thumbnail scan of a response type starts: down SCAN_FROM's path as far as it exists.",
    "calledBy": [
@@ -20284,8 +20588,8 @@
    "params": "data, type, textLength",
    "exported": false,
    "lines": [
-    277,
-    327
+    296,
+    346
    ],
    "description": "The thumbnails at the known paths of `type`, rewritten; the count. A type whose paths reach no item list at all gets the bounded scan, an unknown type gets it when the body is large enough to be worth one, and a type with nothing to find gets neither.",
    "calls": [
@@ -20307,13 +20611,13 @@
    "id": "features/thumbnail-quality/dispatch.js#upgradeResponseThumbnails",
    "name": "upgradeResponseThumbnails",
    "kind": "function",
-   "params": "data, responseType, textLength",
+   "params": "data, responseType, textLength, text",
    "exported": true,
    "lines": [
-    335,
-    362
+    355,
+    387
    ],
-   "description": "Entry point called from the JSON.parse hook in adblock/parse-hook.js. `responseType` is the type adblock already detected, so this costs no extra detection pass; `textLength` is the length of the JSON text, which the hook already has.",
+   "description": "Entry point called from the JSON.parse hook in adblock/parse-hook.js. `responseType` is the type adblock already detected, so this costs no extra detection pass; `textLength` is the length of the JSON text, which the hook already has, and `text` the text itself, which a fallback scan asks whether it is worth running (worthScanning).",
    "calls": [
     "features/thumbnail-quality/dispatch.js#upgradeByType",
     "features/thumbnail-quality/dispatch.js#upgradeContinuation",
@@ -21012,8 +21316,8 @@
    "params": "name",
    "exported": true,
    "lines": [
-    56,
-    61
+    62,
+    67
    ],
    "description": "Clears the timer in `state[name]`, if one is set.",
    "calledBy": [
@@ -23628,8 +23932,8 @@
    "params": "text",
    "exported": false,
    "lines": [
-    34,
-    34
+    35,
+    35
    ],
    "description": "A line of small help text under a row.",
    "calls": [
@@ -23647,8 +23951,8 @@
    "params": "text",
    "exported": false,
    "lines": [
-    37,
-    37
+    38,
+    38
    ],
    "description": "The centred small print at the foot of a page: what the feature is and where it comes from.",
    "calls": [
@@ -23666,8 +23970,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    44,
-    100
+    45,
+    101
    ],
    "description": "The Main page: Cosmetic Filtering (Ad Blocking and the filters that depend on it, greyed out while it is off), then the other features.",
    "calls": [
@@ -23711,8 +24015,8 @@
    "params": "",
    "exported": false,
    "lines": [
-    70,
-    75
+    71,
+    76
    ],
    "description": "Greys out the rows that depend on Ad Blocking while it is off.",
    "calls": [
@@ -23735,8 +24039,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    104,
-    135
+    105,
+    136
    ],
    "description": "The SponsorBlock page: the switch, one row per category, and the SponsorBlock options.",
    "calls": [
@@ -23772,8 +24076,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    143,
-    186
+    144,
+    187
    ],
    "description": "The DeArrow page: the switch and the logo, then the title and thumbnail options, greyed out while it is off (and the thumbnail fallback while crowdsourced thumbnails are). Title formatting is in the webOS 22+ build only (features/dearrow/titles.js): the legacy one gets no formatting rows.",
    "calls": [
@@ -23807,8 +24111,8 @@
    "params": "",
    "exported": false,
    "lines": [
-    174,
-    181
+    175,
+    182
    ],
    "description": "Greys out the rows while DeArrow is off, and the fallback while crowdsourced thumbnails are.",
    "calls": [
@@ -23832,8 +24136,8 @@
    "params": "",
    "exported": true,
    "lines": [
-    190,
-    200
+    191,
+    201
    ],
    "description": "The Shortcuts page: one row per configurable key.",
    "calls": [
@@ -23848,10 +24152,10 @@
    "params": "",
    "exported": true,
    "lines": [
-    207,
-    253
+    209,
+    264
    ],
-   "description": "The UI Tweaks page: shelf opacity, previews, titles, rows ahead, Liquid Glass, the theme, the emoji fix on webOS 3/4, and playback speed where the TV can (webOS 23 and newer).",
+   "description": "The UI Tweaks page: shelf opacity, previews (and Fix Black Tile Previews on webOS 22 and newer), titles, rows ahead, Liquid Glass, the theme, the emoji fix on webOS 3/4, and playback speed where the TV can (webOS 23 and newer).",
    "calls": [
     "core/webos.js#getWebOSVersion",
     "ui/dom.js#createElement",
@@ -23866,6 +24170,7 @@
     "other": [
      "videoShelfOpacity",
      "forcePreviews",
+     "clearPreviewCover",
      "fixMultilineTitles",
      "fixSearchFont",
      "removeLowMemoryStyle",
@@ -24890,16 +25195,37 @@
    ]
   },
   {
-   "id": "ui/shortcuts/seek.js#readChapters",
-   "name": "readChapters",
+   "id": "ui/shortcuts/seek.js#readDataStarts",
+   "name": "readDataStarts",
    "kind": "function",
-   "params": "chapterEls",
+   "params": "",
    "exported": false,
    "lines": [
-    59,
-    68
+    66,
+    77
    ],
-   "description": "The chapter widths off the bar's markers, and their sum (0 when none has a width).",
+   "description": "The chapters' starts in seconds, as the bar renderer's own data has them (`chapters[].start`), or an empty list when it has none. The widths of the markers are whole pixels (seconds off on a short video), and on a long video the bar draws only some chapters: 50 of 71 on a 4.7-hour one, read on a TV, which put a skip minutes off (NicholasBly/youtube-webos#225, point 3; fixed so in foxi69/youtube-webos 675ffad, four skips in a row exact on the TV).",
+   "selectors": [
+    "PROGRESS_BAR_RENDERER"
+   ],
+   "browser": [
+    "querySelector"
+   ],
+   "calledBy": [
+    "ui/shortcuts/seek.js#doSkipChapter"
+   ]
+  },
+  {
+   "id": "ui/shortcuts/seek.js#readWidthStarts",
+   "name": "readWidthStarts",
+   "kind": "function",
+   "params": "chapterEls, duration",
+   "exported": false,
+   "lines": [
+    80,
+    97
+   ],
+   "description": "The chapters' starts in seconds worked out from the markers' widths; empty when none has a width.",
    "calledBy": [
     "ui/shortcuts/seek.js#doSkipChapter"
    ]
@@ -24908,11 +25234,11 @@
    "id": "ui/shortcuts/seek.js#pickChapterTarget",
    "name": "pickChapterTarget",
    "kind": "function",
-   "params": "chapters, duration, currentTime, direction",
+   "params": "starts, currentTime, direction",
    "exported": false,
    "lines": [
-    75,
-    95
+    104,
+    122
    ],
    "description": "Where the skip lands, or -1: forward, the first chapter starting more than a second past the playhead; back, the start of the current chapter, or of the one before it within the first three seconds of the current one.",
    "calledBy": [
@@ -24926,8 +25252,8 @@
    "params": "direction",
    "exported": false,
    "lines": [
-    101,
-    143
+    128,
+    170
    ],
    "description": "Reads the chapters from the progress bar (showing the player UI first when they are not rendered), then seeks to the next or previous one.",
    "calls": [
@@ -24936,7 +25262,8 @@
     "ui/shortcuts/seek.js#dismissForcedUI",
     "ui/shortcuts/seek.js#getChapterEls",
     "ui/shortcuts/seek.js#pickChapterTarget",
-    "ui/shortcuts/seek.js#readChapters",
+    "ui/shortcuts/seek.js#readDataStarts",
+    "ui/shortcuts/seek.js#readWidthStarts",
     "ui/toast/index.js#showNotification"
    ],
    "browser": [
@@ -24953,8 +25280,8 @@
    "params": "seconds, video",
    "exported": true,
    "lines": [
-    153,
-    178
+    180,
+    205
    ],
    "description": "One press of a burst: the toast shows the running total at once, the video is moved by the pending part once the presses pause for 200 ms (a seek per press froze the UI), and a change of direction starts the toast's total over; the part not applied yet still counts. The reset 1.2 s later ends only the toast's total: the part not applied yet is the seek timer's, and a stalled event loop may run the two in either order.",
    "calls": [
@@ -28286,6 +28613,20 @@
     "features/auto-login/previews.js#initPreviews"
    ]
   },
+  "clearPreviewCover": {
+   "label": "Fix Black Tile Previews",
+   "default": true,
+   "listen": [
+    "features/preview-cover.js#(top level)"
+   ],
+   "read": [
+    "features/preview-cover.js#follow",
+    "features/preview-cover.js#sync"
+   ],
+   "other": [
+    "ui/panel/pages.js#buildUITweaksPage"
+   ]
+  },
   "enableLegacyEmojiFix": {
    "label": "Emoji + Characters Fix",
    "default": true,
@@ -28461,6 +28802,7 @@
   "focusin": {
    "listen": [
     "features/comments-fix.js#(top level)",
+    "features/preview-cover.js#(top level)",
     "features/return-dislike/focus-tracking.js#attachListeners",
     "features/watch/index.js#Watch.setupGlobalListeners",
     "ui/panel/keyboard.js#createPanelKeyboard"
@@ -28538,6 +28880,7 @@
   },
   "playing": {
    "listen": [
+    "features/preview-cover.js#(top level)",
     "features/screensaver-fix/decoder-stall.js#(top level)",
     "vendor/playback-speed/audio-engine.js#AudioEngine.attachVideo"
    ]
@@ -28549,6 +28892,7 @@
   },
   "resize": {
    "listen": [
+    "features/preview-cover.js#(top level)",
     "features/screensaver-fix/index.js#(top level)",
     "features/sponsorblock/video-events.js#bindWindowEvents"
    ]
@@ -28562,6 +28906,11 @@
    "listen": [
     "dev/perf-mon.js#ensureVideoTickProbe",
     "features/sponsorblock/skipping.js#attachTimeListener"
+   ]
+  },
+  "transitionend": {
+   "listen": [
+    "features/preview-cover.js#(top level)"
    ]
   },
   "update": {
@@ -28620,7 +28969,7 @@
     "core/dom.js#(top level)",
     "features/auto-login/whos-watching.js#setupActiveBypassListener",
     "features/emoji-font/index.js#(top level)",
-    "features/logo-style.js#initLogoStyle",
+    "features/preview-cover.js#(top level)",
     "features/screensaver-fix/index.js#(top level)",
     "features/video-quality/index.js#setupListeners",
     "features/watch/index.js#Watch.setupGlobalListeners"
@@ -28703,21 +29052,11 @@
     "ui/shortcuts/actions.js#ACTIONS.toggle_subs.run"
    ]
   },
-  "LOGO": {
-   "value": "ytlr-logo-entity",
-   "note": "",
-   "usedBy": [
-    "features/logo-style.js#(top level)",
-    "features/logo-style.js#applyLogoStyle"
-   ]
-  },
   "THUMBNAIL_TILE": {
    "value": "ytlr-thumbnail-details",
    "note": "",
    "usedBy": [
-    "features/dearrow/sweep.js#sweepTiles",
-    "features/logo-style.js#(top level)",
-    "features/logo-style.js#applyToElement"
+    "features/dearrow/sweep.js#sweepTiles"
    ]
   },
   "TILE": {
@@ -28790,7 +29129,8 @@
    "note": "",
    "usedBy": [
     "features/sponsorblock/bar.js#(top level)",
-    "features/sponsorblock/overlay.js#anchorOf"
+    "features/sponsorblock/overlay.js#anchorOf",
+    "ui/shortcuts/seek.js#readDataStarts"
    ]
   },
   "PROGRESS_BAR": {
@@ -29037,6 +29377,9 @@
   ],
   "window.__ytafContinuationStats": [
    "features/rows-ahead.js#(top level)"
+  ],
+  "window.__ytafDeArrowStats": [
+   "features/dearrow/index.js#(top level)"
   ],
   "window.__ytafQualityStats": [
    "features/video-quality/index.js#(top level)"

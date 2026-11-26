@@ -49,12 +49,12 @@ function restoreTiles() {
 }
 
 /**
- * Forgets everything (too many videos remembered): originals back on screen
- * and in the stored responses while they are still known, then the videos,
- * the queue and the thumbnails.
+ * Forgets everything (too many videos remembered, or DeArrow switched off):
+ * originals back on screen and in the stored responses while they are still
+ * known, then the videos, the queue and the thumbnails, whose blobs are freed.
  */
 function wipe() {
-  log.debug('Remembering', videos.size, 'videos: starting over');
+  log.debug('Forgetting', videos.size, 'videos');
   restoreTiles();
   unpatchResponses();
   nextGeneration();
@@ -63,36 +63,57 @@ function wipe() {
   forgetThumbs();
 }
 
+// The key every tile sits under, as it stands in a response's JSON text.
+const TILE_KEY = '"tileRenderer"';
+
+// How many responses were walked for tiles, and how many were not because
+// their text names none. Read on the TV from the web inspector as
+// window.__ytafDeArrowStats; the DeArrow test reads it too.
+const dearrowStats = { walks: 0, skipped: 0 };
+window.__ytafDeArrowStats = dearrowStats;
+
 /**
  * The parse hook's step (adblock/parse-hook.js) for an InnerTube response:
  * its video tiles get what is decided, new videos are queued for a lookup,
  * and the rendered tiles are swept a moment later. Player responses carry no
- * tiles and are skipped.
+ * tiles and are skipped, and so is the walk of a response whose JSON `text`
+ * holds no tile key: comments, live chat, the guide and the settings pages
+ * are thousands of nodes with nothing in them to find, and one native scan
+ * of the text says so (a key quoted inside a string value has its quotes
+ * escaped there, so it is not taken for one).
  */
-export function applyDeArrow(data, responseType) {
+export function applyDeArrow(data, responseType, text) {
   if (!data || typeof data !== 'object' || responseType === 'PLAYER') return;
   // Before any patching: a wipe in the middle of a response would free blobs
   // this same response was just given.
   if (videos.size >= CACHE_LIMIT || thumbsFull()) wipe();
-  const found = patchResponseTiles(data);
-  if (found.length) queueLookups(found);
+  if (text.indexOf(TILE_KEY) === -1) {
+    dearrowStats.skipped++;
+  } else {
+    dearrowStats.walks++;
+    const found = patchResponseTiles(data);
+    if (found.length) queueLookups(found);
+  }
+  // Tiles are rebuilt as the user moves around: the sweep follows every parse.
   scheduleSweep();
 }
 
 /**
  * A DeArrow setting changed: everything is decided again (answers already
  * fetched are reused), newest first, since those are the videos likely on
- * screen; turned off, YouTube's own come back everywhere.
+ * screen. Turned off, YouTube's own come back everywhere and everything
+ * DeArrow kept goes with them: up to BLOB_BUDGET of thumbnail copies would
+ * otherwise stay in memory for the rest of the session.
  */
 function onSettingsChange() {
+  if (!configRead('enableDeArrow')) {
+    wipe();
+    return;
+  }
   nextGeneration();
   // Stored responses get the new output as they are parsed again.
   unpatchResponses();
   clearQueue();
-  if (!configRead('enableDeArrow')) {
-    restoreTiles();
-    return;
-  }
   const ids = [];
   videos.forEach((video, videoId) => {
     ids.push(videoId);

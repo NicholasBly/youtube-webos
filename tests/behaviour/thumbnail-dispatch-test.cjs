@@ -464,5 +464,61 @@ const boot = (cfg, more) =>
     t('and is probed for a better one', probedB(), requests.map((r) => r.url).join(' | '));
   }
 
+  // ---- a response whose text names no thumbnail is never scanned (__ytafThumbStats) ----
+  {
+    const { win, requests } = boot({ upgradeThumbnails: true }, { xhr: 'sddefault' });
+    await wait(20);
+    const skipped = () => win.__ytafThumbStats.scansSkipped;
+    // An unknown shape over the size threshold: the bounded scan is all that
+    // could find a thumbnail in it, and its text says there is none to find.
+    const rows = Array.from({ length: 200 }, (_, i) => ({
+      novelRow: {
+        label: { simpleText: 'Setting ' + i },
+        icon: { url: 'https://yt3.ggpht.com/i' + i }
+      }
+    }));
+    const settings = { responseContext: { _pad: 'z'.repeat(600) }, novelSurface: { rows } };
+    const before = skipped();
+    win.JSON.parse(win.JSON.stringify(settings));
+    t(
+      'an unknown shape without a video thumbnail in its text: the scan is skipped',
+      skipped() === before + 1,
+      before + ' -> ' + skipped()
+    );
+    // A home response of sections the paths cannot read, none with a thumbnail:
+    // each section would get its own scan; the text is asked once.
+    const novelHome = browseResponse(
+      Array.from({ length: 5 }, (_, i) => ({ novelShelfRenderer: { title: 'Shelf ' + i } }))
+    );
+    const beforeHome = skipped();
+    win.JSON.parse(win.JSON.stringify(novelHome));
+    t(
+      'sections no path can read, in a text without thumbnails: skipped, counted once',
+      skipped() === beforeHome + 1,
+      beforeHome + ' -> ' + skipped()
+    );
+    // The same unknown shape with one video thumbnail in it is scanned as before.
+    rows.push({ novelTile: { thumbnail: thumbs('scangate001') } });
+    const beforeFound = skipped();
+    const out = win.JSON.parse(win.JSON.stringify(settings));
+    const url = out.novelSurface.rows[rows.length - 1].novelTile.thumbnail.thumbnails[0].url;
+    await waitFor(() => requests.some((r) => r.url.indexOf('scangate001') !== -1));
+    t(
+      'with a video thumbnail in the text the scan runs: found, rewritten and probed',
+      skipped() === beforeFound &&
+        isSd(url) &&
+        requests.some((r) => r.url.indexOf('scangate001') !== -1),
+      url
+    );
+    // A response the paths read costs no look at the text at all.
+    const beforeKnown = skipped();
+    win.JSON.parse(win.JSON.stringify(browseResponse([shelfOf([tile('gateknown01')])])));
+    t(
+      'a response whose thumbnails the paths reached asks nothing of the text',
+      skipped() === beforeKnown,
+      beforeKnown + ' -> ' + skipped()
+    );
+  }
+
   report.finish();
 })();

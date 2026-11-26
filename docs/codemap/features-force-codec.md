@@ -93,18 +93,18 @@ The two lists are judged separately on purpose. `formats` holds the muxed progre
 
 > The capability hooks, installed once and gated on the mode: MediaSource .isTypeSupported and HTMLMediaElement#canPlayType; and the offer filter the shared JSON.parse hook (features/adblock/parse-hook.js) calls.
 
-69 lines · imports [features/force-codec/state.js](#mod-state-js), [features/force-codec/codecs.js](#mod-codecs-js), [features/force-codec/format-filter.js](#mod-format-filter-js), [features/force-codec/log.js](#mod-log-js) · imported by [features/adblock/parse-hook.js](features-adblock.md#mod-parse-hook-js), [features/force-codec/index.js](#mod-index-js)
+80 lines · imports [features/force-codec/state.js](#mod-state-js), [features/force-codec/codecs.js](#mod-codecs-js), [features/force-codec/format-filter.js](#mod-format-filter-js), [features/force-codec/log.js](#mod-log-js) · imported by [features/adblock/parse-hook.js](features-adblock.md#mod-parse-hook-js), [features/force-codec/index.js](#mod-index-js)
 
 <a id="fn-hooks-js-declines"></a>
-**`declines(type)`** · function · L10–14
+**`declines(type)`** · function · L20–25
 
-Whether a capability question about `type` is answered no by the mode.
+Whether a capability question about `type` is answered no by the mode. Only the plain codec questions are: at startup the player asks with an AVC codec and one parameter at a time which parameters the platform reads, and declining those under a pinned codec made it drop every 60 fps format, so a 1440p60 video played in 480p30 (PR #212; foxi69/youtube-webos 0.8.8). They get the platform's own answer; the offer filter still keeps only the pinned codec.
 
 - **Calls:** [features/force-codec/codecs.js › allowsCodec](#fn-codecs-js-allowscodec), [features/force-codec/codecs.js › detectCodec](#fn-codecs-js-detectcodec), [features/force-codec/codecs.js › isVideoMime](#fn-codecs-js-isvideomime), [features/force-codec/codecs.js › narrowing](#fn-codecs-js-narrowing)
 - **Called by:** [installHooks.HTMLMediaElement.prototype.canPlayType](#fn-hooks-js-installhooks-htmlmediaelement-prototype-canplaytype), [installHooks.MediaSource.isTypeSupported](#fn-hooks-js-installhooks-mediasource-istypesupported)
 
 <a id="fn-hooks-js-installhooks"></a>
-**`installHooks()`** · function, exported · L20–52
+**`installHooks()`** · function, exported · L31–63
 
 Installs the codec hooks once: MediaSource.isTypeSupported and canPlayType answer no for a codec the Force Video Codec setting declines.
 
@@ -112,21 +112,21 @@ Installs the codec hooks once: MediaSource.isTypeSupported and canPlayType answe
 - **Hooks:** `MediaSource.isTypeSupported`, `HTMLMediaElement.prototype.canPlayType`
 
 <a id="fn-hooks-js-installhooks-mediasource-istypesupported"></a>
-**`installHooks.MediaSource.isTypeSupported(type)`** · assigned · L33–39
+**`installHooks.MediaSource.isTypeSupported(type)`** · assigned · L44–50
 
 isTypeSupported that declines the codecs the setting rules out and asks the platform about the rest.
 
 - **Calls:** [declines](#fn-hooks-js-declines)
 
 <a id="fn-hooks-js-installhooks-htmlmediaelement-prototype-canplaytype"></a>
-**`installHooks.HTMLMediaElement.prototype.canPlayType(type)`** · assigned · L47–50
+**`installHooks.HTMLMediaElement.prototype.canPlayType(type)`** · assigned · L58–61
 
 canPlayType that answers '' for the declined codecs and asks the platform about the rest.
 
 - **Calls:** [declines](#fn-hooks-js-declines)
 
 <a id="fn-hooks-js-filterparsedresponse"></a>
-**`filterParsedResponse(out)`** · function, exported · L58–69
+**`filterParsedResponse(out)`** · function, exported · L69–80
 
 The server's offer, in a parsed response: strips the renditions the mode refuses. Called from the shared JSON.parse hook while a codec is forced.
 
@@ -139,10 +139,10 @@ The server's offer, in a parsed response: strips the renditions the mode refuses
 
 > Force Video Codec: the setting's switch, the codec hooks and the filter of the formats a player response offers. The comment below the imports explains the feature.
 
-122 lines · imports [core/config.js](core.md#mod-config-js), [ui/toast/index.js](ui-toast.md#mod-index-js), [features/force-codec/state.js](#mod-state-js), [features/force-codec/codecs.js](#mod-codecs-js), [features/force-codec/hooks.js](#mod-hooks-js), [features/force-codec/log.js](#mod-log-js) · imported by [userScript.js](app.md#mod-userscript-js)
+125 lines · imports [core/config.js](core.md#mod-config-js), [ui/toast/index.js](ui-toast.md#mod-index-js), [features/force-codec/state.js](#mod-state-js), [features/force-codec/codecs.js](#mod-codecs-js), [features/force-codec/hooks.js](#mod-hooks-js), [features/force-codec/log.js](#mod-log-js) · imported by [userScript.js](app.md#mod-userscript-js)
 
 <a id="fn-index-js-applymode"></a>
-**`applyMode(interactive)`** · function · L68–107
+**`applyMode(interactive)`** · function · L71–110
 
 Apply the stored setting.
 
@@ -153,7 +153,7 @@ Apply the stored setting.
 - **Settings:** reads `forceVideoCodec`
 
 <a id="fn-index-js-installcodechooks"></a>
-**`installCodecHooks()`** · function, exported · L112–117
+**`installCodecHooks()`** · function, exported · L115–120
 
 Installs the capability hooks for the stored setting and follows its changes; idempotent.
 
@@ -162,7 +162,7 @@ Installs the capability hooks for the stored setting and follows its changes; id
 - **Settings:** listens to `forceVideoCodec`
 
 <a id="fn-index-js-forcecodecactive"></a>
-**`forceCodecActive()`** · function, exported · L120–122
+**`forceCodecActive()`** · function, exported · L123–125
 
 The live mode, or null when nothing is narrowed: for tests/unit/force-codec-test.cjs.
 

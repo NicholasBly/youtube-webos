@@ -36,6 +36,8 @@ import './features/sponsorblock/index.js';
 import './features/emoji-font/index.js';
 import './features/screensaver-fix/index.js';
 import './features/app-quality-fix.js';
+// Fix Black Tile Previews, webOS 22 and newer (a stand-in in the legacy build).
+import './features/preview-cover.js';
 import './features/comments-fix.js';
 import './features/watch/index.js';
 import './features/lang-settings-fix.ts';

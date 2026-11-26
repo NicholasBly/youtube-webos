@@ -289,6 +289,49 @@ function boot(cfg, bodyClass, timers) {
     );
   }
 
+  // ---- chapters: the starts the bar renderer's data gives (NicholasBly/youtube-webos#225, 3) ----
+  // The bar's widths are whole pixels and, on a long video, cover only some
+  // chapters (50 of 71 on a 4.7-hour video, read on a TV by foxi69). The
+  // renderer's data has every chapter's own start, in seconds. Here: two
+  // halves on the bar (0, 50) for four chapters (0, 7, 33.3, 48).
+  {
+    const { win, model, press } = boot({}, 'WEB_PAGE_TYPE_WATCH');
+    const renderer = progressBar(win, [50, 50]);
+    renderer.__instance = {
+      props: {
+        data: {
+          chapters: [0, 7, 33.3, 48].map((start) => ({ start, title: { simpleText: 'c' } }))
+        }
+      }
+    };
+    model.currentTime = 10;
+    press(KEY.chapterNext);
+    await wait(150);
+    t(
+      "next chapter: the start the renderer's data gives (33.3), not the bar's 50",
+      model.currentTime === 33.3,
+      String(model.currentTime)
+    );
+    model.currentTime = 40;
+    press(KEY.chapterPrev);
+    await wait(150);
+    t(
+      "previous chapter: back to the data's start of the current chapter",
+      model.currentTime === 33.3,
+      String(model.currentTime)
+    );
+    // Data with no usable start: the bar's widths, as before.
+    renderer.__instance.props.data.chapters = [{ start: 'x' }, {}];
+    model.currentTime = 10;
+    press(KEY.chapterNext);
+    await wait(150);
+    t(
+      'chapters without a usable start: the widths on the bar decide',
+      model.currentTime === 50,
+      String(model.currentTime)
+    );
+  }
+
   // ---- play / pause ------------------------------------------------------------
   {
     const { win, model, press, toasts } = boot({}, 'WEB_PAGE_TYPE_WATCH');

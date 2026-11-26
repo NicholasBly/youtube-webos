@@ -14,7 +14,13 @@
  */
 const { createPage, flavour } = require('../harness/page.cjs');
 const { createReport } = require('../harness/report.cjs');
-const { wait, waitFor, rejectsWithTypeError } = require('../harness/fixtures.cjs');
+const {
+  wait,
+  waitFor,
+  rejectsWithTypeError,
+  showPanel,
+  panelCheckbox
+} = require('../harness/fixtures.cjs');
 
 const report = createReport();
 const t = report.check;
@@ -321,6 +327,154 @@ function commentsFixPage() {
     );
   }
 
+  // The native player is beneath the browse page; only the painting element
+  // in front of the playing video should lose its background.
+  if (flavour === 'modern') {
+    let hitTests = 0;
+    const { win } = createPage({
+      raf: 'timeout',
+      html: `<body class="WEB_PAGE_TYPE_BROWSE">
+        <video></video>
+        <ytlr-thumbnail-details style="background: black; box-shadow: 0 0 0 3px white"></ytlr-thumbnail-details>
+        <img>
+      </body>`,
+      setup(w) {
+        const d = w.document;
+        d.elementsFromPoint = () => {
+          hitTests++;
+          return [
+            d.querySelector('ytlr-thumbnail-details'),
+            d.querySelector('video'),
+            d.querySelector('img')
+          ];
+        };
+      }
+    });
+    const d = win.document;
+    const video = d.querySelector('video');
+    const tile = d.querySelector('ytlr-thumbnail-details');
+    video.getBoundingClientRect = () => ({ left: 10, top: 40, width: 720, height: 405 });
+    Object.defineProperty(video, 'paused', { value: false });
+    video.dispatchEvent(new win.Event('playing'));
+    t(
+      'a playing preview clears the thumbnail above the video',
+      tile.classList.contains('ytaf-preview-cover')
+    );
+    t(
+      'a layer behind the video is untouched',
+      !d.querySelector('img').classList.contains('ytaf-preview-cover')
+    );
+    t(
+      'the cleared thumbnail keeps its focus shadow',
+      win.getComputedStyle(tile).boxShadow === '0 0 0 3px white'
+    );
+    const initialHits = hitTests;
+    for (let i = 0; i < 3; i++) tile.dispatchEvent(new win.Event('focusin', { bubbles: true }));
+    await waitFor(() => hitTests > initialHits);
+    t('a burst of focus events triggers only one hit-test', hitTests === initialHits + 1);
+
+    tile.dispatchEvent(new win.Event('focusin', { bubbles: true }));
+    video.dispatchEvent(new win.Event('pause'));
+    await wait(40);
+    t('the thumbnail is restored on pause', !tile.classList.contains('ytaf-preview-cover'));
+    t('pausing cancels a queued hit-test', hitTests === initialHits + 1);
+  }
+
+  // ---- Fix Black Tile Previews: the switch, the panel, a full-screen video ----
+  {
+    /** A browse page with a playing-ready video, a black layer over it and the panel's own layer. */
+    const previewPage = (config) => {
+      const counts = { hitTests: 0 };
+      const page = createPage({
+        raf: 'timeout',
+        config,
+        html: `<body class="WEB_PAGE_TYPE_BROWSE">
+          <video></video>
+          <ytlr-surface-page style="background: black"></ytlr-surface-page>
+        </body>`,
+        setup(w) {
+          const d = w.document;
+          d.elementsFromPoint = () => {
+            counts.hitTests++;
+            const panel = d.querySelector('.ytaf-ui-container');
+            return [panel, d.querySelector('ytlr-surface-page'), d.querySelector('video')].filter(
+              Boolean
+            );
+          };
+        }
+      });
+      const d = page.win.document;
+      const video = d.querySelector('video');
+      video.getBoundingClientRect = () => ({ left: 10, top: 40, width: 720, height: 405 });
+      return { win: page.win, d, video, layer: d.querySelector('ytlr-surface-page'), counts };
+    };
+    const play = (p) => {
+      Object.defineProperty(p.video, 'paused', { value: false, configurable: true });
+      p.video.dispatchEvent(new p.win.Event('playing'));
+    };
+    const cleared = (el) => el.classList.contains('ytaf-preview-cover');
+
+    if (flavour === 'modern') {
+      // Off: no lookup at all, nothing cleared.
+      const off = previewPage({ clearPreviewCover: false });
+      play(off);
+      await wait(30);
+      t(
+        'switched off: a playing preview is left alone, with no lookup',
+        !cleared(off.layer) && off.counts.hitTests === 0,
+        off.counts.hitTests + ' lookups'
+      );
+      // Switched on in the panel while the preview plays: cleared at once.
+      await showPanel(off.win);
+      const box = panelCheckbox(off.win, 'Fix Black Tile Previews');
+      t('the switch is on the panel, off', !!box && box.checked === false);
+      box.click();
+      await wait(30);
+      t('switched on while a preview plays: cleared at once', cleared(off.layer));
+      t(
+        'the settings panel over the preview is never cleared',
+        !cleared(off.d.querySelector('.ytaf-ui-container'))
+      );
+      box.click();
+      await wait(30);
+      t('switched off again: the layer gets its look back', !cleared(off.layer));
+
+      // A video as big as the screen is the watch page's, not a preview.
+      const full = previewPage({});
+      full.video.getBoundingClientRect = () => ({
+        left: 0,
+        top: 0,
+        width: full.win.innerWidth,
+        height: full.win.innerHeight
+      });
+      play(full);
+      await wait(30);
+      t('a full-screen video clears nothing', !cleared(full.layer));
+
+      // The watch page: nothing, whatever plays.
+      const watch = previewPage({});
+      watch.d.body.className = 'WEB_PAGE_TYPE_WATCH';
+      await wait(30);
+      play(watch);
+      await wait(30);
+      t('on the watch page nothing is cleared', !cleared(watch.layer));
+    } else {
+      // The legacy build has neither the listeners nor the switch.
+      const legacy = previewPage({});
+      play(legacy);
+      await wait(30);
+      t(
+        'legacy build: a playing preview is left alone, with no lookup',
+        !cleared(legacy.layer) && legacy.counts.hitTests === 0
+      );
+      await showPanel(legacy.win);
+      t(
+        'legacy build: no Fix Black Tile Previews switch on the panel',
+        panelCheckbox(legacy.win, 'Fix Black Tile Previews') === null
+      );
+    }
+  }
+
   // ---- comments-panel fix: the override follows YouTube's stylesheet ----------------
   {
     const { win } = createPage({
@@ -427,6 +581,118 @@ function commentsFixPage() {
     inPanel.focus();
     t('and stops after the third', reads.n === settled + 3, `${reads.n - settled} scans`);
     t('the fallback stays in place', /display: revert/.test(fix().textContent));
+  }
+
+  // ---- playlist pages: the rows carry no preview (NicholasBly/youtube-webos#227) ----
+  // YouTube sends a preview command for each row of a playlist page (Watch
+  // Later and every other VL... list), but the TV does not put the player on
+  // the row there: the preview played full screen behind the page, heard and
+  // not seen, and opened the video by itself. The shapes are a webOS 25 TV's
+  // (foxi69/youtube-webos 94efeb3). No setting: Ad Blocking on or off.
+  for (const adblock of [true, false]) {
+    const { win } = createPage({ raf: 'timeout', config: { enableAdBlock: adblock } });
+    const P = win.JSON.parse;
+    const S = win.JSON.stringify;
+    const pad = 'x'.repeat(600);
+    const preview = (id) => ({
+      startInlinePlaybackCommand: {
+        videoId: id,
+        autotransitionDelayMs: 39000,
+        startDelayMs: 3000
+      }
+    });
+    const row = (id) => ({
+      tileRenderer: {
+        contentId: id,
+        onFocusCommand: preview(id),
+        onSelectCommand: { watchEndpoint: { videoId: id } }
+      }
+    });
+    const mixed = row('wwwwwwwwww3');
+    mixed.tileRenderer.onFocusCommand.logFocusCommand = { kept: true };
+    const list = (rows) => ({ playlistId: 'WL', contents: rows });
+    const page = {
+      responseContext: { _pad: pad },
+      contents: {
+        tvBrowseRenderer: {
+          content: {
+            tvSurfaceContentRenderer: {
+              content: {
+                twoColumnRenderer: {
+                  leftColumn: { entityMetadataRenderer: { title: 'Watch later' } },
+                  rightColumn: {
+                    playlistVideoListRenderer: list([row('wwwwwwwwww1'), row('wwwwwwwwww2'), mixed])
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+    const on = adblock ? 'Ad Blocking on' : 'Ad Blocking off';
+    const rows = P(S(page)).contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content
+      .twoColumnRenderer.rightColumn.playlistVideoListRenderer.contents;
+    t(
+      `${on}: a playlist row whose focus command was only the preview has none`,
+      !('onFocusCommand' in rows[0].tileRenderer) && !('onFocusCommand' in rows[1].tileRenderer),
+      S(rows[0].tileRenderer)
+    );
+    t(
+      `${on}: a focus command with more in it keeps the rest`,
+      S(rows[2].tileRenderer.onFocusCommand) === '{"logFocusCommand":{"kept":true}}',
+      S(rows[2].tileRenderer.onFocusCommand)
+    );
+    t(
+      `${on}: every row still opens its video`,
+      rows.every(
+        (r, i) => r.tileRenderer.onSelectCommand.watchEndpoint.videoId === 'wwwwwwwwww' + (i + 1)
+      )
+    );
+    const more = P(
+      S({
+        responseContext: { _pad: pad },
+        continuationContents: { playlistVideoListContinuation: list([row('wwwwwwwwww4')]) }
+      })
+    ).continuationContents.playlistVideoListContinuation.contents;
+    t(
+      `${on}: the rows of a playlist continuation lose it too`,
+      !('onFocusCommand' in more[0].tileRenderer),
+      S(more[0])
+    );
+    // Home, search and Subscriptions keep their previews: only playlist rows go.
+    const shelf = {
+      responseContext: { _pad: pad },
+      contents: {
+        tvBrowseRenderer: {
+          content: {
+            tvSurfaceContentRenderer: {
+              content: {
+                sectionListRenderer: {
+                  contents: [
+                    {
+                      shelfRenderer: {
+                        content: { horizontalListRenderer: { items: [row('hhhhhhhhhh1')] } }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+    const home = P(S(shelf)).contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content
+      .sectionListRenderer.contents[0].shelfRenderer.content.horizontalListRenderer.items[0];
+    t(
+      `${on}: a Home tile keeps its preview`,
+      !!(
+        home.tileRenderer.onFocusCommand &&
+        home.tileRenderer.onFocusCommand.startInlinePlaybackCommand
+      ),
+      S(home)
+    );
   }
 
   report.finish();

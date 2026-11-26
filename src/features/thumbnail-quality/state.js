@@ -41,7 +41,12 @@ export const state = {
   listsSeen: 0,
   // Thumbnail lists alone (upgradeContainer), so a section of a shape the
   // walk does not know can be told from one it read (dispatch.js).
-  containersSeen: 0
+  containersSeen: 0,
+  // The JSON text of the response being upgraded, held for the length of the
+  // pass, and whether it names the thumbnail host: null until a fallback scan
+  // asks (dispatch.js worthScanning).
+  responseText: '',
+  textNamesThumbnails: null
 };
 
 // Read on the TV from the web inspector as window.__ytafThumbStats (index.js):
@@ -49,8 +54,9 @@ export const state = {
 // the modes that draw unproven rungs showed grey until the correction), and
 // the ones that learned nothing (a timeout or a network error). The share of
 // misses among the answers is the price of drawing sddefault unproven, about
-// 1 % expected.
-export const thumbStats = { answered: 0, missed: 0, unknown: 0 };
+// 1 % expected. `scansSkipped` counts the responses whose fallback scan was
+// not run because their text names no thumbnail (dispatch.js).
+export const thumbStats = { answered: 0, missed: 0, unknown: 0, scansSkipped: 0 };
 
 /** Clears the timer in `state[name]`, if one is set. */
 export function clearStateTimer(name) {

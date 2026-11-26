@@ -27,7 +27,10 @@ import { log } from './log.js';
  *     1. MediaSource.isTypeSupported - the capability probe the player runs to
  *        decide which formats to ask the server for. This is the lever that
  *        actually changes the negotiation, because the answer feeds the codec
- *        list sent upstream.
+ *        list sent upstream. Only the plain codec questions are narrowed: the
+ *        ones with a parameter (framerate=, width=, eotf=) are how the player
+ *        learns what the platform can do, and declining them capped a pinned
+ *        codec at 480p30 (hooks.js declines).
  *     2. HTMLMediaElement#canPlayType - the same question asked at the element,
  *        for the paths that go there instead.
  *     3. streamingData.adaptiveFormats / .formats - the offer that comes back.

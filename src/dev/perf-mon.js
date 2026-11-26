@@ -292,7 +292,7 @@
     [/hookedParse|walkAndProcess|adPlacements|trackingParams|playerAds/, 'features/adblock'],
     [/twemoji|processTextNode/, 'features/emoji-font'],
     [/setPlaybackQualityRange|yt-player-quality/, 'features/video-quality'],
-    [/ytaf-hide-logo/, 'features/logo-style'],
+    [/ytaf-hide-logo|ytaf-premium-logo/, 'features/logo-style'],
     [/ytaf-watch/, 'features/watch'],
     [/attemptActiveBypass|ytaf-bypass-style|lastFired/, 'features/auto-login'],
     // The dot keeps the literal out of the perf bundle, where bundle-check
@@ -2496,16 +2496,16 @@
 
     {
       key: 'logoStyle',
-      enabledWhen: (v) => v === 'hidden',
-      label: 'Hide YouTube Logo',
+      enabledWhen: (v) => v === 'hidden' || v === 'premium',
+      label: 'YouTube Logo',
       lamp: 'LOGO',
       module: 'features/logo-style',
       pages: ALL_PAGES,
       cost: 'free',
-      expect: 'html.ytaf-hide-logo is set. Static CSS only.',
+      expect: 'html.ytaf-hide-logo or html.ytaf-premium-logo is set. Static CSS only.',
       fns: ['initLogoStyle'],
       probe: function () {
-        const on = hasClass('ytaf-hide-logo');
+        const on = hasClass('ytaf-hide-logo') || hasClass('ytaf-premium-logo');
         return {
           state: on ? 'firing' : 'stalled',
           detail: on ? 'Class applied. No runtime cost.' : 'Class missing from <html>.'

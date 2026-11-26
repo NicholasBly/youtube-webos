@@ -25,7 +25,6 @@ export const SELECTORS = {
   WATCH_PLAYER: 'ytlr-watch-default',
   // Older player root, tried when PLAYER_ID is not on the page.
   HTML5_PLAYER_FALLBACK: '.html5-video-player',
-  LOGO: 'ytlr-logo-entity',
   THUMBNAIL_TILE: 'ytlr-thumbnail-details',
   // A tile of a shelf or grid, and the title text inside one (DeArrow).
   TILE: 'ytlr-tile-renderer',

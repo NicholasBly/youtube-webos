@@ -81,6 +81,11 @@ const makeConfig = (env) => {
                 )
               }
             : {
+                // Fix Black Tile Previews is for webOS 22 and newer.
+                [path.resolve(__dirname, 'src/features/preview-cover.js')]: path.resolve(
+                  __dirname,
+                  'src/features/preview-cover-absent.js'
+                ),
                 [path.resolve(__dirname, 'src/features/block-webos-cast.ts')]: path.resolve(
                   __dirname,
                   'src/features/block-webos-cast-absent.js'

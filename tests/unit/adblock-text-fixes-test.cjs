@@ -364,4 +364,61 @@ function leftover(obj) {
   );
 }
 
+// ---- the gate's first scan: a few ranges that hold every character the exact class does ----
+{
+  const exact = get('NEEDS_TEXT_WORK_RE');
+  const first = get('EMOJI_PREFILTER_RE');
+  // A character class matches one UTF-16 unit, so agreeing on every unit is
+  // agreeing on every text.
+  let missed = 0;
+  let exactCount = 0;
+  for (let unit = 0; unit <= 0xffff; unit++) {
+    const ch = String.fromCharCode(unit);
+    if (!exact.test(ch)) continue;
+    exactCount++;
+    if (!first.test(ch)) missed++;
+  }
+  t('the exact class matches some units at all (the check below is not vacuous)', exactCount > 100);
+  eq('every unit the exact class matches passes the first scan', missed, 0);
+  t(
+    'what most text is made of stops at the first scan: ASCII, bullets, dashes, quotes, Cyrillic, Hangul',
+    !first.test(
+      'Plain text \u2022 1.2M views \u2013 \u201Cquoted\u201D \u2026 \u041F\u0440\u0438\u0432\u0435\u0442 \uD55C\uAD6D\uC5B4'
+    )
+  );
+  // Text the first scan lets through without an emoji in it (kana) is decided
+  // by the exact class from there, and an emoji after it is still found.
+  const kana = '{"t":"' + 'x'.repeat(40) + ' \u3053\u3093\u306B\u3061\u306F"}';
+  t('kana passes the first scan', first.test(kana));
+  t('and needs no walk', mayNeedEmojiWork(kana) === false);
+  t(
+    'an emoji after kana is found',
+    mayNeedEmojiWork(kana.replace('"}', ' ' + String.fromCodePoint(0x1f600) + '"}')) === true
+  );
+  t(
+    'an emoji as the very first character is found',
+    mayNeedEmojiWork(String.fromCharCode(0x2764) + 'x'.repeat(20)) === true
+  );
+  // The whole function against the two exact scans it stands for, on texts of every kind.
+  const escaped = get('ESCAPED_EMOJI_RE');
+  const samples = [
+    '',
+    'plain',
+    kana,
+    'a\u2022b',
+    'x\u00A9',
+    '\u200B',
+    'tail ' + String.fromCodePoint(0x1f1e9, 0x1f1ea),
+    '1\uFE0F\u20E3',
+    'esc \\ud83d\\ude00',
+    'esc \\u0026 only',
+    '\uD83D alone'
+  ];
+  let disagreements = 0;
+  for (const sample of samples) {
+    if (mayNeedEmojiWork(sample) !== (exact.test(sample) || escaped.test(sample))) disagreements++;
+  }
+  eq('mayNeedEmojiWork answers as the two exact scans do, on every sample', disagreements, 0);
+}
+
 report.finish();
