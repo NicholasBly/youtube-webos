@@ -1,0 +1,45 @@
+/* The dislike factoid's place in the description panel: the factoid row wraps
+   so the cloned factoid fits beside the likes, in both panel layouts. */
+ytlr-structured-description-content-renderer
+  .ytLrVideoDescriptionHeaderRendererFactoidContainer.ryd-ready,
+ytlr-structured-description-content-renderer .rznqCe.ryd-ready {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  gap: 1rem !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+/* Chromium 38 to 79 (webOS 3 to 6) ignore flex gap: margins give the same
+   spacing between neighbours. The factoids are divs: a tag on the right keeps
+   the rule out of the bucket tried on every element. */
+ytlr-structured-description-content-renderer .ryd-ready.ryd-no-flex-gap > div {
+  margin-left: 0.5rem !important;
+  margin-right: 0.5rem !important;
+}
+
+ytlr-structured-description-content-renderer .ryd-ready div[idomkey='factoid-2'] {
+  margin-top: 0 !important;
+}
+
+ytlr-structured-description-content-renderer
+  .ryd-ready
+  div[idomkey='factoid-2']
+  .ytLrVideoDescriptionHeaderRendererValue,
+ytlr-structured-description-content-renderer .ryd-ready div[idomkey='factoid-2'] .axf6h {
+  display: inline-block !important;
+  margin-right: 0.2rem !important;
+}
+
+ytlr-structured-description-content-renderer
+  .ryd-ready
+  div[idomkey='factoid-2']
+  .ytLrVideoDescriptionHeaderRendererLabel,
+ytlr-structured-description-content-renderer .ryd-ready div[idomkey='factoid-2'] .Ph2lNb {
+  display: inline-block !important;
+}
+
+#ryd-dislike-factoid {
+  flex: 0 0 auto !important;
+}

@@ -1,0 +1,11 @@
+/* The black overlay the oled_toggle shortcut puts over everything; the keep-alive
+   presses underneath it are in oled.js. */
+#ytaf-oled-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  z-index: 9999;
+}

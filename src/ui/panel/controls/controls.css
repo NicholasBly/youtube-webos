@@ -1,0 +1,68 @@
+/* Controls built by panel/controls: the cycle rows' label and value side, the
+   colour picker and the greyed-out state. Row metrics (size, padding, margins)
+   are in pages.css; the red-theme variants in styles/theme-red.css. */
+
+.ytaf-cycle-label {
+  color: #b8e6f5;
+}
+
+/* A cycle row among checkbox rows: the label is indented by one checkbox,
+   1.85vh wide plus its 1.1vh margin, plus the 0.75vh side padding a checkbox
+   row has and a cycle row does not (pages.css), and takes the row's text
+   colour like the checkbox labels around it instead of the shortcut tint. */
+.ytaf-ui-container .ytaf-cycle-row.ytaf-aligned .ytaf-cycle-label {
+  color: inherit;
+  padding-left: 3.7vh;
+}
+
+.ytaf-cycle-value {
+  display: flex;
+  align-items: center;
+  color: #ffffff;
+}
+
+.ytaf-cycle-value .ytaf-arrow {
+  color: #00d4ff;
+  font-weight: bold;
+  font-size: 2.22vh;
+  user-select: none;
+}
+
+.ytaf-cycle-value .ytaf-value {
+  margin: 0 1.1vh;
+  min-width: 14vh;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* A row whose setting does nothing right now (controls/checkbox.js setUnavailable). */
+.ytaf-ui-container .ytaf-unavailable {
+  opacity: 0.5;
+}
+
+.ytaf-color-picker {
+  display: flex;
+  margin-left: 1.1vh;
+}
+
+.ytaf-color-reset {
+  background: rgba(0, 100, 150, 0.5);
+  color: #ffffff;
+  border: 0.09vh solid rgba(0, 150, 200, 0.5);
+  border-radius: 0.4vh;
+  padding: 0.2vh 0.75vh;
+  margin-right: 0.75vh;
+  cursor: pointer;
+  font-size: 1.2vh;
+  flex-shrink: 0;
+}
+
+.ytaf-ui-container input[type='color'] {
+  appearance: none;
+  width: 3.7vh;
+  height: 2.22vh;
+  border: 0.09vh solid rgba(0, 150, 200, 0.5);
+  border-radius: 0.4vh;
+  background-color: transparent;
+  cursor: pointer;
+}

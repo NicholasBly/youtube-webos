@@ -1,0 +1,34 @@
+/* Toast notifications (ui/toast/index.js). The red-theme and OLED variants are
+   in styles/theme-red.css and styles/theme-oled.css. */
+
+.ytaf-toasts {
+  position: fixed;
+  top: 1.85vh;
+  right: 1.85vh;
+  font-size: 1.48vh;
+  z-index: 1200;
+  max-width: 37vh;
+}
+
+.ytaf-toast {
+  background: #002840;
+  border: 0.09vh solid rgba(0, 212, 255, 0.4);
+  color: white;
+  padding: 1.5vh 1.85vh;
+  margin-bottom: 1.1vh;
+  border-radius: 1.1vh;
+  box-shadow: 0 0.5vh 1.4vh rgba(0, 0, 0, 0.5);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+  opacity: 1;
+  transform: translateX(0);
+  border-left: 0.37vh solid #00d4ff;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ytaf-toast.ytaf-toast-hidden {
+  opacity: 0;
+  transform: translateX(1.85vh);
+}

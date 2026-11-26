@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# cmd.exe misreads labels (goto, call :label) in a batch file with LF line endings
+*.cmd text eol=crlf
+*.bat text eol=crlf

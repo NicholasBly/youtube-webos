@@ -1,0 +1,183 @@
+/* Page layout built by panel/pages.js: the metrics of every row in the settings
+   body, the dense first page, sections and the two-column layout, the
+   SponsorBlock blockquote, help lines and small print. The look of a row (the
+   focus highlight, the checkbox) is in panel.css, the value side of a cycle
+   row in controls/controls.css. */
+
+/* ---------------------------------------------------------------------------
+   Row metrics
+
+   Every row in the settings body, checkbox label or cycle control, is sized by
+   this one rule, and the contextual trims further down (the dense Main page,
+   the SponsorBlock blockquote) address both kinds alike, so the gaps between
+   rows stay even whatever the row holds.
+   --------------------------------------------------------------------------- */
+
+.ytaf-ui-container label,
+.ytaf-ui-container .ytaf-cycle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  /* 2.5vh sizes the cycle arrows and values; the label text itself is 2.1vh. */
+  font-size: 2.5vh;
+  font-weight: 400;
+  line-height: 0.95;
+  /* At least one line of 2.5vh text at line-height 0.95. A minimum: a taller
+     child, as the cycle arrows are, still sets the row's height. */
+  min-height: 2.375vh;
+  padding: 1vh 0.75vh;
+  /* The side margins bleed the focus highlight past the page padding. */
+  margin: 0 -0.75vh 0.2vh;
+  cursor: pointer;
+  border-radius: 0.75vh;
+}
+
+.ytaf-ui-container .ytaf-label-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.ytaf-ui-container .ytaf-label-content,
+.ytaf-ui-container .ytaf-cycle-label {
+  font-size: 2.1vh;
+}
+
+/* Inside a section the bleed margin is not wanted: the section supplies the
+   horizontal padding, and a row bleeding past it would leave the columns out
+   of line. */
+.ytaf-settings-section label,
+.ytaf-settings-section .ytaf-cycle-row {
+  margin: 0 0 0.2vh;
+}
+
+/* The SponsorBlock page lists its rows in a blockquote, a little tighter. */
+.ytaf-ui-container blockquote {
+  margin: 1.5vh 0 1.5vh 2.2vh;
+  padding-left: 2.2vh;
+  border-left: 0.28vh solid #00d4ff;
+  background: rgba(0, 212, 255, 0.05);
+  border-radius: 0 0.75vh 0.75vh 0;
+}
+
+.ytaf-ui-container blockquote label,
+.ytaf-ui-container blockquote .ytaf-cycle-row {
+  padding-top: 0.75vh;
+  padding-bottom: 0.75vh;
+}
+
+.ytaf-ui-container blockquote label {
+  color: #e0e0e0;
+}
+
+/* --- Page 1 density -------------------------------------------------------
+   The Main page is the tallest of the four and the only one at risk of
+   overflowing 95vh on a 1080p panel, so its rows and sections are trimmed;
+   the other tabs keep the roomier spacing. */
+#ytaf-page-main label,
+#ytaf-page-main .ytaf-cycle-row {
+  padding-top: 0.75vh;
+  padding-bottom: 0.75vh;
+  margin-bottom: 0.1vh;
+}
+
+#ytaf-page-main .ytaf-settings-section {
+  margin-bottom: 0.6vh;
+}
+
+#ytaf-page-main .ytaf-settings-section > .ytaf-section-title {
+  margin-top: 0.9vh;
+  margin-bottom: 0.35vh;
+}
+
+/* ---------------------------------------------------------------------------
+   Main settings page layout
+
+   Section chrome lives here rather than in inline styles on createSection(), so
+   the whole panel retunes from one place. The two-column variant and the larger
+   type are a pair: Cosmetic Filtering in two columns takes half the height,
+   and that is the room the larger text uses without the page scrolling.
+
+   Flexbox, not grid - webOS 3 is Chrome 38 and CSS Grid did not ship until 57.
+   --------------------------------------------------------------------------- */
+
+.ytaf-settings-section {
+  margin: 1vh 0 0.5vh;
+  padding: 0 1vh 0.5vh;
+  border: 0.19vh solid #444;
+  border-radius: 0.6vh;
+}
+
+.ytaf-settings-section > .ytaf-section-title {
+  color: #aaa;
+  font-size: 2.6vh;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05vh;
+  margin: 0.6vh 0 0.5vh;
+}
+
+/* Two-column sections.
+
+   `flex: none` with an explicit width rather than `flex: 0 0 50%`: old Chrome
+   miscomputes a percentage flex-basis against a border-box child, and these
+   rows carry horizontal padding. Width plus border-box is the boring, stable
+   way to say the same thing.
+
+   The rows carry no side margins, as in every section (above): a bleed past
+   the section padding at half width would push the second column out of the
+   row and force a wrap. */
+#ytaf-page-main .ytaf-section-2col {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+#ytaf-page-main .ytaf-section-2col > .ytaf-section-title {
+  flex: none;
+  width: 100%;
+}
+
+#ytaf-page-main .ytaf-section-2col > label {
+  flex: none;
+  width: 50%;
+}
+
+/* The last label of the two-column section keeps 0.25vh below it, against the
+   0.1vh between the rows above; sharing its row (an even count), it sets that
+   row's height. */
+#ytaf-page-main .ytaf-section-2col > label:last-child {
+  margin-bottom: 0.25vh;
+}
+
+/* Cycle rows keep the tighter metrics 0.8.4 shipped (it wrote them inline on
+   every cycle row, which outranked the shared row rule above and the trims of
+   the Main page and the SponsorBlock blockquote): the Shortcuts page stays
+   the height it was. Listed with every rule above that sizes a cycle row, so
+   this one, coming last, wins over each. */
+.ytaf-ui-container .ytaf-cycle-row,
+.ytaf-settings-section .ytaf-cycle-row,
+.ytaf-ui-container blockquote .ytaf-cycle-row,
+#ytaf-page-main .ytaf-cycle-row {
+  padding: 0.6vh 0;
+  margin: 0.2vh 0;
+}
+
+/* The grey help line under a control. */
+.ytaf-help {
+  color: #aaa;
+  font-size: 1.67vh;
+  padding: 0.37vh 1.11vh 1.11vh;
+}
+
+/* The small print at the foot of a page (the SponsorBlock credit). */
+.ytaf-ui-container small {
+  display: block;
+  text-align: center;
+  color: #888888;
+  font-size: 1.48vh;
+  margin-top: 1.85vh;
+  padding-top: 1.5vh;
+  border-top: 0.09vh solid rgba(0, 212, 255, 0.2);
+}

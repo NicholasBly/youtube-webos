@@ -1,0 +1,41 @@
+img.emoji {
+  height: 1em;
+  width: 1em;
+  margin: 0 0.05em 0 0.1em;
+  vertical-align: -0.1em;
+}
+
+.twemoji-hidden-text {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  color: transparent;
+  user-select: none;
+  vertical-align: baseline;
+}
+
+/* The webOS 4 and older font fix, gated by html.ytaf-legacy-emoji; the modern
+   build aliases emoji-font away, so these rules are absent there. */
+
+html.ytaf-legacy-emoji yt-formatted-string,
+html.ytaf-legacy-emoji yt-core-attributed-string,
+html.ytaf-legacy-emoji .yt-tv-text,
+html.ytaf-legacy-emoji .video-title,
+html.ytaf-legacy-emoji .title,
+html.ytaf-legacy-emoji #title,
+html.ytaf-legacy-emoji .description,
+html.ytaf-legacy-emoji #description,
+html.ytaf-legacy-emoji .video-title-text,
+html.ytaf-legacy-emoji .badge-text {
+  font-family:
+    'Roboto', 'YouTube Noto', 'YouTube Sans', 'Noto Sans Arabic', 'Arial', 'Noto Sans Math',
+    sans-serif !important;
+}
+
+emoji-render.twemoji-injected {
+  display: inline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  vertical-align: baseline !important;
+}
