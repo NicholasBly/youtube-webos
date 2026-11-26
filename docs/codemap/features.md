@@ -2,7 +2,54 @@
 
 Part of the [code map](../CODEMAP.md), generated from the source by `tools/codemap.mjs`: do not edit it by hand.
 
-Modules: [features/block-webos-cast-absent.js](#mod-block-webos-cast-absent-js), [features/block-webos-cast.ts](#mod-block-webos-cast-ts), [features/comments-fix.js](#mod-comments-fix-js), [features/lang-settings-fix.ts](#mod-lang-settings-fix-ts), [features/logo-style.js](#mod-logo-style-js), [features/playback-speed-absent.js](#mod-playback-speed-absent-js), [features/rows-ahead.js](#mod-rows-ahead-js)
+Modules: [features/app-quality-fix.js](#mod-app-quality-fix-js), [features/block-webos-cast-absent.js](#mod-block-webos-cast-absent-js), [features/block-webos-cast.ts](#mod-block-webos-cast-ts), [features/comments-fix.js](#mod-comments-fix-js), [features/lang-settings-fix.ts](#mod-lang-settings-fix-ts), [features/logo-style.js](#mod-logo-style-js), [features/playback-speed-absent.js](#mod-playback-speed-absent-js), [features/rows-ahead.js](#mod-rows-ahead-js)
+
+<a id="mod-app-quality-fix-js"></a>
+
+## features/app-quality-fix.js
+
+> Black boxes behind text. When YouTube's server sends the TV force_memory_saving_mode, YouTube puts `app-quality-root` on &lt;body>, and its own stylesheet then swaps the soft text shadows for solid black boxes behind the player's title, channel line and timestamps. The flag is pushed from the server, so it can appear months after install and survives a reinstall.
+>
+> Taking the class off &lt;body> brings back the normal styling. Only the CSS changes: the rest of YouTube's memory saving is decided in its own code and stays as it is. YouTube rewrites body.className on navigation, so an observer on &lt;body>'s class attribute takes it off again each time.
+
+64 lines · imports [core/config.js](core.md#mod-config-js), [core/dom.js](core.md#mod-dom-js), [core/log.js](core.md#mod-log-js) · imported by [userScript.js](app.md#mod-userscript-js)
+
+**At load:**
+
+- **Calls:** [core/log.js › createLogger](core.md#fn-log-js-createlogger), [sync](#fn-app-quality-fix-js-sync), [core/config.js › configAddChangeListener](core.md#fn-config-js-configaddchangelistener)
+- **Settings:** listens to `removeLowMemoryStyle`
+
+<a id="fn-app-quality-fix-js-strip"></a>
+**`strip()`** · function · L26–32
+
+Takes the class off &lt;body> if YouTube has put it there.
+
+- **Called by:** [start](#fn-app-quality-fix-js-start)
+
+<a id="fn-app-quality-fix-js-start"></a>
+**`start()`** · function · L35–42
+
+Starts stripping the class and watching &lt;body> for it; false while there is no &lt;body> yet.
+
+- **Calls:** [strip](#fn-app-quality-fix-js-strip)
+- **Called by:** [sync](#fn-app-quality-fix-js-sync)
+- **Browser:** `MutationObserver`
+
+<a id="fn-app-quality-fix-js-stop"></a>
+**`stop()`** · function · L45–52
+
+Stops watching and gives YouTube its class back if it had it.
+
+- **Called by:** [sync](#fn-app-quality-fix-js-sync)
+
+<a id="fn-app-quality-fix-js-sync"></a>
+**`sync()`** · function · L55–61
+
+Follows the setting: on starts the watch (waiting for &lt;body> if needed), off stops it.
+
+- **Calls:** [core/config.js › configRead](core.md#fn-config-js-configread), [core/dom.js › pollUntil](core.md#fn-dom-js-polluntil), [start](#fn-app-quality-fix-js-start), [stop](#fn-app-quality-fix-js-stop)
+- **Called by:** [at load](#mod-app-quality-fix-js)
+- **Settings:** reads `removeLowMemoryStyle`
 
 <a id="mod-block-webos-cast-absent-js"></a>
 

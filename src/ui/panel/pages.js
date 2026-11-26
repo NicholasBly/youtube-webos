@@ -218,6 +218,10 @@ export function buildUITweaksPage() {
     helpLine('Forces the video thumbnail preview on/off on app load'),
     createConfigCheckbox('fixMultilineTitles'),
     createConfigCheckbox('fixSearchFont'),
+    createConfigCheckbox('removeLowMemoryStyle'),
+    helpLine(
+      "Undoes YouTube's low-memory styling, which puts black boxes behind titles and timestamps"
+    ),
     // Here rather than on the Main page, which is as tall as 1080p allows.
     createConfigCheckbox('enableRowsAhead'),
     helpLine(
